@@ -266,6 +266,12 @@ neighbour, found at whatever depth of the tree the neighbour is, not the nearest
 split around the pane. The PTYs are resized once, on release: a program getting a
 SIGWINCH per mouse event redraws dozens of times for one gesture.
 
+Capturing the mouse also takes the host's selection away, so ranma selects
+itself: a drag in a pane's text selects there (and only there, unlike the host's
+selection across the whole screen), double and triple clicks take a word and a
+line, and release copies to the clipboard over OSC 52. A program that uses the
+mouse keeps its clicks; Shift still reaches the host's own selection.
+
 ### Toasts, and a socket per ranma
 
 A notification that sits in the bar until the next key is easy to miss and easy

@@ -174,12 +174,19 @@ terminal so it can tell where you clicked:
 
 - A click focuses the pane under it, and still reaches the program if the program
   uses the mouse (nvim, htop, less with `--mouse`).
+- **Selecting and copying:** in a pane whose program does not use the mouse,
+  drag to select; double-click selects a word, triple-click a line. Letting go
+  copies the selection to your system clipboard (OSC 52), as copy-on-select
+  terminals do; paste it with your terminal's paste key. Typing or clicking again
+  clears the highlight.
 - The wheel scrolls the pane under the pointer: into the program if it uses the
   mouse; as arrow keys for a full-screen program that does not (less, man);
   otherwise back through the pane's scrollback. Typing returns to the bottom.
 - Clicking a workspace in the bar goes there; clicking a tab switches to it.
-- **To select text with your terminal instead, hold Shift while dragging.** kitty,
-  foot, alacritty, wezterm and xterm all let Shift override a program's mouse use.
+- **To select with your terminal instead** (in a pane whose program takes the
+  mouse, say), hold Shift while dragging: kitty, foot, alacritty, wezterm and
+  xterm all let Shift override mouse capture. That selection is the host's, so it
+  spans the whole screen, borders and neighbouring panes included.
 
 **Borders are handles, in any mode.** A pane's top border is its title bar: drag
 a tile by it and drop it on another tile, and it lands on the side of that tile

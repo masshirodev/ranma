@@ -7,6 +7,12 @@
 //! tile, resizing moves the edge it shares with its neighbour. Programs are
 //! resized once, when the button is released, not on every mouse event.
 
+use std::time::{Duration, Instant};
+
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line, Point, Side};
+use alacritty_terminal::selection::{Selection, SelectionType};
+
 use super::{App, Drag, Frame, PaneView};
 use crate::action::Dir;
 use crate::layout::{self, PaneId, Rect, Split};
@@ -180,6 +186,18 @@ impl App {
                     }
                 }
             }
+            Some(Drag::Select { id }) => {
+                if let Some(v) = self.frame().views.into_iter().find(|v| v.id == id)
+                    && let Some(p) = self.panes.get(&id)
+                {
+                    let mut term = p.term.lock();
+                    let point = grid_point(&term, v.inner, x, y);
+                    if let Some(sel) = term.selection.as_mut() {
+                        sel.update(point, Side::Right);
+                    }
+                }
+                self.dirty = true;
+            }
             Some(Drag::Tile { id }) => {
                 let frame = self.frame();
                 self.drop_preview = self
@@ -193,6 +211,11 @@ impl App {
     }
 
     pub(super) fn finish_drag(&mut self) {
+        if let Some(Drag::Select { id }) = self.drag {
+            self.drag = None;
+            self.finish_selection(id);
+            return;
+        }
         if let Some(Drag::Tile { id }) = self.drag
             && let Some((target, dir)) = self.drop_preview.take()
         {
@@ -212,6 +235,96 @@ impl App {
     pub fn drop_preview(&self) -> Option<(PaneId, Dir)> {
         self.drop_preview
     }
+}
+
+// ---- selecting ---------------------------------------------------------------
+//
+// Capturing the mouse takes the host terminal's own selection away (Shift still
+// gives it back, across the whole screen), so ranma selects itself: drag in a
+// pane to select, double-click for a word, triple-click for a line, and the
+// selection goes to the clipboard on release (OSC 52), the way kitty's
+// copy_on_select and most X terminals do. Panes whose program uses the mouse get
+// their clicks as before.
+
+/// Double and triple clicks: presses this close together on the same cell.
+const MULTI_CLICK: Duration = Duration::from_millis(400);
+
+impl App {
+    pub(super) fn start_selection(&mut self, v: PaneView, x: u16, y: u16) {
+        let now = Instant::now();
+        let count = match self.last_click {
+            Some((t, lx, ly, n)) if now.duration_since(t) < MULTI_CLICK && (lx, ly) == (x, y) => {
+                n % 3 + 1
+            }
+            _ => 1,
+        };
+        self.last_click = Some((now, x, y, count));
+        let ty = match count {
+            1 => SelectionType::Simple,
+            2 => SelectionType::Semantic,
+            _ => SelectionType::Lines,
+        };
+        let Some(p) = self.panes.get(&v.id) else {
+            return;
+        };
+        let mut term = p.term.lock();
+        let point = grid_point(&term, v.inner, x, y);
+        let mut sel = Selection::new(ty, point, Side::Left);
+        if count > 1 {
+            // A word or a line is selected by the click itself, not by dragging.
+            sel.update(point, Side::Right);
+        }
+        term.selection = Some(sel);
+        drop(term);
+        self.selection_pane = Some(v.id);
+        self.drag = Some(Drag::Select { id: v.id });
+        self.dirty = true;
+    }
+
+    /// On release: copy what is selected. A plain click selects nothing, and
+    /// leaves nothing highlighted.
+    fn finish_selection(&mut self, id: PaneId) {
+        let text = self.panes.get(&id).and_then(|p| {
+            let mut term = p.term.lock();
+            let text = term.selection_to_string().filter(|t| !t.is_empty());
+            if text.is_none() {
+                term.selection = None;
+            }
+            text
+        });
+        match text {
+            Some(t) => {
+                let n = t.chars().count();
+                self.set_host_clipboard(&t);
+                self.status = Some(format!(
+                    "copied {n} character{}",
+                    if n == 1 { "" } else { "s" }
+                ));
+            }
+            None => self.selection_pane = None,
+        }
+        self.dirty = true;
+    }
+
+    /// Drop the mouse selection, wherever it is.
+    pub(super) fn clear_selection(&mut self) {
+        if let Some(id) = self.selection_pane.take()
+            && let Some(p) = self.panes.get(&id)
+        {
+            p.term.lock().selection = None;
+            self.dirty = true;
+        }
+    }
+}
+
+/// The grid point under screen cell (`x`, `y`) of a pane drawn in `inner`,
+/// clamped into it, and counting the scrollback the view is scrolled into.
+fn grid_point<T>(term: &alacritty_terminal::Term<T>, inner: Rect, x: u16, y: u16) -> Point {
+    let col = x.clamp(inner.x, inner.right().saturating_sub(1)) - inner.x;
+    let row = y.clamp(inner.y, inner.bottom().saturating_sub(1)) - inner.y;
+    let offset = term.grid().display_offset() as i32;
+    let col = (col as usize).min(term.columns().saturating_sub(1));
+    Point::new(Line(row as i32 - offset), Column(col))
 }
 
 /// The side of `r` the point is nearest, by its offset from the centre relative

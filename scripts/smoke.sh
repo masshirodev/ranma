@@ -68,6 +68,18 @@ sleep 0.3
 W1=$(screen | head -1 | cut -d'╮' -f1 | wc -m)
 [ "$W1" -gt "$W0" ] || fail "dragging the border did not resize ($W0 -> $W1)"
 
+# Dragging in a pane's text selects it and copies it on release (OSC 52).
+T send-keys -t s 'clear; echo selectme-ok' Enter; sleep 0.4
+row=$(screen | grep -n '│selectme-ok' | head -1 | cut -d: -f1)
+# Its column, in characters (the borders are multi-byte), whichever pane it is in.
+prefix=$(screen | sed -n "${row}p" | sed 's/│selectme-ok.*//')
+col=$(( $(printf '%s' "$prefix" | wc -m) + 2 ))
+for e in "0;$col;${row}M" "32;$((col + 5));${row}M" "32;$((col + 10));${row}M" "0;$((col + 10));${row}m"; do
+  T send-keys -t s -l $'\e[<'"$e"; sleep 0.1
+done
+sleep 0.3
+[ "$(T show-buffer 2>/dev/null)" = "selectme-ok" ] || fail "mouse selection was not copied ($(T show-buffer 2>/dev/null))"
+
 # Typing reaches the focused pane; tabs do not leave stale cells behind.
 T send-keys -t s 'printf "1234567890\n"; printf "ab\tZ\n"' Enter
 wait_for 'ab      Z' || fail "tab rendering or input passthrough"

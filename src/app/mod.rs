@@ -112,6 +112,10 @@ enum Drag {
     Tile {
         id: PaneId,
     },
+    /// Selecting text in a pane with the mouse (see `drag`, "Selecting").
+    Select {
+        id: PaneId,
+    },
 }
 
 /// The parts of state hooks and state-driven modules react to.
@@ -174,6 +178,10 @@ pub struct App {
     drop_preview: Option<(PaneId, Dir)>,
     /// The source has commits this binary lacks (see `update`).
     update_available: Option<crate::update::Behind>,
+    /// The pane holding a mouse selection, cleared by the next click or key.
+    selection_pane: Option<PaneId>,
+    /// The last left click, for double and triple clicks: when, where, how many.
+    last_click: Option<(Instant, u16, u16, u8)>,
 }
 
 impl App {
@@ -222,6 +230,8 @@ impl App {
             toasts: Default::default(),
             drop_preview: None,
             update_available: None,
+            selection_pane: None,
+            last_click: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -1069,6 +1079,25 @@ impl App {
             return;
         }
         let under = self.pane_at(&frame, x, y);
+        // A left press in the text of a pane whose program does not use the
+        // mouse starts a selection; everything below is for the other cases.
+        if let MouseEventKind::Down(MouseButton::Left) = m.kind {
+            self.clear_selection();
+            if let Some(v) = under
+                && v.inner.contains(x, y)
+                && self
+                    .panes
+                    .get(&v.id)
+                    .is_some_and(|p| !p.modes().wants_mouse())
+            {
+                if Some(v.id) != self.focused() {
+                    self.focus(v.id);
+                    self.relayout();
+                }
+                self.start_selection(v, x, y);
+                return;
+            }
+        }
         match m.kind {
             MouseEventKind::Down(_) => {
                 if let Some(v) = under
@@ -1200,6 +1229,10 @@ impl App {
             {
                 self.run_bind(c, true);
                 return;
+            }
+            // Typing ends a mouse selection, as in any terminal.
+            if self.selection_pane.is_some() {
+                self.clear_selection();
             }
             if let Some(p) = self.focused_pane()
                 && let Some(bytes) = input::encode_key(&key, p.modes())
