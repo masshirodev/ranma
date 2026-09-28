@@ -85,7 +85,8 @@ does not matter; it is ignored.
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
 | `toggle_split` | Flip the focused container between horizontal and vertical. |
-| `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. |
+| `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
+| `cycle_floats` | Raise the bottom-most floating pane and focus it (`leader f`); repeated, it walks through the pile. |
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |
 | `group_next` / `group_prev` | Cycle the tabs of the group around the focused pane. |
 | `fullscreen` | Toggle the focused pane filling the workspace. |
@@ -111,9 +112,10 @@ does not matter; it is ignored.
 | `quit` / `quit now` | Quit ranma, closing every pane in every session (`leader Delete`). `quit` asks first (`y` or `Enter` quits, any other key cancels); `quit now` does not, for scripts: `ranma action "quit now"`. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave
-is gone. **Sessions** are separate sets of workspaces, one shown at a time; the
-others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of its own,
-drawn centred over whatever workspace is shown, whose panes tile inside it.
+is gone. Floats overlap freely and cascade as they open. **Sessions** are separate sets of workspaces, one shown at a time; the
+others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of free floating panes
+over whatever workspace is shown. Its first pane opens centred at 80%, later ones
+cascade; move, size and stack them like any float.
 
 ## Copy mode and search
 

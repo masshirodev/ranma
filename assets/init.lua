@@ -53,6 +53,9 @@ for _, dir in ipairs { "left", "right", "up", "down" } do
 end
 ranma.bind("q", "close_pane")
 ranma.bind("w", "toggle_floating")
+-- Floats are free: they overlap, and new ones cascade from the last. f raises
+-- the next one, cycling through the pile.
+ranma.bind("f", "cycle_floats")
 ranma.bind("j", "toggle_split")
 ranma.bind("alt+return", "fullscreen")
 

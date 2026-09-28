@@ -45,6 +45,8 @@ pub enum Action {
     Resize(Dir, u16),
     ToggleSplit,
     ToggleFloating,
+    /// Raise the next floating pane, cycling through the pile.
+    CycleFloats,
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -224,6 +226,7 @@ impl FromStr for Action {
             }
             "toggle_split" => no_arg(Action::ToggleSplit),
             "toggle_floating" => no_arg(Action::ToggleFloating),
+            "cycle_floats" => no_arg(Action::CycleFloats),
             "toggle_group" => no_arg(Action::ToggleGroup),
             "group_next" => no_arg(Action::GroupNext),
             "group_prev" => no_arg(Action::GroupPrev),
@@ -308,6 +311,7 @@ impl fmt::Display for Action {
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
+            Action::CycleFloats => f.write_str("cycle_floats"),
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),

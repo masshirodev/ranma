@@ -388,16 +388,11 @@ impl App {
             }
         }
 
+        // The scratchpad is a layer of free floats over whatever is shown.
         if self.scratch_shown {
-            let sarea = self.scratch_area();
-            f.overlay = Some(sarea);
-            let lay = self.scratch.tree.layout_full(sarea, gap);
-            for (id, r) in lay.visible {
-                f.views.push(view(id, r, true));
+            for (id, r) in &self.scratch.floating {
+                f.views.push(view(*id, r.clamp_into(area), true));
             }
-            f.hidden
-                .extend(lay.hidden.iter().map(|(id, r)| (*id, r.inset(b, b))));
-            f.tab_bars.extend(lay.tab_bars);
         }
         f
     }
@@ -488,8 +483,15 @@ impl App {
             // i3's default for a fresh split is side by side.
             Layout::Manual => Placement::Manual(Split::Horizontal),
         };
+        let area = self.workspace_area();
+        let in_scratch = self.scratch_shown;
         let ws = self.active_mut();
         match (side, focused) {
+            // Everything in the scratchpad floats: a new pane joins the pile.
+            _ if in_scratch => {
+                let r = ws.cascade(area, 80, 80);
+                ws.floating.push((id, r));
+            }
             (Some(dir), Some(f)) => {
                 ws.tree.insert_beside(id, f, dir);
             }
@@ -681,17 +683,18 @@ impl App {
         let Some((_, float)) = self.detach(id) else {
             return;
         };
-        let area = if target == SCRATCHPAD {
-            self.scratch_area()
-        } else {
-            self.workspace_area()
-        };
+        let area = self.workspace_area();
         let gap = self.config.theme.gaps.inner;
         let ws = self.ws_mut(target);
         match float {
-            // The scratchpad is itself a floating layer: its panes tile inside it.
-            Some(r) if target != SCRATCHPAD => ws.floating.push((id, r)),
-            _ => {
+            // A float stays where it was, wherever it goes.
+            Some(r) => ws.floating.push((id, r)),
+            // Everything in the scratchpad floats: a tile sent there joins the pile.
+            None if target == SCRATCHPAD => {
+                let r = ws.cascade(area, 80, 80);
+                ws.floating.push((id, r));
+            }
+            None => {
                 let anchor = ws.focused.filter(|f| ws.tree.contains(*f));
                 let rect = anchor.and_then(|a| {
                     ws.tree
@@ -714,7 +717,7 @@ impl App {
 
     fn toggle_floating(&mut self) {
         if self.scratch_shown {
-            self.status = Some("scratchpad panes tile inside it; they do not float".into());
+            self.status = Some("scratchpad panes always float".into());
             return;
         }
         if let Some(id) = self.focused() {
@@ -1147,7 +1150,7 @@ impl App {
         };
         self.focus(v.id);
         // In WM mode a float can be grabbed anywhere, not only by its border.
-        if v.floating && !self.scratch_shown {
+        if v.floating {
             self.drag = match button {
                 MouseButton::Left => Some(Drag::Move {
                     id: v.id,
@@ -1357,6 +1360,13 @@ impl App {
                 }
             }
             Action::ToggleFloating => self.toggle_floating(),
+            Action::CycleFloats => {
+                if self.active_mut().cycle_floats().is_some() {
+                    self.relayout();
+                } else {
+                    self.status = Some("no floating panes here".into());
+                }
+            }
             Action::ToggleGroup => {
                 if let Some(id) = focused {
                     if floating {

@@ -63,6 +63,37 @@ impl Workspace {
         }
     }
 
+    /// Where a new float goes: offset down and right from the topmost float, so
+    /// a pile of them shows every title bar, or centred at `pw`% x `ph`% of
+    /// `area` when there is none (or the cascade would run off the area).
+    pub fn cascade(&self, area: Rect, pw: u16, ph: u16) -> Rect {
+        let fresh = area.centered(pw, ph);
+        match self.floating.last() {
+            None => fresh,
+            Some((_, last)) => {
+                let next = Rect::new(last.x + 3, last.y + 1, last.w, last.h);
+                if next.right() > area.right() || next.bottom() > area.bottom() {
+                    fresh
+                } else {
+                    next
+                }
+            }
+        }
+    }
+
+    /// Raise the bottom-most float and return it: called repeatedly, this
+    /// brings each float of a pile to the top in turn.
+    pub fn cycle_floats(&mut self) -> Option<PaneId> {
+        if self.floating.is_empty() {
+            return None;
+        }
+        let bottom = self.floating.remove(0);
+        let id = bottom.0;
+        self.floating.push(bottom);
+        self.focused = Some(id);
+        Some(id)
+    }
+
     pub fn float_rect_mut(&mut self, id: PaneId) -> Option<&mut Rect> {
         self.floating
             .iter_mut()
@@ -86,6 +117,35 @@ mod tests {
         assert_eq!(ws.take(1), Some(None));
         assert_eq!(ws.take(1), None);
         assert!(ws.is_empty());
+    }
+
+    #[test]
+    fn floats_cascade_and_wrap() {
+        let area = Rect::new(0, 0, 100, 40);
+        let mut ws = Workspace::default();
+        let first = ws.cascade(area, 60, 60);
+        assert_eq!(first, area.centered(60, 60));
+        ws.floating.push((1, first));
+        let second = ws.cascade(area, 60, 60);
+        assert_eq!((second.x, second.y), (first.x + 3, first.y + 1));
+        assert_eq!((second.w, second.h), (first.w, first.h));
+        // Off the bottom-right edge: start again from the centre.
+        ws.floating.push((2, Rect::new(60, 30, 40, 10)));
+        assert_eq!(ws.cascade(area, 60, 60), area.centered(60, 60));
+    }
+
+    #[test]
+    fn cycling_brings_each_float_to_the_top() {
+        let mut ws = Workspace::default();
+        for id in 1..=3 {
+            ws.floating.push((id, Rect::default()));
+        }
+        assert_eq!(ws.cycle_floats(), Some(1));
+        assert_eq!(ws.cycle_floats(), Some(2));
+        assert_eq!(ws.cycle_floats(), Some(3));
+        assert_eq!(ws.cycle_floats(), Some(1));
+        assert_eq!(ws.floating.last().unwrap().0, 1);
+        assert_eq!(Workspace::default().cycle_floats(), None);
     }
 
     #[test]

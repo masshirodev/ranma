@@ -180,16 +180,25 @@ the two kept in sync by hand. So:
 
 ### Floating panes and the scratchpad
 
-A workspace has a floating layer over its tree: panes with their own rectangles,
-drawn after the tiles over a cleared area, raised when focused. Keyboard `move`
-shifts a float and `resize` changes its size; in WM mode the mouse drags it (left
-button) and resizes it (right), with the PTY resized once on release rather than
-on every mouse event. A float tiled again goes next to the tile it was over.
+Floats are free. A workspace has a floating layer over its tree: panes with their
+own rectangles that overlap as they like, drawn after the tiles over a cleared
+area, raised when focused. A new float cascades — it opens a few cells down and
+right of the topmost one — so a pile of them shows every title bar instead of
+stacking exactly and hiding the ones below; `cycle_floats` raises the bottom one,
+so repeating it walks the whole pile. Keyboard `move` shifts a float and `resize`
+changes its size; the mouse drags it by its top border and sizes it by the right
+or bottom one (anywhere, in WM mode), with the PTY resized once on release. A
+float tiled again goes next to the tile it was over, and floated again returns
+where it last floated.
 
-The scratchpad is Hyprland's special workspace: one per ranma, drawn centred over
-the current workspace at 80%, its panes tiled inside it. Summoning an empty one
-opens a shell, because the point of the key is a quick terminal. Summoning it ends
-WM mode for the same reason `new_pane` does: the next thing you do is type.
+The scratchpad is Hyprland's special workspace: one per ranma, shown over the
+current workspace, and it is **all floats**. (It first tiled its panes inside a
+centred box, a small tiled screen of its own; that was not what a scratchpad is
+for — a place to throw a shell or two and move them wherever — and it went on
+2026-09-28.) Its first pane opens centred at 80%, later ones cascade. Summoning
+an empty one opens a shell, because the point of the key is a quick terminal.
+Summoning it ends WM mode for the same reason `new_pane` does: the next thing
+you do is type.
 
 ### Sessions swap in and out
 

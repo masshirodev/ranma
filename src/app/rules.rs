@@ -49,7 +49,8 @@ impl App {
             let (pw, ph) = rule.size.unwrap_or((60, 60));
             let ws = self.ws_mut(n);
             if ws.tree.remove(id) {
-                ws.floating.push((id, area.centered(pw, ph)));
+                let r = ws.cascade(area, pw, ph);
+                ws.floating.push((id, r));
             } else if let Some(r) = ws.float_rect_mut(id) {
                 *r = area.centered(pw, ph);
             }
@@ -73,11 +74,12 @@ impl App {
         let ws = self.active_mut();
         match ws.take(id) {
             Some(None) => {
+                let cascade = ws.cascade(area, 60, 60);
                 let r = ws
                     .float_memory
                     .remove(&id)
                     .map(|r| r.clamp_into(area))
-                    .unwrap_or_else(|| area.centered(60, 60));
+                    .unwrap_or(cascade);
                 ws.floating.push((id, r));
                 ws.focused = Some(id);
             }
