@@ -262,6 +262,8 @@ pub struct StateSnapshot {
 pub struct Runtime {
     pub actions: Vec<Action>,
     pub notify: Option<String>,
+    /// `ranma.toast` calls: text, urgent, timeout in seconds.
+    pub toasts: Vec<(String, bool, Option<f64>)>,
     pub state: StateSnapshot,
 }
 
@@ -665,6 +667,40 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
     )?;
 
     ranma.set(
+        "toast",
+        lua.create_function(|lua, (text, opts): (String, Option<Table>)| {
+            let mut urgent = false;
+            let mut timeout = None;
+            if let Some(t) = &opts {
+                for pair in t.pairs::<String, Value>() {
+                    let (k, v) = pair?;
+                    match (k.as_str(), v) {
+                        ("urgent", Value::Boolean(b)) => urgent = b,
+                        ("timeout", Value::Integer(n)) if n > 0 => timeout = Some(n as f64),
+                        ("timeout", Value::Number(n)) if n > 0.0 => timeout = Some(n),
+                        ("urgent" | "timeout", other) => {
+                            return Err(rt_err(format!(
+                                "ranma.toast: bad `{k}` ({}); urgent is true/false, timeout positive seconds",
+                                other.type_name()
+                            )));
+                        }
+                        _ => {
+                            return Err(rt_err(format!(
+                                "ranma.toast: unknown option `{k}` (expected urgent, timeout)"
+                            )));
+                        }
+                    }
+                }
+            }
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.toast only works inside binds, hooks and modules, not at config load")
+            })?;
+            rt.toasts.push((text, urgent, timeout));
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "state",
         lua.create_function(|lua, ()| {
             let st = lua
@@ -984,7 +1020,12 @@ mod tests {
 
     #[test]
     fn runtime_api_refuses_at_config_load() {
-        for src in ["ranma.action('quit')", "ranma.notify('x')", "ranma.state()"] {
+        for src in [
+            "ranma.action('quit')",
+            "ranma.notify('x')",
+            "ranma.state()",
+            "ranma.toast('x')",
+        ] {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains("not at config load"), "{src}: {err}");
         }
@@ -992,6 +1033,18 @@ mod tests {
         // that only runs later: at call time, with the line.
         let err = format!("{:#}", with_user("ranma.action('fly')").unwrap_err());
         assert!(err.contains("fly"), "{err}");
+    }
+
+    #[test]
+    fn toast_options_are_checked() {
+        for (src, needle) in [
+            ("ranma.toast('x', { loud = true })", "loud"),
+            ("ranma.toast('x', { timeout = -1 })", "timeout"),
+            ("ranma.toast('x', { urgent = 'yes' })", "urgent"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
+        }
     }
 
     #[test]

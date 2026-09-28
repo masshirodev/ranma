@@ -246,6 +246,21 @@ title flickers is worse than no rule.
   no late reply is left in the input to turn up as keystrokes. The palette is
   read once; a host that changes colours while ranma runs is not followed.
 
+### Toasts, and a socket per ranma
+
+A notification that sits in the bar until the next key is easy to miss and easy
+to lose, so there are toasts: boxes at the top right that stack, expire, and
+never take focus or keys. The useful source of them is the shell — "tell me when
+this build is done" — so each ranma listens on a Unix socket of its own and puts
+its path in its panes' environment. `ranma notify` in a pane reaches exactly the
+ranma it runs in; with two terminals open, each gets its own. The socket is in
+`$XDG_RUNTIME_DIR`, mode 0600, one request per connection, a few lines of text.
+Once it existed, `ranma action` came for free: any bind's action, from a script.
+
+Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
+alacritty_terminal drops those sequences before ranma sees them, and catching
+them would mean parsing the PTY stream a second time.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

@@ -31,6 +31,10 @@ search_fg = "#1e1e2e"
 search_bg = "#f9e2af"
 search_current_fg = "#1e1e2e"
 search_current_bg = "#fab387"
+# Toasts (ranma notify, ranma.toast, bells in hidden panes). Their border is
+# bar_accent, or bar_urgent for urgent ones.
+toast_fg = "#cdd6f4"
+toast_bg = "#313244"
 # Tab bars of grouped (tabbed) containers.
 tab_active_fg = "#1e1e2e"
 tab_active_bg = "#89b4fa"

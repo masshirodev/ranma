@@ -207,6 +207,11 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
 
+Two more come defined in Lua in the defaults, and are redefined like any module:
+`datetime` (`Mon 28 Sep  14:45`, the default on the right) and `clock` (`14:45`).
+For another format, e.g.
+`ranma.module("datetime", { interval = 60, render = function() return os.date("%Y-%m-%d %H:%M") end })`.
+
 Options go through `ranma.module` with the built-in's name:
 `ranma.module("workspaces", { show = "all" })`.
 
@@ -235,6 +240,25 @@ Give exactly one of `render` or `exec`. A module that fails shows its error in t
 `urgent` style instead of its text. Modules never run while a frame is drawn; the
 bar shows their last result.
 
+## Toasts and `ranma notify`
+
+Toasts are short notifications stacked at the top right, gone after five seconds
+or when clicked. They come from three places:
+
+- **Any pane:** `ranma notify "build done"`, `ranma notify -u "tests failed"`
+  (urgent), `ranma notify -t 30 "..."` (seconds). Chain it after anything slow:
+  `make && ranma notify done || ranma notify -u failed`.
+- **Lua:** `ranma.toast("text", { urgent = true, timeout = 10 })`.
+- **ranma:** a bell in a pane you cannot see says where it rang.
+
+`ranma action "<action>"` runs any action from a pane the same way, e.g.
+`ranma action "workspace 3"` or `ranma action "exec htop"`, which makes ranma
+scriptable from the shell.
+
+Both find the ranma they run in through `RANMA_SOCKET`, which ranma sets in every
+pane; outside ranma they say so and exit 1. The socket is
+`$XDG_RUNTIME_DIR/ranma-<pid>.sock`, mode 0600, removed when ranma exits.
+
 ## Lua at run time
 
 Inside a bind function, a hook, or a module's `render`:
@@ -243,6 +267,7 @@ Inside a bind function, a hook, or a module's `render`:
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
 | `ranma.notify("text")` | Show a message in the bar until the next key in WM mode. |
+| `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
@@ -299,6 +324,7 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.tab_active_fg`, `tab_active_bg`, `tab_inactive_fg`, `tab_inactive_bg` | tab bars of groups |
 | `colors.picker_selected_fg`, `picker_selected_bg` | the selected row in switchers and help |
 | `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
+| `colors.toast_fg`, `toast_bg` | toasts (their border is `bar_accent`, or `bar_urgent` when urgent) |
 | `border.style` | `rounded`, `plain`, `thick`, `double`, `none` |
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
 | `bar.position` | `top`, `bottom`, `hidden` |

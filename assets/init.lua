@@ -151,7 +151,7 @@ ranma.bind("r", "reload_config")
 ranma.bar {
   left = { "mode", "session", "workspaces" },
   center = { "title" },
-  right = { "clock" },
+  right = { "datetime" },
 }
 
 -- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.
@@ -164,6 +164,20 @@ ranma.module("clock", {
   render = function() return os.date("%H:%M") end,
 })
 
+-- The date and time. To change the format, redefine it in your init.lua with
+-- any os.date (strftime) format, e.g. "%Y-%m-%d %H:%M" or "%a %H:%M:%S" (with
+-- interval = 1 for seconds).
+ranma.module("datetime", {
+  interval = 60,
+  render = function() return os.date("%a %d %b  %H:%M") end,
+})
+
+-- Toasts -------------------------------------------------------------------------
+-- From any pane, `ranma notify "text"` (or `ranma notify -u` for urgent) shows a
+-- toast in this ranma: `make && ranma notify "build done"`. `ranma action
+-- "workspace 3"` runs any action the same way. A bell in a pane you cannot see
+-- shows a toast saying where. Click a toast to dismiss it.
+
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind
 -- fires, and does not end WM mode unless the bind says { exit = true }:
@@ -172,7 +186,8 @@ ranma.module("clock", {
 --   ranma.bind("n", function() os.execute("notify-send hello") end, { exit = true })
 --
 -- Inside a bind, hook or module, ranma.action("workspace 2") runs an action,
--- ranma.notify("text") puts a message in the bar, and ranma.state() returns
+-- ranma.notify("text") puts a message in the bar, ranma.toast("text",
+-- { urgent = true, timeout = 10 }) shows a toast, and ranma.state() returns
 -- { workspace, workspaces, focused, title, mode, panes }.
 --
 -- Hooks run on events, with a table describing it:

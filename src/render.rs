@@ -74,6 +74,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }
+    draw_toasts(f, app);
     if let (Some(p), Some(_)) = (app.picker(), app.picker_layout()) {
         draw_picker(f, app, p);
         // The picker's query line has the cursor; nothing else does.
@@ -284,6 +285,34 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
             area.w.saturating_sub(x) as usize,
             style,
         );
+    }
+}
+
+fn draw_toasts(f: &mut Frame, app: &App) {
+    let c = &app.config.theme.colors;
+    let body = Style::default().fg(color(c.toast_fg)).bg(color(c.toast_bg));
+    for (toast, r, lines) in app.toast_layout() {
+        let edge = match toast.level {
+            crate::toast::Level::Normal => c.bar_accent,
+            crate::toast::Level::Urgent => c.bar_urgent,
+        };
+        f.render_widget(Clear, rrect(r));
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(body.fg(color(edge)))
+            .style(body);
+        f.render_widget(block, rrect(r));
+        let buf = f.buffer_mut();
+        for (i, line) in lines.iter().enumerate() {
+            buf.set_stringn(
+                r.x + 2,
+                r.y + 1 + i as u16,
+                line,
+                r.w.saturating_sub(4) as usize,
+                body,
+            );
+        }
     }
 }
 

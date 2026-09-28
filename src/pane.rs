@@ -36,6 +36,14 @@ pub enum AppEvent {
     },
     /// Something in the config directory changed on disk.
     ConfigChanged,
+    /// A toast from `ranma notify` (see `ipc`).
+    Toast {
+        text: String,
+        level: crate::toast::Level,
+        timeout: Option<std::time::Duration>,
+    },
+    /// An action from `ranma action`.
+    Action(crate::action::Action),
 }
 
 /// Forwards a pane's terminal events to the UI thread.
@@ -157,6 +165,10 @@ impl Pane {
         env.insert("COLORTERM".into(), "truecolor".into());
         env.insert("RANMA".into(), std::process::id().to_string());
         env.insert("RANMA_PANE".into(), id.to_string());
+        // How `ranma notify` in this pane finds this ranma.
+        if let Some(sock) = crate::ipc::socket_path() {
+            env.insert(crate::ipc::ENV.into(), sock.display().to_string());
+        }
 
         let pty_opts = tty::Options {
             shell: Some(program),

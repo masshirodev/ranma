@@ -156,6 +156,7 @@ pub struct App {
     last_focused: Option<PaneId>,
     /// The host terminal's colours, asked once at startup (see `hostcolors`).
     pub host_colors: crate::hostcolors::HostColors,
+    pub toasts: crate::toast::Toasts,
 }
 
 impl App {
@@ -201,6 +202,7 @@ impl App {
             rules_applied: HashSet::new(),
             last_focused: None,
             host_colors: Default::default(),
+            toasts: Default::default(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -710,6 +712,12 @@ impl App {
                     self.set_module_value(name, seg);
                 }
             }
+            AppEvent::Toast {
+                text,
+                level,
+                timeout,
+            } => self.toast(text, level, timeout),
+            AppEvent::Action(a) => self.run_action(a),
             AppEvent::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
         }
         self.after_event();
@@ -825,6 +833,24 @@ impl App {
                 pane.write(reply.into_bytes());
             }
             TermEvent::Bell if !visible => {
+                // A bell where you cannot see it gets a toast saying where.
+                let title = pane.title.clone();
+                let place = match (self.locate(id), self.locate_hidden(id)) {
+                    (Some(SCRATCHPAD), _) => "the scratchpad".to_string(),
+                    (Some(n), _) => format!("workspace {n}"),
+                    (None, Some((si, n))) => format!("{} · workspace {n}", self.sessions[si].name),
+                    (None, None) => "a pane".to_string(),
+                };
+                let what = if title.is_empty() {
+                    "bell".to_string()
+                } else {
+                    format!("bell: {title}")
+                };
+                self.toast(
+                    format!("{what} ({place})"),
+                    crate::toast::Level::Normal,
+                    None,
+                );
                 if let Some(n) = self.locate(id).filter(|n| *n != SCRATCHPAD) {
                     self.ws_mut(n).urgent = true;
                     self.dirty = true;
@@ -944,6 +970,18 @@ impl App {
     }
 
     fn handle_mouse(&mut self, m: MouseEvent) {
+        // A click on a toast dismisses it, in any mode; it never reaches a pane.
+        if let MouseEventKind::Down(_) = m.kind
+            && let Some(id) = self
+                .toast_layout()
+                .iter()
+                .find(|(_, r, _)| r.contains(m.column, m.row))
+                .map(|(t, _, _)| t.id)
+        {
+            self.toasts.dismiss(id);
+            self.dirty = true;
+            return;
+        }
         match self.mode {
             Mode::Wm => self.handle_mouse_wm(m),
             // Copy mode handled its own mouse events before getting here.
@@ -1441,6 +1479,14 @@ impl App {
         if let Some(msg) = rt.notify {
             self.status = Some(msg);
         }
+        for (text, urgent, timeout) in rt.toasts {
+            let level = if urgent {
+                crate::toast::Level::Urgent
+            } else {
+                crate::toast::Level::Normal
+            };
+            self.toast(text, level, timeout.map(Duration::from_secs_f64));
+        }
         let out = match result {
             Ok(v) => Some(v),
             Err(e) => {
@@ -1507,10 +1553,38 @@ impl App {
             .values()
             .copied()
             .chain(self.reload_at)
+            .chain(self.toasts.next_expiry())
             .min()
     }
 
+    pub fn toast(
+        &mut self,
+        text: impl Into<String>,
+        level: crate::toast::Level,
+        timeout: Option<Duration>,
+    ) {
+        self.toasts.push(
+            text,
+            level,
+            timeout.unwrap_or(crate::toast::DEFAULT_TIMEOUT),
+            Instant::now(),
+        );
+        self.dirty = true;
+    }
+
+    /// Where toasts go: down the right edge, below a top bar.
+    pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<String>)> {
+        let top = match self.config.theme.bar.position {
+            BarPosition::Top => self.screen.y + 1,
+            _ => self.screen.y,
+        };
+        self.toasts.layout(self.screen, top)
+    }
+
     fn run_timers(&mut self, now: Instant) {
+        if self.toasts.expire(now) {
+            self.dirty = true;
+        }
         if self.reload_at.is_some_and(|t| t <= now) {
             self.reload_config();
         }
@@ -1839,6 +1913,15 @@ pub fn run(config: Config) -> Result<()> {
         let size = terminal.size()?;
         let mut app = App::new(config, tx.clone(), size.width, size.height);
         app.host_colors = host_colors;
+        // Before the first pane: panes learn the socket from their environment.
+        // Not fatal: without it ranma works, only `ranma notify` does not.
+        let _ipc = match crate::ipc::listen(tx.clone()) {
+            Ok(l) => Some(l),
+            Err(e) => {
+                app.status = Some(format!("ranma notify unavailable: {e:#}"));
+                None
+            }
+        };
         app.open_pane(None).context("starting the first pane")?;
         app.after_event();
         spawn_input_thread(tx.clone());

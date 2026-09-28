@@ -104,6 +104,8 @@ pub struct Colors {
     pub search_bg: Color,
     pub search_current_fg: Color,
     pub search_current_bg: Color,
+    pub toast_fg: Color,
+    pub toast_bg: Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

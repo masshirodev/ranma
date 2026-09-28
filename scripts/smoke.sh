@@ -22,14 +22,16 @@ trap 'T kill-server 2>/dev/null || true' EXIT
 
 # An empty config dir: the smoke test checks the defaults, not the user's config.
 CFG=$(mktemp -d)
-T -f /dev/null new-session -d -s s -x 120 -y 30 \
+# Host colours are set in the server's config, so they exist before ranma
+# starts and asks for them (setting them after new-session is a race).
+TCONF=$(mktemp)
+echo "set -g window-style 'fg=#cdd6f4,bg=#1e1e2e'" > "$TCONF"
+T -f "$TCONF" new-session -d -s s -x 120 -y 30 \
   "env RANMA_CONFIG_DIR=$CFG SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
 
 bar() { screen | tail -1; }
 # Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.
 T set -g set-clipboard on
-# Known host colours, for the colour-query check below.
-T set -g window-style 'fg=#cdd6f4,bg=#1e1e2e'
 wait_for '╭' || fail "no pane border drawn"
 bar | grep -q '^ 1 ' || fail "no workspaces module in the bar"
 bar | grep -Eq '[0-9]{2}:[0-9]{2} *$' || fail "no clock module in the bar"
@@ -95,6 +97,10 @@ T send-keys -t s C-b t; sleep 0.8
 T send-keys -t s 'pwd' Enter
 wait_for '│/usr/share *│' || fail "new pane did not start in the focused pane's directory"
 T send-keys -t s 'exit' Enter; sleep 0.5
+
+# `ranma notify` in a pane reaches this ranma and shows a toast.
+T send-keys -t s "$BIN notify smoke-toast-ok" Enter
+wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3
