@@ -116,6 +116,12 @@ ranma.bind("?", "help")
 for _, dir in ipairs { "left", "right", "up", "down" } do
   ranma.bind("alt+" .. dir, "focus " .. dir, { global = true })
 end
+-- Alt+digit switches workspace without the leader. (In WM mode, Alt+digit moves
+-- the pane instead; see Workspaces above.) Readline's Alt+digit (a numeric
+-- argument) is lost to this; ranma.unbind("alt+1") and so on gives it back.
+for i = 1, 10 do
+  ranma.bind("alt+" .. tostring(i % 10), "workspace " .. i, { global = true })
+end
 
 -- ranma itself ------------------------------------------------------------------
 ranma.bind("escape", "exit_mode")

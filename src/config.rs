@@ -880,6 +880,16 @@ mod tests {
             Some(Action::MoveToWorkspace(WorkspaceTarget::Index(3)))
         );
         assert!(builtin(&cfg, "shift+3").is_none());
+        // Bare Alt+digit (global) goes to the workspace; in WM mode it moves the pane.
+        let alt3 = "alt+3".parse().unwrap();
+        assert!(matches!(
+            cfg.global_binds[&alt3].action,
+            BindAction::Builtin(Action::Workspace(WorkspaceTarget::Index(3)))
+        ));
+        assert!(matches!(
+            cfg.global_binds[&"alt+0".parse().unwrap()].action,
+            BindAction::Builtin(Action::Workspace(WorkspaceTarget::Index(10)))
+        ));
         assert_eq!(cfg.settings.mouse, MouseMode::Click);
 
         let cfg = with_user("ranma.unbind('alt+left'); ranma.set { mouse = 'hover' }").unwrap();
