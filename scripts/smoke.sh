@@ -25,23 +25,48 @@ CFG=$(mktemp -d)
 T new-session -d -s s -x 120 -y 30 \
   "env RANMA_CONFIG_DIR=$CFG SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
 
+bar() { screen | tail -1; }
 wait_for '╭' || fail "no pane border drawn"
-wait_for ' ranma ' || fail "no bar"
+bar | grep -q '^ 1 ' || fail "no workspaces module in the bar"
+bar | grep -Eq '[0-9]{2}:[0-9]{2} *$' || fail "no clock module in the bar"
 
 # Split: leader, then t.
 T send-keys -t s C-b t
-wait_for ' 2 *$' || fail "second pane did not open"
+sleep 0.5
 [ "$(screen | head -1 | grep -o '╭' | wc -l)" -eq 2 ] || fail "expected two panes side by side"
 
-# WM mode shows in the bar, and Esc leaves it.
+# WM mode shows in the bar; Esc and Enter both leave it.
 T send-keys -t s C-b
 wait_for ' WM ' || fail "WM mode indicator missing"
-T send-keys -t s Escape
-wait_for ' ranma ' || fail "Esc did not leave WM mode"
+T send-keys -t s Escape; sleep 0.3
+bar | grep -q ' WM ' && fail "Esc did not leave WM mode"
+T send-keys -t s C-b Enter; sleep 0.3
+bar | grep -q ' WM ' && fail "Enter did not leave WM mode"
+
+# Alt+Left is a global bind: focus moves without the leader. Typing lands left.
+T send-keys -t s M-Left; sleep 0.3
+T send-keys -t s 'echo went-left' Enter
+wait_for '^│went-left' || fail "Alt+Left did not focus the left pane"
+
+# A click focuses the pane under it (SGR mouse bytes, as a terminal sends them).
+T send-keys -t s -l $'\e[<0;100;5M'; T send-keys -t s -l $'\e[<0;100;5m'; sleep 0.3
+T send-keys -t s 'echo clicked-right' Enter
+wait_for '││clicked-right' || fail "click did not focus the right pane"
 
 # Typing reaches the focused pane; tabs do not leave stale cells behind.
 T send-keys -t s 'printf "1234567890\n"; printf "ab\tZ\n"' Enter
 wait_for 'ab      Z' || fail "tab rendering or input passthrough"
+
+# Workspaces: 2 appears in the bar while current, and goes when left empty.
+T send-keys -t s C-b 2 Escape; sleep 0.3
+bar | grep -q ' 1  2 ' || fail "workspace 2 not shown in the bar"
+T send-keys -t s C-b 1 Escape; sleep 0.3
+bar | grep -q ' 2 ' && fail "empty workspace 2 still in the bar"
+
+# Hot reload: a broken config is reported at once and the old one kept.
+echo 'ranma.bind("x", "fly")' > "$CFG/init.lua"
+wait_for 'config error, kept the old one' 8 || fail "reload error not shown"
+rm "$CFG/init.lua"
 
 # Idle: zero CPU over five seconds.
 PID=$(pgrep -nx ranma)

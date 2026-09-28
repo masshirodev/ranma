@@ -5,6 +5,7 @@
 
 pub mod action;
 pub mod app;
+pub mod bar;
 pub mod config;
 pub mod input;
 pub mod keys;
@@ -12,3 +13,4 @@ pub mod layout;
 pub mod pane;
 pub mod render;
 pub mod theme;
+pub mod workspace;

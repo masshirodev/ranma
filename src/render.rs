@@ -1,4 +1,4 @@
-//! Drawing a frame: pane borders, pane contents, the bar.
+//! Drawing a frame: pane borders and contents, tab bars, floats, the bar.
 //!
 //! ratatui keeps the previous frame and writes only the cells that differ, so a
 //! frame where one pane changed costs one pane's worth of output. What it does not
@@ -11,12 +11,13 @@ use alacritty_terminal::vte::ansi::{Color as AColor, CursorShape, NamedColor};
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect as RRect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, BorderType, Borders, Clear};
 
 use crate::app::{App, Mode, PaneView};
-use crate::layout::Rect;
-use crate::theme::{self, BorderStyle};
+use crate::bar;
+use crate::layout::{Rect, TabBar};
+use crate::theme::{self, BorderStyle, Colors};
 
 pub fn color(c: theme::Color) -> Color {
     match c {
@@ -38,82 +39,111 @@ pub struct CursorState {
 }
 
 pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
+    let frame = app.frame();
     let mut cursor = None;
+    let mut overlay_cleared = false;
 
-    for view in app.views() {
+    for view in &frame.views {
+        // Floats and the scratchpad cover what is under them; without clearing,
+        // the tiles' cells would show through wherever the float's are blank.
+        if view.floating {
+            match frame.overlay {
+                Some(o) if o.contains(view.outer.x, view.outer.y) => {
+                    if !overlay_cleared {
+                        f.render_widget(Clear, rrect(o));
+                        overlay_cleared = true;
+                    }
+                }
+                _ => f.render_widget(Clear, rrect(view.outer)),
+            }
+        }
         let Some(pane) = app.panes.get(&view.id) else {
             continue;
         };
-        draw_border(f, app, &view, &pane.title);
-
-        let term = pane.term.lock();
-        let content = term.renderable_content();
-        let rows = term.screen_lines() as i32;
-        let inner = view.inner;
-        let buf = f.buffer_mut();
-
-        for indexed in content.display_iter {
-            let line = indexed.point.line.0 + content.display_offset as i32;
-            let col = indexed.point.column.0 as u16;
-            if line < 0 || line >= rows || col >= inner.w || line as u16 >= inner.h {
-                continue;
-            }
-            let cell = indexed.cell;
-            // The second half of a wide character belongs to the first; ratatui
-            // skips it when diffing because the first cell's symbol is two wide.
-            if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                continue;
-            }
-            let Some(out) = buf.cell_mut(Position::new(inner.x + col, inner.y + line as u16))
-            else {
-                continue;
-            };
-            if cell
-                .flags
-                .intersects(Flags::HIDDEN | Flags::LEADING_WIDE_CHAR_SPACER)
-            {
-                out.set_char(' ');
-            } else if let Some(extra) = cell.zerowidth() {
-                let mut s = String::with_capacity(8);
-                s.push(display_char(cell.c));
-                s.extend(extra);
-                out.set_symbol(&s);
-            } else {
-                out.set_char(display_char(cell.c));
-            }
-            out.set_style(Style {
-                fg: Some(term_color(cell.fg, content.colors)),
-                bg: Some(term_color(cell.bg, content.colors)),
-                add_modifier: modifiers(cell.flags),
-                ..Style::default()
-            });
-        }
-
-        if view.focused && app.mode == Mode::Normal {
-            let c = content.cursor;
-            let line = c.point.line.0 + content.display_offset as i32;
-            let visible = content.mode.contains(TermMode::SHOW_CURSOR)
-                && c.shape != CursorShape::Hidden
-                && line >= 0
-                && (line as u16) < inner.h
-                && (c.point.column.0 as u16) < inner.w;
-            if visible {
-                f.set_cursor_position(Position::new(
-                    inner.x + c.point.column.0 as u16,
-                    inner.y + line as u16,
-                ));
-                cursor = Some(CursorState {
-                    shape: c.shape,
-                    blinking: term.cursor_style().blinking,
-                });
-            }
+        draw_border(f, app, view, &pane.title);
+        if let Some(c) = draw_pane(f, app, view, pane) {
+            cursor = Some(c);
         }
     }
 
+    for tb in &frame.tab_bars {
+        draw_tab_bar(f, app, tb);
+    }
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }
     cursor
+}
+
+fn draw_pane(
+    f: &mut Frame,
+    app: &App,
+    view: &PaneView,
+    pane: &crate::pane::Pane,
+) -> Option<CursorState> {
+    let term = pane.term.lock();
+    let content = term.renderable_content();
+    let rows = term.screen_lines() as i32;
+    let inner = view.inner;
+    let buf = f.buffer_mut();
+
+    for indexed in content.display_iter {
+        let line = indexed.point.line.0 + content.display_offset as i32;
+        let col = indexed.point.column.0 as u16;
+        if line < 0 || line >= rows || col >= inner.w || line as u16 >= inner.h {
+            continue;
+        }
+        let cell = indexed.cell;
+        // The second half of a wide character belongs to the first; ratatui
+        // skips it when diffing because the first cell's symbol is two wide.
+        if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+            continue;
+        }
+        let Some(out) = buf.cell_mut(Position::new(inner.x + col, inner.y + line as u16)) else {
+            continue;
+        };
+        if cell
+            .flags
+            .intersects(Flags::HIDDEN | Flags::LEADING_WIDE_CHAR_SPACER)
+        {
+            out.set_char(' ');
+        } else if let Some(extra) = cell.zerowidth() {
+            let mut s = String::with_capacity(8);
+            s.push(display_char(cell.c));
+            s.extend(extra);
+            out.set_symbol(&s);
+        } else {
+            out.set_char(display_char(cell.c));
+        }
+        out.set_style(Style {
+            fg: Some(term_color(cell.fg, content.colors)),
+            bg: Some(term_color(cell.bg, content.colors)),
+            add_modifier: modifiers(cell.flags),
+            ..Style::default()
+        });
+    }
+
+    if !(view.focused && app.mode == Mode::Normal) {
+        return None;
+    }
+    let c = content.cursor;
+    let line = c.point.line.0 + content.display_offset as i32;
+    let visible = content.mode.contains(TermMode::SHOW_CURSOR)
+        && c.shape != CursorShape::Hidden
+        && line >= 0
+        && (line as u16) < inner.h
+        && (c.point.column.0 as u16) < inner.w;
+    if !visible {
+        return None;
+    }
+    f.set_cursor_position(Position::new(
+        inner.x + c.point.column.0 as u16,
+        inner.y + line as u16,
+    ));
+    Some(CursorState {
+        shape: c.shape,
+        blinking: term.cursor_style().blinking,
+    })
 }
 
 fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
@@ -128,10 +158,11 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     let c = &theme.colors;
     // In WM mode the focused border takes the mode colour, so it is obvious which
     // pane the next action applies to.
-    let border = match (view.focused, app.mode) {
-        (true, Mode::Wm) => c.mode_bg,
-        (true, Mode::Normal) => c.border_active,
-        (false, _) => c.border_inactive,
+    let border = match (view.focused, app.mode, view.floating) {
+        (true, Mode::Wm, _) => c.mode_bg,
+        (true, Mode::Normal, _) => c.border_active,
+        (false, _, true) => c.border_floating,
+        (false, _, false) => c.border_inactive,
     };
     let mut block = Block::default()
         .borders(Borders::ALL)
@@ -143,41 +174,80 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     f.render_widget(block, rrect(view.outer));
 }
 
+/// Tabs share the row equally; a click maps back the same way (see App's mouse).
+fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
+    let c: &Colors = &app.config.theme.colors;
+    let n = tb.tabs.len().max(1) as u16;
+    let buf = f.buffer_mut();
+    for (i, id) in tb.tabs.iter().enumerate() {
+        let i = i as u16;
+        let x0 = tb.rect.x + i * tb.rect.w / n;
+        let x1 = tb.rect.x + (i + 1) * tb.rect.w / n;
+        let active = i as usize == tb.active;
+        let style = if active {
+            Style::default()
+                .fg(color(c.tab_active_fg))
+                .bg(color(c.tab_active_bg))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(color(c.tab_inactive_fg))
+                .bg(color(c.tab_inactive_bg))
+        };
+        let title = app
+            .panes
+            .get(id)
+            .map(|p| p.title.as_str())
+            .filter(|t| !t.is_empty())
+            .unwrap_or("shell");
+        let width = x1.saturating_sub(x0) as usize;
+        let label: String = format!(" {title} ").chars().take(width).collect();
+        let padded = format!("{label:<width$}");
+        buf.set_stringn(x0, tb.rect.y, &padded, width, style);
+    }
+}
+
 fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
     let c = &app.config.theme.colors;
     let base = Style::default().fg(color(c.bar_fg)).bg(color(c.bar_bg));
-    let mut spans = Vec::new();
-    match app.mode {
-        Mode::Wm => spans.push(Span::styled(
-            " WM ",
-            Style::default()
-                .fg(color(c.mode_fg))
-                .bg(color(c.mode_bg))
-                .add_modifier(Modifier::BOLD),
-        )),
-        Mode::Normal => spans.push(Span::styled(
-            " ranma ",
-            Style::default().fg(color(c.bar_dim)),
-        )),
+    let buf = f.buffer_mut();
+    buf.set_style(rrect(area), base);
+    for (x, piece) in app.bar_pieces(area.w) {
+        let style = piece_style(c, piece.style).patch(Style::default().bg(color(c.bar_bg)));
+        let style = match piece.style {
+            // These carry their own background.
+            bar::Style::Mode | bar::Style::WsActive => piece_style(c, piece.style),
+            _ => style,
+        };
+        buf.set_stringn(
+            area.x + x,
+            area.y,
+            &piece.text,
+            area.w.saturating_sub(x) as usize,
+            style,
+        );
     }
-    if let Some(msg) = &app.status {
-        spans.push(Span::styled(
-            format!(" {msg}"),
-            Style::default().fg(color(c.bar_accent)),
-        ));
-    } else if let Some(title) = app.focused_title().filter(|t| !t.is_empty()) {
-        spans.push(Span::raw(format!(" {title}")));
+}
+
+fn piece_style(c: &Colors, s: bar::Style) -> Style {
+    let fg = |col| Style::default().fg(color(col));
+    match s {
+        bar::Style::Normal => fg(c.bar_fg),
+        bar::Style::Dim => fg(c.bar_dim),
+        bar::Style::Accent => fg(c.bar_accent),
+        bar::Style::Urgent => fg(c.bar_urgent).add_modifier(Modifier::BOLD),
+        bar::Style::Mode => Style::default()
+            .fg(color(c.mode_fg))
+            .bg(color(c.mode_bg))
+            .add_modifier(Modifier::BOLD),
+        bar::Style::WsActive => Style::default()
+            .fg(color(c.ws_active_fg))
+            .bg(color(c.ws_active_bg))
+            .add_modifier(Modifier::BOLD),
+        bar::Style::WsOccupied => fg(c.ws_occupied),
+        bar::Style::WsEmpty => fg(c.ws_empty),
+        bar::Style::WsUrgent => fg(c.ws_urgent).add_modifier(Modifier::BOLD),
     }
-    let right = format!(
-        "{}{} ",
-        if app.fullscreen() { "[full] " } else { "" },
-        app.panes.len()
-    );
-    let used: usize = spans.iter().map(|s| s.width()).sum();
-    let pad = (area.w as usize).saturating_sub(used + right.chars().count());
-    spans.push(Span::raw(" ".repeat(pad)));
-    spans.push(Span::styled(right, Style::default().fg(color(c.bar_dim))));
-    f.render_widget(Paragraph::new(Line::from(spans)).style(base), rrect(area));
 }
 
 /// What a grid cell's character looks like on screen.

@@ -27,10 +27,21 @@ ranma.set {
   scrollback_lines = 10000,
 
   wm_mode = {
-    -- true: WM mode stays on until Esc (or an action that ends it, like new_pane).
-    -- false: every bind is one-shot and returns to the program.
+    -- true: WM mode stays on until Esc or Enter (or an action that ends it, like
+    -- new_pane). false: every bind is one-shot and returns to the program.
     sticky = true,
   },
+
+  -- What the mouse does outside WM mode:
+  --   "click": clicking a pane focuses it; clicks and the wheel reach programs
+  --            that use the mouse (nvim, htop), and the wheel scrolls back
+  --            through output everywhere else.
+  --   "hover": focus follows the pointer, otherwise the same.
+  --   "off":   the mouse belongs to your terminal (its own selection); ranma only
+  --            uses it in WM mode.
+  -- With "click" or "hover", hold Shift while dragging to select text with your
+  -- terminal instead (kitty, foot, alacritty, wezterm and xterm all do this).
+  mouse = "click",
 }
 
 -- Panes -------------------------------------------------------------------------
@@ -46,6 +57,8 @@ ranma.bind("ctrl+h", "group_prev")
 ranma.bind("ctrl+l", "group_next")
 
 -- Focus, resize, move ----------------------------------------------------------
+-- resize works like Hyprland's resizeactive: right and down grow the pane, left
+-- and up shrink it. On a floating pane, move shifts it instead of swapping.
 for _, dir in ipairs { "left", "right", "up", "down" } do
   ranma.bind(dir, "focus " .. dir)
   ranma.bind("shift+" .. dir, "resize " .. dir .. " 3")
@@ -53,13 +66,17 @@ for _, dir in ipairs { "left", "right", "up", "down" } do
 end
 
 -- Workspaces --------------------------------------------------------------------
--- The number row, 1-9 then 0 for workspace 10. Shift and Alt are matched on the
--- digit key itself, whatever symbol your layout puts on it.
+-- The number row, 1-9 then 0 for workspace 10. Alt+digit moves the pane there and
+-- follows it. Not Shift+digit: terminals report Shift+1 as the symbol your layout
+-- puts on the key ("!", or something else entirely), so it cannot be bound
+-- reliably. Alt+digit arrives as the digit on every terminal and layout.
 for i = 1, 10 do
   local key = tostring(i % 10)
   ranma.bind(key, "workspace " .. i)
-  ranma.bind("shift+" .. key, "move_to_workspace " .. i)
-  ranma.bind("alt+" .. key, "move_to_workspace_silent " .. i)
+  ranma.bind("alt+" .. key, "move_to_workspace " .. i)
+  -- To send a pane away without following it:
+  --   ranma.bind("ctrl+" .. key, "move_to_workspace_silent " .. i)
+  -- (needs a terminal that reports Ctrl+digit, like kitty with its keyboard protocol)
 end
 ranma.bind("ctrl+right", "workspace next")
 ranma.bind("ctrl+left", "workspace prev")
@@ -73,9 +90,37 @@ ranma.bind("alt+s", "move_to_scratchpad")
 ranma.bind("tab", "pane_switcher")
 ranma.bind("backspace", "session_switcher")
 
+-- Global binds -------------------------------------------------------------------
+-- { global = true } binds a key outside WM mode, with no leader. The program in
+-- the pane never sees these keys, so keep them few.
+for _, dir in ipairs { "left", "right", "up", "down" } do
+  ranma.bind("alt+" .. dir, "focus " .. dir, { global = true })
+end
+
 -- ranma itself ------------------------------------------------------------------
 ranma.bind("escape", "exit_mode")
+ranma.bind("return", "exit_mode")
 ranma.bind("r", "reload_config")
+
+-- Bar ---------------------------------------------------------------------------
+-- Which modules go where. Built in: mode (the WM indicator), workspaces, title
+-- (the focused pane's), panes (a count). Anything else is defined with
+-- ranma.module, below or in your own init.lua.
+ranma.bar {
+  left = { "mode", "workspaces" },
+  center = { "title" },
+  right = { "clock" },
+}
+
+-- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.
+ranma.module("workspaces", { show = "occupied" })
+
+-- A module is a Lua function or a shell command. Timed modules tick on the wall
+-- clock: interval = 60 fires on the minute, not 60 s after ranma started.
+ranma.module("clock", {
+  interval = 60,
+  render = function() return os.date("%H:%M") end,
+})
 
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind
@@ -84,9 +129,21 @@ ranma.bind("r", "reload_config")
 --   ranma.bind("c", "exec nvim")
 --   ranma.bind("n", function() os.execute("notify-send hello") end, { exit = true })
 --
--- Hooks run on events:
+-- Inside a bind, hook or module, ranma.action("workspace 2") runs an action,
+-- ranma.notify("text") puts a message in the bar, and ranma.state() returns
+-- { workspace, workspaces, focused, title, mode, panes }.
 --
---   ranma.on("pane_open", function(ev) end)
+-- Hooks run on events, with a table describing it:
+--
+--   ranma.on("workspace_change", function(ev) ranma.notify("now on " .. ev.workspace) end)
 --
 -- Events: pane_open, pane_close, focus_change, workspace_change,
--- session_switch, mode_change, config_reload.
+-- session_switch, mode_change, config_reload. doc/CONFIG.md lists their fields.
+--
+-- Modules:
+--
+--   ranma.module("load", { interval = 5, exec = "cut -d' ' -f1 /proc/loadavg", format = "load %s" })
+--   ranma.module("where", { render = function() return "ws " .. ranma.state().workspace end })
+--
+-- A render function may return { text = "...", style = "urgent" }; styles are
+-- normal, dim, accent and urgent, coloured by the theme.

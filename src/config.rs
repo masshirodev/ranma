@@ -26,6 +26,19 @@ pub enum Layout {
     Manual,
 }
 
+/// What the mouse does outside WM mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MouseMode {
+    /// Clicking a pane focuses it; clicks and wheel go on to programs that ask.
+    Click,
+    /// Focus follows the pointer.
+    Hover,
+    /// The mouse belongs to the host terminal (its selection, its scrolling);
+    /// ranma only sees it in WM mode.
+    Off,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub leader: Chord,
@@ -35,6 +48,7 @@ pub struct Settings {
     pub shell: Option<String>,
     pub scrollback_lines: usize,
     pub wm_mode_sticky: bool,
+    pub mouse: MouseMode,
 }
 
 impl Default for Settings {
@@ -49,6 +63,7 @@ impl Default for Settings {
             shell: None,
             scrollback_lines: 10_000,
             wm_mode_sticky: true,
+            mouse: MouseMode::Click,
         }
     }
 }
@@ -65,6 +80,7 @@ struct SettingsPatch {
     shell: Option<String>,
     scrollback_lines: Option<usize>,
     wm_mode: Option<WmModePatch>,
+    mouse: Option<MouseMode>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -115,18 +131,96 @@ impl FromStr for Event {
     }
 }
 
+/// Modules ranma draws itself. Anything else in a bar list must be defined with
+/// `ranma.module`.
+pub const BUILTIN_MODULES: [&str; 4] = ["mode", "workspaces", "title", "panes"];
+
+/// Which modules the bar shows, in order, on each side.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BarLayout {
+    pub left: Vec<String>,
+    pub center: Vec<String>,
+    pub right: Vec<String>,
+}
+
+impl BarLayout {
+    pub fn all(&self) -> impl Iterator<Item = &String> {
+        self.left.iter().chain(&self.center).chain(&self.right)
+    }
+}
+
+#[derive(Debug)]
+pub enum ModuleKind {
+    /// A Lua function returning a string or `{ text = ..., style = ... }`.
+    Lua(RegistryKey),
+    /// A shell command; its first line of output is the text.
+    Exec {
+        command: String,
+        /// `%s` is replaced by the output line.
+        format: Option<String>,
+    },
+}
+
+#[derive(Debug)]
+pub struct ModuleDef {
+    /// How often to refresh. `None` for a Lua module means "when ranma's state
+    /// changes" (focus, workspace, title, mode) instead of on a timer.
+    pub interval: Option<std::time::Duration>,
+    pub kind: ModuleKind,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarPatch {
+    left: Option<Vec<String>>,
+    center: Option<Vec<String>>,
+    right: Option<Vec<String>>,
+}
+
+/// What `ranma.state()` answers with, filled in by the window manager before it
+/// calls into Lua.
+#[derive(Debug, Clone, Default)]
+pub struct StateSnapshot {
+    pub workspace: u8,
+    pub workspaces: Vec<u8>,
+    pub focused: Option<u64>,
+    pub title: String,
+    pub mode: &'static str,
+    pub panes: usize,
+}
+
+/// Present in the Lua state only while ranma is calling a bind, hook or module:
+/// what `ranma.action`, `ranma.notify` and `ranma.state` read and write.
+#[derive(Debug, Default)]
+pub struct Runtime {
+    pub actions: Vec<Action>,
+    pub notify: Option<String>,
+    pub state: StateSnapshot,
+}
+
 /// What the `ranma` global writes into while the config runs.
 #[derive(Default)]
 struct Builder {
     settings: Settings,
     binds: HashMap<Chord, Bind>,
+    global_binds: HashMap<Chord, Bind>,
     hooks: HashMap<Event, Vec<RegistryKey>>,
+    bar: BarLayout,
+    modules: HashMap<String, ModuleDef>,
+    workspaces_show_all: bool,
 }
 
 pub struct Config {
     pub settings: Settings,
+    /// Keys looked up in WM mode, after the leader.
     pub binds: HashMap<Chord, Bind>,
+    /// Keys looked up outside WM mode, before the program sees them.
+    pub global_binds: HashMap<Chord, Bind>,
     pub hooks: HashMap<Event, Vec<RegistryKey>>,
+    pub bar: BarLayout,
+    pub modules: HashMap<String, ModuleDef>,
+    /// The workspaces module shows 1-10 even when empty.
+    pub workspaces_show_all: bool,
     pub theme: Theme,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
@@ -195,6 +289,9 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             if let Some(sticky) = patch.wm_mode.and_then(|w| w.sticky) {
                 s.wm_mode_sticky = sticky;
             }
+            if let Some(m) = patch.mouse {
+                s.mouse = m;
+            }
             Ok(())
         })?,
     )?;
@@ -206,20 +303,40 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 let chord: Chord = keys
                     .parse()
                     .map_err(|e| rt_err(format!("ranma.bind: key `{keys}`: {e}")))?;
-                let exit_override: Option<bool> = match &opts {
-                    Some(t) => {
-                        for pair in t.pairs::<String, Value>() {
-                            let (k, _) = pair?;
-                            if k != "exit" {
+                let mut exit_override: Option<bool> = None;
+                let mut global = false;
+                if let Some(t) = &opts {
+                    for pair in t.pairs::<String, Value>() {
+                        let (k, v) = pair?;
+                        match (k.as_str(), v) {
+                            ("exit", Value::Boolean(b)) => exit_override = Some(b),
+                            ("global", Value::Boolean(b)) => global = b,
+                            ("exit" | "global", other) => {
                                 return Err(rt_err(format!(
-                                    "ranma.bind: unknown option `{k}` (expected exit)"
+                                    "ranma.bind(\"{keys}\"): `{k}` must be true or false, not {}",
+                                    other.type_name()
+                                )));
+                            }
+                            _ => {
+                                return Err(rt_err(format!(
+                                    "ranma.bind: unknown option `{k}` (expected exit, global)"
                                 )));
                             }
                         }
-                        t.get("exit")?
                     }
-                    None => None,
-                };
+                }
+                if global
+                    && chord
+                        == lua
+                            .app_data_ref::<Builder>()
+                            .expect("builder installed")
+                            .settings
+                            .leader
+                {
+                    return Err(rt_err(format!(
+                        "ranma.bind(\"{keys}\"): the leader cannot also be a global bind"
+                    )));
+                }
                 let bind = match action {
                     Value::String(s) => {
                         let s = s.to_str()?.to_string();
@@ -244,10 +361,12 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                         )));
                     }
                 };
-                lua.app_data_mut::<Builder>()
-                    .expect("builder installed")
-                    .binds
-                    .insert(chord, bind);
+                let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+                if global {
+                    b.global_binds.insert(chord, bind);
+                } else {
+                    b.binds.insert(chord, bind);
+                }
                 Ok(())
             },
         )?,
@@ -259,10 +378,9 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             let chord: Chord = keys
                 .parse()
                 .map_err(|e| rt_err(format!("ranma.unbind: key `{keys}`: {e}")))?;
-            lua.app_data_mut::<Builder>()
-                .expect("builder installed")
-                .binds
-                .remove(&chord);
+            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            b.binds.remove(&chord);
+            b.global_binds.remove(&chord);
             Ok(())
         })?,
     )?;
@@ -270,10 +388,9 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
     ranma.set(
         "unbind_all",
         lua.create_function(|lua, ()| {
-            lua.app_data_mut::<Builder>()
-                .expect("builder installed")
-                .binds
-                .clear();
+            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            b.binds.clear();
+            b.global_binds.clear();
             Ok(())
         })?,
     )?;
@@ -292,6 +409,164 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 .or_default()
                 .push(key);
             Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "bar",
+        lua.create_function(|lua, value: Value| {
+            let patch: BarPatch = lua
+                .from_value(value)
+                .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
+            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            if let Some(v) = patch.left {
+                b.bar.left = v;
+            }
+            if let Some(v) = patch.center {
+                b.bar.center = v;
+            }
+            if let Some(v) = patch.right {
+                b.bar.right = v;
+            }
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "module",
+        lua.create_function(|lua, (name, opts): (String, Table)| {
+            let mut keys = Vec::new();
+            for pair in opts.pairs::<String, Value>() {
+                keys.push(pair?.0);
+            }
+            if BUILTIN_MODULES.contains(&name.as_str()) {
+                // Built-ins are configured, not replaced: their only knobs are listed
+                // here, so a typo is an error instead of a silently ignored option.
+                let allowed: &[&str] = if name == "workspaces" { &["show"] } else { &[] };
+                if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
+                    return Err(rt_err(format!(
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes {}; `{k}` is not one",
+                        if allowed.is_empty() { "no options".to_string() } else { format!("only {}", allowed.join(", ")) }
+                    )));
+                }
+                if name == "workspaces"
+                    && let Some(show) = opts.get::<Option<String>>("show")?
+                {
+                    let all = match show.as_str() {
+                        "all" => true,
+                        "occupied" => false,
+                        other => {
+                            return Err(rt_err(format!(
+                                "ranma.module(\"workspaces\"): show = \"{other}\" (expected \"all\" or \"occupied\")"
+                            )));
+                        }
+                    };
+                    lua.app_data_mut::<Builder>()
+                        .expect("builder installed")
+                        .workspaces_show_all = all;
+                }
+                return Ok(());
+            }
+            if let Some(k) = keys
+                .iter()
+                .find(|k| !["render", "exec", "format", "interval"].contains(&k.as_str()))
+            {
+                return Err(rt_err(format!(
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval)"
+                )));
+            }
+            let interval = match opts.get::<Option<f64>>("interval")? {
+                Some(secs) if secs > 0.0 => Some(std::time::Duration::from_secs_f64(secs)),
+                Some(secs) => {
+                    return Err(rt_err(format!(
+                        "ranma.module(\"{name}\"): interval must be positive, not {secs}"
+                    )));
+                }
+                None => None,
+            };
+            let render: Option<Function> = opts.get("render")?;
+            let exec: Option<String> = opts.get("exec")?;
+            let format: Option<String> = opts.get("format")?;
+            let kind = match (render, exec) {
+                (Some(f), None) => {
+                    if format.is_some() {
+                        return Err(rt_err(format!(
+                            "ranma.module(\"{name}\"): format only applies to exec modules"
+                        )));
+                    }
+                    ModuleKind::Lua(lua.create_registry_value(f)?)
+                }
+                (None, Some(command)) => {
+                    if interval.is_none() {
+                        return Err(rt_err(format!(
+                            "ranma.module(\"{name}\"): an exec module needs an interval"
+                        )));
+                    }
+                    ModuleKind::Exec { command, format }
+                }
+                _ => {
+                    return Err(rt_err(format!(
+                        "ranma.module(\"{name}\"): give exactly one of render or exec"
+                    )));
+                }
+            };
+            lua.app_data_mut::<Builder>()
+                .expect("builder installed")
+                .modules
+                .insert(name, ModuleDef { interval, kind });
+            Ok(())
+        })?,
+    )?;
+
+    // The runtime half: only meaningful while ranma is calling into Lua. During
+    // config load there is no window manager to act on, so these refuse.
+    ranma.set(
+        "action",
+        lua.create_function(|lua, spec: String| {
+            let action: Action = spec
+                .parse()
+                .map_err(|e| rt_err(format!("ranma.action: {e}")))?;
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err(
+                    "ranma.action only works inside binds, hooks and modules, not at config load",
+                )
+            })?;
+            rt.actions.push(action);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "notify",
+        lua.create_function(|lua, msg: String| {
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err(
+                    "ranma.notify only works inside binds, hooks and modules, not at config load",
+                )
+            })?;
+            rt.notify = Some(msg);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "state",
+        lua.create_function(|lua, ()| {
+            let st = lua
+                .app_data_ref::<Runtime>()
+                .ok_or_else(|| {
+                    rt_err("ranma.state only works inside binds, hooks and modules, not at config load")
+                })?
+                .state
+                .clone();
+            let t = lua.create_table()?;
+            t.set("workspace", st.workspace)?;
+            t.set("workspaces", st.workspaces)?;
+            t.set("focused", st.focused)?;
+            t.set("title", st.title)?;
+            t.set("mode", st.mode)?;
+            t.set("panes", st.panes)?;
+            Ok(t)
         })?,
     )?;
 
@@ -348,12 +623,28 @@ pub fn load_from(
     let builder = lua
         .remove_app_data::<Builder>()
         .expect("builder installed above");
+    // Checked after the whole file ran, so a module may be defined after the
+    // ranma.bar call that uses it.
+    if let Some(unknown) = builder
+        .bar
+        .all()
+        .find(|m| !BUILTIN_MODULES.contains(&m.as_str()) && !builder.modules.contains_key(*m))
+    {
+        anyhow::bail!(
+            "ranma.bar: unknown module `{unknown}` (define it with ranma.module, or use a built-in: {})",
+            BUILTIN_MODULES.join(", ")
+        );
+    }
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
 
     Ok(Config {
         settings: builder.settings,
         binds: builder.binds,
+        global_binds: builder.global_binds,
         hooks: builder.hooks,
+        bar: builder.bar,
+        modules: builder.modules,
+        workspaces_show_all: builder.workspaces_show_all,
         theme,
         source: user_file,
         lua,
@@ -457,6 +748,107 @@ mod tests {
             with_user("ranma.set { theme = 'nope' }").unwrap_err()
         );
         assert!(err.contains("nope"), "{err}");
+    }
+
+    #[test]
+    fn global_binds_are_separate_and_alt_arrows_are_default() {
+        let cfg = load_from(None, None, None).unwrap();
+        let alt_left = "alt+left".parse().unwrap();
+        assert!(cfg.global_binds.contains_key(&alt_left));
+        assert!(!cfg.binds.contains_key(&alt_left));
+        assert_eq!(builtin(&cfg, "return"), Some(Action::ExitMode));
+        assert_eq!(
+            builtin(&cfg, "alt+3"),
+            Some(Action::MoveToWorkspace(WorkspaceTarget::Index(3)))
+        );
+        assert!(builtin(&cfg, "shift+3").is_none());
+        assert_eq!(cfg.settings.mouse, MouseMode::Click);
+
+        let cfg = with_user("ranma.unbind('alt+left'); ranma.set { mouse = 'hover' }").unwrap();
+        assert!(!cfg.global_binds.contains_key(&alt_left));
+        assert_eq!(cfg.settings.mouse, MouseMode::Hover);
+
+        let err = format!(
+            "{:#}",
+            with_user("ranma.bind('ctrl+b', 'quit', { global = true })").unwrap_err()
+        );
+        assert!(err.contains("leader"), "{err}");
+        let err = format!(
+            "{:#}",
+            with_user("ranma.bind('x', 'quit', { global = 1 })").unwrap_err()
+        );
+        assert!(err.contains("true or false"), "{err}");
+        let err = format!(
+            "{:#}",
+            with_user("ranma.set { mouse = 'always' }").unwrap_err()
+        );
+        assert!(err.contains("always"), "{err}");
+    }
+
+    #[test]
+    fn bar_and_modules() {
+        let cfg = load_from(None, None, None).unwrap();
+        assert_eq!(cfg.bar.left, vec!["mode", "workspaces"]);
+        assert!(matches!(cfg.modules["clock"].kind, ModuleKind::Lua(_)));
+
+        let cfg = with_user(
+            r#"
+            ranma.bar { right = { "load", "clock" } }
+            ranma.module("load", { interval = 5, exec = "cat /proc/loadavg", format = "L %s" })
+            ranma.module("workspaces", { show = "all" })
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.bar.right, vec!["load", "clock"]);
+        // Only the side given changes.
+        assert_eq!(cfg.bar.left, vec!["mode", "workspaces"]);
+        assert!(cfg.workspaces_show_all);
+        match &cfg.modules["load"].kind {
+            ModuleKind::Exec { command, format } => {
+                assert_eq!(command, "cat /proc/loadavg");
+                assert_eq!(format.as_deref(), Some("L %s"));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn bar_mistakes_are_named() {
+        for (src, needle) in [
+            ("ranma.bar { right = { 'nope' } }", "nope"),
+            ("ranma.bar { middle = { 'title' } }", "middle"),
+            ("ranma.module('x', { interval = 5 })", "exactly one"),
+            ("ranma.module('x', { exec = 'true' })", "needs an interval"),
+            (
+                "ranma.module('x', { render = function() end, format = '%s' })",
+                "format only",
+            ),
+            (
+                "ranma.module('x', { render = function() end, every = 5 })",
+                "every",
+            ),
+            (
+                "ranma.module('x', { render = function() end, interval = 0 })",
+                "positive",
+            ),
+            ("ranma.module('title', { show = 'all' })", "built in"),
+            ("ranma.module('workspaces', { show = 'some' })", "some"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
+        }
+    }
+
+    #[test]
+    fn runtime_api_refuses_at_config_load() {
+        for src in ["ranma.action('quit')", "ranma.notify('x')", "ranma.state()"] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains("not at config load"), "{src}: {err}");
+        }
+        // A bad action is caught where it is written, even inside a function body
+        // that only runs later: at call time, with the line.
+        let err = format!("{:#}", with_user("ranma.action('fly')").unwrap_err());
+        assert!(err.contains("fly"), "{err}");
     }
 
     #[test]

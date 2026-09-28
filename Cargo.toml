@@ -9,8 +9,11 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"
 dirs = "7"
+libc = "0.2"
 mlua = { version = "0.12", features = ["lua54", "serde", "vendored"] }
+notify = "8"
 ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "1"
+unicode-width = "0.2"

@@ -60,12 +60,13 @@ pub enum Action {
 impl Action {
     /// Whether WM mode should end after this action when the bind does not say.
     ///
-    /// Opening a pane ends it because the next thing you do is type into that pane;
-    /// focus, resize and move keep it because they come in runs.
+    /// Opening a pane, or summoning the scratchpad, ends it because the next thing
+    /// you do is type there; focus, resize and move keep it because they come in runs.
     pub fn exits_mode_by_default(&self) -> bool {
         matches!(
             self,
             Action::NewPane
+                | Action::ScratchpadToggle
                 | Action::Exec(_)
                 | Action::ExitMode
                 | Action::SendLeader

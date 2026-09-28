@@ -14,6 +14,20 @@ bar_dim = "#6c7086"
 bar_accent = "#89b4fa"
 mode_fg = "#1e1e2e"
 mode_bg = "#f38ba8"
+# Bar module styles: a module that returns { text = ..., style = "urgent" }
+# is drawn in bar_urgent; "dim" and "accent" use the keys above.
+bar_urgent = "#f38ba8"
+# The workspaces module.
+ws_active_fg = "#1e1e2e"
+ws_active_bg = "#89b4fa"
+ws_occupied = "#cdd6f4"
+ws_empty = "#6c7086"
+ws_urgent = "#f38ba8"
+# Tab bars of grouped (tabbed) containers.
+tab_active_fg = "#1e1e2e"
+tab_active_bg = "#89b4fa"
+tab_inactive_fg = "#cdd6f4"
+tab_inactive_bg = "#313244"
 
 [border]
 # rounded | plain | thick | double | none
@@ -29,3 +43,5 @@ outer_vertical = 0
 [bar]
 # top | bottom | hidden
 position = "bottom"
+# Drawn between two modules on the same side.
+separator = "  "

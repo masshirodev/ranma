@@ -1,10 +1,11 @@
 //! The window manager: state, input routing, actions, and the event loop.
 //!
-//! One thread owns all of this. PTY threads and the input thread only send it
-//! messages, so nothing here is shared and nothing needs a lock except each
-//! pane's `Term`, which alacritty_terminal's own thread also writes.
+//! One thread owns all of this. PTY threads, the input thread, exec modules and
+//! the config watcher only send it messages, so nothing here is shared and
+//! nothing needs a lock except each pane's `Term`, which alacritty_terminal's own
+//! thread also writes.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
@@ -14,22 +15,32 @@ use alacritty_terminal::vte::ansi::CursorShape;
 use anyhow::{Context, Result};
 use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{
-    DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange, Event,
-    KeyEvent, KeyEventKind,
+    DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture, Event, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 use crossterm::execute;
+use mlua::{Function, Lua, Table, Value};
 
-use crate::action::Action;
-use crate::config::{self, BindAction, Config, Layout};
+use crate::action::{Action, Dir, WorkspaceTarget};
+use crate::bar::{self, Piece, Segment, Style};
+use crate::config::{self, BindAction, Config, Event as HookEvent, Layout, ModuleKind};
 use crate::input;
-use crate::layout::{self, PaneId, Placement, Rect, Split, Tree};
+use crate::layout::{self, PaneId, Placement, Rect, Split, TabBar};
 use crate::pane::{AppEvent, Pane, Size, SpawnOptions};
 use crate::render::{self, CursorState};
 use crate::theme::{BarPosition, BorderStyle};
+use crate::workspace::Workspace;
 
 /// The frame cap. Output arriving faster than this is coalesced: the pane is drawn
 /// at its latest state once per interval, not once per read.
 const FRAME: Duration = Duration::from_micros(8_333);
+/// Editors save in several steps (write, rename, chmod); one reload for all of them.
+const RELOAD_DEBOUNCE: Duration = Duration::from_millis(150);
+/// Hooks that run actions that fire hooks: stop before it becomes a loop.
+const MAX_LUA_DEPTH: u8 = 4;
+/// The workspace number the scratchpad reports in hook payloads and state.
+const SCRATCHPAD: u8 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -48,14 +59,54 @@ pub struct PaneView {
     /// The pane's own cells: its PTY size.
     pub inner: Rect,
     pub focused: bool,
+    pub floating: bool,
+}
+
+/// Everything a frame needs to know about where things go.
+#[derive(Debug, Default)]
+pub struct Frame {
+    /// In drawing order: tiles, then floats bottom to top, then the scratchpad.
+    pub views: Vec<PaneView>,
+    /// Panes not shown (background tabs, a fullscreen workspace's others) with the
+    /// inner size they would have, so showing them does not resize the program.
+    pub hidden: Vec<(PaneId, Rect)>,
+    pub tab_bars: Vec<TabBar>,
+    /// Where the scratchpad is drawn, when it is shown.
+    pub overlay: Option<Rect>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Drag {
+    Move {
+        id: PaneId,
+        dx: u16,
+        dy: u16,
+    },
+    Resize {
+        id: PaneId,
+        start: Rect,
+        x: u16,
+        y: u16,
+    },
+}
+
+/// The parts of state hooks and state-driven modules react to.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct Observed {
+    focus: Option<PaneId>,
+    workspace: u8,
+    mode_wm: bool,
+    title: String,
+    panes: usize,
 }
 
 pub struct App {
     pub config: Config,
     pub panes: HashMap<PaneId, Pane>,
-    tree: Tree,
-    focused: Option<PaneId>,
-    fullscreen: bool,
+    workspaces: BTreeMap<u8, Workspace>,
+    current: u8,
+    scratch: Workspace,
+    scratch_shown: bool,
     pub mode: Mode,
     /// A one-line message for the bar; cleared by the next key.
     pub status: Option<String>,
@@ -64,16 +115,32 @@ pub struct App {
     tx: Sender<AppEvent>,
     dirty: bool,
     quit: bool,
+    visible: HashSet<PaneId>,
+    drag: Option<Drag>,
+    /// What the last completed event left behind, for change detection.
+    observed: Observed,
+    lua_depth: u8,
+
+    /// Lua and exec module output, keyed by module name.
+    module_values: HashMap<String, Segment>,
+    module_due: HashMap<String, Instant>,
+    module_running: HashSet<String>,
+    /// Bumped on config reload so results of the old config's execs are dropped.
+    module_generation: u64,
+    reload_at: Option<Instant>,
 }
 
 impl App {
     pub fn new(config: Config, tx: Sender<AppEvent>, cols: u16, rows: u16) -> App {
-        App {
+        let mut workspaces = BTreeMap::new();
+        workspaces.insert(1, Workspace::default());
+        let mut app = App {
             config,
             panes: HashMap::new(),
-            tree: Tree::default(),
-            focused: None,
-            fullscreen: false,
+            workspaces,
+            current: 1,
+            scratch: Workspace::default(),
+            scratch_shown: false,
             mode: Mode::Normal,
             status: None,
             screen: Rect::new(0, 0, cols, rows),
@@ -81,7 +148,101 @@ impl App {
             tx,
             dirty: true,
             quit: false,
+            visible: HashSet::new(),
+            drag: None,
+            observed: Observed {
+                workspace: 1,
+                ..Default::default()
+            },
+            lua_depth: 0,
+            module_values: HashMap::new(),
+            module_due: HashMap::new(),
+            module_running: HashSet::new(),
+            module_generation: 0,
+            reload_at: None,
+        };
+        app.schedule_modules(Instant::now());
+        app
+    }
+
+    // ---- where things are ------------------------------------------------------
+
+    /// The workspace keys and actions apply to: the scratchpad while it is shown.
+    fn active(&self) -> &Workspace {
+        if self.scratch_shown {
+            &self.scratch
+        } else {
+            self.workspaces
+                .get(&self.current)
+                .expect("current workspace exists")
         }
+    }
+
+    fn active_mut(&mut self) -> &mut Workspace {
+        if self.scratch_shown {
+            &mut self.scratch
+        } else {
+            self.workspaces
+                .get_mut(&self.current)
+                .expect("current workspace exists")
+        }
+    }
+
+    pub fn focused(&self) -> Option<PaneId> {
+        self.active().focused
+    }
+
+    /// The workspace holding a pane, and its number (the scratchpad's is 0).
+    fn locate(&self, id: PaneId) -> Option<u8> {
+        if self.scratch.contains(id) {
+            return Some(SCRATCHPAD);
+        }
+        self.workspaces
+            .iter()
+            .find(|(_, ws)| ws.contains(id))
+            .map(|(n, _)| *n)
+    }
+
+    fn ws_mut(&mut self, n: u8) -> &mut Workspace {
+        if n == SCRATCHPAD {
+            &mut self.scratch
+        } else {
+            self.workspaces.entry(n).or_default()
+        }
+    }
+
+    pub fn current_workspace(&self) -> u8 {
+        self.current
+    }
+
+    pub fn scratch_state(&self) -> (bool, bool) {
+        (!self.scratch.is_empty(), self.scratch_shown)
+    }
+
+    /// Workspaces to list in the bar: (number, is current, has panes, urgent).
+    pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool)> {
+        let mut nums: Vec<u8> = self
+            .workspaces
+            .iter()
+            .filter(|(n, ws)| **n == self.current || !ws.is_empty())
+            .map(|(n, _)| *n)
+            .collect();
+        if self.config.workspaces_show_all {
+            nums.extend(1..=10);
+            nums.sort_unstable();
+            nums.dedup();
+        }
+        nums.into_iter()
+            .map(|n| {
+                let ws = self.workspaces.get(&n);
+                (
+                    n,
+                    n == self.current,
+                    ws.is_some_and(|w| !w.is_empty()),
+                    ws.is_some_and(|w| w.urgent),
+                )
+            })
+            .collect()
     }
 
     // ---- geometry ----------------------------------------------------------
@@ -99,7 +260,7 @@ impl App {
     /// The area panes are laid out in: the screen minus the bar and outer gaps.
     fn workspace_area(&self) -> Rect {
         let s = self.screen;
-        let mut a = match self.bar_rect() {
+        let a = match self.bar_rect() {
             None => s,
             Some(_) if self.config.theme.bar.position == BarPosition::Top => {
                 Rect::new(s.x, s.y + 1, s.w, s.h.saturating_sub(1))
@@ -107,8 +268,11 @@ impl App {
             Some(_) => Rect::new(s.x, s.y, s.w, s.h.saturating_sub(1)),
         };
         let g = &self.config.theme.gaps;
-        a = a.inset(g.outer_horizontal, g.outer_vertical);
-        a
+        a.inset(g.outer_horizontal, g.outer_vertical)
+    }
+
+    fn scratch_area(&self) -> Rect {
+        self.workspace_area().centered(80, 80)
     }
 
     fn border(&self) -> u16 {
@@ -118,49 +282,108 @@ impl App {
         }
     }
 
-    /// Every visible pane and where it goes, focused one included.
-    pub fn views(&self) -> Vec<PaneView> {
+    pub fn frame(&self) -> Frame {
+        let mut f = Frame::default();
         let area = self.workspace_area();
+        let gap = self.config.theme.gaps.inner;
         let b = self.border();
-        let rects = match (self.fullscreen, self.focused) {
-            (true, Some(f)) => vec![(f, area)],
-            _ => self.tree.layout(area, self.config.theme.gaps.inner),
+        let focused = self.focused();
+        let view = |id, outer: Rect, floating| PaneView {
+            id,
+            outer,
+            inner: outer.inset(b, b),
+            focused: Some(id) == focused,
+            floating,
         };
-        rects
+
+        if let Some(ws) = self.workspaces.get(&self.current) {
+            let full = ws.focused.filter(|f| ws.fullscreen && ws.contains(*f));
+            let lay = ws.tree.layout_full(area, gap);
+            match full {
+                Some(fid) => {
+                    f.views.push(view(fid, area, false));
+                    for (id, r) in lay.visible.iter().chain(&lay.hidden) {
+                        if *id != fid {
+                            f.hidden.push((*id, r.inset(b, b)));
+                        }
+                    }
+                    for (id, r) in &ws.floating {
+                        if *id != fid {
+                            f.hidden.push((*id, r.clamp_into(area).inset(b, b)));
+                        }
+                    }
+                }
+                None => {
+                    for (id, r) in lay.visible {
+                        f.views.push(view(id, r, false));
+                    }
+                    f.hidden
+                        .extend(lay.hidden.iter().map(|(id, r)| (*id, r.inset(b, b))));
+                    f.tab_bars = lay.tab_bars;
+                    for (id, r) in &ws.floating {
+                        f.views.push(view(*id, r.clamp_into(area), true));
+                    }
+                }
+            }
+        }
+
+        if self.scratch_shown {
+            let sarea = self.scratch_area();
+            f.overlay = Some(sarea);
+            let lay = self.scratch.tree.layout_full(sarea, gap);
+            for (id, r) in lay.visible {
+                f.views.push(view(id, r, true));
+            }
+            f.hidden
+                .extend(lay.hidden.iter().map(|(id, r)| (*id, r.inset(b, b))));
+            f.tab_bars.extend(lay.tab_bars);
+        }
+        f
+    }
+
+    /// Rects of the panes focus can move between: the active layer only.
+    fn focus_rects(&self) -> Vec<(PaneId, Rect)> {
+        let active = self.active();
+        self.frame()
+            .views
             .into_iter()
-            .map(|(id, outer)| PaneView {
-                id,
-                outer,
-                inner: outer.inset(b, b),
-                focused: Some(id) == self.focused,
-            })
+            .filter(|v| active.contains(v.id))
+            .map(|v| (v.id, v.outer))
             .collect()
     }
 
-    fn rects(&self) -> Vec<(PaneId, Rect)> {
-        self.tree
-            .layout(self.workspace_area(), self.config.theme.gaps.inner)
-    }
-
-    /// Push the current layout down to every PTY.
+    /// Push the current layout down to every PTY and note what is visible.
     fn relayout(&mut self) {
-        for view in self.views() {
-            if let Some(p) = self.panes.get_mut(&view.id) {
+        let frame = self.frame();
+        let sizes: Vec<(PaneId, Rect)> = frame
+            .views
+            .iter()
+            .map(|v| (v.id, v.inner))
+            .chain(frame.hidden.iter().copied())
+            .collect();
+        for (id, inner) in sizes {
+            // A floating pane being dragged to a new size keeps its PTY size until
+            // the button is released: one resize, not one per mouse event.
+            if matches!(self.drag, Some(Drag::Resize { id: d, .. }) if d == id) {
+                continue;
+            }
+            if let Some(p) = self.panes.get_mut(&id) {
                 p.resize(Size {
-                    cols: view.inner.w,
-                    rows: view.inner.h,
+                    cols: inner.w,
+                    rows: inner.h,
                 });
             }
         }
+        self.visible = frame.views.iter().map(|v| v.id).collect();
         self.dirty = true;
     }
 
     pub fn fullscreen(&self) -> bool {
-        self.fullscreen
+        !self.scratch_shown && self.active().fullscreen
     }
 
     pub fn focused_title(&self) -> Option<&str> {
-        self.focused
+        self.focused()
             .and_then(|f| self.panes.get(&f))
             .map(|p| p.title.as_str())
     }
@@ -170,25 +393,32 @@ impl App {
     pub fn open_pane(&mut self, command: Option<&str>) -> Result<()> {
         let id = self.next_id;
         self.next_id += 1;
-        let focused_rect = self
-            .focused
-            .and_then(|f| self.rects().into_iter().find(|(p, _)| *p == f))
-            .map(|(_, r)| r);
+        let focused = self.focused().filter(|f| self.active().tree.contains(*f));
+        let focused_rect = focused.and_then(|f| {
+            self.frame()
+                .views
+                .into_iter()
+                .find(|v| v.id == f)
+                .map(|v| v.outer)
+        });
         let placement = match self.config.settings.layout {
             Layout::Dwindle => Placement::Dwindle,
             // i3's default for a fresh split is side by side.
             Layout::Manual => Placement::Manual(Split::Horizontal),
         };
-        self.tree.insert(id, self.focused, focused_rect, placement);
-        self.fullscreen = false;
+        let ws = self.active_mut();
+        ws.tree.insert(id, focused, focused_rect, placement);
+        ws.fullscreen = false;
 
         // Spawn at the size the layout gives it, so the program starts at its real
         // size instead of getting a resize immediately after starting.
-        let view = self.views().into_iter().find(|v| v.id == id);
-        let size = view.map_or(Size { cols: 80, rows: 24 }, |v| Size {
-            cols: v.inner.w,
-            rows: v.inner.h,
-        });
+        let size = self.frame().views.into_iter().find(|v| v.id == id).map_or(
+            Size { cols: 80, rows: 24 },
+            |v| Size {
+                cols: v.inner.w,
+                rows: v.inner.h,
+            },
+        );
         let s = &self.config.settings;
         let opts = SpawnOptions {
             shell: s.shell.as_deref(),
@@ -198,62 +428,223 @@ impl App {
         match Pane::spawn(id, size, &opts, self.tx.clone()) {
             Ok(pane) => {
                 self.panes.insert(id, pane);
-                self.set_focus(Some(id));
+                self.focus(id);
                 self.relayout();
+                let ws = if self.scratch_shown {
+                    SCRATCHPAD
+                } else {
+                    self.current
+                };
+                self.emit(HookEvent::PaneOpen, |t| {
+                    t.set("pane", id)?;
+                    t.set("workspace", ws)
+                });
                 Ok(())
             }
             Err(e) => {
-                self.tree.remove(id);
+                self.active_mut().tree.remove(id);
                 self.relayout();
                 Err(e)
             }
         }
     }
 
-    fn close_pane(&mut self, id: PaneId) {
-        // Focus goes to the neighbour the eye lands on, not whatever is first in
-        // the tree: left, then up, then right, then down.
-        let rects = self.rects();
-        let next = if self.focused == Some(id) {
-            use crate::action::Dir::*;
-            [Left, Up, Right, Down]
-                .into_iter()
-                .find_map(|d| layout::neighbour(&rects, id, d))
-                .or_else(|| rects.iter().map(|(p, _)| *p).find(|p| *p != id))
+    /// Where focus goes when `id` leaves a visible workspace: the neighbour the
+    /// eye lands on (left, up, right, down), else any pane left there.
+    fn successor(&self, ws_num: u8, id: PaneId) -> Option<PaneId> {
+        let ws = if ws_num == SCRATCHPAD {
+            &self.scratch
         } else {
-            self.focused
+            self.workspaces.get(&ws_num)?
         };
-        self.tree.remove(id);
+        let rects: Vec<(PaneId, Rect)> = self
+            .frame()
+            .views
+            .into_iter()
+            .filter(|v| ws.contains(v.id))
+            .map(|v| (v.id, v.outer))
+            .collect();
+        [Dir::Left, Dir::Up, Dir::Right, Dir::Down]
+            .into_iter()
+            .find_map(|d| layout::neighbour(&rects, id, d))
+            .or_else(|| ws.panes().into_iter().find(|p| *p != id))
+    }
+
+    /// Remove a pane from whichever workspace holds it and fix that one's focus.
+    /// Returns the workspace it was in and its float rect if it floated.
+    fn detach(&mut self, id: PaneId) -> Option<(u8, Option<Rect>)> {
+        let n = self.locate(id)?;
+        let next = self.successor(n, id);
+        let ws = self.ws_mut(n);
+        let was = ws.take(id)?;
+        if ws.focused == Some(id) {
+            ws.focused = next.filter(|p| *p != id);
+        }
+        ws.fullscreen &= ws.focused.is_some();
+        Some((n, was))
+    }
+
+    /// Drop empty workspaces other than the current one, and hide an empty scratchpad.
+    fn tidy(&mut self) {
+        let cur = self.current;
+        self.workspaces.retain(|n, ws| *n == cur || !ws.is_empty());
+        if self.scratch.is_empty() {
+            self.scratch_shown = false;
+        }
+    }
+
+    fn close_pane(&mut self, id: PaneId) {
+        let Some((n, _)) = self.detach(id) else {
+            return;
+        };
         self.panes.remove(&id);
         if self.panes.is_empty() {
             self.quit = true;
             return;
         }
-        self.fullscreen = false;
-        self.set_focus(next);
+        self.tidy();
         self.relayout();
+        self.emit(HookEvent::PaneClose, |t| {
+            t.set("pane", id)?;
+            t.set("workspace", n)
+        });
     }
 
-    fn set_focus(&mut self, id: Option<PaneId>) {
-        if id == self.focused {
+    /// Focus a pane in the active workspace: reveal its tab, raise it if it floats.
+    fn focus(&mut self, id: PaneId) {
+        let ws = self.active_mut();
+        if !ws.contains(id) {
             return;
         }
-        if let Some(old) = self.focused.and_then(|f| self.panes.get(&f))
-            && let Some(b) = input::encode_focus(false, old.modes())
-        {
-            old.write(b);
-        }
-        self.focused = id;
-        if let Some(new) = id.and_then(|f| self.panes.get(&f))
-            && let Some(b) = input::encode_focus(true, new.modes())
-        {
-            new.write(b);
-        }
+        ws.focused = Some(id);
+        ws.tree.reveal(id);
+        ws.raise(id);
         self.dirty = true;
     }
 
     fn focused_pane(&self) -> Option<&Pane> {
-        self.focused.and_then(|f| self.panes.get(&f))
+        self.focused().and_then(|f| self.panes.get(&f))
+    }
+
+    fn switch_workspace(&mut self, target: u8) {
+        self.scratch_shown = false;
+        if target == self.current {
+            return;
+        }
+        self.current = target;
+        let ws = self.workspaces.entry(target).or_default();
+        ws.urgent = false;
+        self.tidy();
+        self.relayout();
+    }
+
+    fn resolve(&self, t: &WorkspaceTarget) -> u8 {
+        match t {
+            WorkspaceTarget::Index(n) => *n,
+            // Relative moves stay among 1-10, wrapping, like a row of keys.
+            WorkspaceTarget::Next => {
+                if self.current >= 10 {
+                    1
+                } else {
+                    self.current + 1
+                }
+            }
+            WorkspaceTarget::Prev => {
+                if self.current <= 1 {
+                    10
+                } else {
+                    self.current - 1
+                }
+            }
+            WorkspaceTarget::Empty => (1..=99u8)
+                .find(|n| self.workspaces.get(n).is_none_or(|w| w.is_empty()))
+                .unwrap_or(self.current),
+        }
+    }
+
+    /// Move the focused pane to workspace `target` (0 is the scratchpad).
+    fn move_focused_to(&mut self, target: u8, follow: bool) {
+        let Some(id) = self.focused() else {
+            return;
+        };
+        let from = if self.scratch_shown {
+            SCRATCHPAD
+        } else {
+            self.current
+        };
+        if target == from {
+            return;
+        }
+        let Some((_, float)) = self.detach(id) else {
+            return;
+        };
+        let area = if target == SCRATCHPAD {
+            self.scratch_area()
+        } else {
+            self.workspace_area()
+        };
+        let gap = self.config.theme.gaps.inner;
+        let ws = self.ws_mut(target);
+        match float {
+            // The scratchpad is itself a floating layer: its panes tile inside it.
+            Some(r) if target != SCRATCHPAD => ws.floating.push((id, r)),
+            _ => {
+                let anchor = ws.focused.filter(|f| ws.tree.contains(*f));
+                let rect = anchor.and_then(|a| {
+                    ws.tree
+                        .layout(area, gap)
+                        .into_iter()
+                        .find(|(p, _)| *p == a)
+                        .map(|(_, r)| r)
+                });
+                ws.tree.insert(id, anchor, rect, Placement::Dwindle);
+            }
+        }
+        ws.focused = Some(id);
+        ws.fullscreen = false;
+        if follow && target != SCRATCHPAD {
+            self.switch_workspace(target);
+        }
+        self.tidy();
+        self.relayout();
+    }
+
+    fn toggle_floating(&mut self) {
+        if self.scratch_shown {
+            self.status = Some("scratchpad panes tile inside it; they do not float".into());
+            return;
+        }
+        let Some(id) = self.focused() else {
+            return;
+        };
+        let area = self.workspace_area();
+        let gap = self.config.theme.gaps.inner;
+        let ws = self.active_mut();
+        match ws.take(id) {
+            Some(None) => {
+                ws.floating.push((id, area.centered(60, 60)));
+                ws.focused = Some(id);
+            }
+            Some(Some(r)) => {
+                // Tile it next to whatever it was floating over, so it lands where
+                // the eye already is.
+                let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
+                let under = ws
+                    .tree
+                    .layout(area, gap)
+                    .into_iter()
+                    .find(|(_, t)| t.contains(cx, cy));
+                ws.tree.insert(
+                    id,
+                    under.map(|(p, _)| p),
+                    under.map(|(_, t)| t),
+                    Placement::Dwindle,
+                );
+                ws.focused = Some(id);
+            }
+            None => {}
+        }
+        self.relayout();
     }
 
     // ---- events --------------------------------------------------------------
@@ -263,22 +654,93 @@ impl App {
             AppEvent::Input(ev) => self.handle_input(ev),
             AppEvent::InputClosed => self.quit = true,
             AppEvent::Pane(id, ev) => self.handle_pane_event(id, ev),
+            AppEvent::Module {
+                name,
+                generation,
+                text,
+            } => {
+                self.module_running.remove(&name);
+                if generation == self.module_generation {
+                    let seg = match text {
+                        Ok(line) => {
+                            let fmt = match self.config.modules.get(&name).map(|m| &m.kind) {
+                                Some(ModuleKind::Exec { format, .. }) => format.clone(),
+                                _ => None,
+                            };
+                            vec![Piece::new(
+                                bar::format_output(fmt.as_deref(), &line),
+                                Style::Normal,
+                            )]
+                        }
+                        Err(e) => vec![Piece::new(format!("{name}: {e}"), Style::Urgent)],
+                    };
+                    self.set_module_value(name, seg);
+                }
+            }
+            AppEvent::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
         }
+        self.after_event();
+    }
+
+    /// Fire hooks for whatever the event changed, and refresh state-driven modules.
+    fn after_event(&mut self) {
+        let now = Observed {
+            focus: self.focused(),
+            workspace: self.current,
+            mode_wm: self.mode == Mode::Wm,
+            title: self.focused_title().unwrap_or("").to_string(),
+            panes: self.panes.len(),
+        };
+        if now == self.observed {
+            return;
+        }
+        let before = std::mem::replace(&mut self.observed, now.clone());
+
+        if now.focus != before.focus {
+            // Programs that asked for focus events get them, as in any terminal.
+            for (id, gained) in [(before.focus, false), (now.focus, true)] {
+                if let Some(p) = id.and_then(|i| self.panes.get(&i))
+                    && let Some(b) = input::encode_focus(gained, p.modes())
+                {
+                    p.write(b);
+                }
+            }
+            self.emit(HookEvent::FocusChange, |t| {
+                t.set("pane", now.focus)?;
+                t.set("previous", before.focus)
+            });
+        }
+        if now.workspace != before.workspace {
+            self.emit(HookEvent::WorkspaceChange, |t| {
+                t.set("workspace", now.workspace)?;
+                t.set("previous", before.workspace)
+            });
+        }
+        if now.mode_wm != before.mode_wm {
+            self.emit(HookEvent::ModeChange, |t| {
+                t.set("mode", if now.mode_wm { "wm" } else { "normal" })
+            });
+        }
+        self.render_state_modules();
+        self.dirty = true;
     }
 
     fn handle_pane_event(&mut self, id: PaneId, ev: TermEvent) {
+        let visible = self.visible.contains(&id);
         let Some(pane) = self.panes.get_mut(&id) else {
             return;
         };
         match ev {
-            TermEvent::Wakeup => self.dirty = true,
+            // A pane nobody can see does not cost a frame. Its wakeup flag stays
+            // set, so it sends no more wakeups until it is shown and drawn.
+            TermEvent::Wakeup => self.dirty |= visible,
             TermEvent::Title(t) => {
                 pane.title = t;
-                self.dirty = true;
+                self.dirty |= visible;
             }
             TermEvent::ResetTitle => {
                 pane.title.clear();
-                self.dirty = true;
+                self.dirty |= visible;
             }
             // Replies to queries the program made (device attributes, cursor
             // position): they go back to the program, not to the host.
@@ -293,8 +755,14 @@ impl App {
                 });
                 pane.write(reply.into_bytes());
             }
+            TermEvent::Bell if !visible => {
+                if let Some(n) = self.locate(id).filter(|n| *n != SCRATCHPAD) {
+                    self.ws_mut(n).urgent = true;
+                    self.dirty = true;
+                }
+            }
             TermEvent::ChildExit(_) | TermEvent::Exit => self.close_pane(id),
-            // Clipboard (OSC 52), colour queries, bell: milestone 3.
+            // Clipboard (OSC 52) and colour queries: milestone 3.
             _ => {}
         }
     }
@@ -304,6 +772,7 @@ impl App {
             Event::Key(key) => self.handle_key(key),
             Event::Paste(text) => {
                 if let Some(p) = self.focused_pane() {
+                    p.scroll_to_bottom();
                     p.write(input::encode_paste(&text, p.modes()));
                 }
             }
@@ -318,8 +787,206 @@ impl App {
                 self.screen = Rect::new(0, 0, w, h);
                 self.relayout();
             }
-            Event::Mouse(_) => {}
+            Event::Mouse(m) => self.handle_mouse(m),
         }
+    }
+
+    /// The pane under a point, topmost first (the scratchpad and floats are drawn
+    /// last), among the panes of the active workspace.
+    fn pane_at(&self, frame: &Frame, x: u16, y: u16) -> Option<PaneView> {
+        frame
+            .views
+            .iter()
+            .rev()
+            .find(|v| v.outer.contains(x, y) && self.active().contains(v.id))
+            .copied()
+    }
+
+    /// Clicks on the bar and on tab bars work in any mode: they are ranma's own.
+    /// Returns true when the click was one of those.
+    fn click_chrome(&mut self, frame: &Frame, x: u16, y: u16) -> bool {
+        if let Some(bar) = self.bar_rect()
+            && bar.contains(x, y)
+        {
+            let target = self
+                .bar_pieces(bar.w)
+                .into_iter()
+                .find(|(px, p)| {
+                    x - bar.x >= *px && ((x - bar.x - px) as usize) < p.text.chars().count()
+                })
+                .and_then(|(_, p)| p.click);
+            match target {
+                Some(SCRATCHPAD) => self.run_action(Action::ScratchpadToggle),
+                Some(n) => self.run_action(Action::Workspace(WorkspaceTarget::Index(n))),
+                None => {}
+            }
+            return true;
+        }
+        if let Some(tb) = frame.tab_bars.iter().find(|t| t.rect.contains(x, y)) {
+            let i = ((x - tb.rect.x) as usize * tb.tabs.len()) / tb.rect.w.max(1) as usize;
+            if let Some(p) = tb.tabs.get(i) {
+                self.focus(*p);
+                self.relayout();
+            }
+            return true;
+        }
+        false
+    }
+
+    fn handle_mouse(&mut self, m: MouseEvent) {
+        match self.mode {
+            Mode::Wm => self.handle_mouse_wm(m),
+            Mode::Normal => self.handle_mouse_normal(m),
+        }
+    }
+
+    /// Outside WM mode: focus by click (or hover), and everything else goes to the
+    /// program under the pointer, the way it would in a terminal of its own.
+    fn handle_mouse_normal(&mut self, m: MouseEvent) {
+        let (x, y) = (m.column, m.row);
+        let frame = self.frame();
+        if let MouseEventKind::Down(_) = m.kind
+            && self.click_chrome(&frame, x, y)
+        {
+            return;
+        }
+        let under = self.pane_at(&frame, x, y);
+        match m.kind {
+            MouseEventKind::Down(_) => {
+                if let Some(v) = under
+                    && Some(v.id) != self.focused()
+                {
+                    self.focus(v.id);
+                    self.relayout();
+                }
+            }
+            MouseEventKind::Moved if self.config.settings.mouse == config::MouseMode::Hover => {
+                if let Some(v) = under
+                    && Some(v.id) != self.focused()
+                {
+                    self.focus(v.id);
+                    self.relayout();
+                }
+            }
+            _ => {}
+        }
+
+        let scroll = match m.kind {
+            MouseEventKind::ScrollUp => Some(3i32),
+            MouseEventKind::ScrollDown => Some(-3),
+            _ => None,
+        };
+        // The wheel goes to the pane under the pointer; everything else to the
+        // focused pane, which is where a drag that started in it belongs even when
+        // the pointer leaves it.
+        let target = if scroll.is_some() {
+            under
+        } else {
+            let f = self.focused();
+            frame.views.iter().find(|v| Some(v.id) == f).copied()
+        };
+        let Some(v) = target else {
+            return;
+        };
+        let Some(p) = self.panes.get(&v.id) else {
+            return;
+        };
+        let modes = p.modes();
+        if modes.wants_mouse() {
+            let col = x.clamp(v.inner.x, v.inner.right().saturating_sub(1)) - v.inner.x;
+            let row = y.clamp(v.inner.y, v.inner.bottom().saturating_sub(1)) - v.inner.y;
+            if let Some(bytes) = input::encode_mouse(m.kind, m.modifiers, col, row, modes) {
+                p.write(bytes);
+            }
+        } else if let Some(lines) = scroll {
+            if modes.alt_screen && modes.alternate_scroll {
+                // A full-screen program without mouse support (less, man): the
+                // wheel becomes arrow keys, as xterm does it.
+                let key = KeyEvent::new(
+                    if lines > 0 {
+                        crossterm::event::KeyCode::Up
+                    } else {
+                        crossterm::event::KeyCode::Down
+                    },
+                    crossterm::event::KeyModifiers::NONE,
+                );
+                if let Some(bytes) = input::encode_key(&key, modes) {
+                    p.write(bytes.repeat(lines.unsigned_abs() as usize));
+                }
+            } else if !modes.alt_screen {
+                p.scroll(lines);
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// In WM mode: click to focus, drag a floating pane with the left button,
+    /// resize it with the right.
+    fn handle_mouse_wm(&mut self, m: MouseEvent) {
+        let (x, y) = (m.column, m.row);
+        match m.kind {
+            MouseEventKind::Down(button) => {
+                let frame = self.frame();
+                if self.click_chrome(&frame, x, y) {
+                    return;
+                }
+                let Some(v) = self.pane_at(&frame, x, y) else {
+                    return;
+                };
+                self.focus(v.id);
+                if v.floating && !self.scratch_shown {
+                    self.drag = match button {
+                        MouseButton::Left => Some(Drag::Move {
+                            id: v.id,
+                            dx: x - v.outer.x,
+                            dy: y - v.outer.y,
+                        }),
+                        MouseButton::Right => Some(Drag::Resize {
+                            id: v.id,
+                            start: v.outer,
+                            x,
+                            y,
+                        }),
+                        MouseButton::Middle => None,
+                    };
+                }
+                self.relayout();
+            }
+            MouseEventKind::Drag(_) => {
+                let area = self.workspace_area();
+                match self.drag {
+                    Some(Drag::Move { id, dx, dy }) => {
+                        if let Some(r) = self.active_mut().float_rect_mut(id) {
+                            *r = Rect::new(x.saturating_sub(dx), y.saturating_sub(dy), r.w, r.h)
+                                .clamp_into(area);
+                        }
+                        self.dirty = true;
+                    }
+                    Some(Drag::Resize {
+                        id,
+                        start,
+                        x: x0,
+                        y: y0,
+                    }) => {
+                        let w = (start.w as i32 + x as i32 - x0 as i32).max(10) as u16;
+                        let h = (start.h as i32 + y as i32 - y0 as i32).max(3) as u16;
+                        if let Some(r) = self.active_mut().float_rect_mut(id) {
+                            *r = Rect::new(start.x, start.y, w, h).clamp_into(area);
+                        }
+                        self.dirty = true;
+                    }
+                    None => {}
+                }
+            }
+            MouseEventKind::Up(_) if self.drag.take().is_some() => self.relayout(),
+            _ => {}
+        }
+    }
+
+    /// Whether the host terminal should report the mouse: always, unless the
+    /// config gives it to the host, in which case only in WM mode.
+    pub fn wants_mouse(&self) -> bool {
+        self.mode == Mode::Wm || self.config.settings.mouse != config::MouseMode::Off
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
@@ -333,9 +1000,18 @@ impl App {
             if chord == Some(leader) {
                 self.set_mode(Mode::Wm);
                 self.status = None;
-            } else if let Some(p) = self.focused_pane()
+                return;
+            }
+            if let Some(c) = chord
+                && self.config.global_binds.contains_key(&c)
+            {
+                self.run_bind(c, true);
+                return;
+            }
+            if let Some(p) = self.focused_pane()
                 && let Some(bytes) = input::encode_key(&key, p.modes())
             {
+                p.scroll_to_bottom();
                 p.write(bytes);
             }
             return;
@@ -346,39 +1022,61 @@ impl App {
         let Some(chord) = chord else {
             return;
         };
-        let (action, exits) = match self.config.binds.get(&chord) {
-            Some(bind) => (
-                match &bind.action {
-                    BindAction::Builtin(a) => Some(a.clone()),
-                    BindAction::Lua(_) => None,
-                },
-                bind.exits_mode,
-            ),
-            // The leader pressed again goes through to the program, tmux style.
-            None if chord == leader => (Some(Action::SendLeader), true),
+        if !self.config.binds.contains_key(&chord) && chord != leader {
             // Unbound keys are swallowed: WM mode is a mode, and typing into a pane
             // by accident while in it is worse than a dead key.
-            None => {
-                self.status = Some(format!("{chord} is not bound"));
-                return;
-            }
-        };
-        match action {
-            Some(a) => self.run_action(a),
-            None => self.status = Some("Lua binds run from milestone 2".into()),
+            self.status = Some(format!("{chord} is not bound"));
+            return;
         }
+        let exits = if chord == leader && !self.config.binds.contains_key(&chord) {
+            // The leader pressed again goes through to the program, tmux style.
+            self.run_action(Action::SendLeader);
+            true
+        } else {
+            self.run_bind(chord, false)
+        };
         if exits || !self.config.settings.wm_mode_sticky {
             self.set_mode(Mode::Normal);
         }
     }
 
+    /// Run the bind for `chord` from the WM or the global table. Returns whether
+    /// the bind ends WM mode.
+    fn run_bind(&mut self, chord: crate::keys::Chord, global: bool) -> bool {
+        let table = if global {
+            &self.config.global_binds
+        } else {
+            &self.config.binds
+        };
+        let Some(bind) = table.get(&chord) else {
+            return false;
+        };
+        let exits = bind.exits_mode;
+        match &bind.action {
+            BindAction::Builtin(a) => {
+                let a = a.clone();
+                self.run_action(a);
+            }
+            BindAction::Lua(key) => match self.config.lua.registry_value::<Function>(key) {
+                Ok(f) => {
+                    self.call_lua(|_| f.call::<()>(()));
+                }
+                Err(_) => self.status = Some("lua: bind function is gone".into()),
+            },
+        }
+        exits
+    }
+
     fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
+        self.drag = None;
         self.dirty = true;
     }
 
     fn run_action(&mut self, action: Action) {
-        let focused = self.focused;
+        let focused = self.focused();
+        let floating = focused.is_some_and(|f| self.active().is_floating(f));
+        let area = self.workspace_area();
         match action {
             Action::NewPane => {
                 if let Err(e) = self.open_pane(None) {
@@ -396,42 +1094,137 @@ impl App {
                 }
             }
             Action::Focus(dir) => {
-                if let Some(id) = focused
-                    && let Some(n) = layout::neighbour(&self.rects(), id, dir)
-                {
-                    self.fullscreen = false;
-                    self.set_focus(Some(n));
-                    self.relayout();
+                if let Some(id) = focused {
+                    let rects = self.focus_rects();
+                    let next = layout::neighbour(&rects, id, dir)
+                        .or_else(|| nearest_by_centre(&rects, id, dir));
+                    if let Some(n) = next {
+                        self.active_mut().fullscreen = false;
+                        self.focus(n);
+                        self.relayout();
+                    }
                 }
+            }
+            Action::Move(dir) if floating => {
+                let id = focused.unwrap();
+                let (dx, dy): (i32, i32) = match dir {
+                    Dir::Left => (-4, 0),
+                    Dir::Right => (4, 0),
+                    Dir::Up => (0, -2),
+                    Dir::Down => (0, 2),
+                };
+                if let Some(r) = self.active_mut().float_rect_mut(id) {
+                    *r = Rect::new(
+                        (r.x as i32 + dx).max(0) as u16,
+                        (r.y as i32 + dy).max(0) as u16,
+                        r.w,
+                        r.h,
+                    )
+                    .clamp_into(area);
+                }
+                self.relayout();
             }
             Action::Move(dir) => {
                 if let Some(id) = focused
-                    && let Some(n) = layout::neighbour(&self.rects(), id, dir)
+                    && let Some(n) = layout::neighbour(&self.focus_rects(), id, dir)
+                    && self.active_mut().tree.swap(id, n)
                 {
-                    self.tree.swap(id, n);
                     self.relayout();
                 }
             }
+            Action::Resize(dir, cells) if floating => {
+                let id = focused.unwrap();
+                if let Some(r) = self.active_mut().float_rect_mut(id) {
+                    let (w, h) = match dir {
+                        Dir::Right => (r.w.saturating_add(cells), r.h),
+                        Dir::Left => (r.w.saturating_sub(cells).max(10), r.h),
+                        Dir::Down => (r.w, r.h.saturating_add(cells)),
+                        Dir::Up => (r.w, r.h.saturating_sub(cells).max(3)),
+                    };
+                    *r = Rect::new(r.x, r.y, w, h).clamp_into(area);
+                }
+                self.relayout();
+            }
             Action::Resize(dir, cells) => {
                 if let Some(id) = focused {
-                    let area = self.workspace_area();
+                    let area = if self.scratch_shown {
+                        self.scratch_area()
+                    } else {
+                        area
+                    };
                     let gap = self.config.theme.gaps.inner;
-                    if self.tree.resize(id, dir, cells, area, gap) {
+                    if self.active_mut().tree.resize(id, dir, cells, area, gap) {
                         self.relayout();
                     }
                 }
             }
             Action::ToggleSplit => {
                 if let Some(id) = focused
-                    && self.tree.toggle_split(id)
+                    && self.active_mut().tree.toggle_split(id)
                 {
                     self.relayout();
                 }
             }
-            Action::Fullscreen => {
-                if focused.is_some() {
-                    self.fullscreen = !self.fullscreen;
+            Action::ToggleFloating => self.toggle_floating(),
+            Action::ToggleGroup => {
+                if let Some(id) = focused {
+                    if floating {
+                        self.status = Some("floating panes cannot be grouped".into());
+                    } else if self.active_mut().tree.toggle_group(id) {
+                        self.relayout();
+                    }
+                }
+            }
+            Action::GroupNext | Action::GroupPrev => {
+                let forward = action == Action::GroupNext;
+                if let Some(id) = focused
+                    && let Some(next) = self.active_mut().tree.cycle_group(id, forward)
+                {
+                    self.focus(next);
                     self.relayout();
+                }
+            }
+            Action::Fullscreen => {
+                if focused.is_some() && !self.scratch_shown {
+                    let ws = self.active_mut();
+                    ws.fullscreen = !ws.fullscreen;
+                    self.relayout();
+                }
+            }
+            Action::Workspace(t) => {
+                let n = self.resolve(&t);
+                self.switch_workspace(n);
+                self.relayout();
+            }
+            Action::MoveToWorkspace(t) => {
+                let n = self.resolve(&t);
+                self.move_focused_to(n, true);
+            }
+            Action::MoveToWorkspaceSilent(t) => {
+                let n = self.resolve(&t);
+                self.move_focused_to(n, false);
+            }
+            Action::ScratchpadToggle => {
+                if self.scratch_shown {
+                    self.scratch_shown = false;
+                } else if self.scratch.is_empty() {
+                    // An empty scratchpad summons a fresh shell: the point of the
+                    // key is a quick terminal, not a message saying there is none.
+                    self.scratch_shown = true;
+                    if let Err(e) = self.open_pane(None) {
+                        self.scratch_shown = false;
+                        self.status = Some(format!("scratchpad failed: {e:#}"));
+                    }
+                } else {
+                    self.scratch_shown = true;
+                }
+                self.relayout();
+            }
+            Action::MoveToScratchpad => {
+                if self.scratch_shown {
+                    self.status = Some("already in the scratchpad".into());
+                } else {
+                    self.move_focused_to(SCRATCHPAD, false);
                 }
             }
             Action::ExitMode => {}
@@ -445,28 +1238,339 @@ impl App {
             }
             Action::ReloadConfig => self.reload_config(),
             Action::Quit => self.quit = true,
-            other => self.status = Some(format!("`{other}` arrives in a later milestone")),
+            other @ (Action::PaneSwitcher | Action::SessionSwitcher) => {
+                self.status = Some(format!("`{other}` arrives in milestone 3"))
+            }
         }
     }
 
     fn reload_config(&mut self) {
+        self.reload_at = None;
+        // A reload can come from a timer, with no input event to trigger a frame;
+        // either outcome puts a message in the bar that must be drawn now.
+        self.dirty = true;
         match config::load(config::config_dir().as_deref()) {
             Ok(cfg) => {
                 self.config = cfg;
+                self.module_generation += 1;
+                self.module_values.clear();
+                self.module_running.clear();
+                self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
                 self.relayout();
+                self.render_state_modules();
+                self.emit(HookEvent::ConfigReload, |_| Ok(()));
             }
             // Keep running on the old config; a typo must never take the session down.
-            Err(e) => self.status = Some(format!("config error: {e:#}")),
+            Err(e) => {
+                let msg = format!("{e:#}");
+                self.status = Some(format!(
+                    "config error, kept the old one: {}",
+                    msg.lines().next().unwrap_or("")
+                ));
+            }
         }
     }
 
-    /// Clear per-pane wakeup flags once a frame has been drawn.
+    // ---- Lua ---------------------------------------------------------------------
+
+    fn snapshot(&self) -> config::StateSnapshot {
+        config::StateSnapshot {
+            workspace: if self.scratch_shown {
+                SCRATCHPAD
+            } else {
+                self.current
+            },
+            workspaces: self
+                .workspaces
+                .iter()
+                .filter(|(_, w)| !w.is_empty())
+                .map(|(n, _)| *n)
+                .collect(),
+            focused: self.focused(),
+            title: self.focused_title().unwrap_or("").to_string(),
+            mode: if self.mode == Mode::Wm {
+                "wm"
+            } else {
+                "normal"
+            },
+            panes: self.panes.len(),
+        }
+    }
+
+    /// Run Lua with the runtime API live, then apply what it asked for.
+    fn call_lua<R>(&mut self, f: impl FnOnce(&Lua) -> mlua::Result<R>) -> Option<R> {
+        let rt = config::Runtime {
+            state: self.snapshot(),
+            ..Default::default()
+        };
+        self.config.lua.set_app_data(rt);
+        let result = f(&self.config.lua);
+        let rt = self
+            .config
+            .lua
+            .remove_app_data::<config::Runtime>()
+            .unwrap_or_default();
+        if let Some(msg) = rt.notify {
+            self.status = Some(msg);
+        }
+        let out = match result {
+            Ok(v) => Some(v),
+            Err(e) => {
+                let msg = e.to_string();
+                self.status = Some(format!("lua: {}", msg.lines().next().unwrap_or("")));
+                None
+            }
+        };
+        if !rt.actions.is_empty() {
+            if self.lua_depth >= MAX_LUA_DEPTH {
+                self.status = Some("lua: actions nested too deep; stopped".into());
+            } else {
+                self.lua_depth += 1;
+                for a in rt.actions {
+                    self.run_action(a);
+                }
+                self.lua_depth -= 1;
+            }
+        }
+        self.dirty = true;
+        out
+    }
+
+    /// Call every hook for `event` with a payload table filled in by `fill`.
+    fn emit(&mut self, event: HookEvent, fill: impl FnOnce(&Table) -> mlua::Result<()>) {
+        let Some(keys) = self.config.hooks.get(&event) else {
+            return;
+        };
+        let funcs: Vec<Function> = keys
+            .iter()
+            .filter_map(|k| self.config.lua.registry_value(k).ok())
+            .collect();
+        if funcs.is_empty() {
+            return;
+        }
+        let payload = match self.config.lua.create_table() {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+        if fill(&payload).is_err() {
+            return;
+        }
+        for f in funcs {
+            let p = payload.clone();
+            self.call_lua(|_| f.call::<()>(p));
+        }
+    }
+
+    // ---- bar modules ---------------------------------------------------------------
+
+    fn schedule_modules(&mut self, now: Instant) {
+        self.module_due = self
+            .config
+            .modules
+            .iter()
+            .filter(|(_, m)| m.interval.is_some())
+            .map(|(name, _)| (name.clone(), now))
+            .collect();
+    }
+
+    /// The next moment something needs doing without an event arriving.
+    fn next_deadline(&self) -> Option<Instant> {
+        self.module_due
+            .values()
+            .copied()
+            .chain(self.reload_at)
+            .min()
+    }
+
+    fn run_timers(&mut self, now: Instant) {
+        if self.reload_at.is_some_and(|t| t <= now) {
+            self.reload_config();
+        }
+        let due: Vec<String> = self
+            .module_due
+            .iter()
+            .filter(|(_, t)| **t <= now)
+            .map(|(n, _)| n.clone())
+            .collect();
+        for name in due {
+            let Some(iv) = self.config.modules.get(&name).and_then(|m| m.interval) else {
+                continue;
+            };
+            self.module_due.insert(name.clone(), bar::next_due(now, iv));
+            self.run_module(&name);
+        }
+    }
+
+    fn run_module(&mut self, name: &str) {
+        let Some(m) = self.config.modules.get(name) else {
+            return;
+        };
+        match &m.kind {
+            ModuleKind::Exec { command, .. } => {
+                // One run at a time: a slow command skips ticks instead of piling up.
+                if self.module_running.insert(name.to_string()) {
+                    bar::spawn_exec(
+                        name.to_string(),
+                        self.module_generation,
+                        command.clone(),
+                        self.tx.clone(),
+                    );
+                }
+            }
+            ModuleKind::Lua(key) => {
+                let Ok(f) = self.config.lua.registry_value::<Function>(key) else {
+                    return;
+                };
+                let seg = match self.call_lua(|_| f.call::<Value>(())) {
+                    Some(v) => lua_segment(&v),
+                    None => vec![Piece::new(format!("{name}: error"), Style::Urgent)],
+                };
+                self.set_module_value(name.to_string(), seg);
+            }
+        }
+    }
+
+    /// Lua modules without an interval re-render when observed state changes.
+    fn render_state_modules(&mut self) {
+        let names: Vec<String> = self
+            .config
+            .modules
+            .iter()
+            .filter(|(_, m)| m.interval.is_none() && matches!(m.kind, ModuleKind::Lua(_)))
+            .map(|(n, _)| n.clone())
+            .collect();
+        for n in names {
+            self.run_module(&n);
+        }
+    }
+
+    fn set_module_value(&mut self, name: String, seg: Segment) {
+        if self.module_values.get(&name) != Some(&seg) {
+            self.module_values.insert(name, seg);
+            self.dirty = true;
+        }
+    }
+
+    /// One module's current output: built-ins from state, others from the cache.
+    fn segment(&self, name: &str) -> Segment {
+        match name {
+            "mode" => match self.mode {
+                Mode::Wm => vec![Piece::new(" WM ", Style::Mode)],
+                Mode::Normal => Vec::new(),
+            },
+            "workspaces" => {
+                let mut seg: Segment = self
+                    .workspace_list()
+                    .into_iter()
+                    .map(|(n, current, occupied, urgent)| {
+                        let style = if current && !self.scratch_shown {
+                            Style::WsActive
+                        } else if urgent {
+                            Style::WsUrgent
+                        } else if occupied {
+                            Style::WsOccupied
+                        } else {
+                            Style::WsEmpty
+                        };
+                        Piece::new(format!(" {n} "), style).clickable(n)
+                    })
+                    .collect();
+                let (has, shown) = self.scratch_state();
+                if has {
+                    let style = if shown {
+                        Style::WsActive
+                    } else {
+                        Style::WsOccupied
+                    };
+                    seg.push(Piece::new(" S ", style).clickable(SCRATCHPAD));
+                }
+                seg
+            }
+            "title" => self
+                .focused_title()
+                .filter(|t| !t.is_empty())
+                .map(|t| vec![Piece::new(t, Style::Normal)])
+                .unwrap_or_default(),
+            "panes" => vec![Piece::new(self.panes.len().to_string(), Style::Dim)],
+            _ => self.module_values.get(name).cloned().unwrap_or_default(),
+        }
+    }
+
+    /// The bar's pieces and where they go, for `cols` columns. A status message
+    /// takes the centre while it is up.
+    pub fn bar_pieces(&self, cols: u16) -> Vec<(u16, Piece)> {
+        let side =
+            |names: &[String]| -> Vec<Segment> { names.iter().map(|n| self.segment(n)).collect() };
+        let bar = &self.config.bar;
+        let center = match &self.status {
+            Some(msg) => vec![vec![Piece::new(msg.clone(), Style::Accent)]],
+            None => side(&bar.center),
+        };
+        bar::fit(
+            &side(&bar.left),
+            &center,
+            &side(&bar.right),
+            &self.config.theme.bar.separator,
+            cols,
+        )
+    }
+
+    /// Clear wakeup flags of the panes a frame just drew.
     fn drawn(&mut self) {
-        for p in self.panes.values() {
-            p.drawn();
+        for id in &self.visible {
+            if let Some(p) = self.panes.get(id) {
+                p.drawn();
+            }
         }
         self.dirty = false;
+    }
+}
+
+/// When nothing lies strictly in a direction (a float over tiles, say), go to the
+/// pane whose centre is nearest that way.
+fn nearest_by_centre(rects: &[(PaneId, Rect)], from: PaneId, dir: Dir) -> Option<PaneId> {
+    let centre = |r: &Rect| (r.x as i32 * 2 + r.w as i32, r.y as i32 * 2 + r.h as i32);
+    let (cx, cy) = centre(&rects.iter().find(|(id, _)| *id == from)?.1);
+    rects
+        .iter()
+        .filter(|(id, _)| *id != from)
+        .filter_map(|(id, r)| {
+            let (x, y) = centre(r);
+            let (along, across) = match dir {
+                Dir::Left => (cx - x, (y - cy).abs()),
+                Dir::Right => (x - cx, (y - cy).abs()),
+                Dir::Up => (cy - y, (x - cx).abs()),
+                Dir::Down => (y - cy, (x - cx).abs()),
+            };
+            (along > 0).then_some((*id, along + across * 2))
+        })
+        .min_by_key(|(_, d)| *d)
+        .map(|(id, _)| id)
+}
+
+/// What a Lua module returned, as bar pieces.
+fn lua_segment(v: &Value) -> Segment {
+    match v {
+        Value::Nil => Vec::new(),
+        Value::String(s) => vec![Piece::new(s.to_string_lossy(), Style::Normal)],
+        Value::Integer(i) => vec![Piece::new(i.to_string(), Style::Normal)],
+        Value::Number(n) => vec![Piece::new(n.to_string(), Style::Normal)],
+        Value::Table(t) => {
+            let text: String = t.get("text").unwrap_or_default();
+            let style: Option<String> = t.get("style").ok().flatten();
+            match style.as_deref().map(|s| (s, Style::from_name(s))) {
+                None => vec![Piece::new(text, Style::Normal)],
+                Some((_, Some(st))) => vec![Piece::new(text, st)],
+                Some((bad, None)) => {
+                    vec![Piece::new(format!("unknown style `{bad}`"), Style::Urgent)]
+                }
+            }
+        }
+        other => vec![Piece::new(
+            format!("module returned a {}", other.type_name()),
+            Style::Urgent,
+        )],
     }
 }
 
@@ -520,6 +1624,29 @@ fn spawn_input_thread(tx: Sender<AppEvent>) {
         .expect("spawning the input thread");
 }
 
+/// Watch the config directory with inotify: no polling, no cost while idle.
+/// Returns the watcher, which stops watching when dropped.
+fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
+    use notify::{RecursiveMode, Watcher};
+    let dir = config::config_dir().filter(|d| d.is_dir())?;
+    let mut w = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
+        if let Ok(ev) = ev
+            && !ev.kind.is_access()
+            && ev.paths.iter().any(|p| {
+                matches!(
+                    p.extension().and_then(|e| e.to_str()),
+                    Some("lua") | Some("toml")
+                )
+            })
+        {
+            let _ = tx.send(AppEvent::ConfigChanged);
+        }
+    })
+    .ok()?;
+    w.watch(&dir, RecursiveMode::Recursive).ok()?;
+    Some(w)
+}
+
 /// Run the window manager until the last pane closes or `quit`.
 pub fn run(config: Config) -> Result<()> {
     let (tx, rx): (Sender<AppEvent>, Receiver<AppEvent>) = mpsc::channel();
@@ -535,23 +1662,28 @@ pub fn run(config: Config) -> Result<()> {
         let size = terminal.size()?;
         let mut app = App::new(config, tx.clone(), size.width, size.height);
         app.open_pane(None).context("starting the first pane")?;
-        spawn_input_thread(tx);
+        app.after_event();
+        spawn_input_thread(tx.clone());
+        let _watcher = watch_config(tx);
 
         let mut last_draw = Instant::now() - FRAME;
         let mut last_cursor: Option<CursorState> = None;
+        let mut mouse = false;
         loop {
-            // Idle means blocked here with no timeout: zero frames, zero wakeups.
-            let first = if app.dirty {
-                match rx.recv_timeout(FRAME.saturating_sub(last_draw.elapsed())) {
+            // Idle means blocked here: no timeout unless a frame is owed or a timer
+            // (a bar module, a pending reload) is due. Zero frames, zero wakeups.
+            let frame_due = app.dirty.then(|| last_draw + FRAME);
+            let deadline = [frame_due, app.next_deadline()].into_iter().flatten().min();
+            let first = match deadline {
+                Some(d) => match rx.recv_timeout(d.saturating_duration_since(Instant::now())) {
                     Ok(ev) => Some(ev),
                     Err(RecvTimeoutError::Timeout) => None,
                     Err(RecvTimeoutError::Disconnected) => break,
-                }
-            } else {
-                match rx.recv() {
+                },
+                None => match rx.recv() {
                     Ok(ev) => Some(ev),
                     Err(_) => break,
-                }
+                },
             };
             if let Some(ev) = first {
                 app.handle(ev);
@@ -559,8 +1691,18 @@ pub fn run(config: Config) -> Result<()> {
                     app.handle(ev);
                 }
             }
+            app.run_timers(Instant::now());
+            app.after_event();
             if app.quit {
                 break;
+            }
+            if app.wants_mouse() != mouse {
+                mouse = app.wants_mouse();
+                if mouse {
+                    execute!(terminal.backend_mut(), EnableMouseCapture)?;
+                } else {
+                    execute!(terminal.backend_mut(), DisableMouseCapture)?;
+                }
             }
             if app.dirty && last_draw.elapsed() >= FRAME {
                 let mut cursor = None;
@@ -580,6 +1722,7 @@ pub fn run(config: Config) -> Result<()> {
 
     let _ = execute!(
         terminal.backend_mut(),
+        DisableMouseCapture,
         DisableBracketedPaste,
         DisableFocusChange,
         SetCursorStyle::DefaultUserShape

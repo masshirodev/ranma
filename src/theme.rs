@@ -88,6 +88,16 @@ pub struct Colors {
     pub bar_accent: Color,
     pub mode_fg: Color,
     pub mode_bg: Color,
+    pub bar_urgent: Color,
+    pub ws_active_fg: Color,
+    pub ws_active_bg: Color,
+    pub ws_occupied: Color,
+    pub ws_empty: Color,
+    pub ws_urgent: Color,
+    pub tab_active_fg: Color,
+    pub tab_active_bg: Color,
+    pub tab_inactive_fg: Color,
+    pub tab_inactive_bg: Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -126,6 +136,7 @@ pub enum BarPosition {
 #[serde(deny_unknown_fields)]
 pub struct Bar {
     pub position: BarPosition,
+    pub separator: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

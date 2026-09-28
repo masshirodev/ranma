@@ -9,7 +9,9 @@
 //! There is no paste detection here on purpose: pastes arrive as bracketed-paste
 //! events from the host and nothing else is guessed at (see DESIGN.md, tuios #89/#113).
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+};
 
 use crate::keys::{Chord, Key, Mods};
 
@@ -60,6 +62,21 @@ pub struct PaneModes {
     pub app_cursor: bool,
     pub bracketed_paste: bool,
     pub focus_events: bool,
+    /// The program asked for clicks (1000), drags (1002) or all motion (1003).
+    pub mouse_click: bool,
+    pub mouse_drag: bool,
+    pub mouse_motion: bool,
+    /// SGR encoding (1006), which has no coordinate limit.
+    pub mouse_sgr: bool,
+    pub alt_screen: bool,
+    /// On the alternate screen, turn the wheel into arrow keys (1007).
+    pub alternate_scroll: bool,
+}
+
+impl PaneModes {
+    pub fn wants_mouse(&self) -> bool {
+        self.mouse_click || self.mouse_drag || self.mouse_motion
+    }
 }
 
 /// xterm's modifier parameter: 1 + shift + 2*alt + 4*ctrl.
@@ -188,6 +205,59 @@ pub fn encode_focus(gained: bool, modes: PaneModes) -> Option<&'static [u8]> {
         .then_some(if gained { b"\x1b[I" } else { b"\x1b[O" })
 }
 
+/// Encode a mouse event at `col`, `row` (0-based, inside the pane) for a program
+/// that enabled mouse reporting. `None` when the program did not ask for this kind
+/// of event (motion without 1003, drags without 1002).
+pub fn encode_mouse(
+    kind: MouseEventKind,
+    mods: KeyModifiers,
+    col: u16,
+    row: u16,
+    m: PaneModes,
+) -> Option<Vec<u8>> {
+    if !m.wants_mouse() {
+        return None;
+    }
+    let button = |b: MouseButton| match b {
+        MouseButton::Left => 0u8,
+        MouseButton::Middle => 1,
+        MouseButton::Right => 2,
+    };
+    let (code, release) = match kind {
+        MouseEventKind::Down(b) => (button(b), false),
+        MouseEventKind::Up(b) => (button(b), true),
+        MouseEventKind::Drag(b) if m.mouse_drag || m.mouse_motion => (button(b) + 32, false),
+        MouseEventKind::Moved if m.mouse_motion => (3 + 32, false),
+        MouseEventKind::ScrollUp => (64, false),
+        MouseEventKind::ScrollDown => (65, false),
+        MouseEventKind::ScrollLeft => (66, false),
+        MouseEventKind::ScrollRight => (67, false),
+        _ => return None,
+    };
+    let code = code
+        + 4 * mods.contains(KeyModifiers::SHIFT) as u8
+        + 8 * mods.contains(KeyModifiers::ALT) as u8
+        + 16 * mods.contains(KeyModifiers::CONTROL) as u8;
+    let (x, y) = (col as u32 + 1, row as u32 + 1);
+    if m.mouse_sgr {
+        let end = if release { 'm' } else { 'M' };
+        return Some(format!("\x1b[<{code};{x};{y}{end}").into_bytes());
+    }
+    // X10 encoding: a release is button 3, and coordinates past 223 cannot be sent.
+    let code = if release { 3 + (code & !3) } else { code };
+    if x > 223 || y > 223 {
+        return None;
+    }
+    Some(vec![
+        0x1b,
+        b'[',
+        b'M',
+        32 + code,
+        32 + x as u8,
+        32 + y as u8,
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +319,45 @@ mod tests {
         assert_eq!(enc(KeyCode::F(1), NONE), b"\x1bOP");
         assert_eq!(enc(KeyCode::F(5), NONE), b"\x1b[15~");
         assert_eq!(enc(KeyCode::F(12), NONE), b"\x1b[24~");
+    }
+
+    #[test]
+    fn mouse_is_encoded_only_when_asked_for() {
+        use crossterm::event::{MouseButton, MouseEventKind};
+        let down = MouseEventKind::Down(MouseButton::Left);
+        assert_eq!(encode_mouse(down, NONE, 0, 0, PaneModes::default()), None);
+        let click = PaneModes {
+            mouse_click: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            encode_mouse(down, NONE, 4, 9, click).unwrap(),
+            vec![0x1b, b'[', b'M', 32, 37, 42]
+        );
+        // Drags and motion need their own modes.
+        let drag = MouseEventKind::Drag(MouseButton::Left);
+        assert_eq!(encode_mouse(drag, NONE, 1, 1, click), None);
+        assert_eq!(encode_mouse(MouseEventKind::Moved, NONE, 1, 1, click), None);
+        let sgr = PaneModes {
+            mouse_click: true,
+            mouse_drag: true,
+            mouse_sgr: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            encode_mouse(drag, KeyModifiers::CONTROL, 299, 0, sgr).unwrap(),
+            b"\x1b[<48;300;1M"
+        );
+        assert_eq!(
+            encode_mouse(MouseEventKind::Up(MouseButton::Right), NONE, 0, 0, sgr).unwrap(),
+            b"\x1b[<2;1;1m"
+        );
+        assert_eq!(
+            encode_mouse(MouseEventKind::ScrollUp, NONE, 0, 0, sgr).unwrap(),
+            b"\x1b[<64;1;1M"
+        );
+        // Past column 223 the old encoding cannot say where the click was.
+        assert_eq!(encode_mouse(down, NONE, 300, 0, click), None);
     }
 
     #[test]

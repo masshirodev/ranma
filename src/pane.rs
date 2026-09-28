@@ -27,6 +27,15 @@ pub enum AppEvent {
     Input(crossterm::event::Event),
     InputClosed,
     Pane(PaneId, TermEvent),
+    /// An exec bar module finished. `generation` ties it to the config that
+    /// started it, so a result from before a reload is dropped.
+    Module {
+        name: String,
+        generation: u64,
+        text: Result<String, String>,
+    },
+    /// Something in the config directory changed on disk.
+    ConfigChanged,
 }
 
 /// Forwards a pane's terminal events to the UI thread.
@@ -192,6 +201,28 @@ impl Pane {
             app_cursor: mode.contains(TermMode::APP_CURSOR),
             bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
             focus_events: mode.contains(TermMode::FOCUS_IN_OUT),
+            mouse_click: mode.contains(TermMode::MOUSE_REPORT_CLICK),
+            mouse_drag: mode.contains(TermMode::MOUSE_DRAG),
+            mouse_motion: mode.contains(TermMode::MOUSE_MOTION),
+            mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
+            alt_screen: mode.contains(TermMode::ALT_SCREEN),
+            alternate_scroll: mode.contains(TermMode::ALTERNATE_SCROLL),
+        }
+    }
+
+    /// Scroll the view through scrollback; positive is up (older output).
+    pub fn scroll(&self, lines: i32) {
+        self.term
+            .lock()
+            .scroll_display(alacritty_terminal::grid::Scroll::Delta(lines));
+    }
+
+    /// Back to the live screen, if scrolled back. Typing does this, as in any
+    /// terminal: input goes where the output is.
+    pub fn scroll_to_bottom(&self) {
+        let mut term = self.term.lock();
+        if term.grid().display_offset() != 0 {
+            term.scroll_display(alacritty_terminal::grid::Scroll::Bottom);
         }
     }
 

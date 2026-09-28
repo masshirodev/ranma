@@ -5,6 +5,10 @@
 //! on top of it (split the focused pane along its longer side), not a different
 //! structure, so both feels share this one tree.
 //!
+//! A container can also be *tabbed* (a group, in Hyprland's words): one child is
+//! shown at a time under a one-row tab bar. It keeps its split, so untabbing it
+//! puts things back the way they were.
+//!
 //! Everything here is pure: no PTYs, no terminal. Directional focus and movement
 //! work on the computed rectangles, not on tree order, which is what makes focus
 //! go where the eye expects.
@@ -42,6 +46,27 @@ impl Rect {
             hh,
         )
     }
+    pub fn contains(&self, x: u16, y: u16) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
+    }
+    /// A `pw`% by `ph`% rect centred in this one.
+    pub fn centered(&self, pw: u16, ph: u16) -> Rect {
+        let w = (self.w as u32 * pw as u32 / 100) as u16;
+        let h = (self.h as u32 * ph as u32 / 100) as u16;
+        Rect::new(self.x + (self.w - w) / 2, self.y + (self.h - h) / 2, w, h)
+    }
+    /// Move and clip this rect so it lies inside `area`, keeping its size if it fits.
+    pub fn clamp_into(&self, area: Rect) -> Rect {
+        let w = self.w.min(area.w).max(1);
+        let h = self.h.min(area.h).max(1);
+        let x = self
+            .x
+            .clamp(area.x, area.right().saturating_sub(w).max(area.x));
+        let y = self
+            .y
+            .clamp(area.y, area.bottom().saturating_sub(h).max(area.y));
+        Rect::new(x, y, w, h)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,9 +97,28 @@ pub enum Node {
     Pane(PaneId),
     Container {
         split: Split,
+        /// `Some(active child)` when the container is tabbed.
+        tabbed: Option<usize>,
         /// Children with their weights. Weights are relative, not fractions.
         children: Vec<(Node, f32)>,
     },
+}
+
+impl Node {
+    fn split(split: Split, children: Vec<(Node, f32)>) -> Node {
+        Node::Container {
+            split,
+            tabbed: None,
+            children,
+        }
+    }
+    /// The pane a tab is labelled and focused by: its first pane.
+    fn first_pane(&self) -> PaneId {
+        match self {
+            Node::Pane(id) => *id,
+            Node::Container { children, .. } => children[0].0.first_pane(),
+        }
+    }
 }
 
 /// How a new pane enters the tree.
@@ -84,6 +128,23 @@ pub enum Placement {
     Dwindle,
     /// Split the focused pane in this direction.
     Manual(Split),
+}
+
+/// One tab bar to draw: the row it takes and a pane standing for each tab.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabBar {
+    pub rect: Rect,
+    pub tabs: Vec<PaneId>,
+    pub active: usize,
+}
+
+/// A full layout: every pane (hidden ones sized as if shown, so switching tabs
+/// does not resize the program) and the tab bars.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Layout {
+    pub visible: Vec<(PaneId, Rect)>,
+    pub hidden: Vec<(PaneId, Rect)>,
+    pub tab_bars: Vec<TabBar>,
 }
 
 /// The tree of one workspace, possibly empty.
@@ -99,6 +160,12 @@ const CELL_ASPECT: u32 = 2;
 impl Tree {
     pub fn is_empty(&self) -> bool {
         self.root.is_none()
+    }
+
+    pub fn contains(&self, id: PaneId) -> bool {
+        self.root
+            .as_ref()
+            .is_some_and(|r| find_path(r, id).is_some())
     }
 
     pub fn panes(&self) -> Vec<PaneId> {
@@ -135,15 +202,12 @@ impl Tree {
             // No usable focus: append at the top level, the least surprising place.
             None => {
                 let old = std::mem::replace(root, Node::Pane(new));
-                *root = Node::Container {
-                    split,
-                    children: vec![(old, 1.0), (Node::Pane(new), 1.0)],
-                };
+                *root = Node::split(split, vec![(old, 1.0), (Node::Pane(new), 1.0)]);
             }
         }
     }
 
-    /// Remove a pane, collapsing containers left with a single child.
+    /// Remove a pane, collapsing split containers left with a single child.
     pub fn remove(&mut self, id: PaneId) -> bool {
         let Some(root) = self.root.as_mut() else {
             return false;
@@ -161,20 +225,83 @@ impl Tree {
 
     /// Flip the split of the container directly holding `id` (Hyprland's togglesplit).
     pub fn toggle_split(&mut self, id: PaneId) -> bool {
-        let Some(root) = self.root.as_mut() else {
-            return false;
-        };
-        let Some(path) = find_path(root, id) else {
-            return false;
-        };
-        if path.is_empty() {
-            return false;
+        match self.parent_mut(id) {
+            Some((Node::Container { split, .. }, _)) => {
+                *split = split.flipped();
+                true
+            }
+            _ => false,
         }
-        if let Node::Container { split, .. } = node_at_mut(root, &path[..path.len() - 1]) {
-            *split = split.flipped();
+    }
+
+    /// Tab or untab the container holding `id` (i3's `layout tabbed`). A pane with
+    /// no container around it gets a tabbed container of its own, so the next pane
+    /// opened joins it as a tab.
+    pub fn toggle_group(&mut self, id: PaneId) -> bool {
+        if self.root == Some(Node::Pane(id)) {
+            let only = self.root.take().unwrap();
+            self.root = Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: Some(0),
+                children: vec![(only, 1.0)],
+            });
             return true;
         }
-        false
+        match self.parent_mut(id) {
+            Some((Node::Container { tabbed, .. }, idx)) => {
+                *tabbed = match tabbed {
+                    Some(_) => None,
+                    None => Some(idx),
+                };
+                if let Some(root) = self.root.as_mut() {
+                    normalize(root);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Cycle the nearest tabbed container around `id`. Returns the pane to focus.
+    pub fn cycle_group(&mut self, id: PaneId, forward: bool) -> Option<PaneId> {
+        let root = self.root.as_mut()?;
+        let path = find_path(root, id)?;
+        for depth in (0..path.len()).rev() {
+            if let Node::Container {
+                tabbed: Some(active),
+                children,
+                ..
+            } = node_at_mut(root, &path[..depth])
+            {
+                let n = children.len();
+                *active = if forward {
+                    (*active + 1) % n
+                } else {
+                    (*active + n - 1) % n
+                };
+                return Some(children[*active].0.first_pane());
+            }
+        }
+        None
+    }
+
+    /// Make every tab on the way to `id` the active one, so `id` is visible.
+    pub fn reveal(&mut self, id: PaneId) {
+        let Some(root) = self.root.as_mut() else {
+            return;
+        };
+        let Some(path) = find_path(root, id) else {
+            return;
+        };
+        for depth in 0..path.len() {
+            if let Node::Container {
+                tabbed: Some(active),
+                ..
+            } = node_at_mut(root, &path[..depth])
+            {
+                *active = path[depth];
+            }
+        }
     }
 
     /// Swap two panes' places in the tree.
@@ -190,11 +317,14 @@ impl Tree {
         true
     }
 
-    /// Move the edge of `id` facing `dir` by `cells`, growing the pane.
+    /// Grow (`Right`, `Down`) or shrink (`Left`, `Up`) `id` by `cells`, the way
+    /// Hyprland's `resizeactive` does.
     ///
-    /// Adjusts the nearest ancestor split along that axis where the pane has a
-    /// sibling on that side. Returns false when there is no such edge (the pane
-    /// already touches the workspace border there).
+    /// The edge that moves is the one shared with a neighbour: the right/bottom one
+    /// when there is a sibling there, else the left/top one. The container adjusted
+    /// is the nearest ancestor split along that axis with such a sibling. Returns
+    /// false when nothing could move (no neighbour on that axis, or the neighbour
+    /// or the pane is already at its minimum).
     pub fn resize(&mut self, id: PaneId, dir: Dir, cells: u16, area: Rect, inner_gap: u16) -> bool {
         let Some(root) = self.root.as_mut() else {
             return false;
@@ -203,26 +333,28 @@ impl Tree {
             return false;
         };
         let want = Split::of(dir);
-        let forward = matches!(dir, Dir::Right | Dir::Down);
+        let grow = matches!(dir, Dir::Right | Dir::Down);
         // Walk up from the pane to find the container to adjust, tracking the rect
         // of each container so the change can be converted from cells to weight.
         let rects = path_rects(root, &path, area, inner_gap);
         for depth in (0..path.len()).rev() {
             let idx = path[depth];
             let container = node_at_mut(root, &path[..depth]);
-            let Node::Container { split, children } = container else {
+            let Node::Container {
+                split,
+                tabbed: None,
+                children,
+            } = container
+            else {
                 continue;
             };
-            if *split != want {
+            if *split != want || children.len() < 2 {
                 continue;
             }
-            let neighbour = if forward {
-                (idx + 1 < children.len()).then_some(idx + 1)
+            let nb = if idx + 1 < children.len() {
+                idx + 1
             } else {
-                idx.checked_sub(1)
-            };
-            let Some(nb) = neighbour else {
-                continue;
+                idx - 1
             };
             let crect = rects[depth];
             let span = match want {
@@ -234,27 +366,41 @@ impl Tree {
             }
             let total: f32 = children.iter().map(|(_, w)| *w).sum();
             let delta = cells as f32 / span * total;
-            // Keep the neighbour at least two cells wide: one cell's worth of weight
-            // can floor to zero columns once rounding is applied.
-            let min = 2.0 * total / span;
-            let give = delta.min(children[nb].1 - min).max(0.0);
+            // Nothing drops below two cells. Exactly two cells' worth of weight can
+            // floor to one once float error and rounding are applied, so the floor
+            // is set half a cell above it.
+            let min = 2.5 * total / span;
+            let (from, to) = if grow { (nb, idx) } else { (idx, nb) };
+            let give = delta.min(children[from].1 - min).max(0.0);
             if give <= 0.0 {
                 return false;
             }
-            children[idx].1 += give;
-            children[nb].1 -= give;
+            children[to].1 += give;
+            children[from].1 -= give;
             return true;
         }
         false
     }
 
-    /// Lay the tree out in `area`, `inner_gap` cells between siblings.
+    /// The visible panes laid out in `area`, `inner_gap` cells between siblings.
     pub fn layout(&self, area: Rect, inner_gap: u16) -> Vec<(PaneId, Rect)> {
-        let mut out = Vec::new();
+        self.layout_full(area, inner_gap).visible
+    }
+
+    pub fn layout_full(&self, area: Rect, inner_gap: u16) -> Layout {
+        let mut out = Layout::default();
         if let Some(r) = &self.root {
-            layout_node(r, area, inner_gap, &mut out);
+            layout_node(r, area, inner_gap, true, &mut out);
         }
         out
+    }
+
+    /// The container directly holding `id`, and `id`'s index in it.
+    fn parent_mut(&mut self, id: PaneId) -> Option<(&mut Node, usize)> {
+        let root = self.root.as_mut()?;
+        let path = find_path(root, id)?;
+        let (&idx, parent) = path.split_last()?;
+        Some((node_at_mut(root, parent), idx))
     }
 }
 
@@ -329,45 +475,71 @@ fn node_at_mut<'a>(mut n: &'a mut Node, path: &[usize]) -> &'a mut Node {
 
 fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split) {
     let path = find_path(root, focused).expect("caller checked");
-    // Joining the parent keeps i3's flat containers: three panes side by side are
-    // one container of three, not a container nested in a container.
     if let Some((&idx, parent_path)) = path.split_last()
         && let Node::Container {
             split: psplit,
+            tabbed,
             children,
         } = node_at_mut(root, parent_path)
-        && *psplit == split
     {
-        // Split the focused pane's share instead of adding a full share, so the
-        // rest of the row keeps its size.
-        let w = children[idx].1 / 2.0;
-        children[idx].1 = w;
-        children.insert(idx + 1, (Node::Pane(new), w));
-        return;
+        // Inside a group, a new pane is a new tab next to the current one.
+        if let Some(active) = tabbed {
+            children.insert(idx + 1, (Node::Pane(new), 1.0));
+            *active = idx + 1;
+            return;
+        }
+        // Joining the parent keeps i3's flat containers: three panes side by side
+        // are one container of three, not a container nested in a container.
+        if *psplit == split {
+            // Split the focused pane's share instead of adding a full share, so the
+            // rest of the row keeps its size.
+            let w = children[idx].1 / 2.0;
+            children[idx].1 = w;
+            children.insert(idx + 1, (Node::Pane(new), w));
+            return;
+        }
     }
     let leaf = node_at_mut(root, &path);
     let old = std::mem::replace(leaf, Node::Pane(new));
-    *leaf = Node::Container {
-        split,
-        children: vec![(old, 1.0), (Node::Pane(new), 1.0)],
-    };
+    *leaf = Node::split(split, vec![(old, 1.0), (Node::Pane(new), 1.0)]);
 }
 
 fn remove_in(n: &mut Node, id: PaneId) -> bool {
-    let Node::Container { children, .. } = n else {
+    let Node::Container {
+        children, tabbed, ..
+    } = n
+    else {
         return false;
     };
     if let Some(i) = children.iter().position(|(c, _)| *c == Node::Pane(id)) {
         children.remove(i);
+        if let Some(active) = tabbed {
+            // The tab to the left takes over, as in a browser; the first tab's
+            // right-hand neighbour when the first one closes.
+            if i < *active || (i == *active && *active > 0) {
+                *active -= 1;
+            }
+            *active = (*active).min(children.len().saturating_sub(1));
+        }
         return true;
     }
     children.iter_mut().any(|(c, _)| remove_in(c, id))
 }
 
+/// Remove empty containers and collapse split containers with one child. A tabbed
+/// container with one tab stays, as in i3: it is still a group the next pane joins.
 fn normalize(n: &mut Node) {
-    if let Node::Container { children, .. } = n {
+    if let Node::Container {
+        children, tabbed, ..
+    } = n
+    {
         children.iter_mut().for_each(|(c, _)| normalize(c));
-        if children.len() == 1 {
+        children
+            .retain(|(c, _)| !matches!(c, Node::Container { children, .. } if children.is_empty()));
+        if let Some(active) = tabbed {
+            *active = (*active).min(children.len().saturating_sub(1));
+        }
+        if children.len() == 1 && tabbed.is_none() {
             let (only, _) = children.pop().unwrap();
             *n = only;
         }
@@ -396,7 +568,21 @@ fn distribute(len: u16, weights: &[f32], gap: u16) -> Vec<u16> {
     sizes
 }
 
-fn child_rects(split: Split, children: &[(Node, f32)], area: Rect, gap: u16) -> Vec<Rect> {
+/// Each child's rect. A tabbed container gives every child the area under its
+/// tab bar.
+fn child_rects(node: &Node, area: Rect, gap: u16) -> Vec<Rect> {
+    let Node::Container {
+        split,
+        tabbed,
+        children,
+    } = node
+    else {
+        return Vec::new();
+    };
+    if tabbed.is_some() {
+        let content = Rect::new(area.x, area.y + 1, area.w, area.h.saturating_sub(1));
+        return vec![content; children.len()];
+    }
     let weights: Vec<f32> = children.iter().map(|(_, w)| *w).collect();
     let (len, start) = match split {
         Split::Horizontal => (area.w, area.x),
@@ -416,15 +602,28 @@ fn child_rects(split: Split, children: &[(Node, f32)], area: Rect, gap: u16) -> 
         .collect()
 }
 
-fn layout_node(n: &Node, area: Rect, gap: u16, out: &mut Vec<(PaneId, Rect)>) {
+fn layout_node(n: &Node, area: Rect, gap: u16, visible: bool, out: &mut Layout) {
     match n {
-        Node::Pane(id) => out.push((*id, area)),
-        Node::Container { split, children } => {
-            for ((c, _), r) in children
-                .iter()
-                .zip(child_rects(*split, children, area, gap))
-            {
-                layout_node(c, r, gap, out);
+        Node::Pane(id) => {
+            if visible {
+                out.visible.push((*id, area));
+            } else {
+                out.hidden.push((*id, area));
+            }
+        }
+        Node::Container {
+            tabbed, children, ..
+        } => {
+            if let (Some(active), true) = (tabbed, visible) {
+                out.tab_bars.push(TabBar {
+                    rect: Rect::new(area.x, area.y, area.w, area.h.min(1)),
+                    tabs: children.iter().map(|(c, _)| c.first_pane()).collect(),
+                    active: *active,
+                });
+            }
+            for (i, ((c, _), r)) in children.iter().zip(child_rects(n, area, gap)).enumerate() {
+                let shown = visible && tabbed.is_none_or(|a| a == i);
+                layout_node(c, r, gap, shown, out);
             }
         }
     }
@@ -436,10 +635,10 @@ fn path_rects(root: &Node, path: &[usize], area: Rect, gap: u16) -> Vec<Rect> {
     let mut n = root;
     let mut r = area;
     for &i in path {
-        let Node::Container { split, children } = n else {
+        let Node::Container { children, .. } = n else {
             break;
         };
-        r = child_rects(*split, children, r, gap)[i];
+        r = child_rects(n, r, gap)[i];
         n = &children[i].0;
         rects.push(r);
     }
@@ -598,29 +797,105 @@ mod tests {
     }
 
     #[test]
-    fn resize_moves_the_shared_edge() {
+    fn resize_grows_right_and_shrinks_left_like_hyprland() {
         let mut t = dwindle(2);
         assert!(t.resize(1, Dir::Right, 10, AREA, 0));
         assert_eq!(rect_of(&t, 1).w, 110);
-        assert_eq!(rect_of(&t, 2).w, 90);
-        assert!(t.resize(2, Dir::Left, 20, AREA, 0));
-        assert_eq!(rect_of(&t, 2).w, 110);
-        // Nothing to the left of pane 1: no edge to move.
-        assert!(!t.resize(1, Dir::Left, 5, AREA, 0));
-        // Nothing above in a side-by-side layout either.
+        assert!(t.resize(1, Dir::Left, 30, AREA, 0));
+        assert_eq!(rect_of(&t, 1).w, 80);
+        // The right-most pane has no right neighbour: its left edge moves instead.
+        assert!(t.resize(2, Dir::Right, 20, AREA, 0));
+        assert_eq!(rect_of(&t, 2).w, 140);
+        assert_eq!(rect_of(&t, 2).x, 60);
+        // Side by side, there is nothing to resize vertically.
         assert!(!t.resize(1, Dir::Up, 5, AREA, 0));
+        assert!(!dwindle(1).resize(1, Dir::Right, 5, AREA, 0));
     }
 
     #[test]
-    fn resize_never_crushes_the_neighbour() {
+    fn resize_never_crushes_either_side() {
         let mut t = dwindle(2);
         assert!(t.resize(1, Dir::Right, 500, AREA, 0));
-        assert!(rect_of(&t, 2).w >= 1);
+        assert!(rect_of(&t, 2).w >= 2);
+        assert!(t.resize(1, Dir::Left, 500, AREA, 0));
+        assert!(rect_of(&t, 1).w >= 2);
     }
 
     #[test]
     fn inset_saturates() {
         assert_eq!(Rect::new(0, 0, 3, 3).inset(5, 5).w, 0);
         assert_eq!(Rect::new(2, 2, 10, 6).inset(1, 1), Rect::new(3, 3, 8, 4));
+    }
+
+    #[test]
+    fn grouping_shows_one_tab_under_a_bar() {
+        let mut t = dwindle(2);
+        assert!(t.toggle_group(2));
+        let l = t.layout_full(AREA, 0);
+        assert_eq!(l.visible, vec![(2, Rect::new(0, 1, 200, 49))]);
+        assert_eq!(l.hidden, vec![(1, Rect::new(0, 1, 200, 49))]);
+        assert_eq!(
+            l.tab_bars,
+            vec![TabBar {
+                rect: Rect::new(0, 0, 200, 1),
+                tabs: vec![1, 2],
+                active: 1
+            }]
+        );
+        // Untabbing restores the split exactly.
+        assert!(t.toggle_group(2));
+        assert_eq!(rect_of(&t, 1), Rect::new(0, 0, 100, 50));
+        assert!(t.layout_full(AREA, 0).tab_bars.is_empty());
+    }
+
+    #[test]
+    fn a_new_pane_in_a_group_is_a_new_active_tab() {
+        let mut t = dwindle(1);
+        assert!(t.toggle_group(1));
+        t.insert(2, Some(1), Some(AREA), Placement::Dwindle);
+        let l = t.layout_full(AREA, 0);
+        assert_eq!(l.tab_bars[0].tabs, vec![1, 2]);
+        assert_eq!(l.tab_bars[0].active, 1);
+        assert_eq!(l.visible.len(), 1);
+        assert_eq!(l.visible[0].0, 2);
+    }
+
+    #[test]
+    fn cycling_and_revealing_tabs() {
+        let mut t = dwindle(1);
+        t.toggle_group(1);
+        t.insert(2, Some(1), None, Placement::Dwindle);
+        t.insert(3, Some(2), None, Placement::Dwindle);
+        assert_eq!(t.cycle_group(3, true), Some(1));
+        assert_eq!(t.cycle_group(1, false), Some(3));
+        t.reveal(2);
+        assert_eq!(t.layout(AREA, 0)[0].0, 2);
+        // No group around a lone pane in a split: nothing to cycle.
+        assert_eq!(dwindle(2).cycle_group(1, true), None);
+    }
+
+    #[test]
+    fn closing_a_tab_activates_its_left_neighbour_and_keeps_the_group() {
+        let mut t = dwindle(1);
+        t.toggle_group(1);
+        t.insert(2, Some(1), None, Placement::Dwindle);
+        t.insert(3, Some(2), None, Placement::Dwindle);
+        t.reveal(2);
+        t.remove(2);
+        assert_eq!(t.layout(AREA, 0)[0].0, 1);
+        t.remove(3);
+        // One tab left: still a group, still a bar.
+        assert_eq!(t.layout_full(AREA, 0).tab_bars.len(), 1);
+    }
+
+    #[test]
+    fn rect_helpers() {
+        let a = Rect::new(0, 0, 100, 40);
+        assert_eq!(a.centered(50, 50), Rect::new(25, 10, 50, 20));
+        assert_eq!(
+            Rect::new(90, 35, 20, 10).clamp_into(a),
+            Rect::new(80, 30, 20, 10)
+        );
+        assert!(a.contains(99, 39) && !a.contains(100, 0));
     }
 }

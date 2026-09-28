@@ -90,11 +90,31 @@ with Super removed: arrows to focus, Shift+arrows to resize, `1`-`0` for workspa
 switcher (where Hyprland's session menu is). hjkl is not bound by default because `j`
 is `toggle_split` there.
 
-**Known issue:** binds such as `shift+1` depend on the terminal reporting the key
-itself rather than the shifted symbol (`!` on US and ABNT2 alike). The kitty keyboard
-protocol reports both; legacy terminals report only the symbol. Input decoding must
-request the protocol where available and have a fallback — decide which when the
-input layer is written.
+**Digits: Alt, not Shift** (decided 2026-09-28, card c13). A terminal reports
+Shift+1 as the symbol the layout puts on the key — `!` on US and ABNT2, something
+else elsewhere — so `shift+<digit>` cannot be bound reliably. The kitty keyboard
+protocol does carry the base key, but crossterm replaces it with the shifted one
+when decoding, so enabling the protocol would not help without writing our own
+input parser. `alt+<digit>` arrives as `ESC <digit>` on every terminal and layout,
+so the defaults use it: `<digit>` goes to a workspace, `alt+<digit>` moves the pane
+there and follows. The silent variant is left unbound, with the config showing how
+to put it on `ctrl+<digit>` for terminals that report that.
+
+**Global binds.** A few keys are worth having without the leader — by default
+`alt+arrows` to move focus, as asked for. `{ global = true }` puts a bind in a
+second table looked up *outside* WM mode, before the program sees the key. The cost
+is that the program never gets that key, which is why the defaults stop at four.
+
+**The mouse is ranma's by default.** Click-to-focus needs the host to report the
+mouse, and once it does, the host's own selection and wheel no longer reach the
+panes. So capturing the mouse commits ranma to passing it on properly: clicks,
+drags and motion to programs that enabled mouse reporting (encoded in the mode and
+format they asked for, SGR or X10); the wheel as arrow keys to full-screen programs
+without mouse support (xterm's alternate scroll); and the wheel through scrollback
+everywhere else. Text selection stays one modifier away, since every common
+terminal lets Shift override a program's mouse capture. `mouse = "off"` restores
+the milestone 1 behaviour for anyone who prefers the host's own selection: the
+mouse is captured only while in WM mode.
 
 ### Configuration: Lua for behaviour, TOML for looks — from day one
 
@@ -111,14 +131,65 @@ input layer is written.
 - **Lua never runs on the hot path.** Not per frame, not per byte of output — only
   on binds, hooks and (later) throttled bar-widget ticks. The renderer reads plain
   Rust values.
-- **Hot reload** (milestone 2): watch the config directory, rebuild the config in a
-  fresh Lua state, and swap it in only if it loads; otherwise keep the old one and
-  show the error in the bar. Never crash on a bad config.
+- **Hot reload**: the config directory is watched with inotify (no polling, no
+  idle cost), saves are debounced by 150 ms because editors write in several steps,
+  and the config is rebuilt in a fresh Lua state and swapped in only if it loads.
+  Otherwise the old one stays and the error is shown in the bar. Never crash on a
+  bad config.
+- **Lua at run time** gets three functions and nothing more: `ranma.action` (run
+  an action), `ranma.notify` (a bar message) and `ranma.state` (a snapshot). They
+  exist only while ranma is calling into Lua, so a config cannot act on a window
+  manager that does not exist yet. Actions a hook runs can fire more hooks; the
+  chain stops at four levels.
 
 Not planned: WASM plugins in the style of zellij. A large commitment for v1, and
 Lua hooks cover the things actually wanted.
 
 `doc/CONFIG.md` is the user-facing reference.
+
+### The bar: waybar's shape, without waybar's configuration
+
+Waybar is the model for what a bar *is* — modules on three sides, some built in,
+some yours, some running commands on a timer — and the warning for what
+configuring one should not be: a JSON file for layout, a CSS file for looks, and
+the two kept in sync by hand. So:
+
+- **Layout and behaviour are Lua**, in the same `init.lua` as everything else:
+  `ranma.bar { left = {...}, center = {...}, right = {...} }` and
+  `ranma.module(name, { render | exec, interval, format })`. A module is a
+  function or a command; there is no module type system to learn.
+- **Looks are a handful of theme colours**, not a stylesheet. A module picks one of
+  four named styles (`normal`, `dim`, `accent`, `urgent`); the workspaces module
+  and the mode indicator have their own keys. That limits what a bar can look
+  like, on purpose: every theme styles every module, and nothing needs a selector.
+- **Built-ins are configured, not replaced.** `ranma.module("workspaces", {...})`
+  takes the built-in's few options; anything else is an error naming what it does
+  take.
+- **Budgeting, not dropping.** Space goes to the right side first, then the left;
+  the centre gets the gap. Overflow is cut with `…` at a known place, instead of
+  the last module silently disappearing (tuios #181).
+- **Drawing never runs a module.** Lua and exec modules run on their own schedule,
+  aligned to the wall clock, and their output is cached; a frame reads the cache.
+  State-driven Lua modules (no interval) re-run when focus, workspace, mode, title
+  or the pane count change — not per frame. A result that did not change does not
+  cost a frame.
+- **Exec modules cannot hang ranma.** They run on their own thread, in their own
+  process group, one run at a time per module, and a 5-second timeout kills the
+  whole group, so a grandchild holding the output pipe open cannot wedge the read
+  (tuios #141).
+
+### Floating panes and the scratchpad
+
+A workspace has a floating layer over its tree: panes with their own rectangles,
+drawn after the tiles over a cleared area, raised when focused. Keyboard `move`
+shifts a float and `resize` changes its size; in WM mode the mouse drags it (left
+button) and resizes it (right), with the PTY resized once on release rather than
+on every mouse event. A float tiled again goes next to the tile it was over.
+
+The scratchpad is Hyprland's special workspace: one per ranma, drawn centred over
+the current workspace at 80%, its panes tiled inside it. Summoning an empty one
+opens a shell, because the point of the key is a quick terminal. Summoning it ends
+WM mode for the same reason `new_pane` does: the next thing you do is type.
 
 ### Stack
 
@@ -131,6 +202,7 @@ Rust, for predictable latency without a GC, and for the emulator:
 | Host terminal I/O | `crossterm` | Raw mode, input decoding, including the kitty keyboard protocol. |
 | Drawing | `ratatui` | Cell-buffer diffing: only changed cells are written. |
 | Config | `mlua` (Lua 5.4, vendored), `toml`, `serde` | |
+| Config watching | `notify` | inotify on Linux: events, not polling. |
 
 ### Rendering rules
 
