@@ -263,11 +263,12 @@ impl App {
     }
 
     /// Workspaces to list in the bar: (number, is current, has panes, urgent).
-    pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool)> {
+    /// (number, is current, has panes, urgent, name) for each listed workspace.
+    pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool, Option<String>)> {
         let mut nums: Vec<u8> = self
             .workspaces
             .iter()
-            .filter(|(n, ws)| **n == self.current || !ws.is_empty())
+            .filter(|(n, ws)| **n == self.current || !ws.is_empty() || ws.name.is_some())
             .map(|(n, _)| *n)
             .collect();
         if self.config.workspaces_show_all {
@@ -283,6 +284,7 @@ impl App {
                     n == self.current,
                     ws.is_some_and(|w| !w.is_empty()),
                     ws.is_some_and(|w| w.urgent),
+                    ws.and_then(|w| w.name.clone()),
                 )
             })
             .collect()
@@ -428,7 +430,7 @@ impl App {
     pub fn focused_title(&self) -> Option<&str> {
         self.focused()
             .and_then(|f| self.panes.get(&f))
-            .map(|p| p.title.as_str())
+            .map(|p| p.label())
     }
 
     // ---- panes ---------------------------------------------------------------
@@ -541,7 +543,8 @@ impl App {
     /// Drop empty workspaces other than the current one, and hide an empty scratchpad.
     fn tidy(&mut self) {
         let cur = self.current;
-        self.workspaces.retain(|n, ws| *n == cur || !ws.is_empty());
+        self.workspaces
+            .retain(|n, ws| *n == cur || !ws.is_empty() || ws.name.is_some());
         if self.scratch.is_empty() {
             self.scratch_shown = false;
         }
@@ -834,7 +837,7 @@ impl App {
             }
             TermEvent::Bell if !visible => {
                 // A bell where you cannot see it gets a toast saying where.
-                let title = pane.title.clone();
+                let title = pane.label().to_string();
                 let place = match (self.locate(id), self.locate_hidden(id)) {
                     (Some(SCRATCHPAD), _) => "the scratchpad".to_string(),
                     (Some(n), _) => format!("workspace {n}"),
@@ -1404,6 +1407,14 @@ impl App {
             },
             Action::RenameSession(Some(name)) => self.rename_session(self.active_session, &name),
             Action::RenameSession(None) => self.open_rename_prompt(self.active_session),
+            Action::RenameWorkspace(Some(name)) => self.rename_workspace(self.current, &name),
+            Action::RenameWorkspace(None) => self.open_rename_workspace(),
+            Action::RenamePane(Some(name)) => {
+                if let Some(id) = self.focused() {
+                    self.rename_pane(id, &name);
+                }
+            }
+            Action::RenamePane(None) => self.open_rename_pane(),
         }
     }
 
@@ -1680,7 +1691,7 @@ impl App {
                 let mut seg: Segment = self
                     .workspace_list()
                     .into_iter()
-                    .map(|(n, current, occupied, urgent)| {
+                    .map(|(n, current, occupied, urgent, name)| {
                         let style = if current && !self.scratch_shown {
                             Style::WsActive
                         } else if urgent {
@@ -1690,7 +1701,12 @@ impl App {
                         } else {
                             Style::WsEmpty
                         };
-                        Piece::new(format!(" {n} "), style).on_click(Click::Workspace(n))
+                        // The number always shows: it is the key that gets you there.
+                        let label = match name {
+                            Some(name) => format!(" {n}:{name} "),
+                            None => format!(" {n} "),
+                        };
+                        Piece::new(label, style).on_click(Click::Workspace(n))
                     })
                     .collect();
                 let (has, shown) = self.scratch_state();

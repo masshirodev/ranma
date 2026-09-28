@@ -103,7 +103,10 @@ pub struct Pane {
     sender: EventLoopSender,
     wakeup_pending: Arc<AtomicBool>,
     pub size: Size,
+    /// What the program last set (OSC 0/2). Window rules match this.
     pub title: String,
+    /// A name given with rename_pane; shown instead of the title while set.
+    pub name: Option<String>,
     /// The pane's own child (the shell, or the `exec` command).
     pub pid: u32,
 }
@@ -192,8 +195,14 @@ impl Pane {
             wakeup_pending,
             size,
             title: String::new(),
+            name: None,
             pid,
         })
+    }
+
+    /// What to call the pane on screen: its name if it has one, else its title.
+    pub fn label(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.title)
     }
 
     /// The directory the pane's child is in now: where `cd` last took the shell.

@@ -66,6 +66,10 @@ pub enum Action {
     Session(SessionTarget),
     /// Rename the current session; without a name, ask for one.
     RenameSession(Option<String>),
+    /// Name the current workspace (an empty name clears it); without one, ask.
+    RenameWorkspace(Option<String>),
+    /// Name the focused pane, overriding its title (empty clears); without one, ask.
+    RenamePane(Option<String>),
     /// Open a new pane running this command line.
     Exec(String),
     ExitMode,
@@ -95,6 +99,8 @@ impl Action {
                 | Action::Search
                 | Action::NewSession(_)
                 | Action::RenameSession(_)
+                | Action::RenameWorkspace(_)
+                | Action::RenamePane(_)
                 | Action::Quit
         )
     }
@@ -220,6 +226,8 @@ impl FromStr for Action {
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
+            "rename_workspace" => Ok(Action::RenameWorkspace(rest.map(str::to_string))),
+            "rename_pane" => Ok(Action::RenamePane(rest.map(str::to_string))),
             "session" => match rest {
                 Some("next") => Ok(Action::Session(SessionTarget::Next)),
                 Some("prev") => Ok(Action::Session(SessionTarget::Prev)),
@@ -295,6 +303,10 @@ impl fmt::Display for Action {
             Action::NewSession(Some(n)) => write!(f, "new_session {n}"),
             Action::RenameSession(None) => f.write_str("rename_session"),
             Action::RenameSession(Some(n)) => write!(f, "rename_session {n}"),
+            Action::RenameWorkspace(None) => f.write_str("rename_workspace"),
+            Action::RenameWorkspace(Some(n)) => write!(f, "rename_workspace {n}"),
+            Action::RenamePane(None) => f.write_str("rename_pane"),
+            Action::RenamePane(Some(n)) => write!(f, "rename_pane {n}"),
             Action::Session(SessionTarget::Next) => f.write_str("session next"),
             Action::Session(SessionTarget::Prev) => f.write_str("session prev"),
             Action::Session(SessionTarget::Name(n)) => write!(f, "session {n}"),
@@ -383,6 +395,8 @@ mod tests {
             "session next",
             "session kumiko",
             "rename_session",
+            "rename_workspace web",
+            "rename_pane",
         ] {
             assert_eq!(a(&a(s).to_string()), a(s), "{s}");
         }

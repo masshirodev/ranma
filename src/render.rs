@@ -62,7 +62,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         let Some(pane) = app.panes.get(&view.id) else {
             continue;
         };
-        draw_border(f, app, view, &pane.title);
+        draw_border(f, app, view, pane.label());
         if let Some(c) = draw_pane(f, app, view, pane) {
             cursor = Some(c);
         }
@@ -256,7 +256,7 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
         let title = app
             .panes
             .get(id)
-            .map(|p| p.title.as_str())
+            .map(|p| p.label())
             .filter(|t| !t.is_empty())
             .unwrap_or("shell");
         let width = x1.saturating_sub(x0) as usize;

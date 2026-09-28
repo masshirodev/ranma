@@ -34,6 +34,8 @@ pub enum Kind {
     Help,
     /// A one-line prompt renaming the session at this index.
     RenameSession(usize),
+    RenameWorkspace(u8),
+    RenamePane(PaneId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,7 +78,10 @@ impl Picker {
     }
 
     pub fn is_prompt(&self) -> bool {
-        matches!(self.kind, Kind::RenameSession(_))
+        matches!(
+            self.kind,
+            Kind::RenameSession(_) | Kind::RenameWorkspace(_) | Kind::RenamePane(_)
+        )
     }
 
     /// The items matching the query, best first, plus "new session" when the

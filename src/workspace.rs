@@ -11,6 +11,9 @@ pub struct Workspace {
     pub fullscreen: bool,
     /// A pane here rang the bell while the workspace was not shown.
     pub urgent: bool,
+    /// A name given with rename_workspace; the bar shows it after the number.
+    /// A named workspace stays even while empty: the name says it is wanted.
+    pub name: Option<String>,
     /// Where tiled panes last floated, so floating one again puts it back there.
     pub float_memory: std::collections::HashMap<PaneId, Rect>,
 }

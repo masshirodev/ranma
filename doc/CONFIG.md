@@ -98,6 +98,8 @@ does not matter; it is ignored.
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
 | `session <name>` / `session next` / `session prev` | Switch sessions. |
 | `rename_session [name]` | Rename the current session; without a name, ask for one. |
+| `rename_workspace [name]` | Name the current workspace, shown as `3:name` in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask. |
+| `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | Every bind, filterable by key or action; `Enter` runs the selected one. |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
@@ -203,7 +205,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | --- | --- | --- |
 | `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
-| `workspaces` | The workspaces, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. | `show = "occupied"` (default) or `"all"` (1-10) |
+| `workspaces` | The workspaces as ` 3 ` or ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. | `show = "occupied"` (default) or `"all"` (1-10) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
 

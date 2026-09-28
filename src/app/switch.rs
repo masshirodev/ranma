@@ -116,6 +116,54 @@ impl App {
         self.dirty = true;
     }
 
+    pub(super) fn open_rename_workspace(&mut self) {
+        let n = self.current;
+        let name = self
+            .workspaces
+            .get(&n)
+            .and_then(|w| w.name.clone())
+            .unwrap_or_default();
+        self.picker = Some(Picker::prompt(
+            Kind::RenameWorkspace(n),
+            format!("name workspace {n}  (empty clears)"),
+            &name,
+        ));
+        self.dirty = true;
+    }
+
+    pub(super) fn open_rename_pane(&mut self) {
+        let Some(id) = self.focused() else {
+            return;
+        };
+        let current = self
+            .panes
+            .get(&id)
+            .map(|p| p.label().to_string())
+            .unwrap_or_default();
+        self.picker = Some(Picker::prompt(
+            Kind::RenamePane(id),
+            "name this pane  (empty goes back to its title)",
+            &current,
+        ));
+        self.dirty = true;
+    }
+
+    pub(super) fn rename_workspace(&mut self, n: u8, name: &str) {
+        let name = name.trim();
+        if let Some(ws) = self.workspaces.get_mut(&n) {
+            ws.name = (!name.is_empty()).then(|| name.to_string());
+        }
+        self.dirty = true;
+    }
+
+    pub(super) fn rename_pane(&mut self, id: crate::layout::PaneId, name: &str) {
+        let name = name.trim();
+        if let Some(p) = self.panes.get_mut(&id) {
+            p.name = (!name.is_empty()).then(|| name.to_string());
+        }
+        self.dirty = true;
+    }
+
     pub(super) fn open_help(&mut self) {
         let mut items: Vec<Item> = Vec::new();
         let leader = self.config.settings.leader;
@@ -157,7 +205,7 @@ impl App {
     fn pane_title(&self, id: crate::layout::PaneId) -> String {
         self.panes
             .get(&id)
-            .map(|p| p.title.clone())
+            .map(|p| p.label().to_string())
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| format!("pane {id}"))
     }
@@ -221,8 +269,11 @@ impl App {
             Outcome::Rename(i) => self.open_rename_prompt(i),
             Outcome::Submit(text) => {
                 self.picker = None;
-                if let Some(Kind::RenameSession(i)) = kind {
-                    self.rename_session(i, &text);
+                match kind {
+                    Some(Kind::RenameSession(i)) => self.rename_session(i, &text),
+                    Some(Kind::RenameWorkspace(n)) => self.rename_workspace(n, &text),
+                    Some(Kind::RenamePane(id)) => self.rename_pane(id, &text),
+                    _ => {}
                 }
             }
             Outcome::Accept(target) => {
