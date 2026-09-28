@@ -7,6 +7,7 @@ pub mod action;
 pub mod app;
 pub mod bar;
 pub mod config;
+pub mod hostcolors;
 pub mod input;
 pub mod keys;
 pub mod layout;

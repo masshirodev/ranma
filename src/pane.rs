@@ -96,12 +96,16 @@ pub struct Pane {
     wakeup_pending: Arc<AtomicBool>,
     pub size: Size,
     pub title: String,
+    /// The pane's own child (the shell, or the `exec` command).
+    pub pid: u32,
 }
 
 pub struct SpawnOptions<'a> {
     pub shell: Option<&'a str>,
     pub command: Option<&'a str>,
     pub scrollback_lines: usize,
+    /// Where the child starts; ranma's own directory when `None`.
+    pub cwd: Option<std::path::PathBuf>,
 }
 
 impl Pane {
@@ -156,11 +160,12 @@ impl Pane {
 
         let pty_opts = tty::Options {
             shell: Some(program),
-            working_directory: std::env::current_dir().ok(),
+            working_directory: opts.cwd.clone().or_else(|| std::env::current_dir().ok()),
             drain_on_exit: false,
             env,
         };
         let pty = tty::new(&pty_opts, size.window(), id).context("opening a PTY")?;
+        let pid = pty.child().id();
         let event_loop = EventLoop::new(term.clone(), proxy, pty, false, false)
             .context("starting the PTY event loop")?;
         let sender = event_loop.channel();
@@ -175,7 +180,16 @@ impl Pane {
             wakeup_pending,
             size,
             title: String::new(),
+            pid,
         })
+    }
+
+    /// The directory the pane's child is in now: where `cd` last took the shell.
+    /// Read from /proc, so it follows the shell without any shell integration.
+    pub fn cwd(&self) -> Option<std::path::PathBuf> {
+        std::fs::read_link(format!("/proc/{}/cwd", self.pid))
+            .ok()
+            .filter(|p| p.is_dir())
     }
 
     pub fn write(&self, bytes: impl Into<Vec<u8>>) {

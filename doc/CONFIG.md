@@ -14,6 +14,10 @@ Every mistake is an error at load, with the file and line: unknown settings, key
 actions, events, bind options, modules, theme keys and colours. Nothing is
 silently ignored.
 
+**Symlinks are fine.** Dotfile setups often make `init.lua` or `themes/` a
+link into a repository; ranma watches the real files behind the links, so saving
+through them reloads as well.
+
 **Reloading is automatic.** ranma watches the config directory (inotify, so it
 costs nothing while idle) and reloads a moment after `init.lua` or a theme is
 saved. A config that fails to load is reported in the bar and the old one stays in
@@ -74,7 +78,7 @@ does not matter; it is ignored.
 
 | Action | Does |
 | --- | --- |
-| `new_pane` | Open a pane with the shell, placed by the layout. |
+| `new_pane` | Open a pane with the shell, placed by the layout, in the directory the focused pane's shell is in. |
 | `close_pane` | Close the focused pane. |
 | `focus <dir>` | Focus the pane in that direction (`left right up down`). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
@@ -97,7 +101,7 @@ does not matter; it is ignored.
 | `help` | Every bind, filterable by key or action; `Enter` runs the selected one. |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
-| `exec <command line>` | Open a pane running the command (through `sh -c`). |
+| `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. |

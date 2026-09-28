@@ -28,6 +28,8 @@ T -f /dev/null new-session -d -s s -x 120 -y 30 \
 bar() { screen | tail -1; }
 # Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.
 T set -g set-clipboard on
+# Known host colours, for the colour-query check below.
+T set -g window-style 'fg=#cdd6f4,bg=#1e1e2e'
 wait_for '╭' || fail "no pane border drawn"
 bar | grep -q '^ 1 ' || fail "no workspaces module in the bar"
 bar | grep -Eq '[0-9]{2}:[0-9]{2} *$' || fail "no clock module in the bar"
@@ -82,6 +84,17 @@ T send-keys -t s 'time seq 1 2000000' Enter
 wait_for '^│*real' 160 || wait_for 'real' 160 || fail "flood did not finish"
 screen | grep -q 'real[0-9]' && fail "stale cells after flood"
 echo "flood: $(screen | grep -o 'real.*s' | head -1)"
+
+# A program asking for the background gets the host's (OSC 11).
+T send-keys -t s "printf '\\033]11;?\\033\\\\'; IFS= read -rs -t 1 -d '\\' r; printf '%q\\n' \"\$r\"" Enter
+wait_for 'rgb:1e1e/1e1e/2e2e' 8 || fail "OSC 11 was not answered with the host background"
+
+# A new pane starts in the focused pane's directory.
+T send-keys -t s 'cd /usr/share' Enter; sleep 0.2
+T send-keys -t s C-b t; sleep 0.8
+T send-keys -t s 'pwd' Enter
+wait_for '│/usr/share *│' || fail "new pane did not start in the focused pane's directory"
+T send-keys -t s 'exit' Enter; sleep 0.5
 
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3

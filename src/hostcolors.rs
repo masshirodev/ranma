@@ -1,0 +1,271 @@
+//! The host terminal's colours, so ranma can answer programs that ask.
+//!
+//! Programs query the terminal for its foreground, background and palette (OSC 10,
+//! 11 and 4): nvim picks light or dark from the background, many tools do the
+//! same. Inside ranma the "terminal" is ranma, which has no colours of its own —
+//! it draws with the host's. So ranma asks the host once at startup and answers
+//! from that. Without it the queries go unanswered and every such program waits
+//! for its timeout and then guesses.
+
+use std::io::Write;
+use std::os::fd::AsRawFd;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct HostColors {
+    pub fg: Option<Rgb>,
+    pub bg: Option<Rgb>,
+    pub cursor: Option<Rgb>,
+    /// The 16 ANSI colours as the host has them.
+    pub palette: [Option<Rgb>; 16],
+}
+
+impl HostColors {
+    /// The colour at alacritty_terminal's index: 0-255 the palette, 256 the
+    /// foreground, 257 the background, 258 the cursor. Palette entries past 15
+    /// are the standard xterm cube and grey ramp, which no terminal changes.
+    pub fn get(&self, index: usize) -> Option<Rgb> {
+        match index {
+            0..=15 => self.palette[index],
+            16..=255 => Some(xterm_256(index as u8)),
+            256 => self.fg,
+            257 => self.bg,
+            258 => self.cursor.or(self.fg),
+            _ => None,
+        }
+    }
+}
+
+/// The 6x6x6 cube and 24-step grey ramp of the xterm 256-colour palette.
+pub fn xterm_256(i: u8) -> Rgb {
+    if i >= 232 {
+        let v = 8 + 10 * (i - 232);
+        return Rgb { r: v, g: v, b: v };
+    }
+    let i = i.saturating_sub(16);
+    let level = |n: u8| if n == 0 { 0 } else { 55 + 40 * n };
+    Rgb {
+        r: level(i / 36),
+        g: level((i / 6) % 6),
+        b: level(i % 6),
+    }
+}
+
+/// Parse `rgb:RRRR/GGGG/BBBB` (1-4 hex digits per channel, as terminals send it).
+pub fn parse_rgb(spec: &str) -> Option<Rgb> {
+    let body = spec.strip_prefix("rgb:")?;
+    let mut parts = body.split('/');
+    let mut chan = || -> Option<u8> {
+        let h = parts.next()?;
+        if h.is_empty() || h.len() > 4 {
+            return None;
+        }
+        let v = u32::from_str_radix(h, 16).ok()?;
+        let max = (1u32 << (4 * h.len())) - 1;
+        Some(((v * 255 + max / 2) / max) as u8)
+    };
+    let c = Rgb {
+        r: chan()?,
+        g: chan()?,
+        b: chan()?,
+    };
+    parts.next().is_none().then_some(c)
+}
+
+/// Pull every OSC 4/10/11/12 colour reply out of what the host sent.
+pub fn parse_replies(input: &[u8]) -> HostColors {
+    let mut out = HostColors::default();
+    let text = String::from_utf8_lossy(input);
+    for chunk in text.split("\x1b]").skip(1) {
+        // Replies end in BEL or ST (ESC \); cut at whichever comes first.
+        let end = chunk.find(['\x07', '\x1b']).unwrap_or(chunk.len());
+        let body = &chunk[..end];
+        let mut fields = body.split(';');
+        match fields.next() {
+            Some("10") => out.fg = fields.next().and_then(parse_rgb),
+            Some("11") => out.bg = fields.next().and_then(parse_rgb),
+            Some("12") => out.cursor = fields.next().and_then(parse_rgb),
+            Some("4") => {
+                if let (Some(Ok(i)), Some(spec)) =
+                    (fields.next().map(str::parse::<usize>), fields.next())
+                    && i < 16
+                {
+                    out.palette[i] = parse_rgb(spec);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Ask the host for its colours. Must run in raw mode, before anything else reads
+/// the terminal's input.
+///
+/// The queries are followed by DA1 (`ESC [ c`), which every terminal answers,
+/// after its answers to the queries before it. Reading stops at that reply, so a
+/// terminal that ignores colour queries costs one round trip, not a timeout, and
+/// no late reply is left in the input to be read as keystrokes later.
+pub fn query(timeout: Duration) -> HostColors {
+    let mut q = String::from("\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\");
+    for i in 0..16 {
+        q.push_str(&format!("\x1b]4;{i};?\x1b\\"));
+    }
+    q.push_str("\x1b[c");
+    let mut stdout = std::io::stdout();
+    if stdout
+        .write_all(q.as_bytes())
+        .and_then(|_| stdout.flush())
+        .is_err()
+    {
+        return HostColors::default();
+    }
+
+    let fd = std::io::stdin().as_raw_fd();
+    let deadline = Instant::now() + timeout;
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 1024];
+    while Instant::now() < deadline {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let mut pfd = libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: one valid pollfd for the duration of the call.
+        let ready = unsafe { libc::poll(&mut pfd, 1, left.as_millis() as libc::c_int) };
+        if ready <= 0 {
+            break;
+        }
+        // SAFETY: reading into a stack buffer of the length given.
+        let n = unsafe { libc::read(fd, chunk.as_mut_ptr().cast(), chunk.len()) };
+        if n <= 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n as usize]);
+        if da1_seen(&buf) {
+            break;
+        }
+    }
+    parse_replies(&buf)
+}
+
+/// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.
+fn da1_seen(buf: &[u8]) -> bool {
+    (0..buf.len()).any(|i| {
+        buf[i..].starts_with(b"\x1b[?")
+            && buf[i + 3..]
+                .iter()
+                .find(|b| !(b.is_ascii_digit() || **b == b';'))
+                == Some(&b'c')
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_widths_scale_to_eight_bits() {
+        assert_eq!(
+            parse_rgb("rgb:ffff/0000/8080"),
+            Some(Rgb {
+                r: 255,
+                g: 0,
+                b: 128
+            })
+        );
+        assert_eq!(
+            parse_rgb("rgb:ff/00/80"),
+            Some(Rgb {
+                r: 255,
+                g: 0,
+                b: 128
+            })
+        );
+        assert_eq!(
+            parse_rgb("rgb:f/0/8"),
+            Some(Rgb {
+                r: 255,
+                g: 0,
+                b: 136
+            })
+        );
+        assert_eq!(
+            parse_rgb("rgb:1e1e/1e1e/2e2e"),
+            Some(Rgb {
+                r: 30,
+                g: 30,
+                b: 46
+            })
+        );
+        assert_eq!(parse_rgb("rgb:ff/00"), None);
+        assert_eq!(parse_rgb("#ff0000"), None);
+    }
+
+    #[test]
+    fn replies_are_picked_out_of_a_stream() {
+        let input = b"\x1b]10;rgb:cdcd/d6d6/f4f4\x1b\\\x1b]11;rgb:1e1e/1e1e/2e2e\x07\
+                      \x1b]4;1;rgb:f3/8b/a8\x1b\\\x1b]4;99;rgb:00/00/00\x07\x1b[?62;22c";
+        let c = parse_replies(input);
+        assert_eq!(
+            c.fg,
+            Some(Rgb {
+                r: 205,
+                g: 214,
+                b: 244
+            })
+        );
+        assert_eq!(
+            c.bg,
+            Some(Rgb {
+                r: 30,
+                g: 30,
+                b: 46
+            })
+        );
+        assert_eq!(
+            c.palette[1],
+            Some(Rgb {
+                r: 243,
+                g: 139,
+                b: 168
+            })
+        );
+        assert_eq!(c.cursor, None);
+        assert!(da1_seen(input));
+        assert!(!da1_seen(b"\x1b]10;rgb:0/0/0\x07"));
+        assert!(!da1_seen(b"\x1b[?62;22"));
+    }
+
+    #[test]
+    fn index_mapping() {
+        let c = HostColors {
+            fg: Some(Rgb { r: 1, g: 2, b: 3 }),
+            bg: Some(Rgb { r: 4, g: 5, b: 6 }),
+            ..Default::default()
+        };
+        assert_eq!(c.get(256), c.fg);
+        assert_eq!(c.get(257), c.bg);
+        assert_eq!(c.get(258), c.fg, "cursor falls back to the foreground");
+        assert_eq!(c.get(3), None, "an unanswered palette entry stays unknown");
+        assert_eq!(c.get(16), Some(Rgb { r: 0, g: 0, b: 0 }));
+        assert_eq!(
+            c.get(231),
+            Some(Rgb {
+                r: 255,
+                g: 255,
+                b: 255
+            })
+        );
+        assert_eq!(c.get(232), Some(Rgb { r: 8, g: 8, b: 8 }));
+        assert_eq!(c.get(196), Some(Rgb { r: 255, g: 0, b: 0 }));
+    }
+}

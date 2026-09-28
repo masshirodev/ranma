@@ -231,6 +231,21 @@ apply the first time a title matches, once per pane and rule, because titles cha
 constantly (the shell sets one per prompt) and a pane that moves every time its
 title flickers is worse than no rule.
 
+### Small things a terminal is expected to do
+
+- **New panes start where you are.** A new pane, an `exec`, a new session and an
+  empty scratchpad all start in the directory of the focused pane's shell, read
+  from `/proc/<pid>/cwd`, so it follows every `cd` with no shell integration.
+- **Colour queries are answered.** Programs ask the terminal for its colours
+  (OSC 10/11/12 and 4): nvim picks light or dark from the background. ranma has no
+  colours of its own, it draws with the host's, so it asks the host once at
+  startup and answers from that, with any colour a program set itself taking
+  priority. The startup query ends with a DA1 request, which every terminal
+  answers after everything before it, so reading stops the moment the host has
+  said all it will: a host that ignores colour queries costs one round trip, and
+  no late reply is left in the input to turn up as keystrokes. The palette is
+  read once; a host that changes colours while ranma runs is not followed.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

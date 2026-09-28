@@ -151,6 +151,11 @@ pub struct App {
     host_out: Vec<Vec<u8>>,
     /// (pane, rule index) pairs already applied, so title rules fire once.
     rules_applied: HashSet<(PaneId, usize)>,
+    /// The last pane that had focus anywhere. A new session or an empty
+    /// scratchpad has no focused pane of its own, and still starts where you were.
+    last_focused: Option<PaneId>,
+    /// The host terminal's colours, asked once at startup (see `hostcolors`).
+    pub host_colors: crate::hostcolors::HostColors,
 }
 
 impl App {
@@ -194,6 +199,8 @@ impl App {
             copy: None,
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
+            last_focused: None,
+            host_colors: Default::default(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -425,6 +432,11 @@ impl App {
     // ---- panes ---------------------------------------------------------------
 
     pub fn open_pane(&mut self, command: Option<&str>) -> Result<()> {
+        let spawn_cwd = self
+            .focused()
+            .or(self.last_focused)
+            .and_then(|f| self.panes.get(&f))
+            .and_then(|p| p.cwd());
         let id = self.next_id;
         self.next_id += 1;
         let focused = self.focused().filter(|f| self.active().tree.contains(*f));
@@ -453,11 +465,14 @@ impl App {
                 rows: v.inner.h,
             },
         );
+        // Where the focused pane's shell is now, as captured before this pane
+        // took focus: a new pane continues where you were working.
         let s = &self.config.settings;
         let opts = SpawnOptions {
             shell: s.shell.as_deref(),
             command,
             scrollback_lines: s.scrollback_lines,
+            cwd: spawn_cwd,
         };
         match Pane::spawn(id, size, &opts, self.tx.clone()) {
             Ok(pane) => {
@@ -723,6 +738,9 @@ impl App {
             return;
         }
         let before = std::mem::replace(&mut self.observed, now.clone());
+        if now.focus.is_some() {
+            self.last_focused = now.focus;
+        }
 
         if now.focus != before.focus {
             // Programs that asked for focus events get them, as in any terminal.
@@ -779,6 +797,23 @@ impl App {
             // Replies to queries the program made (device attributes, cursor
             // position): they go back to the program, not to the host.
             TermEvent::PtyWrite(s) => pane.write(s.into_bytes()),
+            // A program asking for a colour (OSC 4/10/11/12). One it set itself
+            // wins; otherwise the host's, since those are what it is drawn with.
+            // Unknown stays unanswered, as before.
+            TermEvent::ColorRequest(index, fmt) => {
+                let own = pane.term.lock().colors()[index];
+                let host =
+                    self.host_colors
+                        .get(index)
+                        .map(|c| alacritty_terminal::vte::ansi::Rgb {
+                            r: c.r,
+                            g: c.g,
+                            b: c.b,
+                        });
+                if let Some(rgb) = own.or(host) {
+                    pane.write(fmt(rgb).into_bytes());
+                }
+            }
             TermEvent::TextAreaSizeRequest(fmt) => {
                 let size = pane.size;
                 let reply = fmt(alacritty_terminal::event::WindowSize {
@@ -1734,6 +1769,11 @@ fn spawn_input_thread(tx: Sender<AppEvent>) {
 
 /// Watch the config directory with inotify: no polling, no cost while idle.
 /// Returns the watcher, which stops watching when dropped.
+///
+/// Dotfiles usually make `init.lua` (or `themes/`) a symlink into a repo, and
+/// inotify reports changes to a symlink's *target* only to a watch on the
+/// target's own directory. So the directories behind any such links are watched
+/// too, or saving through the link would never reload.
 fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
     use notify::{RecursiveMode, Watcher};
     let dir = config::config_dir().filter(|d| d.is_dir())?;
@@ -1752,7 +1792,33 @@ fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
     })
     .ok()?;
     w.watch(&dir, RecursiveMode::Recursive).ok()?;
+    for (entry, mode) in config_link_targets(&dir) {
+        // Best effort: a dangling link simply is not watched.
+        let _ = w.watch(&entry, mode);
+    }
     Some(w)
+}
+
+/// Directories behind symlinks in the config dir that need their own watch:
+/// the parent of a linked `init.lua`, and a linked `themes/` itself.
+fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify::RecursiveMode)> {
+    let mut out = Vec::new();
+    let init = dir.join("init.lua");
+    if init.is_symlink()
+        && let Some(parent) = init
+            .canonicalize()
+            .ok()
+            .and_then(|p| p.parent().map(Into::into))
+    {
+        out.push((parent, notify::RecursiveMode::NonRecursive));
+    }
+    let themes = dir.join("themes");
+    if themes.is_symlink()
+        && let Ok(t) = themes.canonicalize()
+    {
+        out.push((t, notify::RecursiveMode::Recursive));
+    }
+    out
 }
 
 /// Run the window manager until the last pane closes or `quit`.
@@ -1767,8 +1833,12 @@ pub fn run(config: Config) -> Result<()> {
             EnableBracketedPaste,
             EnableFocusChange
         )?;
+        // Before the input thread exists: the replies are read straight off the
+        // terminal here, and none may be left for crossterm to take for keys.
+        let host_colors = crate::hostcolors::query(Duration::from_millis(300));
         let size = terminal.size()?;
         let mut app = App::new(config, tx.clone(), size.width, size.height);
+        app.host_colors = host_colors;
         app.open_pane(None).context("starting the first pane")?;
         app.after_event();
         spawn_input_thread(tx.clone());
