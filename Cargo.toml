@@ -4,10 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+alacritty_terminal = "0.26"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+crossterm = "0.29"
 dirs = "7"
 mlua = { version = "0.12", features = ["lua54", "serde", "vendored"] }
+ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 toml = "1"

@@ -54,6 +54,12 @@ is Ctrl and the plus key.
 
 ### Actions
 
+Actions not built yet are still accepted, so a config written today keeps working;
+pressing one shows "arrives in a later milestone" in the bar. As of milestone 1
+that is: `toggle_floating`, `toggle_group`, `group_next`, `group_prev`, the
+workspace and scratchpad actions, and both switchers. Lua function binds and hooks
+are accepted but do not run until milestone 2.
+
 | Action | Does |
 | --- | --- |
 | `new_pane` | Open a pane with the shell, placed by the layout. |

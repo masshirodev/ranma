@@ -70,9 +70,15 @@ Super belongs to Hyprland and never reaches a terminal program, and Alt collides
 with shells and editors. So every WM action goes through a **leader chord**
 (`ctrl+b` by default) that enters **WM mode**:
 
-- Outside WM mode, ranma forwards input bytes untouched. It does not look at them
-  beyond spotting the leader. That is what keeps IMEs, pastes, vim and non-Latin
-  layouts working (see tuios #89, #113, #202).
+- Outside WM mode, every key goes to the focused pane. ranma only checks it for
+  the leader; nothing else is interpreted. Keys are decoded from the host and
+  **re-encoded for the modes the pane asked for**, the way tmux does it: a program
+  in application-cursor mode expects `ESC O A` for Up even though the host, whose
+  modes are ranma's, sent `ESC [ A`. Passing host bytes through untouched would be
+  wrong for exactly those programs.
+- Nothing is guessed. Pastes arrive as bracketed-paste events from the host and go
+  to the pane bracketed only if it enabled bracketed paste; there is no "that
+  looked like a paste" heuristic to misfire on IMEs or fast typing (tuios #89, #113).
 - Inside WM mode, keys are looked up in the bind table. By default the mode is
   *sticky* — it stays until `Esc` — because WM actions come in runs (`→ → shift+→`).
   Actions that lead straight into typing (`new_pane`, `exec`, the switchers) end it.
@@ -121,7 +127,7 @@ Rust, for predictable latency without a GC, and for the emulator:
 | Concern | Crate | Why |
 | --- | --- | --- |
 | Terminal emulation | `alacritty_terminal` | Years of VT edge cases already fixed; bounded scrollback. |
-| PTYs | `portable-pty` | Spawn, resize, read/write. |
+| PTYs | `alacritty_terminal::tty` + its `EventLoop` | The PTY layer and per-pane I/O thread Alacritty itself runs: bounded reads, a fair lock against the renderer, wakeup events. |
 | Host terminal I/O | `crossterm` | Raw mode, input decoding, including the kitty keyboard protocol. |
 | Drawing | `ratatui` | Cell-buffer diffing: only changed cells are written. |
 | Config | `mlua` (Lua 5.4, vendored), `toml`, `serde` | |
@@ -131,8 +137,13 @@ Rust, for predictable latency without a GC, and for the emulator:
 - **Draw on change, not on a timer.** Idle means zero frames (tuios #79).
 - **Coalesce output.** When a pane floods (`cat bigfile`), render its latest state at
   the frame cap instead of every intermediate one.
-- **One reader thread per PTY**, one render loop, bounded channels with byte-based
-  backpressure (tuios #159).
+- **One I/O thread per PTY** (alacritty_terminal's event loop), one UI thread. A
+  pane's output never queues up in ranma: the I/O thread parses straight into the
+  pane's grid, and the UI thread gets one coalesced wakeup per frame, however much
+  arrived (tuios #159 is about the opposite: queues of undrawn output).
+- **Control characters are drawn as blanks.** alacritty_terminal keeps a literal
+  `\t` in the cell a tab starts from; sent to the host, it moves the cursor instead
+  of drawing, and stale cells show through. Found by `scripts/smoke.sh`.
 - Borders and gaps are cells; they are cheap and stay. Animations are not planned:
   a cell grid cannot animate smoothly, and they would spend the speed this project
   exists for.

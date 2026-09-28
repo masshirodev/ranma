@@ -8,7 +8,10 @@ non-goals. A feature on the non-goals list needs the design changed first, not a
 
 ```sh
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+scripts/smoke.sh    # when the change touches app, pane, render or input
 ```
+
+`doc/TESTING.md` says what each check covers.
 
 ## Conventions
 

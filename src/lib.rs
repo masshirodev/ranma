@@ -4,6 +4,11 @@
 //! testable without a terminal attached.
 
 pub mod action;
+pub mod app;
 pub mod config;
+pub mod input;
 pub mod keys;
+pub mod layout;
+pub mod pane;
+pub mod render;
 pub mod theme;

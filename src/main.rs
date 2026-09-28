@@ -62,8 +62,11 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // The window manager itself is milestone 1 (doc/ROADMAP.md). Until it exists,
-    // say so instead of pretending to start.
-    eprintln!("ranma: config loaded; the window manager is not built yet (see doc/ROADMAP.md)");
-    ExitCode::FAILURE
+    match ranma::app::run(cfg) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("ranma: {e:#}");
+            ExitCode::FAILURE
+        }
+    }
 }
