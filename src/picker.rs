@@ -56,6 +56,9 @@ pub enum Outcome {
 pub struct Picker {
     pub kind: Kind,
     pub title: String,
+    /// Shown in place of the query line when there is nothing to type (a
+    /// yes/no question).
+    pub message: Option<String>,
     pub query: String,
     items: Vec<Item>,
     /// Index into `visible()`, not into `items`.
@@ -67,6 +70,7 @@ impl Picker {
         Picker {
             kind,
             title: title.into(),
+            message: None,
             query: String::new(),
             items,
             selected: 0,
@@ -76,6 +80,13 @@ impl Picker {
     pub fn prompt(kind: Kind, title: impl Into<String>, initial: &str) -> Picker {
         let mut p = Picker::new(kind, title, Vec::new());
         p.query = initial.to_string();
+        p
+    }
+
+    /// A question answered with one key: `message` is shown, nothing is typed.
+    pub fn question(kind: Kind, title: impl Into<String>, message: impl Into<String>) -> Picker {
+        let mut p = Picker::new(kind, title, Vec::new());
+        p.message = Some(message.into());
         p
     }
 

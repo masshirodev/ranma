@@ -2,6 +2,7 @@
 //! prompt, and help (every bind, runnable).
 
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
+use unicode_width::UnicodeWidthStr;
 
 use super::{App, SCRATCHPAD};
 use crate::keys::Chord;
@@ -27,10 +28,22 @@ impl App {
         let p = self.picker.as_ref()?;
         let s = self.screen;
         let items = p.visible().len() as u16;
-        let w = s.w.saturating_sub(4).clamp(10, 72);
-        let max_h = (s.h * 3 / 5).max(5);
-        // Border, query row, the items (at least one row), border.
-        let h = (items.max(1) + 3).min(max_h);
+        let fit = s.w.saturating_sub(4).max(10);
+        let (w, h) = if p.is_prompt() {
+            // A prompt is one row between borders, as wide as its text needs:
+            // cutting a question short is worse than a wide box.
+            let text = p
+                .message
+                .as_deref()
+                .map(UnicodeWidthStr::width)
+                .unwrap_or(40)
+                .max(UnicodeWidthStr::width(p.title.as_str()) + 2);
+            ((text as u16 + 4).clamp(30, fit), 3)
+        } else {
+            // Border, query row, the items (at least one row), border.
+            let max_h = (s.h * 3 / 5).max(5);
+            (fit.min(72), (items.max(1) + 3).min(max_h))
+        };
         let outer = Rect::new(s.x + (s.w - w) / 2, s.y + (s.h.saturating_sub(h)) / 3, w, h);
         let inner = outer.inset(1, 1);
         let query = Rect::new(inner.x, inner.y, inner.w, inner.h.min(1));
@@ -156,10 +169,10 @@ impl App {
             (n, 1) => format!("{n} panes"),
             (n, s) => format!("{n} panes in {s} sessions"),
         };
-        self.picker = Some(Picker::prompt(
+        self.picker = Some(Picker::question(
             Kind::ConfirmQuit,
-            format!("quit ranma, closing {what}?  y / Enter quits, anything else cancels"),
-            "",
+            "quit ranma",
+            format!("Close {what}?   y or Enter quits · any other key cancels"),
         ));
         self.dirty = true;
     }

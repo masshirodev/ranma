@@ -348,6 +348,17 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
 
     let buf = f.buffer_mut();
     let q = l.query;
+    // A question shows its message and takes one key: no input line, no cursor.
+    if let Some(msg) = &p.message {
+        buf.set_stringn(
+            q.x + 1,
+            q.y,
+            msg,
+            q.w.saturating_sub(1) as usize,
+            Style::default().fg(color(c.bar_fg)),
+        );
+        return;
+    }
     let prompt = format!("> {}", p.query);
     buf.set_stringn(
         q.x,
