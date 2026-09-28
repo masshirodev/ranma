@@ -1,0 +1,31 @@
+# The built-in theme. Every other theme inherits from this one unless it says
+# `inherits = "<name>"`, so a user theme only needs the keys it changes.
+#
+# Colours are "#rrggbb", an ANSI name ("blue", "bright-black", ...), an index
+# 0-255, or "default" for the host terminal's own foreground/background.
+
+[colors]
+border_active = "#89b4fa"
+border_inactive = "#45475a"
+border_floating = "#f5c2e7"
+bar_bg = "default"
+bar_fg = "#cdd6f4"
+bar_dim = "#6c7086"
+bar_accent = "#89b4fa"
+mode_fg = "#1e1e2e"
+mode_bg = "#f38ba8"
+
+[border]
+# rounded | plain | thick | double | none
+style = "rounded"
+
+[gaps]
+# Measured in cells. A terminal cell is roughly twice as tall as it is wide,
+# so outer gaps usually look best at horizontal = 2 * vertical.
+inner = 0
+outer_horizontal = 0
+outer_vertical = 0
+
+[bar]
+# top | bottom | hidden
+position = "bottom"
