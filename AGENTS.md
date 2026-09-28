@@ -11,6 +11,10 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 scripts/smoke.sh    # when the change touches app, pane, render or input
 ```
 
+To install what you built: `./install.sh` (it checks the new binary against the
+user's config and restores the previous one if it is rejected). `./install.sh
+--check` runs the gate above first. Prefer it to a bare `cargo install`.
+
 `doc/TESTING.md` says what each check covers.
 
 ## Conventions
@@ -32,4 +36,4 @@ scripts/smoke.sh    # when the change touches app, pane, render or input
   `~/.config/myconf/matugen/templates/ranma.toml`. Adding the key to that
   template (or re-rendering it) before `cargo install` makes the installed ranma
   reject the theme, and every new terminal falls back to a plain shell. Order:
-  add the key here with a default, `cargo install --path .`, then the template.
+  add the key here with a default, `./install.sh`, then the template.

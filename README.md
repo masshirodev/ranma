@@ -14,10 +14,26 @@ copy mode and history search with the system clipboard, window rules, a
 waybar-style bar with Lua and shell modules, Lua binds and hooks, mouse focus,
 and live config reload. `leader ?` lists every key.
 
+## Install
+
 ```sh
-cargo run --release           # start it; Ctrl+b enters WM mode, t opens a pane
-cargo run -- --dump-config    # the default init.lua, which documents every option
-cargo run -- --check-config   # validate ~/.config/ranma/init.lua and its theme
+./install.sh            # build, install to ~/.cargo/bin, check it against your config
+./install.sh --check    # run the full pre-commit gate first
+./install.sh --uninstall
+```
+
+Needs `cargo` and a C compiler (ranma builds its Lua from source). After
+installing, the new binary is run against your config; if it rejects it, the
+previous binary is put back, so a terminal that starts ranma never falls back to
+a plain shell because of an upgrade. Running instances keep the old binary until
+they exit.
+
+Then start it with `ranma` (or from your shell startup: see
+[`doc/CONFIG.md`](doc/CONFIG.md)). `Ctrl+b ?` lists every key.
+
+```sh
+ranma --dump-config    # the default init.lua, which documents every option
+ranma --check-config   # validate ~/.config/ranma/init.lua and its theme
 ```
 
 - [`doc/DESIGN.md`](doc/DESIGN.md): what ranma is, what it refuses to be, and why
