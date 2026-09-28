@@ -108,7 +108,7 @@ does not matter; it is ignored.
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. |
-| `quit` | Quit ranma. |
+| `quit` / `quit now` | Quit ranma, closing every pane in every session (`leader Delete`). `quit` asks first (`y` or `Enter` quits, any other key cancels); `quit now` does not, for scripts: `ranma action "quit now"`. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave
 is gone. **Sessions** are separate sets of workspaces, one shown at a time; the

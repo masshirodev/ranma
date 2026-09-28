@@ -1419,7 +1419,8 @@ impl App {
                 }
             }
             Action::ReloadConfig => self.reload_config(),
-            Action::Quit => self.quit = true,
+            Action::Quit { now: true } => self.quit = true,
+            Action::Quit { now: false } => self.confirm_quit(),
             Action::PaneSwitcher => self.open_pane_switcher(),
             Action::SessionSwitcher => self.open_session_switcher(),
             Action::Help => self.open_help(),

@@ -154,6 +154,9 @@ end
 ranma.bind("escape", "exit_mode")
 ranma.bind("return", "exit_mode")
 ranma.bind("r", "reload_config")
+-- Quit ranma (Hyprland's Super+Delete ends the session). It asks first, since
+-- every shell in every session closes with it; "quit now" skips the question.
+ranma.bind("delete", "quit")
 
 -- Bar ---------------------------------------------------------------------------
 -- Which modules go where. Built in: mode (WM, COPY, SEARCH), session (its name,

@@ -36,6 +36,8 @@ pub enum Kind {
     RenameSession(usize),
     RenameWorkspace(u8),
     RenamePane(PaneId),
+    /// "Quit ranma?": y or Enter confirms, anything else cancels.
+    ConfirmQuit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +82,10 @@ impl Picker {
     pub fn is_prompt(&self) -> bool {
         matches!(
             self.kind,
-            Kind::RenameSession(_) | Kind::RenameWorkspace(_) | Kind::RenamePane(_)
+            Kind::RenameSession(_)
+                | Kind::RenameWorkspace(_)
+                | Kind::RenamePane(_)
+                | Kind::ConfirmQuit
         )
     }
 
@@ -125,6 +130,13 @@ impl Picker {
 
     pub fn key(&mut self, key: &KeyEvent) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        // A yes/no question: one key answers it, and only yes is yes.
+        if self.kind == Kind::ConfirmQuit {
+            return match key.code {
+                KeyCode::Enter | KeyCode::Char('y' | 'Y') if !ctrl => Outcome::Submit("y".into()),
+                _ => Outcome::Cancel,
+            };
+        }
         let n = self.visible().len();
         match key.code {
             KeyCode::Esc => return Outcome::Cancel,
@@ -298,6 +310,24 @@ mod tests {
             p.key(&KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)),
             Outcome::Rename(1)
         );
+    }
+
+    #[test]
+    fn quit_confirmation_takes_only_yes() {
+        for (code, out) in [
+            (KeyCode::Char('y'), Outcome::Submit("y".into())),
+            (KeyCode::Enter, Outcome::Submit("y".into())),
+            (KeyCode::Char('n'), Outcome::Cancel),
+            (KeyCode::Char('q'), Outcome::Cancel),
+            (KeyCode::Esc, Outcome::Cancel),
+        ] {
+            let mut p = Picker::prompt(Kind::ConfirmQuit, "quit?", "");
+            assert_eq!(
+                p.key(&KeyEvent::new(code, KeyModifiers::NONE)),
+                out,
+                "{code:?}"
+            );
+        }
     }
 
     #[test]

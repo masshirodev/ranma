@@ -78,7 +78,10 @@ pub enum Action {
     /// Send the leader chord itself to the focused program.
     SendLeader,
     ReloadConfig,
-    Quit,
+    /// Quit ranma, closing every pane. Asks first unless `now` (`quit now`).
+    Quit {
+        now: bool,
+    },
 }
 
 impl Action {
@@ -104,7 +107,7 @@ impl Action {
                 | Action::RenameSession(_)
                 | Action::RenameWorkspace(_)
                 | Action::RenamePane(_)
-                | Action::Quit
+                | Action::Quit { .. }
         )
     }
 }
@@ -253,7 +256,15 @@ impl FromStr for Action {
             "exit_mode" => no_arg(Action::ExitMode),
             "send_leader" => no_arg(Action::SendLeader),
             "reload_config" => no_arg(Action::ReloadConfig),
-            "quit" => no_arg(Action::Quit),
+            "quit" => match rest {
+                None => Ok(Action::Quit { now: false }),
+                Some("now") => Ok(Action::Quit { now: true }),
+                Some(other) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: other.into(),
+                    expected: "nothing, or `now` to skip the question",
+                }),
+            },
             _ => Err(ActionError::Unknown(name.into())),
         }
     }
@@ -321,7 +332,8 @@ impl fmt::Display for Action {
             Action::ExitMode => f.write_str("exit_mode"),
             Action::SendLeader => f.write_str("send_leader"),
             Action::ReloadConfig => f.write_str("reload_config"),
-            Action::Quit => f.write_str("quit"),
+            Action::Quit { now: false } => f.write_str("quit"),
+            Action::Quit { now: true } => f.write_str("quit now"),
         }
     }
 }
@@ -409,6 +421,8 @@ mod tests {
             "rename_session",
             "rename_workspace web",
             "rename_pane",
+            "quit",
+            "quit now",
         ] {
             assert_eq!(a(&a(s).to_string()), a(s), "{s}");
         }

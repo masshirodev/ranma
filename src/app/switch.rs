@@ -148,6 +148,22 @@ impl App {
         self.dirty = true;
     }
 
+    pub(super) fn confirm_quit(&mut self) {
+        let n = self.panes.len();
+        let s = self.session_count();
+        let what = match (n, s) {
+            (1, _) => "the last pane".to_string(),
+            (n, 1) => format!("{n} panes"),
+            (n, s) => format!("{n} panes in {s} sessions"),
+        };
+        self.picker = Some(Picker::prompt(
+            Kind::ConfirmQuit,
+            format!("quit ranma, closing {what}?  y / Enter quits, anything else cancels"),
+            "",
+        ));
+        self.dirty = true;
+    }
+
     pub(super) fn rename_workspace(&mut self, n: u8, name: &str) {
         let name = name.trim();
         if let Some(ws) = self.workspaces.get_mut(&n) {
@@ -273,6 +289,7 @@ impl App {
                     Some(Kind::RenameSession(i)) => self.rename_session(i, &text),
                     Some(Kind::RenameWorkspace(n)) => self.rename_workspace(n, &text),
                     Some(Kind::RenamePane(id)) => self.rename_pane(id, &text),
+                    Some(Kind::ConfirmQuit) => self.quit = true,
                     _ => {}
                 }
             }
