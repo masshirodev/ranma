@@ -115,6 +115,7 @@ ranma.bind("backspace", "session_switcher")
 ranma.bind("shift+n", "new_session")
 ranma.bind("(", "session prev")
 ranma.bind(")", "session next")
+-- A session by name: ranma.bind("k", "session kumiko")
 ranma.bind("$", "rename_session")
 -- Names: "," names the focused pane (as tmux's rename-window), overriding the
 -- title its program sets; "." names the current workspace, shown as 3:name in
@@ -163,6 +164,8 @@ for sym, ws in pairs(shifted) do
 end
 
 -- ranma itself ------------------------------------------------------------------
+-- The leader pressed again in WM mode sends it to the program; to put that on
+-- another key: ranma.bind("b", "send_leader")
 ranma.bind("escape", "exit_mode")
 ranma.bind("return", "exit_mode")
 ranma.bind("r", "reload_config")

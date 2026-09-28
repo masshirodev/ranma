@@ -6,6 +6,9 @@ your file only needs what you change.
 
 ```sh
 ranma --dump-config   # the built-in init.lua: every option and default bind
+ranma --dump-config --commented >> ~/.config/ranma/init.lua
+                      # the same, all commented out: a reference inside your
+                      # own file that changes nothing until you uncomment it
 ranma --dump-theme    # the built-in theme
 ranma --check-config  # load your config and theme, report errors, exit
 ```
