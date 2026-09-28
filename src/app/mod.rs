@@ -33,11 +33,13 @@ use crate::theme::{BarPosition, BorderStyle};
 use crate::workspace::Workspace;
 
 mod copy;
+mod drag;
 mod rules;
 mod session;
 mod switch;
 
 pub use copy::CopyState;
+pub use drag::drop_half;
 use session::Session;
 pub use switch::PickerLayout;
 
@@ -99,6 +101,17 @@ enum Drag {
         x: u16,
         y: u16,
     },
+    /// A tile border between two panes; `last` is the pointer's position along
+    /// the axis at the previous event.
+    Edge {
+        id: PaneId,
+        split: Split,
+        last: u16,
+    },
+    /// A tile picked up by its title bar, to drop beside another.
+    Tile {
+        id: PaneId,
+    },
 }
 
 /// The parts of state hooks and state-driven modules react to.
@@ -157,6 +170,8 @@ pub struct App {
     /// The host terminal's colours, asked once at startup (see `hostcolors`).
     pub host_colors: crate::hostcolors::HostColors,
     pub toasts: crate::toast::Toasts,
+    /// Where a tile being dragged would land (see `drag`).
+    drop_preview: Option<(PaneId, Dir)>,
 }
 
 impl App {
@@ -203,6 +218,7 @@ impl App {
             last_focused: None,
             host_colors: Default::default(),
             toasts: Default::default(),
+            drop_preview: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -407,10 +423,12 @@ impl App {
             .chain(frame.hidden.iter().copied())
             .collect();
         for (id, inner) in sizes {
-            // A floating pane being dragged to a new size keeps its PTY size until
-            // the button is released: one resize, not one per mouse event.
-            if matches!(self.drag, Some(Drag::Resize { id: d, .. }) if d == id) {
-                continue;
+            // Panes being resized by the mouse keep their PTY size until the
+            // button is released: one resize, not one per mouse event.
+            match self.drag {
+                Some(Drag::Resize { id: d, .. }) if d == id => continue,
+                Some(Drag::Edge { .. }) => continue,
+                _ => {}
             }
             if let Some(p) = self.panes.get_mut(&id) {
                 p.resize(Size {
@@ -436,6 +454,12 @@ impl App {
     // ---- panes ---------------------------------------------------------------
 
     pub fn open_pane(&mut self, command: Option<&str>) -> Result<()> {
+        self.open_pane_at(command, None)
+    }
+
+    /// Open a pane; with `side`, on that side of the focused tile rather than
+    /// where the layout would put it.
+    pub fn open_pane_at(&mut self, command: Option<&str>, side: Option<Dir>) -> Result<()> {
         let spawn_cwd = self
             .focused()
             .or(self.last_focused)
@@ -457,7 +481,12 @@ impl App {
             Layout::Manual => Placement::Manual(Split::Horizontal),
         };
         let ws = self.active_mut();
-        ws.tree.insert(id, focused, focused_rect, placement);
+        match (side, focused) {
+            (Some(dir), Some(f)) => {
+                ws.tree.insert_beside(id, f, dir);
+            }
+            _ => ws.tree.insert(id, focused, focused_rect, placement),
+        }
         ws.fullscreen = false;
 
         // Spawn at the size the layout gives it, so the program starts at its real
@@ -985,6 +1014,26 @@ impl App {
             self.dirty = true;
             return;
         }
+        // Borders are ranma's in every mode: the top one moves, the others resize.
+        let (x, y) = (m.column, m.row);
+        match m.kind {
+            MouseEventKind::Down(MouseButton::Left) if self.drag.is_none() => {
+                let frame = self.frame();
+                if let Some(hit) = self.border_hit(&frame, x, y) {
+                    self.start_border_drag(hit, x, y);
+                    return;
+                }
+            }
+            MouseEventKind::Drag(_) if self.drag.is_some() => {
+                self.update_drag(x, y);
+                return;
+            }
+            MouseEventKind::Up(_) if self.drag.is_some() => {
+                self.finish_drag();
+                return;
+            }
+            _ => {}
+        }
         match self.mode {
             Mode::Wm => self.handle_mouse_wm(m),
             // Copy mode handled its own mouse events before getting here.
@@ -1076,63 +1125,36 @@ impl App {
     /// resize it with the right.
     fn handle_mouse_wm(&mut self, m: MouseEvent) {
         let (x, y) = (m.column, m.row);
-        match m.kind {
-            MouseEventKind::Down(button) => {
-                let frame = self.frame();
-                if self.click_chrome(&frame, x, y) {
-                    return;
-                }
-                let Some(v) = self.pane_at(&frame, x, y) else {
-                    return;
-                };
-                self.focus(v.id);
-                if v.floating && !self.scratch_shown {
-                    self.drag = match button {
-                        MouseButton::Left => Some(Drag::Move {
-                            id: v.id,
-                            dx: x - v.outer.x,
-                            dy: y - v.outer.y,
-                        }),
-                        MouseButton::Right => Some(Drag::Resize {
-                            id: v.id,
-                            start: v.outer,
-                            x,
-                            y,
-                        }),
-                        MouseButton::Middle => None,
-                    };
-                }
-                self.relayout();
-            }
-            MouseEventKind::Drag(_) => {
-                let area = self.workspace_area();
-                match self.drag {
-                    Some(Drag::Move { id, dx, dy }) => {
-                        if let Some(r) = self.active_mut().float_rect_mut(id) {
-                            *r = Rect::new(x.saturating_sub(dx), y.saturating_sub(dy), r.w, r.h)
-                                .clamp_into(area);
-                        }
-                        self.dirty = true;
-                    }
-                    Some(Drag::Resize {
-                        id,
-                        start,
-                        x: x0,
-                        y: y0,
-                    }) => {
-                        let w = (start.w as i32 + x as i32 - x0 as i32).max(10) as u16;
-                        let h = (start.h as i32 + y as i32 - y0 as i32).max(3) as u16;
-                        if let Some(r) = self.active_mut().float_rect_mut(id) {
-                            *r = Rect::new(start.x, start.y, w, h).clamp_into(area);
-                        }
-                        self.dirty = true;
-                    }
-                    None => {}
-                }
-            }
-            MouseEventKind::Up(_) if self.drag.take().is_some() => self.relayout(),
-            _ => {}
+        // Drags and releases were handled with the borders, in handle_mouse.
+        let MouseEventKind::Down(button) = m.kind else {
+            return;
+        };
+        let frame = self.frame();
+        if self.click_chrome(&frame, x, y) {
+            return;
         }
+        let Some(v) = self.pane_at(&frame, x, y) else {
+            return;
+        };
+        self.focus(v.id);
+        // In WM mode a float can be grabbed anywhere, not only by its border.
+        if v.floating && !self.scratch_shown {
+            self.drag = match button {
+                MouseButton::Left => Some(Drag::Move {
+                    id: v.id,
+                    dx: x - v.outer.x,
+                    dy: y - v.outer.y,
+                }),
+                MouseButton::Right => Some(Drag::Resize {
+                    id: v.id,
+                    start: v.outer,
+                    x,
+                    y,
+                }),
+                MouseButton::Middle => None,
+            };
+        }
+        self.relayout();
     }
 
     /// Whether the host terminal should report the mouse: always, unless the
@@ -1235,6 +1257,11 @@ impl App {
         match action {
             Action::NewPane => {
                 if let Err(e) = self.open_pane(None) {
+                    self.status = Some(format!("new pane failed: {e:#}"));
+                }
+            }
+            Action::NewPaneAt(dir) => {
+                if let Err(e) = self.open_pane_at(None, Some(dir)) {
                     self.status = Some(format!("new pane failed: {e:#}"));
                 }
             }

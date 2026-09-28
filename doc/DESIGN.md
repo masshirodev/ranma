@@ -246,6 +246,17 @@ title flickers is worse than no rule.
   no late reply is left in the input to turn up as keystrokes. The palette is
   read once; a host that changes colours while ranma runs is not followed.
 
+### The mouse: top border moves, the rest resize
+
+One rule for every pane in every mode, so it is learnt once: the top border is
+the title bar, every other border resizes. Moving a tile is drag-and-drop onto
+another tile's side, which is the operation keyboards make awkward ("put this one
+under that one") and a pointer makes obvious; the half it would land in is
+outlined while dragging. Resizing a tile moves the edge it shares with its
+neighbour, found at whatever depth of the tree the neighbour is, not the nearest
+split around the pane. The PTYs are resized once, on release: a program getting a
+SIGWINCH per mouse event redraws dozens of times for one gesture.
+
 ### Toasts, and a socket per ranma
 
 A notification that sits in the bar until the next key is easy to miss and easy

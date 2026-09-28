@@ -46,6 +46,11 @@ ranma.set {
 
 -- Panes -------------------------------------------------------------------------
 ranma.bind("t", "new_pane")
+-- Alt+arrow opens the new pane on that side of the focused one, instead of
+-- where dwindle would put it: leader, Alt+Down is "open below".
+for _, dir in ipairs { "left", "right", "up", "down" } do
+  ranma.bind("alt+" .. dir, "new_pane " .. dir)
+end
 ranma.bind("q", "close_pane")
 ranma.bind("w", "toggle_floating")
 ranma.bind("j", "toggle_split")
@@ -59,6 +64,8 @@ ranma.bind("ctrl+l", "group_next")
 -- Focus, resize, move ----------------------------------------------------------
 -- resize works like Hyprland's resizeactive: right and down grow the pane, left
 -- and up shrink it. On a floating pane, move shifts it instead of swapping.
+-- With the mouse, in any mode: drag a border between panes to resize, drag a
+-- pane by its top border to move it (drop it on a side of another pane).
 for _, dir in ipairs { "left", "right", "up", "down" } do
   ranma.bind(dir, "focus " .. dir)
   ranma.bind("shift+" .. dir, "resize " .. dir .. " 3")

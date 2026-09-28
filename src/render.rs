@@ -71,6 +71,17 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     for tb in &frame.tab_bars {
         draw_tab_bar(f, app, tb);
     }
+    // Where a dragged tile would land: an outline over that half of the target.
+    if let Some((target, dir)) = app.drop_preview()
+        && let Some(v) = frame.views.iter().find(|v| v.id == target)
+    {
+        let half = crate::app::drop_half(v.outer, dir);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Thick)
+            .border_style(Style::default().fg(color(app.config.theme.colors.mode_bg)));
+        f.render_widget(block, rrect(half));
+    }
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }

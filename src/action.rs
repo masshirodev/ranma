@@ -35,6 +35,8 @@ pub enum SessionTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     NewPane,
+    /// Open a pane on this side of the focused one.
+    NewPaneAt(Dir),
     ClosePane,
     Focus(Dir),
     /// Swap the focused pane with its neighbour in that direction.
@@ -88,6 +90,7 @@ impl Action {
         matches!(
             self,
             Action::NewPane
+                | Action::NewPaneAt(_)
                 | Action::ScratchpadToggle
                 | Action::Exec(_)
                 | Action::ExitMode
@@ -187,7 +190,10 @@ impl FromStr for Action {
         };
 
         match name {
-            "new_pane" => no_arg(Action::NewPane),
+            "new_pane" => match first {
+                None => Ok(Action::NewPane),
+                Some(_) => Ok(Action::NewPaneAt(parse_dir(name, first)?)),
+            },
             "close_pane" => no_arg(Action::ClosePane),
             "focus" => Ok(Action::Focus(parse_dir(name, first)?)),
             "move" => Ok(Action::Move(parse_dir(name, first)?)),
@@ -279,6 +285,7 @@ impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Action::NewPane => f.write_str("new_pane"),
+            Action::NewPaneAt(d) => write!(f, "new_pane {d}"),
             Action::ClosePane => f.write_str("close_pane"),
             Action::Focus(d) => write!(f, "focus {d}"),
             Action::Move(d) => write!(f, "move {d}"),
@@ -368,9 +375,13 @@ mod tests {
             "resize left 0".parse::<Action>(),
             Err(ActionError::BadArg { .. })
         ));
-        assert_eq!(
+        assert!(matches!(
             "new_pane now".parse::<Action>(),
-            Err(ActionError::UnexpectedArg("new_pane".into()))
+            Err(ActionError::BadArg { .. })
+        ));
+        assert_eq!(
+            "close_pane now".parse::<Action>(),
+            Err(ActionError::UnexpectedArg("close_pane".into()))
         );
         assert!(matches!(
             "exec".parse::<Action>(),
@@ -382,6 +393,7 @@ mod tests {
     fn display_round_trips() {
         for s in [
             "new_pane",
+            "new_pane down",
             "focus down",
             "resize left 3",
             "workspace empty",

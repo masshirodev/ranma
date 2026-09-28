@@ -59,6 +59,15 @@ T send-keys -t s -l $'\e[<0;100;5M'; T send-keys -t s -l $'\e[<0;100;5m'; sleep 
 T send-keys -t s 'echo clicked-right' Enter
 wait_for '││clicked-right' || fail "click did not focus the right pane"
 
+# Dragging the border between the two panes resizes them (left one grows).
+W0=$(screen | head -1 | cut -d'╮' -f1 | wc -m)
+for e in '0;60;10M' '32;66;10M' '32;70;10M' '0;70;10m'; do
+  T send-keys -t s -l $'\e[<'"$e"; sleep 0.1
+done
+sleep 0.3
+W1=$(screen | head -1 | cut -d'╮' -f1 | wc -m)
+[ "$W1" -gt "$W0" ] || fail "dragging the border did not resize ($W0 -> $W1)"
+
 # Typing reaches the focused pane; tabs do not leave stale cells behind.
 T send-keys -t s 'printf "1234567890\n"; printf "ab\tZ\n"' Enter
 wait_for 'ab      Z' || fail "tab rendering or input passthrough"

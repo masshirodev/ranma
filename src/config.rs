@@ -909,7 +909,12 @@ mod tests {
         let cfg = load_from(None, None, None).unwrap();
         let alt_left = "alt+left".parse().unwrap();
         assert!(cfg.global_binds.contains_key(&alt_left));
-        assert!(!cfg.binds.contains_key(&alt_left));
+        // The same chord means something else in each table: focus outside WM
+        // mode, open a pane on that side inside it.
+        assert_eq!(
+            builtin(&cfg, "alt+left"),
+            Some(Action::NewPaneAt(Dir::Left))
+        );
         assert_eq!(builtin(&cfg, "return"), Some(Action::ExitMode));
         assert_eq!(
             builtin(&cfg, "alt+3"),
@@ -945,6 +950,7 @@ mod tests {
 
         let cfg = with_user("ranma.unbind('alt+left'); ranma.set { mouse = 'hover' }").unwrap();
         assert!(!cfg.global_binds.contains_key(&alt_left));
+        assert!(!cfg.binds.contains_key(&alt_left));
         assert_eq!(cfg.settings.mouse, MouseMode::Hover);
 
         let err = format!(

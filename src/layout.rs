@@ -198,13 +198,27 @@ impl Tree {
         };
         let target = focused.filter(|f| find_path(root, *f).is_some());
         match target {
-            Some(f) => insert_at(root, f, new, split),
+            Some(f) => insert_at(root, f, new, split, false),
             // No usable focus: append at the top level, the least surprising place.
             None => {
                 let old = std::mem::replace(root, Node::Pane(new));
                 *root = Node::split(split, vec![(old, 1.0), (Node::Pane(new), 1.0)]);
             }
         }
+    }
+
+    /// Insert `new` on the `dir` side of `target`: right of it, below it, and so
+    /// on. What "open below" and dropping a dragged pane onto another use.
+    pub fn insert_beside(&mut self, new: PaneId, target: PaneId, dir: Dir) -> bool {
+        let Some(root) = self.root.as_mut() else {
+            return false;
+        };
+        if find_path(root, target).is_none() {
+            return false;
+        }
+        let before = matches!(dir, Dir::Left | Dir::Up);
+        insert_at(root, target, new, Split::of(dir), before);
+        true
     }
 
     /// Remove a pane, collapsing split containers left with a single child.
@@ -382,6 +396,70 @@ impl Tree {
         false
     }
 
+    /// Move the edge on the far side of `id` — its right edge for a horizontal
+    /// split, its bottom edge for a vertical one — by `delta` cells (negative is
+    /// left/up). This is the edge a mouse drags: shared with the neighbour after
+    /// `id`, found at whatever level of the tree that neighbour is. Returns false
+    /// when there is no such edge or nothing could move.
+    pub fn move_edge(
+        &mut self,
+        id: PaneId,
+        split: Split,
+        delta: i32,
+        area: Rect,
+        gap: u16,
+    ) -> bool {
+        let Some(root) = self.root.as_mut() else {
+            return false;
+        };
+        let Some(path) = find_path(root, id) else {
+            return false;
+        };
+        if delta == 0 {
+            return false;
+        }
+        let rects = path_rects(root, &path, area, gap);
+        for depth in (0..path.len()).rev() {
+            let idx = path[depth];
+            let Node::Container {
+                split: s,
+                tabbed: None,
+                children,
+            } = node_at_mut(root, &path[..depth])
+            else {
+                continue;
+            };
+            if *s != split || idx + 1 >= children.len() {
+                continue;
+            }
+            let crect = rects[depth];
+            let span = match split {
+                Split::Horizontal => crect.w,
+                Split::Vertical => crect.h,
+            } as f32;
+            if span <= 0.0 {
+                return false;
+            }
+            let total: f32 = children.iter().map(|(_, w)| *w).sum();
+            let min = 2.5 * total / span;
+            let want = delta as f32 / span * total;
+            // Positive grows `idx` at the expense of the child after it.
+            let (from, to, amount) = if want > 0.0 {
+                (idx + 1, idx, want)
+            } else {
+                (idx, idx + 1, -want)
+            };
+            let give = amount.min(children[from].1 - min).max(0.0);
+            if give <= 0.0 {
+                return false;
+            }
+            children[to].1 += give;
+            children[from].1 -= give;
+            return true;
+        }
+        false
+    }
+
     /// The visible panes laid out in `area`, `inner_gap` cells between siblings.
     pub fn layout(&self, area: Rect, inner_gap: u16) -> Vec<(PaneId, Rect)> {
         self.layout_full(area, inner_gap).visible
@@ -473,7 +551,8 @@ fn node_at_mut<'a>(mut n: &'a mut Node, path: &[usize]) -> &'a mut Node {
     n
 }
 
-fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split) {
+/// Insert `new` next to `focused` along `split`: after it, or `before` it.
+fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split, before: bool) {
     let path = find_path(root, focused).expect("caller checked");
     if let Some((&idx, parent_path)) = path.split_last()
         && let Node::Container {
@@ -484,8 +563,9 @@ fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split) {
     {
         // Inside a group, a new pane is a new tab next to the current one.
         if let Some(active) = tabbed {
-            children.insert(idx + 1, (Node::Pane(new), 1.0));
-            *active = idx + 1;
+            let at = if before { idx } else { idx + 1 };
+            children.insert(at, (Node::Pane(new), 1.0));
+            *active = at;
             return;
         }
         // Joining the parent keeps i3's flat containers: three panes side by side
@@ -495,13 +575,19 @@ fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split) {
             // rest of the row keeps its size.
             let w = children[idx].1 / 2.0;
             children[idx].1 = w;
-            children.insert(idx + 1, (Node::Pane(new), w));
+            let at = if before { idx } else { idx + 1 };
+            children.insert(at, (Node::Pane(new), w));
             return;
         }
     }
     let leaf = node_at_mut(root, &path);
     let old = std::mem::replace(leaf, Node::Pane(new));
-    *leaf = Node::split(split, vec![(old, 1.0), (Node::Pane(new), 1.0)]);
+    let pair = if before {
+        vec![(Node::Pane(new), 1.0), (old, 1.0)]
+    } else {
+        vec![(old, 1.0), (Node::Pane(new), 1.0)]
+    };
+    *leaf = Node::split(split, pair);
 }
 
 fn remove_in(n: &mut Node, id: PaneId) -> bool {
@@ -819,6 +905,54 @@ mod tests {
         assert!(rect_of(&t, 2).w >= 2);
         assert!(t.resize(1, Dir::Left, 500, AREA, 0));
         assert!(rect_of(&t, 1).w >= 2);
+    }
+
+    #[test]
+    fn move_edge_moves_the_shared_edge_at_any_depth() {
+        // [1 | [2 / 3]]: dragging 1's right edge resizes against the container.
+        let mut t = Tree::default();
+        t.insert(1, None, None, Placement::Manual(Split::Horizontal));
+        t.insert(2, Some(1), None, Placement::Manual(Split::Horizontal));
+        t.insert(3, Some(2), None, Placement::Manual(Split::Vertical));
+        assert!(t.move_edge(1, Split::Horizontal, 10, AREA, 0));
+        assert_eq!(rect_of(&t, 1).w, 110);
+        assert_eq!(rect_of(&t, 2).w, 90);
+        assert!(t.move_edge(1, Split::Horizontal, -30, AREA, 0));
+        assert_eq!(rect_of(&t, 1).w, 80);
+        // 2's bottom edge is shared with 3.
+        assert!(t.move_edge(2, Split::Vertical, 5, AREA, 0));
+        assert_eq!(rect_of(&t, 2).h, 30);
+        // 3 and 2 are on the right edge of the screen: nothing after them.
+        assert!(!t.move_edge(3, Split::Horizontal, 5, AREA, 0));
+        assert!(!t.move_edge(3, Split::Vertical, 5, AREA, 0));
+        assert!(!t.move_edge(1, Split::Horizontal, 0, AREA, 0));
+    }
+
+    #[test]
+    fn move_edge_keeps_both_sides_at_least_two_cells() {
+        let mut t = dwindle(2);
+        assert!(t.move_edge(1, Split::Horizontal, 500, AREA, 0));
+        assert!(rect_of(&t, 2).w >= 2);
+        assert!(t.move_edge(1, Split::Horizontal, -500, AREA, 0));
+        assert!(rect_of(&t, 1).w >= 2);
+    }
+
+    #[test]
+    fn insert_beside_puts_the_pane_on_that_side() {
+        // 1 | 2, then 3 below 1 and 4 above 2.
+        let mut t = dwindle(2);
+        assert!(t.insert_beside(3, 1, Dir::Down));
+        assert!(t.insert_beside(4, 2, Dir::Up));
+        let (r1, r3) = (rect_of(&t, 1), rect_of(&t, 3));
+        assert_eq!((r1.x, r3.x), (0, 0));
+        assert!(r3.y > r1.y, "3 below 1");
+        let (r2, r4) = (rect_of(&t, 2), rect_of(&t, 4));
+        assert!(r4.y < r2.y && r4.x == r2.x, "4 above 2");
+        // Left of a pane in a horizontal row joins that row before it.
+        assert!(t.insert_beside(5, 1, Dir::Left));
+        assert_eq!(rect_of(&t, 5).x, 0);
+        assert!(rect_of(&t, 1).x > 0);
+        assert!(!t.insert_beside(6, 99, Dir::Left));
     }
 
     #[test]

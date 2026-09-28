@@ -79,6 +79,7 @@ does not matter; it is ignored.
 | Action | Does |
 | --- | --- |
 | `new_pane` | Open a pane with the shell, placed by the layout, in the directory the focused pane's shell is in. |
+| `new_pane <dir>` | The same, on that side of the focused pane (`leader Alt+arrow`): `new_pane down` opens below. |
 | `close_pane` | Close the focused pane. |
 | `focus <dir>` | Focus the pane in that direction (`left right up down`). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
@@ -178,8 +179,16 @@ terminal so it can tell where you clicked:
 - **To select text with your terminal instead, hold Shift while dragging.** kitty,
   foot, alacritty, wezterm and xterm all let Shift override a program's mouse use.
 
+**Borders are handles, in any mode.** A pane's top border is its title bar: drag
+a tile by it and drop it on another tile, and it lands on the side of that tile
+the pointer is on (top, bottom, left or right half, outlined while dragging); drag
+a float by it to move the float. Every other border resizes: between two tiles it
+moves their shared edge, on a float's right or bottom edge it sizes the float.
+Programs are resized once, when the button is released. (With `border.style =
+"none"` there are no borders to grab; the keyboard still does all of it.)
+
 In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
-with the left button, resize it with the right. `mouse = "off"` limits ranma to
+anywhere with the left button, resize it with the right. `mouse = "off"` limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.
 
 ## The bar
