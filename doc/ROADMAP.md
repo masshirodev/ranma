@@ -57,6 +57,8 @@ scrollback otherwise. That last part was milestone 3's.
 - [x] Window rules in Lua (command and title globs: float, size, workspace)
 - [x] Floating panes remember where they floated
 - [x] Help (`leader ?`): every bind, filterable, runnable
+- [x] Move a workspace, whole, to another session (`leader m`); switchers open
+  on and mark where you are
 
 ## 4. A server — done
 

@@ -240,6 +240,18 @@ one, the next session with panes is shown first. ranma quits only when no pane i
 left anywhere. The scratchpad is one for all sessions: a quick shell should not
 depend on which project is shown.
 
+**A workspace moves between sessions whole** (`move_workspace_to_session`, added
+2026-09-28). Sessions get created after the work has started — `ranma open
+--session ai-projects` makes one while the shells for it already sit in `main` —
+so the unit you want to hand over is the workspace, not pane by pane. It is only
+bookkeeping: the workspace changes maps and every pane, process and scrollback
+stays exactly where it was. The move follows, like `move_to_workspace`, because
+you sent it there to work on it. It keeps its number when the other session has
+that number free (an empty, unnamed workspace counts as free; a named one is
+wanted), else takes the lowest free one. Moving a workspace to *another server*
+is a different thing entirely — a live PTY and its grid would have to change
+processes — and is not planned.
+
 ### One picker for switching, renaming and help
 
 The pane switcher, the session switcher, the rename prompt and help are one
@@ -247,7 +259,11 @@ component: a query line over a fuzzy-filtered list. Creating a session is typing
 name that does not exist, the way `tmux new -A` and most fuzzy finders do it, rather
 than a separate dialog. **Help is a palette**: it lists every bind by key and
 action, filterable by either, and `Enter` runs the selected one, so it answers
-"what was the key for…" and "just do the thing" with the same window.
+"what was the key for…" and "just do the thing" with the same window. A switcher
+**opens on where you are**, marked `●` and bold: the session switcher selects the
+shown session so the arrows move from it, and the pane switcher marks the focused
+pane but still starts at the top, since the pane you want is another one.
+Moving a workspace starts on the first session that is not the current one.
 
 ### Copy mode is alacritty's vi mode
 

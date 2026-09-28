@@ -125,6 +125,9 @@ ranma.bind("(", "session prev")
 ranma.bind(")", "session next")
 -- A session by name: ranma.bind("k", "session kumiko")
 ranma.bind("$", "rename_session")
+-- Send the current workspace, whole, to another session and follow it; m asks
+-- which (typing a new name makes one). By name: "move_workspace_to_session ai".
+ranma.bind("m", "move_workspace_to_session")
 -- Names: "," names the focused pane (as tmux's rename-window), overriding the
 -- title its program sets; "." names the current workspace, shown as 3:name in
 -- the bar. An empty name goes back to none.

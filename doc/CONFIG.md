@@ -121,10 +121,11 @@ does not matter; it is ignored.
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
 | `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
-| `session_switcher` | The sessions, filterable. A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
+| `session_switcher` | The sessions, filterable, opened on the current one (marked `●`). A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
 | `session <name>` / `session next` / `session prev` | Switch sessions. |
 | `rename_session [name]` | Rename the current session; without a name, ask for one. |
+| `move_workspace_to_session [name]` / `... next` / `... prev` | Send the current workspace, with every pane in it, to another session and follow it (`m`). Without a target it asks, like the session switcher; a name no session has creates it, as `ranma open --session` does. The workspace keeps its number unless that session uses it, then takes the lowest free one. A session left without panes ends. The scratchpad belongs to every session and does not move. |
 | `rename_workspace [name]` | Name the current workspace, shown as `3:name` in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask. |
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | Every bind, filterable by key or action; `Enter` runs the selected one. |

@@ -25,12 +25,16 @@ pub struct Item {
     /// Shown dimmed to the right; not matched against.
     pub detail: String,
     pub target: Target,
+    /// Where you are now (the shown session, the focused pane): marked in the list.
+    pub current: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
     Panes,
     Sessions,
+    /// The sessions again, choosing where the current workspace goes.
+    MoveWorkspace,
     Help,
     /// A one-line prompt renaming the session at this index.
     RenameSession(usize),
@@ -92,6 +96,13 @@ impl Picker {
         p
     }
 
+    /// Start on the item marked current, so Enter stays put and the arrows move
+    /// from where you are.
+    pub fn select_current(&mut self) -> &mut Self {
+        self.selected = self.visible().iter().position(|it| it.current).unwrap_or(0);
+        self
+    }
+
     pub fn is_prompt(&self) -> bool {
         matches!(
             self.kind,
@@ -129,7 +140,7 @@ impl Picker {
             .map(|(_, i)| self.items[i].clone())
             .collect();
         let q = self.query.trim();
-        if self.kind == Kind::Sessions
+        if matches!(self.kind, Kind::Sessions | Kind::MoveWorkspace)
             && !q.is_empty()
             && !self.items.iter().any(|it| it.label == q)
         {
@@ -137,6 +148,7 @@ impl Picker {
                 label: format!("new session: {q}"),
                 detail: String::new(),
                 target: Target::NewSession,
+                current: false,
             });
         }
         out
@@ -254,6 +266,7 @@ mod tests {
                 label: l.to_string(),
                 detail: String::new(),
                 target: Target::Session(i),
+                current: false,
             })
             .collect()
     }
@@ -299,6 +312,31 @@ mod tests {
         let mut p = Picker::new(Kind::Sessions, "sessions", items(&["main"]));
         typed(&mut p, "main");
         assert!(p.visible().iter().all(|i| i.target != Target::NewSession));
+    }
+
+    #[test]
+    fn opens_on_the_current_item() {
+        let mut list = items(&["main", "ai-projects", "kumiko"]);
+        list[1].current = true;
+        let mut p = Picker::new(Kind::Sessions, "sessions", list);
+        p.select_current();
+        assert_eq!(p.selected, 1);
+        assert_eq!(
+            p.key(&KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
+            Outcome::Open
+        );
+        assert_eq!(p.selected, 2);
+        // With nothing marked it starts at the top.
+        let mut p = Picker::new(Kind::Sessions, "sessions", items(&["a", "b"]));
+        p.select_current();
+        assert_eq!(p.selected, 0);
+    }
+
+    #[test]
+    fn moving_a_workspace_offers_a_new_session_too() {
+        let mut p = Picker::new(Kind::MoveWorkspace, "move", items(&["main"]));
+        typed(&mut p, "ai");
+        assert_eq!(p.visible().last().unwrap().target, Target::NewSession);
     }
 
     #[test]

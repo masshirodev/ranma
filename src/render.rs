@@ -370,6 +370,7 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
     let cx = q.x + (prompt.width() as u16).min(q.w.saturating_sub(1));
 
     let items = p.visible();
+    let marks = items.iter().any(|it| it.current);
     if items.is_empty() && !p.is_prompt() {
         buf.set_stringn(
             l.list.x,
@@ -396,8 +397,19 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
         };
         let base = Style::default().fg(fg).bg(bg);
         buf.set_style(RRect::new(l.list.x, y, l.list.w, 1), base);
-        let label = format!(" {}", item.label);
-        buf.set_stringn(l.list.x, y, &label, w, base);
+        // Where you are is marked, not only described in the dim detail: the
+        // selection can sit elsewhere, and then nothing else says it.
+        let label = match (marks, item.current) {
+            (true, true) => format!(" ● {}", item.label),
+            (true, false) => format!("   {}", item.label),
+            (false, _) => format!(" {}", item.label),
+        };
+        let style = if item.current {
+            base.add_modifier(Modifier::BOLD)
+        } else {
+            base
+        };
+        buf.set_stringn(l.list.x, y, &label, w, style);
         if !item.detail.is_empty() {
             let d = format!("{} ", item.detail);
             let dw = d.width();

@@ -72,6 +72,9 @@ pub enum Action {
     /// Create a session (named, or numbered) and switch to it.
     NewSession(Option<String>),
     Session(SessionTarget),
+    /// Send the current workspace, whole, to another session and follow it;
+    /// without a target, pick the session (or type a new one).
+    MoveWorkspaceToSession(Option<SessionTarget>),
     /// Rename the current session; without a name, ask for one.
     RenameSession(Option<String>),
     /// Name the current workspace (an empty name clears it); without one, ask.
@@ -110,6 +113,7 @@ impl Action {
                 | Action::CopyMode
                 | Action::Search
                 | Action::NewSession(_)
+                | Action::MoveWorkspaceToSession(_)
                 | Action::RenameSession(_)
                 | Action::RenameWorkspace(_)
                 | Action::RenamePane(_)
@@ -253,15 +257,16 @@ impl FromStr for Action {
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
             "rename_workspace" => Ok(Action::RenameWorkspace(rest.map(str::to_string))),
             "rename_pane" => Ok(Action::RenamePane(rest.map(str::to_string))),
-            "session" => match rest {
-                Some("next") => Ok(Action::Session(SessionTarget::Next)),
-                Some("prev") => Ok(Action::Session(SessionTarget::Prev)),
-                Some(name) => Ok(Action::Session(SessionTarget::Name(name.to_string()))),
-                None => Err(ActionError::MissingArg {
-                    action: name.into(),
-                    expected: "a session name, next or prev",
-                }),
-            },
+            "session" => {
+                rest.map(|r| Action::Session(parse_session(r)))
+                    .ok_or(ActionError::MissingArg {
+                        action: name.into(),
+                        expected: "a session name, next or prev",
+                    })
+            }
+            "move_workspace_to_session" => {
+                Ok(Action::MoveWorkspaceToSession(rest.map(parse_session)))
+            }
             "exec" => {
                 rest.map(|cmd| Action::Exec(cmd.to_string()))
                     .ok_or(ActionError::MissingArg {
@@ -282,6 +287,24 @@ impl FromStr for Action {
                 }),
             },
             _ => Err(ActionError::Unknown(name.into())),
+        }
+    }
+}
+
+fn parse_session(s: &str) -> SessionTarget {
+    match s {
+        "next" => SessionTarget::Next,
+        "prev" => SessionTarget::Prev,
+        name => SessionTarget::Name(name.to_string()),
+    }
+}
+
+impl fmt::Display for SessionTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SessionTarget::Name(n) => f.write_str(n),
+            SessionTarget::Next => f.write_str("next"),
+            SessionTarget::Prev => f.write_str("prev"),
         }
     }
 }
@@ -344,9 +367,9 @@ impl fmt::Display for Action {
             Action::RenameWorkspace(Some(n)) => write!(f, "rename_workspace {n}"),
             Action::RenamePane(None) => f.write_str("rename_pane"),
             Action::RenamePane(Some(n)) => write!(f, "rename_pane {n}"),
-            Action::Session(SessionTarget::Next) => f.write_str("session next"),
-            Action::Session(SessionTarget::Prev) => f.write_str("session prev"),
-            Action::Session(SessionTarget::Name(n)) => write!(f, "session {n}"),
+            Action::Session(t) => write!(f, "session {t}"),
+            Action::MoveWorkspaceToSession(None) => f.write_str("move_workspace_to_session"),
+            Action::MoveWorkspaceToSession(Some(t)) => write!(f, "move_workspace_to_session {t}"),
             Action::Exec(cmd) => write!(f, "exec {cmd}"),
             Action::ExitMode => f.write_str("exit_mode"),
             Action::SendLeader => f.write_str("send_leader"),
@@ -437,6 +460,9 @@ mod tests {
             "new_session work",
             "session next",
             "session kumiko",
+            "move_workspace_to_session",
+            "move_workspace_to_session prev",
+            "move_workspace_to_session ai-projects",
             "rename_session",
             "rename_workspace web",
             "rename_pane",

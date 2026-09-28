@@ -895,6 +895,10 @@ mod tests {
             Some(Action::Workspace(WorkspaceTarget::Index(10)))
         );
         assert_eq!(builtin(&cfg, "backspace"), Some(Action::SessionSwitcher));
+        assert_eq!(
+            builtin(&cfg, "m"),
+            Some(Action::MoveWorkspaceToSession(None))
+        );
         assert!(cfg.binds[&"t".parse().unwrap()].exits_mode);
         assert!(!cfg.binds[&"left".parse().unwrap()].exits_mode);
     }

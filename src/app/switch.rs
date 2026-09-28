@@ -60,6 +60,7 @@ impl App {
     pub(super) fn open_pane_switcher(&mut self) {
         let mut items = Vec::new();
         let sessions = self.session_count() > 1;
+        let focused = self.focused();
         // The shown session first, then the others: the pane you want is usually
         // close by.
         let mut order: Vec<usize> = vec![self.active_session];
@@ -82,6 +83,7 @@ impl App {
                         label: title,
                         detail: place,
                         target: Target::Pane(id),
+                        current: Some(id) == focused,
                     });
                 }
             }
@@ -91,31 +93,57 @@ impl App {
                 label: self.pane_title(id),
                 detail: "scratchpad".into(),
                 target: Target::Pane(id),
+                current: Some(id) == focused,
             });
         }
         self.picker = Some(Picker::new(Kind::Panes, "panes", items));
         self.dirty = true;
     }
 
-    pub(super) fn open_session_switcher(&mut self) {
-        let items = self
-            .session_list()
+    fn session_items(&self) -> Vec<Item> {
+        self.session_list()
             .into_iter()
             .map(|(i, name, panes, shown)| Item {
                 label: name,
                 detail: format!(
                     "{panes} pane{}{}",
                     if panes == 1 { "" } else { "s" },
-                    if shown { " · shown" } else { "" }
+                    if shown { " · current" } else { "" }
                 ),
                 target: Target::Session(i),
+                current: shown,
             })
-            .collect();
-        self.picker = Some(Picker::new(
+            .collect()
+    }
+
+    pub(super) fn open_session_switcher(&mut self) {
+        let mut p = Picker::new(
             Kind::Sessions,
             "sessions  (type a new name to create · ctrl+r renames)",
-            items,
-        ));
+            self.session_items(),
+        );
+        p.select_current();
+        self.picker = Some(p);
+        self.dirty = true;
+    }
+
+    /// Choose where the current workspace goes. It starts on the first session
+    /// that is not this one: staying put is never what the key was pressed for.
+    pub(super) fn open_move_workspace(&mut self) {
+        if let Err(e) = self.movable_workspace() {
+            self.status = Some(e);
+            return;
+        }
+        let mut p = Picker::new(
+            Kind::MoveWorkspace,
+            format!(
+                "send workspace {} to  (type a new name to create)",
+                self.current
+            ),
+            self.session_items(),
+        );
+        p.selected = p.visible().iter().position(|it| !it.current).unwrap_or(0);
+        self.picker = Some(p);
         self.dirty = true;
     }
 
@@ -214,6 +242,7 @@ impl App {
                         String::new()
                     },
                     target: Target::Bind(*chord, global),
+                    current: false,
                 });
             }
         }
@@ -313,11 +342,17 @@ impl App {
                     .take()
                     .map(|p| p.query.trim().to_string())
                     .unwrap_or_default();
-                match target {
-                    Target::Session(i) => self.switch_session(i),
-                    Target::NewSession => self.new_session(Some(&query)),
-                    Target::Pane(id) => self.reveal_pane(id),
-                    Target::Bind(chord, global) => self.run_help_bind(chord, global),
+                match (kind, target) {
+                    (Some(Kind::MoveWorkspace), Target::Session(i)) => {
+                        self.move_workspace_to_session(Some(i), None)
+                    }
+                    (Some(Kind::MoveWorkspace), Target::NewSession) => {
+                        self.move_workspace_to_session(None, Some(&query))
+                    }
+                    (_, Target::Session(i)) => self.switch_session(i),
+                    (_, Target::NewSession) => self.new_session(Some(&query)),
+                    (_, Target::Pane(id)) => self.reveal_pane(id),
+                    (_, Target::Bind(chord, global)) => self.run_help_bind(chord, global),
                 }
             }
         }

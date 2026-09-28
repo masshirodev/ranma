@@ -1557,7 +1557,13 @@ impl App {
             Action::NewSession(name) => self.new_session(name.as_deref()),
             Action::Session(t) => match self.resolve_session(&t) {
                 Some(i) => self.switch_session(i),
-                None => self.status = Some(format!("no session `{t:?}`")),
+                None => self.status = Some(format!("no session `{t}`")),
+            },
+            Action::MoveWorkspaceToSession(None) => self.open_move_workspace(),
+            // A name no session has makes one, as `ranma open --session` does.
+            Action::MoveWorkspaceToSession(Some(t)) => match self.resolve_session(&t) {
+                Some(i) => self.move_workspace_to_session(Some(i), None),
+                None => self.move_workspace_to_session(None, Some(&t.to_string())),
             },
             Action::RenameSession(Some(name)) => self.rename_session(self.active_session, &name),
             Action::RenameSession(None) => self.open_rename_prompt(self.active_session),

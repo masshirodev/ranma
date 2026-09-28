@@ -149,6 +149,87 @@ impl App {
         self.relayout();
     }
 
+    /// The workspace `move_workspace_to_session` would send: the current one, if
+    /// it has panes. The scratchpad is every session's, so it never moves.
+    pub(super) fn movable_workspace(&self) -> Result<u8, String> {
+        if self.scratch_shown {
+            return Err("the scratchpad belongs to every session; it does not move".into());
+        }
+        if self
+            .workspaces
+            .get(&self.current)
+            .is_none_or(Workspace::is_empty)
+        {
+            return Err(format!("workspace {} is empty", self.current));
+        }
+        Ok(self.current)
+    }
+
+    /// Send the current workspace, whole, to session `to` (or to a new session
+    /// called `new`) and follow it. It keeps its number unless that session
+    /// already uses it, then takes the lowest free one. A session left without
+    /// panes ends, as when its last pane closes.
+    pub(super) fn move_workspace_to_session(&mut self, to: Option<usize>, new: Option<&str>) {
+        let n = match self.movable_workspace() {
+            Ok(n) => n,
+            Err(e) => {
+                self.status = Some(e);
+                return;
+            }
+        };
+        let to = match to {
+            Some(i) if i == self.active_session => {
+                self.status = Some(format!("already in {}", self.session_name()));
+                return;
+            }
+            Some(i) if i < self.sessions.len() => i,
+            Some(_) => return,
+            None => match self.free_session_name(new) {
+                Ok(name) => {
+                    self.sessions.push(Session {
+                        name,
+                        workspaces: BTreeMap::new(),
+                        current: n,
+                    });
+                    self.sessions.len() - 1
+                }
+                Err(e) => {
+                    self.status = Some(e);
+                    return;
+                }
+            },
+        };
+        let target = &mut self.sessions[to];
+        // An empty, unnamed workspace is only a placeholder; a named one is wanted.
+        let free = |k: u8| {
+            target
+                .workspaces
+                .get(&k)
+                .is_none_or(|w| w.is_empty() && w.name.is_none())
+        };
+        let Some(slot) = std::iter::once(n).chain(1..=99).find(|k| free(*k)) else {
+            self.status = Some(format!("{} has no free workspace", target.name));
+            return;
+        };
+        let ws = self.workspaces.remove(&n).expect("movable");
+        target.workspaces.insert(slot, ws);
+        target.current = slot;
+        let name = target.name.clone();
+        // What stays behind is shown from its first workspace next time.
+        if let Some(&k) = self.workspaces.keys().next() {
+            self.current = k;
+        }
+        self.switch_session(to);
+        self.tidy();
+        self.drop_empty_sessions();
+        self.status = Some(if slot == n {
+            format!("workspace {n} sent to {name}")
+        } else {
+            format!("workspace {n} sent to {name} as {slot}")
+        });
+        self.relayout();
+    }
+
     pub(super) fn rename_session(&mut self, i: usize, name: &str) {
         let name = name.trim();
         if self.sessions.get(i).is_some_and(|s| s.name == name) {
@@ -235,5 +316,139 @@ impl App {
             t.set("session", session)?;
             t.set("previous", previous)
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An app with sessions of pane ids and no processes behind them: moving
+    /// workspaces is bookkeeping, and bookkeeping is what is under test.
+    type Spec<'a> = [(&'a str, &'a [(u8, &'a [PaneId])])];
+
+    fn app(sessions: &Spec) -> App {
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut app = App::new(config, tx, 80, 24);
+        app.sessions.clear();
+        for (name, spaces) in sessions {
+            let mut s = Session::new(*name);
+            s.workspaces.clear();
+            for (n, panes) in *spaces {
+                let mut ws = Workspace::default();
+                for id in *panes {
+                    ws.tree
+                        .insert(*id, None, None, crate::layout::Placement::Dwindle);
+                }
+                ws.focused = panes.first().copied();
+                s.workspaces.insert(*n, ws);
+            }
+            s.current = *s.workspaces.keys().next().unwrap_or(&1);
+            app.sessions.push(s);
+        }
+        // Show the first, the way switch_session leaves things.
+        app.active_session = 0;
+        app.workspaces = std::mem::take(&mut app.sessions[0].workspaces);
+        app.current = app.sessions[0].current;
+        app
+    }
+
+    fn names(app: &App) -> Vec<&str> {
+        app.sessions.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    #[test]
+    fn a_workspace_moves_whole_and_is_followed() {
+        let mut a = app(&[("main", &[(1, &[1]), (2, &[2, 3])]), ("ai", &[(1, &[4])])]);
+        a.switch_workspace(2);
+        a.move_workspace_to_session(Some(1), None);
+        assert_eq!(a.session_name(), "ai");
+        assert_eq!(a.current, 2);
+        assert_eq!(a.workspaces[&2].panes(), vec![2, 3]);
+        assert_eq!(a.workspaces[&1].panes(), vec![4]);
+        // What stayed behind is intact and shown from its remaining workspace.
+        assert_eq!(a.sessions[0].workspaces[&1].panes(), vec![1]);
+        assert_eq!(a.sessions[0].current, 1);
+        assert!(!a.sessions[0].workspaces.contains_key(&2));
+    }
+
+    #[test]
+    fn a_taken_number_gives_way_to_the_lowest_free_one() {
+        let mut a = app(&[
+            ("main", &[(1, &[1]), (2, &[2])]),
+            ("ai", &[(1, &[3]), (2, &[4])]),
+        ]);
+        a.move_workspace_to_session(Some(1), None);
+        assert_eq!(a.current, 3);
+        assert_eq!(a.workspaces[&3].panes(), vec![1]);
+        assert_eq!(a.status.as_deref(), Some("workspace 1 sent to ai as 3"));
+    }
+
+    #[test]
+    fn the_last_workspace_leaving_ends_its_session() {
+        let mut a = app(&[("main", &[(1, &[1, 2])]), ("ai", &[(1, &[3])])]);
+        a.move_workspace_to_session(Some(1), None);
+        assert_eq!(names(&a), vec!["ai"]);
+        assert_eq!(a.active_session, 0);
+        assert_eq!(a.workspaces[&2].panes(), vec![1, 2]);
+    }
+
+    #[test]
+    fn a_new_name_makes_the_session() {
+        let mut a = app(&[("main", &[(1, &[1]), (4, &[2])])]);
+        a.switch_workspace(4);
+        a.move_workspace_to_session(None, Some("ai-projects"));
+        assert_eq!(names(&a), vec!["main", "ai-projects"]);
+        assert_eq!(a.session_name(), "ai-projects");
+        assert_eq!(a.workspaces.keys().copied().collect::<Vec<_>>(), vec![4]);
+        a.move_workspace_to_session(None, Some("main"));
+        assert_eq!(a.status.as_deref(), Some("a session called `main` exists"));
+    }
+
+    #[test]
+    fn empty_workspaces_the_scratchpad_and_here_stay_put() {
+        let mut a = app(&[("main", &[(1, &[1])]), ("ai", &[(1, &[2])])]);
+        a.move_workspace_to_session(Some(0), None);
+        assert_eq!(a.status.as_deref(), Some("already in main"));
+        a.switch_workspace(5);
+        a.move_workspace_to_session(Some(1), None);
+        assert_eq!(a.status.as_deref(), Some("workspace 5 is empty"));
+        a.switch_workspace(1);
+        a.scratch_shown = true;
+        a.move_workspace_to_session(Some(1), None);
+        assert!(a.status.as_deref().unwrap().contains("scratchpad"));
+        assert_eq!(a.session_name(), "main");
+    }
+
+    #[test]
+    fn the_action_by_name_creates_like_ranma_open() {
+        let mut a = app(&[("main", &[(1, &[1]), (2, &[2])])]);
+        a.run_action("move_workspace_to_session work".parse().unwrap());
+        assert_eq!(a.session_name(), "work");
+        a.run_action("move_workspace_to_session prev".parse().unwrap());
+        assert_eq!(a.session_name(), "main");
+        assert_eq!(names(&a), vec!["main"]);
+    }
+
+    #[test]
+    fn the_switchers_open_on_where_you_are() {
+        let mut a = app(&[
+            ("main", &[(1, &[1])]),
+            ("ai", &[(1, &[2])]),
+            ("x", &[(1, &[3])]),
+        ]);
+        a.switch_session(1);
+        a.open_session_switcher();
+        let p = a.picker.as_ref().unwrap();
+        assert_eq!(p.selected, 1);
+        assert!(p.visible()[1].current);
+        assert_eq!(p.visible().iter().filter(|i| i.current).count(), 1);
+        // Moving starts on a session that is not this one.
+        a.picker = None;
+        a.open_move_workspace();
+        let p = a.picker.as_ref().unwrap();
+        assert_eq!(p.kind, crate::picker::Kind::MoveWorkspace);
+        assert_eq!(p.selected, 0);
     }
 }
