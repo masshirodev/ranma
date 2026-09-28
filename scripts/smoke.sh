@@ -123,6 +123,18 @@ T send-keys -t s 'exit' Enter; sleep 0.5
 T send-keys -t s "$BIN notify smoke-toast-ok" Enter
 wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
+# ranma inside ranma: the outer one shows the passthrough hint and passes the
+# leader down, so the inner one's WM mode opens and the outer one's does not.
+T send-keys -t s "RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 $BIN" Enter
+wait_for '│ 1 ' 20 || fail "the inner ranma did not start"
+bar | grep -q ' ⧉ ' || fail "the outer ranma does not show the passthrough hint"
+T send-keys -t s C-b; sleep 0.4
+screen | grep -q '│ WM ' || fail "the leader did not reach the inner ranma"
+bar | grep -q ' WM ' && fail "the outer ranma took the leader"
+T send-keys -t s Escape; sleep 0.3
+T send-keys -t s C-b; sleep 0.2; T send-keys -t s DC; sleep 0.3; T send-keys -t s y; sleep 1
+bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"
+
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3
 wait_for 'keys  (type to filter' || fail "help did not open"

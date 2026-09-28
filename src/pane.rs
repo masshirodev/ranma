@@ -204,9 +204,28 @@ impl Pane {
         })
     }
 
-    /// What to call the pane on screen: its name if it has one, else its title.
+    /// What to call the pane on screen: its name if it has one, else its title
+    /// (without the marker a ranma inside it puts there).
     pub fn label(&self) -> &str {
-        self.name.as_deref().unwrap_or(&self.title)
+        self.name
+            .as_deref()
+            .unwrap_or_else(|| strip_nested_marker(&self.title))
+    }
+
+    /// The title as its program meant it, marker removed. Window rules match this.
+    pub fn clean_title(&self) -> &str {
+        strip_nested_marker(&self.title)
+    }
+
+    /// A ranma is running in this pane (it announces itself in its title).
+    pub fn hosts_ranma(&self) -> bool {
+        self.title.starts_with(NESTED_MARKER)
+    }
+
+    /// The ranma in this pane is engaged: in WM mode, or with an engaged ranma
+    /// of its own. The outer leader goes on down to it instead of stopping here.
+    pub fn inner_engaged(&self) -> bool {
+        self.title.starts_with(NESTED_MARKER_ENGAGED)
     }
 
     /// The directory the pane's child is in now: where `cd` last took the shell.
@@ -265,7 +284,8 @@ impl Pane {
         }
     }
 
-    /// Called when a frame including this pane has been drawn.
+    /// Called when a frame including this pane is about to be drawn: the next
+    /// output wakes the UI again.
     pub fn drawn(&self) {
         self.wakeup_pending.store(false, Ordering::Release);
     }
@@ -278,6 +298,24 @@ impl Pane {
 impl Drop for Pane {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+/// How a ranma marks the title of the terminal it runs in, so a ranma around it
+/// can tell: titles are one of the few things that pass through a terminal
+/// emulator's parser, and over SSH.
+pub const NESTED_MARKER: &str = "⧉ ranma";
+/// The same, for a ranma that is engaged (see `Pane::inner_engaged`).
+pub const NESTED_MARKER_ENGAGED: &str = "⧉ ranma+";
+
+/// A title without the nested-ranma marker: `⧉ ranma · nvim` is `nvim`.
+pub fn strip_nested_marker(title: &str) -> &str {
+    match title
+        .strip_prefix(NESTED_MARKER_ENGAGED)
+        .or_else(|| title.strip_prefix(NESTED_MARKER))
+    {
+        Some(rest) => rest.strip_prefix(" · ").unwrap_or(rest.trim_start()),
+        None => title,
     }
 }
 
@@ -305,4 +343,17 @@ fn terminfo_exists(name: &str) -> bool {
     let hex = format!("{:x}", first.as_bytes()[0]);
     dirs.iter()
         .any(|d| d.join(first).join(name).exists() || d.join(&hex).join(name).exists())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_nested_marker;
+
+    #[test]
+    fn the_marker_is_not_part_of_the_title() {
+        assert_eq!(strip_nested_marker("⧉ ranma · nvim"), "nvim");
+        assert_eq!(strip_nested_marker("⧉ ranma+ · nvim"), "nvim");
+        assert_eq!(strip_nested_marker("⧉ ranma"), "");
+        assert_eq!(strip_nested_marker("plain title"), "plain title");
+    }
 }

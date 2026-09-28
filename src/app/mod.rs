@@ -122,6 +122,8 @@ enum Drag {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct Observed {
     session: String,
+    /// Whether this ranma is engaged (see `engaged`); announced to a ranma around it.
+    engaged: bool,
     focus: Option<PaneId>,
     workspace: u8,
     mode_wm: bool,
@@ -182,6 +184,8 @@ pub struct App {
     selection_pane: Option<PaneId>,
     /// The last left click, for double and triple clicks: when, where, how many.
     last_click: Option<(Instant, u16, u16, u8)>,
+    /// The title last given to the host terminal (see `announce`).
+    host_title: String,
 }
 
 impl App {
@@ -232,6 +236,7 @@ impl App {
             update_available: None,
             selection_pane: None,
             last_click: None,
+            host_title: String::new(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -793,6 +798,7 @@ impl App {
             self.exit_copy_mode();
         }
         let now = Observed {
+            engaged: self.engaged(),
             session: self.session_name().to_string(),
             focus: self.focused(),
             workspace: self.current,
@@ -803,6 +809,7 @@ impl App {
         if now == self.observed {
             return;
         }
+        self.announce();
         let before = std::mem::replace(&mut self.observed, now.clone());
         if now.focus.is_some() {
             self.last_focused = now.focus;
@@ -853,7 +860,8 @@ impl App {
                 pane.title = t.clone();
                 self.dirty |= visible;
                 if !self.config.rules.is_empty() {
-                    self.apply_title_rules(id, &t);
+                    let clean = crate::pane::strip_nested_marker(&t).to_string();
+                    self.apply_title_rules(id, &clean);
                 }
             }
             TermEvent::ResetTitle => {
@@ -1218,7 +1226,35 @@ impl App {
         let chord = input::chord_of(&key);
         let leader = self.config.settings.leader;
 
+        let outer = self.config.settings.outer_leader;
         if self.mode == Mode::Normal {
+            // The outer leader reaches this ranma, even past one inside, unless
+            // the one inside is engaged (in WM mode, or deeper): then it is on
+            // its way further down, and goes on.
+            if chord == Some(outer) {
+                if let Some(p) = self.focused_pane()
+                    && self.passes_through()
+                    && p.inner_engaged()
+                {
+                    if let Some(bytes) = input::encode_key(&key, p.modes()) {
+                        p.write(bytes);
+                    }
+                    return;
+                }
+                self.set_mode(Mode::Wm);
+                self.status = None;
+                return;
+            }
+            // A ranma in the focused pane gets every other key, the leader and
+            // global binds included: keys act on the innermost ranma.
+            if self.passes_through() {
+                if let Some(p) = self.focused_pane()
+                    && let Some(bytes) = input::encode_key(&key, p.modes())
+                {
+                    p.write(bytes);
+                }
+                return;
+            }
             if chord == Some(leader) {
                 self.set_mode(Mode::Wm);
                 self.status = None;
@@ -1248,6 +1284,16 @@ impl App {
         let Some(chord) = chord else {
             return;
         };
+        // The outer leader again, unbound: one level down, to the ranma inside.
+        if chord == outer && !self.config.binds.contains_key(&chord) {
+            if let Some(p) = self.focused_pane()
+                && let Some(bytes) = chord_bytes(outer, p.modes())
+            {
+                p.write(bytes);
+            }
+            self.set_mode(Mode::Normal);
+            return;
+        }
         if !self.config.binds.contains_key(&chord) && chord != leader {
             // Unbound keys are swallowed: WM mode is a mode, and typing into a pane
             // by accident while in it is worse than a dead key.
@@ -1686,6 +1732,49 @@ impl App {
         self.dirty = true;
     }
 
+    /// Whether keys go straight to a ranma running in the focused pane.
+    pub fn passes_through(&self) -> bool {
+        self.config.settings.nested == config::NestedMode::Auto
+            && self.focused_pane().is_some_and(|p| p.hosts_ranma())
+    }
+
+    /// This ranma is in WM mode, or passes keys to an engaged ranma inside it:
+    /// either way the outer leader should come down to here.
+    fn engaged(&self) -> bool {
+        self.mode == Mode::Wm
+            || (self.passes_through() && self.focused_pane().is_some_and(|p| p.inner_engaged()))
+    }
+
+    /// Tell the terminal ranma runs in that it is ranma, through its title,
+    /// followed by the focused pane's: a ranma around this one finds the marker
+    /// and passes keys down; a plain terminal shows a useful window title.
+    fn announce(&mut self) {
+        if self.config.settings.nested == config::NestedMode::Off {
+            return;
+        }
+        let label: String = self
+            .focused_title()
+            .unwrap_or("")
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect();
+        let marker = if self.engaged() {
+            crate::pane::NESTED_MARKER_ENGAGED
+        } else {
+            crate::pane::NESTED_MARKER
+        };
+        let title = if label.is_empty() {
+            marker.to_string()
+        } else {
+            format!("{marker} · {label}")
+        };
+        if title != self.host_title {
+            self.host_out
+                .push(format!("\x1b]2;{title}\x07").into_bytes());
+            self.host_title = title;
+        }
+    }
+
     /// The checker found commits this binary lacks: remind, ask, or nothing,
     /// per the `updates` setting (read now, so a reload since startup counts).
     fn update_found(&mut self, b: crate::update::Behind) {
@@ -1808,6 +1897,8 @@ impl App {
                     let label = if searching { " SEARCH " } else { " COPY " };
                     vec![Piece::new(label, Style::Mode)]
                 }
+                // Keys are going to a ranma inside the focused pane.
+                Mode::Normal if self.passes_through() => vec![Piece::new(" ⧉ ", Style::Dim)],
                 Mode::Normal => Vec::new(),
             },
             // Only once there is more than one: a lone "main" says nothing.
@@ -1886,7 +1977,16 @@ impl App {
     }
 
     /// Clear wakeup flags of the panes a frame just drew.
-    fn drawn(&mut self) {
+    /// Called just before a frame is drawn: re-arm the visible panes' wakeups
+    /// and mark the frame clean.
+    ///
+    /// Before, not after. Output that arrives while the frame is being drawn
+    /// may miss it; with the flag already cleared, that output sends a fresh
+    /// wakeup and gets the next frame. Cleared after the draw instead, the
+    /// flag would swallow that wakeup and the output would sit undrawn until
+    /// some unrelated event came along: the "one keypress late" a ranma
+    /// nested in another showed, where a frame arrives as several reads.
+    fn begin_frame(&mut self) {
         for id in &self.visible {
             if let Some(p) = self.panes.get(id) {
                 p.drawn();
@@ -2059,9 +2159,11 @@ pub fn run(config: Config) -> Result<()> {
             EnableBracketedPaste,
             EnableFocusChange
         )?;
+        // Keep the host's title to give back on exit (xterm's title stack).
+        terminal.backend_mut().write_all(b"\x1b[22;0t")?;
         // Before the input thread exists: the replies are read straight off the
         // terminal here, and none may be left for crossterm to take for keys.
-        let host_colors = crate::hostcolors::query(Duration::from_millis(300));
+        let (host_colors, typed_early) = crate::hostcolors::query(Duration::from_millis(300));
         let size = terminal.size()?;
         let mut app = App::new(config, tx.clone(), size.width, size.height);
         app.host_colors = host_colors;
@@ -2075,6 +2177,13 @@ pub fn run(config: Config) -> Result<()> {
             }
         };
         app.open_pane(None).context("starting the first pane")?;
+        // Keys typed while ranma was starting were read with the colour
+        // replies; they were meant for the shell.
+        if !typed_early.is_empty()
+            && let Some(p) = app.focused_pane()
+        {
+            p.write(typed_early);
+        }
         app.after_event();
         spawn_input_thread(tx.clone());
         if app.config.settings.updates != crate::config::UpdateMode::Off {
@@ -2129,6 +2238,7 @@ pub fn run(config: Config) -> Result<()> {
                 }
             }
             if app.dirty && last_draw.elapsed() >= FRAME {
+                app.begin_frame();
                 let mut cursor = None;
                 terminal.draw(|f| cursor = render::draw(f, &app))?;
                 if cursor != last_cursor {
@@ -2137,13 +2247,14 @@ pub fn run(config: Config) -> Result<()> {
                     }
                     last_cursor = cursor;
                 }
-                app.drawn();
                 last_draw = Instant::now();
             }
         }
         Ok(())
     })();
 
+    // The title from before ranma started, back.
+    let _ = terminal.backend_mut().write_all(b"\x1b[23;0t");
     let _ = execute!(
         terminal.backend_mut(),
         DisableMouseCapture,

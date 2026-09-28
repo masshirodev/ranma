@@ -79,6 +79,47 @@ pub fn parse_rgb(spec: &str) -> Option<Rgb> {
     parts.next().is_none().then_some(c)
 }
 
+/// What the host sent while being asked, minus its replies (OSC answers and the
+/// DA1 reply): keys typed while ranma was starting, which belong to the first
+/// pane rather than to the bin.
+pub fn leftover_input(input: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < input.len() {
+        if input[i..].starts_with(b"\x1b]") {
+            // An OSC reply: up to BEL or ST.
+            let rest = &input[i + 2..];
+            let end = rest
+                .iter()
+                .enumerate()
+                .find_map(|(j, b)| match b {
+                    0x07 => Some(j + 1),
+                    0x1b if rest.get(j + 1) == Some(&b'\\') => Some(j + 2),
+                    _ => None,
+                })
+                .unwrap_or(rest.len());
+            i += 2 + end;
+        } else if input[i..].starts_with(b"\x1b[?") {
+            // The DA1 reply: ESC [ ? digits and ; then c.
+            let rest = &input[i + 3..];
+            let n = rest
+                .iter()
+                .take_while(|b| b.is_ascii_digit() || **b == b';')
+                .count();
+            if rest.get(n) == Some(&b'c') {
+                i += 3 + n + 1;
+            } else {
+                out.push(input[i]);
+                i += 1;
+            }
+        } else {
+            out.push(input[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
 /// Pull every OSC 4/10/11/12 colour reply out of what the host sent.
 pub fn parse_replies(input: &[u8]) -> HostColors {
     let mut out = HostColors::default();
@@ -113,7 +154,10 @@ pub fn parse_replies(input: &[u8]) -> HostColors {
 /// after its answers to the queries before it. Reading stops at that reply, so a
 /// terminal that ignores colour queries costs one round trip, not a timeout, and
 /// no late reply is left in the input to be read as keystrokes later.
-pub fn query(timeout: Duration) -> HostColors {
+///
+/// Returns the colours, and any other input that arrived meanwhile (see
+/// `leftover_input`).
+pub fn query(timeout: Duration) -> (HostColors, Vec<u8>) {
     let mut q = String::from("\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\");
     for i in 0..16 {
         q.push_str(&format!("\x1b]4;{i};?\x1b\\"));
@@ -125,7 +169,7 @@ pub fn query(timeout: Duration) -> HostColors {
         .and_then(|_| stdout.flush())
         .is_err()
     {
-        return HostColors::default();
+        return (HostColors::default(), Vec::new());
     }
 
     let fd = std::io::stdin().as_raw_fd();
@@ -154,7 +198,7 @@ pub fn query(timeout: Duration) -> HostColors {
             break;
         }
     }
-    parse_replies(&buf)
+    (parse_replies(&buf), leftover_input(&buf))
 }
 
 /// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.
@@ -243,6 +287,18 @@ mod tests {
         assert!(da1_seen(input));
         assert!(!da1_seen(b"\x1b]10;rgb:0/0/0\x07"));
         assert!(!da1_seen(b"\x1b[?62;22"));
+    }
+
+    #[test]
+    fn keys_typed_during_the_query_are_kept() {
+        let input = b"ls\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\\x1b]10;rgb:0/0/0\x07 -la\x1b[?62;22c\r";
+        assert_eq!(leftover_input(input), b"ls -la\r");
+        assert_eq!(
+            leftover_input(b"\x1b[A"),
+            b"\x1b[A",
+            "an arrow key is not a reply"
+        );
+        assert!(leftover_input(b"\x1b[?6c").is_empty());
     }
 
     #[test]

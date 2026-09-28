@@ -170,6 +170,25 @@ scratchpad.
 
 A pane you float, tile, and float again goes back where it last floated.
 
+## ranma inside ranma
+
+Over SSH, three levels deep, each machine starting ranma: with
+`nested = "auto"` (the default) that just works.
+
+- Each ranma marks its terminal's title (`⧉ ranma · <focused title>`); a ranma
+  that finds the mark on its focused pane passes it **every key**, so the leader
+  and the Alt binds always act on the innermost ranma, the one whose panes you
+  are looking at. Its bar shows `⧉` while it does. The mark is never shown:
+  borders, tabs and the bar show the title without it.
+- `outer_leader` (`ctrl+alt+b`) reaches the outermost ranma instead; pressed
+  again, the next one down: once for the outermost, twice for the second, and so
+  on.
+- The mouse works through every layer: each ranma keeps its own borders and bar,
+  and passes the rest to the ranma inside, whose own borders, drags, selection and
+  clipboard then work as usual.
+- A program could set a title starting with the mark and get the leader passed to
+  it; `outer_leader` still reaches ranma. `nested = "off"` turns all of it off.
+
 ## Mouse
 
 With `mouse = "click"` (the default) or `"hover"`, ranma takes the mouse from your

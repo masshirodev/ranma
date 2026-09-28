@@ -39,6 +39,16 @@ pub enum MouseMode {
     Off,
 }
 
+/// Whether ranma steps aside for a ranma running in the focused pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NestedMode {
+    /// Announce ourselves in the host's title, and pass every key to a ranma
+    /// found in the focused pane.
+    Auto,
+    Off,
+}
+
 /// What ranma does when its source has moved on (see `update`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -63,6 +73,10 @@ pub struct Settings {
     pub mouse: MouseMode,
     pub updates: UpdateMode,
     pub update_check_hours: f64,
+    pub nested: NestedMode,
+    /// Reaches this ranma even while it passes keys to one inside it; pressed
+    /// again in WM mode, it goes one level down.
+    pub outer_leader: Chord,
 }
 
 impl Default for Settings {
@@ -80,6 +94,8 @@ impl Default for Settings {
             mouse: MouseMode::Click,
             updates: UpdateMode::Remind,
             update_check_hours: 24.0,
+            nested: NestedMode::Auto,
+            outer_leader: "ctrl+alt+b".parse().unwrap(),
         }
     }
 }
@@ -99,6 +115,8 @@ struct SettingsPatch {
     mouse: Option<MouseMode>,
     updates: Option<UpdateMode>,
     update_check_hours: Option<f64>,
+    nested: Option<NestedMode>,
+    outer_leader: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -385,6 +403,19 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             }
             if let Some(u) = patch.updates {
                 s.updates = u;
+            }
+            if let Some(n) = patch.nested {
+                s.nested = n;
+            }
+            if let Some(k) = patch.outer_leader {
+                s.outer_leader = k
+                    .parse()
+                    .map_err(|e| rt_err(format!("ranma.set: outer_leader `{k}`: {e}")))?;
+            }
+            if s.outer_leader == s.leader {
+                return Err(rt_err(
+                    "ranma.set: outer_leader must differ from leader (it reaches past a nested ranma)",
+                ));
             }
             if let Some(h) = patch.update_check_hours {
                 if h.is_nan() || h <= 0.0 {
@@ -1099,6 +1130,20 @@ mod tests {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");
         }
+    }
+
+    #[test]
+    fn nested_settings() {
+        let cfg = load_from(None, None, None).unwrap();
+        assert_eq!(cfg.settings.nested, NestedMode::Auto);
+        assert_eq!(cfg.settings.outer_leader, "ctrl+alt+b".parse().unwrap());
+        let cfg = with_user("ranma.set { nested = 'off', outer_leader = 'ctrl+alt+a' }").unwrap();
+        assert_eq!(cfg.settings.nested, NestedMode::Off);
+        let err = format!(
+            "{:#}",
+            with_user("ranma.set { outer_leader = 'ctrl+b' }").unwrap_err()
+        );
+        assert!(err.contains("differ"), "{err}");
     }
 
     #[test]

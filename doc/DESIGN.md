@@ -290,6 +290,31 @@ Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
 alacritty_terminal drops those sequences before ranma sees them, and catching
 them would mean parsing the PTY stream a second time.
 
+### ranma inside ranma
+
+Nesting (ranma over SSH in ranma) is solved by the inner ranma telling the
+outer one it is there, through the one channel that crosses a terminal emulator
+and an SSH connection: the window title. Each ranma sets its host's title to
+`⧉ ranma · <focused title>` (restoring the previous title on exit, with the
+xterm title stack), and a ranma that sees the marker on its focused pane passes
+it every key. The marker is stripped wherever a title is shown.
+
+The alternative, a lock key toggled by hand, puts the bookkeeping on the user;
+this makes the common case (act on the ranma whose panes you see) need nothing.
+The rare case, an outer level, has its own key, `outer_leader`, which enters the
+outermost ranma's WM mode, and pressed there again goes one level down. For that
+to walk several levels, a ranma that is in WM mode (or has such a ranma inside)
+marks itself engaged (`⧉ ranma+`), and an outer ranma passes the outer leader on
+to an engaged one instead of stopping. Marks travel through pane output, so a key
+pressed in the same instant as the one before can arrive ahead of the mark.
+
+Building this found two bugs that were there all along: a pane's wakeup flag was
+re-armed *after* a frame was drawn, so output arriving during the draw was left
+undrawn until some other event (a nested ranma, whose frames arrive in pieces,
+showed every change one keypress late); and keys typed while ranma was starting
+were read along with the host's colour replies and lost. The flag is re-armed
+before drawing now, and early keys are handed to the first pane.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

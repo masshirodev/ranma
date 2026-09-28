@@ -51,6 +51,14 @@ ranma.set {
   -- ranma, and never prompts for a password or key.
   updates = "remind",
   update_check_hours = 24,
+
+  -- ranma inside ranma (over SSH, say). "auto": each ranma marks its terminal's
+  -- title, and a ranma that finds another in its focused pane passes it every
+  -- key, so the leader and the Alt binds act on the innermost one. The outer
+  -- leader reaches the outermost ranma instead, and pressed again, the next one
+  -- down. "off": no marking, no passing.
+  nested = "auto",
+  outer_leader = "ctrl+alt+b",
 }
 
 -- Panes -------------------------------------------------------------------------
