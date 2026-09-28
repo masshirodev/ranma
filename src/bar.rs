@@ -48,6 +48,8 @@ pub enum Click {
     /// Go to this workspace (0 toggles the scratchpad).
     Workspace(u8),
     SessionSwitcher,
+    /// Run the update.
+    Update,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

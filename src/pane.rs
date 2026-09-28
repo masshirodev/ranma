@@ -46,6 +46,8 @@ pub enum AppEvent {
     Action(crate::action::Action),
     /// A pane from `ranma open`.
     Open(crate::ipc::OpenSpec),
+    /// The source has commits this binary lacks (see `update`).
+    UpdateAvailable(crate::update::Behind),
 }
 
 /// Forwards a pane's terminal events to the UI thread.

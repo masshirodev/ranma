@@ -27,7 +27,7 @@ CFG=$(mktemp -d)
 TCONF=$(mktemp)
 echo "set -g window-style 'fg=#cdd6f4,bg=#1e1e2e'" > "$TCONF"
 T -f "$TCONF" new-session -d -s s -x 120 -y 30 \
-  "env RANMA_CONFIG_DIR=$CFG SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
+  "env RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
 
 bar() { screen | tail -1; }
 # Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.

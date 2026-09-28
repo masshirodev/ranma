@@ -42,6 +42,15 @@ ranma.set {
   -- With "click" or "hover", hold Shift while dragging to select text with your
   -- terminal instead (kitty, foot, alacritty, wezterm and xterm all do this).
   mouse = "click",
+
+  -- When ranma's source (the checkout it was installed from) has new commits:
+  --   "remind": a toast and a marker in the bar; leader U installs.
+  --   "prompt": ask y/n, as oh-my-zsh does.
+  --   "off":    never check.
+  -- Checking is a git fetch at most every update_check_hours, shared by every
+  -- ranma, and never prompts for a password or key.
+  updates = "remind",
+  update_check_hours = 24,
 }
 
 -- Panes -------------------------------------------------------------------------
@@ -160,16 +169,18 @@ ranma.bind("r", "reload_config")
 -- Quit ranma (Hyprland's Super+Delete ends the session). It asks first, since
 -- every shell in every session closes with it; "quit now" skips the question.
 ranma.bind("delete", "quit")
+-- Pull ranma's source and install it, in a floating pane you can watch.
+ranma.bind("shift+u", "update")
 
 -- Bar ---------------------------------------------------------------------------
 -- Which modules go where. Built in: mode (WM, COPY, SEARCH), session (its name,
 -- once there is more than one), workspaces, title (the focused pane's), panes
--- (a count). Anything else is defined with
+-- (a count), update (a marker while an update is waiting; click to install). Anything else is defined with
 -- ranma.module, below or in your own init.lua.
 ranma.bar {
   left = { "mode", "session", "workspaces" },
   center = { "title" },
-  right = { "datetime" },
+  right = { "update", "datetime" },
 }
 
 -- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.

@@ -5,7 +5,7 @@ use ranma::{config, ipc, theme};
 
 /// A tiling window manager for the terminal: i3's tree, Hyprland's dwindle, in a PTY.
 #[derive(Parser)]
-#[command(version)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("RANMA_GIT_SHA"), ")"))]
 struct Cli {
     /// Print the built-in default init.lua and exit. It is also the reference for every option.
     #[arg(long, conflicts_with_all = ["check_config", "dump_theme"])]
@@ -38,6 +38,12 @@ enum Command {
         #[arg(required = true)]
         text: Vec<String>,
     },
+    /// Pull ranma's source and install it; with --check, only say whether there
+    /// is anything new.
+    Update {
+        #[arg(long)]
+        check: bool,
+    },
     /// Run an action, spelled as in a bind: `ranma action "workspace 3"`.
     Action {
         #[arg(required = true)]
@@ -68,6 +74,46 @@ enum Command {
     },
 }
 
+/// `ranma update`: report how far behind the source is, and (without --check)
+/// run the same pull-and-install the in-ranma update does.
+fn update(check: bool) -> ExitCode {
+    use ranma::update::{BUILD_SHA, SOURCE_DIR, behind, install_command};
+    let dir = std::path::Path::new(SOURCE_DIR);
+    match behind(dir, BUILD_SHA, true) {
+        Ok(b) if b.commits() == 0 => {
+            println!("ranma is up to date ({BUILD_SHA}, from {SOURCE_DIR})");
+            if check {
+                return ExitCode::SUCCESS;
+            }
+        }
+        Ok(b) => {
+            println!(
+                "ranma is {} commit(s) behind its source: {} upstream, {} in the checkout ({SOURCE_DIR})",
+                b.commits(),
+                b.upstream,
+                b.local
+            );
+            if check {
+                return ExitCode::SUCCESS;
+            }
+        }
+        Err(e) => {
+            eprintln!("ranma: cannot check for updates: {e:#}");
+            if check {
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    match std::process::Command::new("sh")
+        .arg("-c")
+        .arg(install_command())
+        .status()
+    {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
+}
+
 /// One argument is a command line as written; several are quoted one by one,
 /// the way ssh treats what follows the host.
 fn command_line(args: &[String]) -> Option<String> {
@@ -86,6 +132,10 @@ fn command_line(args: &[String]) -> Option<String> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    if let Some(Command::Update { check }) = cli.command {
+        return update(check);
+    }
+
     if let Some(cmd) = cli.command {
         let request = match cmd {
             Command::Notify {
@@ -93,6 +143,7 @@ fn main() -> ExitCode {
                 timeout,
                 text,
             } => ipc::toast_request(&text.join(" "), urgent, timeout),
+            Command::Update { .. } => unreachable!("handled above"),
             Command::Action { action } => format!("action\n{}", action.join(" ")),
             Command::Open {
                 session,

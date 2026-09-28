@@ -39,6 +39,18 @@ pub enum MouseMode {
     Off,
 }
 
+/// What ranma does when its source has moved on (see `update`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateMode {
+    /// A toast and a bar marker; `leader U` installs.
+    Remind,
+    /// Ask y/n, as oh-my-zsh does.
+    Prompt,
+    /// Never check.
+    Off,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub leader: Chord,
@@ -49,6 +61,8 @@ pub struct Settings {
     pub scrollback_lines: usize,
     pub wm_mode_sticky: bool,
     pub mouse: MouseMode,
+    pub updates: UpdateMode,
+    pub update_check_hours: f64,
 }
 
 impl Default for Settings {
@@ -64,6 +78,8 @@ impl Default for Settings {
             scrollback_lines: 10_000,
             wm_mode_sticky: true,
             mouse: MouseMode::Click,
+            updates: UpdateMode::Remind,
+            update_check_hours: 24.0,
         }
     }
 }
@@ -81,6 +97,8 @@ struct SettingsPatch {
     scrollback_lines: Option<usize>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
+    updates: Option<UpdateMode>,
+    update_check_hours: Option<f64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -133,7 +151,8 @@ impl FromStr for Event {
 
 /// Modules ranma draws itself. Anything else in a bar list must be defined with
 /// `ranma.module`.
-pub const BUILTIN_MODULES: [&str; 5] = ["mode", "session", "workspaces", "title", "panes"];
+pub const BUILTIN_MODULES: [&str; 6] =
+    ["mode", "session", "workspaces", "title", "panes", "update"];
 
 /// Which modules the bar shows, in order, on each side.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -363,6 +382,17 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             }
             if let Some(m) = patch.mouse {
                 s.mouse = m;
+            }
+            if let Some(u) = patch.updates {
+                s.updates = u;
+            }
+            if let Some(h) = patch.update_check_hours {
+                if h.is_nan() || h <= 0.0 {
+                    return Err(rt_err(format!(
+                        "ranma.set: update_check_hours must be positive, not {h}"
+                    )));
+                }
+                s.update_check_hours = h;
             }
             Ok(())
         })?,
@@ -1047,6 +1077,24 @@ mod tests {
             ("ranma.toast('x', { loud = true })", "loud"),
             ("ranma.toast('x', { timeout = -1 })", "timeout"),
             ("ranma.toast('x', { urgent = 'yes' })", "urgent"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
+        }
+    }
+
+    #[test]
+    fn update_settings() {
+        let cfg = load_from(None, None, None).unwrap();
+        assert_eq!(cfg.settings.updates, UpdateMode::Remind);
+        assert_eq!(cfg.settings.update_check_hours, 24.0);
+        assert_eq!(builtin(&cfg, "shift+u"), Some(Action::Update));
+        let cfg = with_user("ranma.set { updates = 'prompt', update_check_hours = 6 }").unwrap();
+        assert_eq!(cfg.settings.updates, UpdateMode::Prompt);
+        assert_eq!(cfg.settings.update_check_hours, 6.0);
+        for (src, needle) in [
+            ("ranma.set { updates = 'always' }", "always"),
+            ("ranma.set { update_check_hours = 0 }", "positive"),
         ] {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");

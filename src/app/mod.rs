@@ -172,6 +172,8 @@ pub struct App {
     pub toasts: crate::toast::Toasts,
     /// Where a tile being dragged would land (see `drag`).
     drop_preview: Option<(PaneId, Dir)>,
+    /// The source has commits this binary lacks (see `update`).
+    update_available: Option<crate::update::Behind>,
 }
 
 impl App {
@@ -219,6 +221,7 @@ impl App {
             host_colors: Default::default(),
             toasts: Default::default(),
             drop_preview: None,
+            update_available: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -762,6 +765,7 @@ impl App {
             } => self.toast(text, level, timeout),
             AppEvent::Action(a) => self.run_action(a),
             AppEvent::Open(spec) => self.open_spec(spec),
+            AppEvent::UpdateAvailable(b) => self.update_found(b),
             AppEvent::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
         }
         self.after_event();
@@ -998,6 +1002,7 @@ impl App {
                     self.run_action(Action::Workspace(WorkspaceTarget::Index(n)))
                 }
                 Some(Click::SessionSwitcher) => self.open_session_switcher(),
+                Some(Click::Update) => self.run_action(Action::Update),
                 None => {}
             }
             return true;
@@ -1360,6 +1365,24 @@ impl App {
                 }
             }
             Action::ToggleFloating => self.toggle_floating(),
+            Action::Update => {
+                // In a float, so the pull and the build can be watched, and the
+                // pane stays until a key is pressed so the result can be read.
+                let cmd = format!(
+                    "{}; printf '\\npress a key to close'; read -rsn1 _",
+                    crate::update::install_command()
+                );
+                match self.open_pane_at(Some(&cmd), None, None) {
+                    Ok(id) => {
+                        if !self.scratch_shown {
+                            self.toggle_floating_pane(id);
+                        }
+                        self.rename_pane(id, "ranma update");
+                        self.update_available = None;
+                    }
+                    Err(e) => self.status = Some(format!("update failed: {e:#}")),
+                }
+            }
             Action::CycleFloats => {
                 if self.active_mut().cycle_floats().is_some() {
                     self.relayout();
@@ -1630,6 +1653,33 @@ impl App {
         self.dirty = true;
     }
 
+    /// The checker found commits this binary lacks: remind, ask, or nothing,
+    /// per the `updates` setting (read now, so a reload since startup counts).
+    fn update_found(&mut self, b: crate::update::Behind) {
+        use crate::config::UpdateMode;
+        let n = b.commits();
+        let what = format!("{n} new commit{}", if n == 1 { "" } else { "s" });
+        match self.config.settings.updates {
+            UpdateMode::Off => return,
+            // Asking takes the keyboard; if something else already has it
+            // (a picker), remind instead of interrupting that.
+            UpdateMode::Prompt if self.picker.is_none() => {
+                self.picker = Some(crate::picker::Picker::question(
+                    crate::picker::Kind::ConfirmUpdate,
+                    "ranma update",
+                    format!("{what}. Update now?   y or Enter updates · any other key cancels"),
+                ));
+            }
+            _ => self.toast(
+                format!("ranma: {what} · leader U updates"),
+                crate::toast::Level::Normal,
+                Some(Duration::from_secs(20)),
+            ),
+        }
+        self.update_available = Some(b);
+        self.dirty = true;
+    }
+
     /// Where toasts go: down the right edge, below a top bar.
     pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<String>)> {
         let top = match self.config.theme.bar.position {
@@ -1773,6 +1823,12 @@ impl App {
                 .map(|t| vec![Piece::new(t, Style::Normal)])
                 .unwrap_or_default(),
             "panes" => vec![Piece::new(self.panes.len().to_string(), Style::Dim)],
+            "update" => match self.update_available {
+                Some(b) => vec![
+                    Piece::new(format!("⬆ {}", b.commits()), Style::Accent).on_click(Click::Update),
+                ],
+                None => Vec::new(),
+            },
             _ => self.module_values.get(name).cloned().unwrap_or_default(),
         }
     }
@@ -1988,6 +2044,10 @@ pub fn run(config: Config) -> Result<()> {
         app.open_pane(None).context("starting the first pane")?;
         app.after_event();
         spawn_input_thread(tx.clone());
+        if app.config.settings.updates != crate::config::UpdateMode::Off {
+            let hours = app.config.settings.update_check_hours;
+            crate::update::spawn_checker(tx.clone(), Duration::from_secs_f64(hours * 3600.0));
+        }
         let _watcher = watch_config(tx);
 
         let mut last_draw = Instant::now() - FRAME;

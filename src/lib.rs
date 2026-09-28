@@ -17,4 +17,5 @@ pub mod picker;
 pub mod render;
 pub mod theme;
 pub mod toast;
+pub mod update;
 pub mod workspace;

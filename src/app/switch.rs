@@ -303,6 +303,7 @@ impl App {
                     Some(Kind::RenameWorkspace(n)) => self.rename_workspace(n, &text),
                     Some(Kind::RenamePane(id)) => self.rename_pane(id, &text),
                     Some(Kind::ConfirmQuit) => self.quit = true,
+                    Some(Kind::ConfirmUpdate) => self.run_action(crate::action::Action::Update),
                     _ => {}
                 }
             }

@@ -47,6 +47,8 @@ pub enum Action {
     ToggleFloating,
     /// Raise the next floating pane, cycling through the pile.
     CycleFloats,
+    /// Pull ranma's source and install it, in a floating pane.
+    Update,
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -110,6 +112,7 @@ impl Action {
                 | Action::RenameWorkspace(_)
                 | Action::RenamePane(_)
                 | Action::Quit { .. }
+                | Action::Update
         )
     }
 }
@@ -227,6 +230,7 @@ impl FromStr for Action {
             "toggle_split" => no_arg(Action::ToggleSplit),
             "toggle_floating" => no_arg(Action::ToggleFloating),
             "cycle_floats" => no_arg(Action::CycleFloats),
+            "update" => no_arg(Action::Update),
             "toggle_group" => no_arg(Action::ToggleGroup),
             "group_next" => no_arg(Action::GroupNext),
             "group_prev" => no_arg(Action::GroupPrev),
@@ -312,6 +316,7 @@ impl fmt::Display for Action {
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
             Action::CycleFloats => f.write_str("cycle_floats"),
+            Action::Update => f.write_str("update"),
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),

@@ -38,6 +38,8 @@ pub enum Kind {
     RenamePane(PaneId),
     /// "Quit ranma?": y or Enter confirms, anything else cancels.
     ConfirmQuit,
+    /// "Update ranma?", answered the same way.
+    ConfirmUpdate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +99,7 @@ impl Picker {
                 | Kind::RenameWorkspace(_)
                 | Kind::RenamePane(_)
                 | Kind::ConfirmQuit
+                | Kind::ConfirmUpdate
         )
     }
 
@@ -142,7 +145,7 @@ impl Picker {
     pub fn key(&mut self, key: &KeyEvent) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         // A yes/no question: one key answers it, and only yes is yes.
-        if self.kind == Kind::ConfirmQuit {
+        if matches!(self.kind, Kind::ConfirmQuit | Kind::ConfirmUpdate) {
             return match key.code {
                 KeyCode::Enter | KeyCode::Char('y' | 'Y') if !ctrl => Outcome::Submit("y".into()),
                 _ => Outcome::Cancel,
