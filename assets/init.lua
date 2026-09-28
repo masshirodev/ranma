@@ -122,6 +122,21 @@ end
 for i = 1, 10 do
   ranma.bind("alt+" .. tostring(i % 10), "workspace " .. i, { global = true })
 end
+-- Alt+Shift+arrows moves the focused pane (swaps tiles, shifts floats).
+for _, dir in ipairs { "left", "right", "up", "down" } do
+  ranma.bind("alt+shift+" .. dir, "move " .. dir, { global = true })
+end
+-- Alt+Shift+digit sends the pane to a workspace and follows it. A terminal
+-- reports Shift+digit as the symbol the keyboard layout puts on the key, so the
+-- binds name those symbols. This table covers US and ABNT2 (Brazilian), which
+-- differ only on 6; add your layout's symbols if they are not here.
+local shifted = {
+  ["!"] = 1, ["@"] = 2, ["#"] = 3, ["$"] = 4, ["%"] = 5,
+  ["^"] = 6, ["¨"] = 6, ["&"] = 7, ["*"] = 8, ["("] = 9, [")"] = 10,
+}
+for sym, ws in pairs(shifted) do
+  ranma.bind("alt+" .. sym, "move_to_workspace " .. ws, { global = true })
+end
 
 -- ranma itself ------------------------------------------------------------------
 ranma.bind("escape", "exit_mode")

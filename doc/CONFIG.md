@@ -53,7 +53,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 | Option | Meaning |
 | --- | --- |
 | `exit` | Whether WM mode ends after the bind fires. Left out, it follows the action: `new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it. |
-| `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead). The leader itself cannot be global. |
+| `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
 
 ### Keys
 
@@ -63,7 +63,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 `pageup`, `pagedown`, `f1`-`f24`, and `plus minus comma period slash`. `"ctrl++"`
 is Ctrl and the plus key.
 
-**Do not bind `shift+<digit>`.** Terminals report Shift+1 as the character your
+**Do not bind `shift+<digit>`; bind the symbol.** Terminals report Shift+1 as the character your
 layout puts there (`!` on US and ABNT2), and even the kitty keyboard protocol, as
 decoded here, does not recover the key. `alt+<digit>` arrives as the digit
 everywhere, which is why the defaults use it. **Symbols bind as themselves:** `"?"`,

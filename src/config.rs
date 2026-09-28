@@ -880,6 +880,21 @@ mod tests {
             Some(Action::MoveToWorkspace(WorkspaceTarget::Index(3)))
         );
         assert!(builtin(&cfg, "shift+3").is_none());
+        // Alt+Shift+digit arrives as Alt+<symbol>; US and ABNT2 symbols are bound.
+        for (sym, n) in [("!", 1), ("@", 2), ("^", 6), ("¨", 6), (")", 10)] {
+            let chord: crate::keys::Chord = format!("alt+{sym}").parse().unwrap();
+            assert!(
+                matches!(
+                    cfg.global_binds[&chord].action,
+                    BindAction::Builtin(Action::MoveToWorkspace(WorkspaceTarget::Index(m))) if m == n
+                ),
+                "{sym}"
+            );
+        }
+        assert!(matches!(
+            cfg.global_binds[&"alt+shift+left".parse().unwrap()].action,
+            BindAction::Builtin(Action::Move(Dir::Left))
+        ));
         // Bare Alt+digit (global) goes to the workspace; in WM mode it moves the pane.
         let alt3 = "alt+3".parse().unwrap();
         assert!(matches!(
