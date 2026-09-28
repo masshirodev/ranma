@@ -7,11 +7,12 @@ Lua and themed in TOML.
 
 Named for the 欄間, the carved transom panel above sliding doors.
 
-**Status:** milestone 2 of [`doc/ROADMAP.md`](doc/ROADMAP.md) — a working tiling
-window manager: dwindle-tiled panes, tabbed groups, a floating layer, workspaces,
-a scratchpad, a waybar-style bar with Lua and shell modules, Lua binds and hooks,
-mouse focus, and live config reload. Sessions, the switchers and copy mode are
-milestone 3.
+**Status:** milestones 1-3 of [`doc/ROADMAP.md`](doc/ROADMAP.md) are done — a
+daily-drivable tiling window manager: dwindle-tiled panes, tabbed groups, a
+floating layer, workspaces and sessions with fuzzy switchers, a scratchpad,
+copy mode and history search with the system clipboard, window rules, a
+waybar-style bar with Lua and shell modules, Lua binds and hooks, mouse focus,
+and live config reload. `leader ?` lists every key.
 
 ```sh
 cargo run --release           # start it; Ctrl+b enters WM mode, t opens a pane

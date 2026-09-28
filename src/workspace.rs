@@ -11,6 +11,8 @@ pub struct Workspace {
     pub fullscreen: bool,
     /// A pane here rang the bell while the workspace was not shown.
     pub urgent: bool,
+    /// Where tiled panes last floated, so floating one again puts it back there.
+    pub float_memory: std::collections::HashMap<PaneId, Rect>,
 }
 
 impl Workspace {

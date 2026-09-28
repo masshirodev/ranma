@@ -30,6 +30,11 @@ pub fn chord_of(ev: &KeyEvent) -> Option<Chord> {
             // crossterm reports Shift+a as 'A' with SHIFT; binds spell it "shift+a".
             if c.is_uppercase() {
                 mods.shift = true;
+            } else if !c.is_alphanumeric() {
+                // A symbol already carries its Shift ('?' is Shift+/): some
+                // terminals report the modifier too, others do not, and "?" must
+                // match either way.
+                mods.shift = false;
             }
             Key::Char(c.to_lowercase().next().unwrap_or(c))
         }
@@ -282,6 +287,11 @@ mod tests {
         assert_eq!(c, "shift+tab".parse().unwrap());
         let c = chord_of(&key(KeyCode::Enter, KeyModifiers::ALT)).unwrap();
         assert_eq!(c, "alt+return".parse().unwrap());
+        // "?" matches whether or not the terminal also reports Shift.
+        let c = chord_of(&key(KeyCode::Char('?'), KeyModifiers::SHIFT)).unwrap();
+        assert_eq!(c, "?".parse().unwrap());
+        let c = chord_of(&key(KeyCode::Char('?'), KeyModifiers::NONE)).unwrap();
+        assert_eq!(c, "?".parse().unwrap());
     }
 
     #[test]

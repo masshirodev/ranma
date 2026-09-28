@@ -42,12 +42,19 @@ impl Style {
     }
 }
 
+/// What clicking a piece of the bar does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Click {
+    /// Go to this workspace (0 toggles the scratchpad).
+    Workspace(u8),
+    SessionSwitcher,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Piece {
     pub text: String,
     pub style: Style,
-    /// The workspace a click on this piece switches to (0 is the scratchpad).
-    pub click: Option<u8>,
+    pub click: Option<Click>,
 }
 
 impl Piece {
@@ -58,8 +65,8 @@ impl Piece {
             click: None,
         }
     }
-    pub fn clickable(mut self, workspace: u8) -> Piece {
-        self.click = Some(workspace);
+    pub fn on_click(mut self, click: Click) -> Piece {
+        self.click = Some(click);
         self
     }
 }

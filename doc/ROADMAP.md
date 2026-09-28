@@ -47,12 +47,16 @@ grow/shrink semantics, and the mouse outside WM mode — click (or hover) to foc
 clicks and wheel passed to programs that use the mouse, the wheel through
 scrollback otherwise. That last part was milestone 3's.
 
-## 3. Daily driver
+## 3. Daily driver — done
 
-- [ ] Sessions and the session switcher; pane switcher
-- [ ] Copy mode (keyboard scrollback and selection), OSC 52 clipboard passthrough (wheel scrollback is done)
-- [x] Mouse passthrough to programs that ask for it; bracketed paste (both done early)
-- [ ] Window rules in Lua
+- [x] Sessions and the session switcher (create by typing a name, rename); pane
+  switcher across sessions
+- [x] Copy mode on alacritty's vi mode; search (`leader /`) over the whole
+  history; OSC 52 clipboard for copies and passed through for programs
+- [x] Mouse passthrough and bracketed paste (done early, in M1 and M2)
+- [x] Window rules in Lua (command and title globs: float, size, workspace)
+- [x] Floating panes remember where they floated
+- [x] Help (`leader ?`): every bind, filterable, runnable
 
 ## Later, maybe
 

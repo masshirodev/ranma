@@ -13,10 +13,12 @@ use ratatui::layout::{Position, Rect as RRect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear};
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::{App, Mode, PaneView};
 use crate::bar;
 use crate::layout::{Rect, TabBar};
+use crate::picker::Picker;
 use crate::theme::{self, BorderStyle, Colors};
 
 pub fn color(c: theme::Color) -> Color {
@@ -72,6 +74,11 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }
+    if let (Some(p), Some(_)) = (app.picker(), app.picker_layout()) {
+        draw_picker(f, app, p);
+        // The picker's query line has the cursor; nothing else does.
+        return None;
+    }
     cursor
 }
 
@@ -85,6 +92,15 @@ fn draw_pane(
     let content = term.renderable_content();
     let rows = term.screen_lines() as i32;
     let inner = view.inner;
+    let colors = &app.config.theme.colors;
+    let copy = app.copy_state().filter(|c| c.pane == view.id);
+    let hit_style = Style::default()
+        .fg(color(colors.search_fg))
+        .bg(color(colors.search_bg));
+    let current_style = Style::default()
+        .fg(color(colors.search_current_fg))
+        .bg(color(colors.search_current_bg));
+    let selection = content.selection;
     let buf = f.buffer_mut();
 
     for indexed in content.display_iter {
@@ -115,20 +131,62 @@ fn draw_pane(
         } else {
             out.set_char(display_char(cell.c));
         }
-        out.set_style(Style {
+        let mut style = Style {
             fg: Some(term_color(cell.fg, content.colors)),
             bg: Some(term_color(cell.bg, content.colors)),
             add_modifier: modifiers(cell.flags),
             ..Style::default()
+        };
+        let point = indexed.point;
+        if let Some(c) = copy {
+            if c.current.as_ref().is_some_and(|m| m.contains(&point)) {
+                style = style.patch(current_style);
+            } else if c.hits.iter().any(|m| m.contains(&point)) {
+                style = style.patch(hit_style);
+            }
+        }
+        if selection.is_some_and(|sel| sel.contains(point)) {
+            style = style.add_modifier(Modifier::REVERSED);
+        }
+        out.set_style(style);
+    }
+
+    // The search prompt takes the pane's bottom row while it is open.
+    if let Some(s) = copy.and_then(|c| c.search.as_ref()).filter(|s| s.editing)
+        && inner.h > 0
+    {
+        let y = inner.y + inner.h - 1;
+        let prompt = format!(
+            "{}{}{}",
+            if s.backward { "?" } else { "/" },
+            s.query,
+            if s.failed && !s.query.is_empty() {
+                "   (no match)"
+            } else {
+                ""
+            }
+        );
+        let style = Style::default()
+            .fg(color(colors.mode_fg))
+            .bg(color(colors.mode_bg));
+        buf.set_style(RRect::new(inner.x, y, inner.w, 1), style);
+        buf.set_stringn(inner.x, y, &prompt, inner.w as usize, style);
+        let cx = inner.x + (1 + s.query.width() as u16).min(inner.w.saturating_sub(1));
+        f.set_cursor_position(Position::new(cx, y));
+        return Some(CursorState {
+            shape: CursorShape::Beam,
+            blinking: false,
         });
     }
 
-    if !(view.focused && app.mode == Mode::Normal) {
+    if !(view.focused && matches!(app.mode, Mode::Normal | Mode::Copy)) {
         return None;
     }
     let c = content.cursor;
     let line = c.point.line.0 + content.display_offset as i32;
-    let visible = content.mode.contains(TermMode::SHOW_CURSOR)
+    // In copy mode the cursor is alacritty's vi cursor, shown even when the
+    // program hides its own.
+    let visible = (app.mode == Mode::Copy || content.mode.contains(TermMode::SHOW_CURSOR))
         && c.shape != CursorShape::Hidden
         && line >= 0
         && (line as u16) < inner.h
@@ -159,7 +217,7 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     // In WM mode the focused border takes the mode colour, so it is obvious which
     // pane the next action applies to.
     let border = match (view.focused, app.mode, view.floating) {
-        (true, Mode::Wm, _) => c.mode_bg,
+        (true, Mode::Wm | Mode::Copy, _) => c.mode_bg,
         (true, Mode::Normal, _) => c.border_active,
         (false, _, true) => c.border_floating,
         (false, _, false) => c.border_inactive,
@@ -227,6 +285,82 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
             style,
         );
     }
+}
+
+fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
+    let Some(l) = app.picker_layout() else {
+        return;
+    };
+    let c = &app.config.theme.colors;
+    f.render_widget(Clear, rrect(l.outer));
+    let border_type = match app.config.theme.border.style {
+        BorderStyle::Rounded | BorderStyle::None => BorderType::Rounded,
+        BorderStyle::Plain => BorderType::Plain,
+        BorderStyle::Thick => BorderType::Thick,
+        BorderStyle::Double => BorderType::Double,
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(border_type)
+        .border_style(Style::default().fg(color(c.mode_bg)))
+        .title(Line::from(format!(" {} ", p.title)));
+    f.render_widget(block, rrect(l.outer));
+
+    let buf = f.buffer_mut();
+    let q = l.query;
+    let prompt = format!("> {}", p.query);
+    buf.set_stringn(
+        q.x,
+        q.y,
+        &prompt,
+        q.w as usize,
+        Style::default().fg(color(c.bar_fg)),
+    );
+    let cx = q.x + (prompt.width() as u16).min(q.w.saturating_sub(1));
+
+    let items = p.visible();
+    if items.is_empty() && !p.is_prompt() {
+        buf.set_stringn(
+            l.list.x,
+            l.list.y,
+            "  nothing matches",
+            l.list.w as usize,
+            Style::default().fg(color(c.bar_dim)),
+        );
+    }
+    for (row, (i, item)) in items
+        .iter()
+        .enumerate()
+        .skip(l.offset)
+        .take(l.list.h as usize)
+        .enumerate()
+    {
+        let y = l.list.y + row as u16;
+        let w = l.list.w as usize;
+        let selected = i == p.selected;
+        let (fg, bg) = if selected {
+            (color(c.picker_selected_fg), color(c.picker_selected_bg))
+        } else {
+            (color(c.bar_fg), Color::Reset)
+        };
+        let base = Style::default().fg(fg).bg(bg);
+        buf.set_style(RRect::new(l.list.x, y, l.list.w, 1), base);
+        let label = format!(" {}", item.label);
+        buf.set_stringn(l.list.x, y, &label, w, base);
+        if !item.detail.is_empty() {
+            let d = format!("{} ", item.detail);
+            let dw = d.width();
+            if label.width() + dw + 2 <= w {
+                let dim = if selected {
+                    base
+                } else {
+                    base.fg(color(c.bar_dim))
+                };
+                buf.set_stringn(l.list.x + (w - dw) as u16, y, &d, dw, dim);
+            }
+        }
+    }
+    f.set_cursor_position(Position::new(cx, q.y));
 }
 
 fn piece_style(c: &Colors, s: bar::Style) -> Style {

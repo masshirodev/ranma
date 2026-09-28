@@ -63,10 +63,12 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 `pageup`, `pagedown`, `f1`-`f24`, and `plus minus comma period slash`. `"ctrl++"`
 is Ctrl and the plus key.
 
-**Do not bind `shift+<digit>` or other shifted symbols.** Terminals report
-Shift+1 as the character your layout puts there (`!` on US and ABNT2), and even the
-kitty keyboard protocol, as decoded here, does not recover the key. `alt+<digit>`
-arrives as the digit everywhere, which is why the defaults use it.
+**Do not bind `shift+<digit>`.** Terminals report Shift+1 as the character your
+layout puts there (`!` on US and ABNT2), and even the kitty keyboard protocol, as
+decoded here, does not recover the key. `alt+<digit>` arrives as the digit
+everywhere, which is why the defaults use it. **Symbols bind as themselves:** `"?"`,
+`"$"`, `"("` — not `"shift+/"`. Whether the terminal also reports Shift with them
+does not matter; it is ignored.
 
 ### Actions
 
@@ -87,8 +89,14 @@ arrives as the digit everywhere, which is why the defaults use it.
 | `move_to_workspace_silent <ws>` | Send it there and stay. |
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
-| `pane_switcher` | Fuzzy list of panes. *Milestone 3.* |
-| `session_switcher` | Fuzzy list of sessions. *Milestone 3.* |
+| `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
+| `session_switcher` | The sessions, filterable. A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
+| `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
+| `session <name>` / `session next` / `session prev` | Switch sessions. |
+| `rename_session [name]` | Rename the current session; without a name, ask for one. |
+| `help` | Every bind, filterable by key or action; `Enter` runs the selected one. |
+| `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
+| `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`). |
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
@@ -96,8 +104,59 @@ arrives as the digit everywhere, which is why the defaults use it.
 | `quit` | Quit ranma. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave
-is gone. The **scratchpad** is Hyprland's special workspace: a layer of its own,
+is gone. **Sessions** are separate sets of workspaces, one shown at a time; the
+others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of its own,
 drawn centred over whatever workspace is shown, whose panes tile inside it.
+
+## Copy mode and search
+
+`search` (`leader /`) opens a prompt on the focused pane's bottom row and searches
+its whole history — commands and their output alike — as you type, most recent
+match first. Every visible match is highlighted, the current one more strongly.
+`Enter` keeps you at the match in copy mode; `Esc` leaves.
+
+`copy_mode` (`leader [`) enters copy mode without searching. In copy mode:
+
+| Keys | Do |
+| --- | --- |
+| `h j k l`, arrows | move |
+| `w b e` / `W B E` | words (punctuation-aware) / WORDS (space-separated) |
+| `0 ^ $` | start of line, first non-blank, end of line |
+| `H M L` | top, middle, bottom of the screen |
+| `g G` | oldest line, newest line |
+| `Ctrl+u Ctrl+d` / `Ctrl+b Ctrl+f`, PageUp/PageDown | half a page / a page |
+| `%` | matching bracket |
+| `v` / `V` / `Ctrl+v` | select characters / lines / a block (again to cancel) |
+| `y`, `Enter` | copy the selection — or the current match, if nothing is selected — and leave |
+| `/` `?` | search forward / backward |
+| `n` `N` | next match / previous match |
+| `q`, `Esc` | leave |
+
+Copies go to your system clipboard through the terminal (OSC 52): kitty, foot,
+wezterm, alacritty and tmux accept it; some terminals need it allowed in their
+config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,
+say) are passed through too. Reading the clipboard back is not allowed.
+
+## Window rules — `ranma.rule { ... }`
+
+```lua
+ranma.rule { command = "htop*", float = true, size = { 70, 60 } }
+ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `command` | Glob (`*`, `?`) matched against the command an `exec` pane was opened with; applied when it opens. |
+| `title` | Glob matched against the pane's title; applied the first time the title matches, once per pane. |
+| `float` | Float the pane. |
+| `size` | `{ width%, height% }` of the workspace, each 10-100; implies `float`. |
+| `workspace` | Move the pane to this workspace, following it unless `silent = true`. |
+
+Give `command` or `title`, and at least one effect. Every matching rule applies,
+in the order written. Rules act on panes of the shown session, not in the
+scratchpad.
+
+A pane you float, tile, and float again goes back where it last floated.
 
 ## Mouse
 
@@ -138,7 +197,8 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 
 | Module | Shows | Options |
 | --- | --- | --- |
-| `mode` | ` WM ` while in WM mode, nothing otherwise | — |
+| `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise | — |
+| `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
 | `workspaces` | The workspaces, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. | `show = "occupied"` (default) or `"all"` (1-10) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
@@ -179,7 +239,7 @@ Inside a bind function, a hook, or a module's `render`:
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
 | `ranma.notify("text")` | Show a message in the bar until the next key in WM mode. |
-| `ranma.state()` | `{ workspace, workspaces, focused, title, mode, panes }`: the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"` or `"normal"`, and the pane count. |
+| `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
@@ -201,7 +261,7 @@ end)
 | `workspace_change` | `workspace`, `previous` |
 | `mode_change` | `mode`: `"wm"` or `"normal"` |
 | `config_reload` | nothing; runs in the newly loaded config |
-| `session_switch` | *Milestone 3.* Registering is already accepted. |
+| `session_switch` | `session`, `previous` (names) |
 
 ## Globals
 
@@ -233,6 +293,8 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.mode_fg`, `mode_bg` | the WM-mode indicator, and the focused border in WM mode |
 | `colors.ws_active_fg`, `ws_active_bg`, `ws_occupied`, `ws_empty`, `ws_urgent` | the workspaces module |
 | `colors.tab_active_fg`, `tab_active_bg`, `tab_inactive_fg`, `tab_inactive_bg` | tab bars of groups |
+| `colors.picker_selected_fg`, `picker_selected_bg` | the selected row in switchers and help |
+| `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
 | `border.style` | `rounded`, `plain`, `thick`, `double`, `none` |
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
 | `bar.position` | `top`, `bottom`, `hidden` |

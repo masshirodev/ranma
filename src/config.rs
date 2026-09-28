@@ -133,7 +133,7 @@ impl FromStr for Event {
 
 /// Modules ranma draws itself. Anything else in a bar list must be defined with
 /// `ranma.module`.
-pub const BUILTIN_MODULES: [&str; 4] = ["mode", "workspaces", "title", "panes"];
+pub const BUILTIN_MODULES: [&str; 5] = ["mode", "session", "workspaces", "title", "panes"];
 
 /// Which modules the bar shows, in order, on each side.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -177,10 +177,77 @@ struct BarPatch {
     right: Option<Vec<String>>,
 }
 
+/// A window rule: what to do with a pane whose command or title matches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rule {
+    /// Glob (`*`, `?`) matched against the command an `exec` pane was opened with.
+    pub command: Option<String>,
+    /// Glob matched against the pane's title, the first time the title matches.
+    pub title: Option<String>,
+    pub float: bool,
+    /// Floating size in percent of the workspace, width and height.
+    pub size: Option<(u16, u16)>,
+    pub workspace: Option<u8>,
+    /// With `workspace`: send it there without following.
+    pub silent: bool,
+}
+
+impl Rule {
+    pub fn matches_command(&self, cmd: &str) -> bool {
+        self.command.as_deref().is_some_and(|g| glob(g, cmd))
+    }
+    pub fn matches_title(&self, title: &str) -> bool {
+        self.title.as_deref().is_some_and(|g| glob(g, title))
+    }
+}
+
+/// `*` matches any run of characters, `?` any one; everything else is literal.
+/// Case-sensitive, like the commands and titles it matches.
+pub fn glob(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = text.chars().collect();
+    // Iterative matcher with one backtrack point: linear enough for short globs.
+    let (mut pi, mut ti) = (0, 0);
+    let (mut star, mut mark) = (None, 0);
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = Some(pi);
+            mark = ti;
+            pi += 1;
+        } else if let Some(sp) = star {
+            pi = sp + 1;
+            mark += 1;
+            ti = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RuleSpec {
+    command: Option<String>,
+    title: Option<String>,
+    float: Option<bool>,
+    size: Option<Vec<u16>>,
+    workspace: Option<u8>,
+    silent: Option<bool>,
+}
+
 /// What `ranma.state()` answers with, filled in by the window manager before it
 /// calls into Lua.
 #[derive(Debug, Clone, Default)]
 pub struct StateSnapshot {
+    pub session: String,
+    pub sessions: Vec<String>,
     pub workspace: u8,
     pub workspaces: Vec<u8>,
     pub focused: Option<u64>,
@@ -208,6 +275,7 @@ struct Builder {
     bar: BarLayout,
     modules: HashMap<String, ModuleDef>,
     workspaces_show_all: bool,
+    rules: Vec<Rule>,
 }
 
 pub struct Config {
@@ -221,6 +289,8 @@ pub struct Config {
     pub modules: HashMap<String, ModuleDef>,
     /// The workspaces module shows 1-10 even when empty.
     pub workspaces_show_all: bool,
+    /// In the order written; every matching rule applies, later ones last.
+    pub rules: Vec<Rule>,
     pub theme: Theme,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
@@ -518,6 +588,51 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
         })?,
     )?;
 
+    ranma.set(
+        "rule",
+        lua.create_function(|lua, value: Value| {
+            let spec: RuleSpec = lua
+                .from_value(value)
+                .map_err(|e| rt_err(format!("ranma.rule: {e}")))?;
+            if spec.command.is_none() && spec.title.is_none() {
+                return Err(rt_err("ranma.rule: give command or title to match on"));
+            }
+            let size = match spec.size.as_deref() {
+                None => None,
+                Some([w, h]) if (10..=100).contains(w) && (10..=100).contains(h) => Some((*w, *h)),
+                Some(other) => {
+                    return Err(rt_err(format!(
+                        "ranma.rule: size is {{ width%, height% }}, each 10-100, not {other:?}"
+                    )));
+                }
+            };
+            if spec.workspace == Some(0) {
+                return Err(rt_err("ranma.rule: workspaces are numbered from 1"));
+            }
+            let float = spec.float.unwrap_or(size.is_some());
+            if !float && size.is_none() && spec.workspace.is_none() {
+                return Err(rt_err(
+                    "ranma.rule: the rule does nothing (give float, size or workspace)",
+                ));
+            }
+            if spec.silent.is_some() && spec.workspace.is_none() {
+                return Err(rt_err("ranma.rule: silent only applies with workspace"));
+            }
+            lua.app_data_mut::<Builder>()
+                .expect("builder installed")
+                .rules
+                .push(Rule {
+                    command: spec.command,
+                    title: spec.title,
+                    float,
+                    size,
+                    workspace: spec.workspace,
+                    silent: spec.silent.unwrap_or(false),
+                });
+            Ok(())
+        })?,
+    )?;
+
     // The runtime half: only meaningful while ranma is calling into Lua. During
     // config load there is no window manager to act on, so these refuse.
     ranma.set(
@@ -560,6 +675,8 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 .state
                 .clone();
             let t = lua.create_table()?;
+            t.set("session", st.session)?;
+            t.set("sessions", st.sessions)?;
             t.set("workspace", st.workspace)?;
             t.set("workspaces", st.workspaces)?;
             t.set("focused", st.focused)?;
@@ -645,6 +762,7 @@ pub fn load_from(
         bar: builder.bar,
         modules: builder.modules,
         workspaces_show_all: builder.workspaces_show_all,
+        rules: builder.rules,
         theme,
         source: user_file,
         lua,
@@ -788,7 +906,7 @@ mod tests {
     #[test]
     fn bar_and_modules() {
         let cfg = load_from(None, None, None).unwrap();
-        assert_eq!(cfg.bar.left, vec!["mode", "workspaces"]);
+        assert_eq!(cfg.bar.left, vec!["mode", "session", "workspaces"]);
         assert!(matches!(cfg.modules["clock"].kind, ModuleKind::Lua(_)));
 
         let cfg = with_user(
@@ -801,7 +919,7 @@ mod tests {
         .unwrap();
         assert_eq!(cfg.bar.right, vec!["load", "clock"]);
         // Only the side given changes.
-        assert_eq!(cfg.bar.left, vec!["mode", "workspaces"]);
+        assert_eq!(cfg.bar.left, vec!["mode", "session", "workspaces"]);
         assert!(cfg.workspaces_show_all);
         match &cfg.modules["load"].kind {
             ModuleKind::Exec { command, format } => {
@@ -849,6 +967,50 @@ mod tests {
         // that only runs later: at call time, with the line.
         let err = format!("{:#}", with_user("ranma.action('fly')").unwrap_err());
         assert!(err.contains("fly"), "{err}");
+    }
+
+    #[test]
+    fn globs() {
+        assert!(glob("htop", "htop"));
+        assert!(!glob("htop", "htop -d 5"));
+        assert!(glob("htop*", "htop -d 5"));
+        assert!(glob("*NVIM*", "keys.rs - NVIM"));
+        assert!(glob("?vim", "nvim"));
+        assert!(glob("*", ""));
+        assert!(!glob("a*b", "acd"));
+        assert!(glob("a*b*c", "a-b-b-c"));
+    }
+
+    #[test]
+    fn rules() {
+        let cfg = with_user(
+            r#"
+            ranma.rule { command = "htop*", float = true, size = { 70, 60 } }
+            ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
+            ranma.rule { command = "btop", size = { 50, 50 } }
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.rules.len(), 3);
+        assert!(cfg.rules[0].matches_command("htop -d 5"));
+        assert!(!cfg.rules[0].matches_title("htop"));
+        assert_eq!(cfg.rules[1].workspace, Some(2));
+        // A size implies floating.
+        assert!(cfg.rules[2].float);
+        for (src, needle) in [
+            ("ranma.rule { float = true }", "command or title"),
+            ("ranma.rule { command = 'x' }", "does nothing"),
+            ("ranma.rule { command = 'x', size = { 5, 50 } }", "10-100"),
+            ("ranma.rule { command = 'x', workspace = 0 }", "from 1"),
+            (
+                "ranma.rule { command = 'x', float = true, silent = true }",
+                "silent",
+            ),
+            ("ranma.rule { command = 'x', floating = true }", "floating"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
+        }
     }
 
     #[test]

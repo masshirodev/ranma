@@ -23,7 +23,7 @@ use crossterm::execute;
 use mlua::{Function, Lua, Table, Value};
 
 use crate::action::{Action, Dir, WorkspaceTarget};
-use crate::bar::{self, Piece, Segment, Style};
+use crate::bar::{self, Click, Piece, Segment, Style};
 use crate::config::{self, BindAction, Config, Event as HookEvent, Layout, ModuleKind};
 use crate::input;
 use crate::layout::{self, PaneId, Placement, Rect, Split, TabBar};
@@ -31,6 +31,15 @@ use crate::pane::{AppEvent, Pane, Size, SpawnOptions};
 use crate::render::{self, CursorState};
 use crate::theme::{BarPosition, BorderStyle};
 use crate::workspace::Workspace;
+
+mod copy;
+mod rules;
+mod session;
+mod switch;
+
+pub use copy::CopyState;
+use session::Session;
+pub use switch::PickerLayout;
 
 /// The frame cap. Output arriving faster than this is coalesced: the pane is drawn
 /// at its latest state once per interval, not once per read.
@@ -48,6 +57,8 @@ pub enum Mode {
     Normal,
     /// Keys are looked up in the bind table.
     Wm,
+    /// Keys move a cursor through the focused pane's scrollback (see `copy`).
+    Copy,
 }
 
 /// Where one pane is drawn this frame.
@@ -93,6 +104,7 @@ enum Drag {
 /// The parts of state hooks and state-driven modules react to.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct Observed {
+    session: String,
     focus: Option<PaneId>,
     workspace: u8,
     mode_wm: bool,
@@ -103,8 +115,11 @@ struct Observed {
 pub struct App {
     pub config: Config,
     pub panes: HashMap<PaneId, Pane>,
+    /// The shown session's workspaces (see `session` for how sessions swap).
     workspaces: BTreeMap<u8, Workspace>,
     current: u8,
+    sessions: Vec<Session>,
+    active_session: usize,
     scratch: Workspace,
     scratch_shown: bool,
     pub mode: Mode,
@@ -128,6 +143,14 @@ pub struct App {
     /// Bumped on config reload so results of the old config's execs are dropped.
     module_generation: u64,
     reload_at: Option<Instant>,
+
+    picker: Option<crate::picker::Picker>,
+    copy: Option<CopyState>,
+    /// Bytes for the host terminal itself (OSC 52 clipboard writes), written by
+    /// the event loop after the event that queued them.
+    host_out: Vec<Vec<u8>>,
+    /// (pane, rule index) pairs already applied, so title rules fire once.
+    rules_applied: HashSet<(PaneId, usize)>,
 }
 
 impl App {
@@ -139,6 +162,12 @@ impl App {
             panes: HashMap::new(),
             workspaces,
             current: 1,
+            sessions: vec![Session {
+                name: "main".into(),
+                workspaces: BTreeMap::new(),
+                current: 1,
+            }],
+            active_session: 0,
             scratch: Workspace::default(),
             scratch_shown: false,
             mode: Mode::Normal,
@@ -151,6 +180,7 @@ impl App {
             visible: HashSet::new(),
             drag: None,
             observed: Observed {
+                session: "main".into(),
                 workspace: 1,
                 ..Default::default()
             },
@@ -160,6 +190,10 @@ impl App {
             module_running: HashSet::new(),
             module_generation: 0,
             reload_at: None,
+            picker: None,
+            copy: None,
+            host_out: Vec::new(),
+            rules_applied: HashSet::new(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -430,6 +464,9 @@ impl App {
                 self.panes.insert(id, pane);
                 self.focus(id);
                 self.relayout();
+                if let Some(cmd) = command {
+                    self.apply_command_rules(id, cmd);
+                }
                 let ws = if self.scratch_shown {
                     SCRATCHPAD
                 } else {
@@ -494,15 +531,25 @@ impl App {
     }
 
     fn close_pane(&mut self, id: PaneId) {
-        let Some((n, _)) = self.detach(id) else {
-            return;
+        let n = match self.detach(id) {
+            Some((n, _)) => n,
+            None if self.detach_hidden(id) => 0,
+            None => return,
         };
+        if self.copy.as_ref().is_some_and(|c| c.pane == id) {
+            self.copy = None;
+            if self.mode == Mode::Copy {
+                self.mode = Mode::Normal;
+            }
+        }
         self.panes.remove(&id);
+        self.rules_applied.retain(|(p, _)| *p != id);
         if self.panes.is_empty() {
             self.quit = true;
             return;
         }
         self.tidy();
+        self.drop_empty_sessions();
         self.relayout();
         self.emit(HookEvent::PaneClose, |t| {
             t.set("pane", id)?;
@@ -564,15 +611,14 @@ impl App {
 
     /// Move the focused pane to workspace `target` (0 is the scratchpad).
     fn move_focused_to(&mut self, target: u8, follow: bool) {
-        let Some(id) = self.focused() else {
-            return;
-        };
-        let from = if self.scratch_shown {
-            SCRATCHPAD
-        } else {
-            self.current
-        };
-        if target == from {
+        if let Some(id) = self.focused() {
+            self.move_pane_to(id, target, follow);
+        }
+    }
+
+    /// Move a pane of the shown session to workspace `target` (0 is the scratchpad).
+    fn move_pane_to(&mut self, id: PaneId, target: u8, follow: bool) {
+        if self.locate(id).is_none_or(|from| from == target) {
             return;
         }
         let Some((_, float)) = self.detach(id) else {
@@ -614,37 +660,9 @@ impl App {
             self.status = Some("scratchpad panes tile inside it; they do not float".into());
             return;
         }
-        let Some(id) = self.focused() else {
-            return;
-        };
-        let area = self.workspace_area();
-        let gap = self.config.theme.gaps.inner;
-        let ws = self.active_mut();
-        match ws.take(id) {
-            Some(None) => {
-                ws.floating.push((id, area.centered(60, 60)));
-                ws.focused = Some(id);
-            }
-            Some(Some(r)) => {
-                // Tile it next to whatever it was floating over, so it lands where
-                // the eye already is.
-                let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
-                let under = ws
-                    .tree
-                    .layout(area, gap)
-                    .into_iter()
-                    .find(|(_, t)| t.contains(cx, cy));
-                ws.tree.insert(
-                    id,
-                    under.map(|(p, _)| p),
-                    under.map(|(_, t)| t),
-                    Placement::Dwindle,
-                );
-                ws.focused = Some(id);
-            }
-            None => {}
+        if let Some(id) = self.focused() {
+            self.toggle_floating_pane(id);
         }
-        self.relayout();
     }
 
     // ---- events --------------------------------------------------------------
@@ -684,7 +702,17 @@ impl App {
 
     /// Fire hooks for whatever the event changed, and refresh state-driven modules.
     fn after_event(&mut self) {
+        // Copy mode belongs to one pane; it ends when that pane is no longer the
+        // focused one (switched away by a click, a hook, a workspace change).
+        if self
+            .copy
+            .as_ref()
+            .is_some_and(|c| Some(c.pane) != self.focused())
+        {
+            self.exit_copy_mode();
+        }
         let now = Observed {
+            session: self.session_name().to_string(),
             focus: self.focused(),
             workspace: self.current,
             mode_wm: self.mode == Mode::Wm,
@@ -709,6 +737,9 @@ impl App {
                 t.set("pane", now.focus)?;
                 t.set("previous", before.focus)
             });
+        }
+        if now.session != before.session {
+            self.emit_session_switch(now.session.clone(), before.session.clone());
         }
         if now.workspace != before.workspace {
             self.emit(HookEvent::WorkspaceChange, |t| {
@@ -735,8 +766,11 @@ impl App {
             // set, so it sends no more wakeups until it is shown and drawn.
             TermEvent::Wakeup => self.dirty |= visible,
             TermEvent::Title(t) => {
-                pane.title = t;
+                pane.title = t.clone();
                 self.dirty |= visible;
+                if !self.config.rules.is_empty() {
+                    self.apply_title_rules(id, &t);
+                }
             }
             TermEvent::ResetTitle => {
                 pane.title.clear();
@@ -759,8 +793,16 @@ impl App {
                 if let Some(n) = self.locate(id).filter(|n| *n != SCRATCHPAD) {
                     self.ws_mut(n).urgent = true;
                     self.dirty = true;
+                } else if let Some((si, n)) = self.locate_hidden(id)
+                    && let Some(ws) = self.sessions[si].workspaces.get_mut(&n)
+                {
+                    ws.urgent = true;
                 }
             }
+            // A program copying to the clipboard (OSC 52, e.g. nvim's "+y over
+            // SSH): passed on to the host terminal, which owns the clipboard.
+            // Reading the clipboard back is refused, alacritty_terminal's default.
+            TermEvent::ClipboardStore(_, text) => self.set_host_clipboard(&text),
             TermEvent::ChildExit(_) | TermEvent::Exit => self.close_pane(id),
             // Clipboard (OSC 52) and colour queries: milestone 3.
             _ => {}
@@ -768,6 +810,36 @@ impl App {
     }
 
     fn handle_input(&mut self, ev: Event) {
+        // An open picker takes the keyboard and the mouse, whatever the mode.
+        if self.picker.is_some() {
+            match ev {
+                Event::Key(key) if key.kind != KeyEventKind::Release => self.picker_key(&key),
+                Event::Paste(text) => self.picker_paste(&text),
+                Event::Mouse(m) => self.picker_mouse(m),
+                Event::Resize(w, h) => {
+                    self.screen = Rect::new(0, 0, w, h);
+                    self.relayout();
+                }
+                _ => {}
+            }
+            return;
+        }
+        if self.mode == Mode::Copy {
+            match ev {
+                Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    return self.copy_key(&key);
+                }
+                Event::Mouse(m) => match m.kind {
+                    MouseEventKind::ScrollUp => return self.copy_scroll(3),
+                    MouseEventKind::ScrollDown => return self.copy_scroll(-3),
+                    // A click anywhere leaves copy mode and then acts as usual.
+                    MouseEventKind::Down(_) => self.exit_copy_mode(),
+                    _ => return,
+                },
+                Event::Paste(_) => return,
+                _ => {}
+            }
+        }
         match ev {
             Event::Key(key) => self.handle_key(key),
             Event::Paste(text) => {
@@ -816,8 +888,11 @@ impl App {
                 })
                 .and_then(|(_, p)| p.click);
             match target {
-                Some(SCRATCHPAD) => self.run_action(Action::ScratchpadToggle),
-                Some(n) => self.run_action(Action::Workspace(WorkspaceTarget::Index(n))),
+                Some(Click::Workspace(SCRATCHPAD)) => self.run_action(Action::ScratchpadToggle),
+                Some(Click::Workspace(n)) => {
+                    self.run_action(Action::Workspace(WorkspaceTarget::Index(n)))
+                }
+                Some(Click::SessionSwitcher) => self.open_session_switcher(),
                 None => {}
             }
             return true;
@@ -836,7 +911,8 @@ impl App {
     fn handle_mouse(&mut self, m: MouseEvent) {
         match self.mode {
             Mode::Wm => self.handle_mouse_wm(m),
-            Mode::Normal => self.handle_mouse_normal(m),
+            // Copy mode handled its own mouse events before getting here.
+            Mode::Normal | Mode::Copy => self.handle_mouse_normal(m),
         }
     }
 
@@ -986,7 +1062,9 @@ impl App {
     /// Whether the host terminal should report the mouse: always, unless the
     /// config gives it to the host, in which case only in WM mode.
     pub fn wants_mouse(&self) -> bool {
-        self.mode == Mode::Wm || self.config.settings.mouse != config::MouseMode::Off
+        self.mode != Mode::Normal
+            || self.picker.is_some()
+            || self.config.settings.mouse != config::MouseMode::Off
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
@@ -1035,7 +1113,8 @@ impl App {
         } else {
             self.run_bind(chord, false)
         };
-        if exits || !self.config.settings.wm_mode_sticky {
+        // Only from WM mode: the bind may have entered copy mode or opened a picker.
+        if (exits || !self.config.settings.wm_mode_sticky) && self.mode == Mode::Wm {
             self.set_mode(Mode::Normal);
         }
     }
@@ -1238,9 +1317,20 @@ impl App {
             }
             Action::ReloadConfig => self.reload_config(),
             Action::Quit => self.quit = true,
-            other @ (Action::PaneSwitcher | Action::SessionSwitcher) => {
-                self.status = Some(format!("`{other}` arrives in milestone 3"))
-            }
+            Action::PaneSwitcher => self.open_pane_switcher(),
+            Action::SessionSwitcher => self.open_session_switcher(),
+            Action::Help => self.open_help(),
+            Action::CopyMode => self.enter_copy_mode(None),
+            // Backward: the most recent match first, which is what searching
+            // history usually wants.
+            Action::Search => self.enter_copy_mode(Some(true)),
+            Action::NewSession(name) => self.new_session(name.as_deref()),
+            Action::Session(t) => match self.resolve_session(&t) {
+                Some(i) => self.switch_session(i),
+                None => self.status = Some(format!("no session `{t:?}`")),
+            },
+            Action::RenameSession(Some(name)) => self.rename_session(self.active_session, &name),
+            Action::RenameSession(None) => self.open_rename_prompt(self.active_session),
         }
     }
 
@@ -1276,6 +1366,8 @@ impl App {
 
     fn snapshot(&self) -> config::StateSnapshot {
         config::StateSnapshot {
+            session: self.session_name().to_string(),
+            sessions: self.sessions.iter().map(|s| s.name.clone()).collect(),
             workspace: if self.scratch_shown {
                 SCRATCHPAD
             } else {
@@ -1289,10 +1381,10 @@ impl App {
                 .collect(),
             focused: self.focused(),
             title: self.focused_title().unwrap_or("").to_string(),
-            mode: if self.mode == Mode::Wm {
-                "wm"
-            } else {
-                "normal"
+            mode: match self.mode {
+                Mode::Wm => "wm",
+                Mode::Normal => "normal",
+                Mode::Copy => "copy",
             },
             panes: self.panes.len(),
         }
@@ -1457,8 +1549,24 @@ impl App {
         match name {
             "mode" => match self.mode {
                 Mode::Wm => vec![Piece::new(" WM ", Style::Mode)],
+                Mode::Copy => {
+                    let searching = self
+                        .copy
+                        .as_ref()
+                        .and_then(|c| c.search.as_ref())
+                        .is_some_and(|s| s.editing);
+                    let label = if searching { " SEARCH " } else { " COPY " };
+                    vec![Piece::new(label, Style::Mode)]
+                }
                 Mode::Normal => Vec::new(),
             },
+            // Only once there is more than one: a lone "main" says nothing.
+            "session" if self.session_count() > 1 => {
+                vec![
+                    Piece::new(self.session_name(), Style::Accent).on_click(Click::SessionSwitcher),
+                ]
+            }
+            "session" => Vec::new(),
             "workspaces" => {
                 let mut seg: Segment = self
                     .workspace_list()
@@ -1473,7 +1581,7 @@ impl App {
                         } else {
                             Style::WsEmpty
                         };
-                        Piece::new(format!(" {n} "), style).clickable(n)
+                        Piece::new(format!(" {n} "), style).on_click(Click::Workspace(n))
                     })
                     .collect();
                 let (has, shown) = self.scratch_state();
@@ -1483,7 +1591,7 @@ impl App {
                     } else {
                         Style::WsOccupied
                     };
-                    seg.push(Piece::new(" S ", style).clickable(SCRATCHPAD));
+                    seg.push(Piece::new(" S ", style).on_click(Click::Workspace(SCRATCHPAD)));
                 }
                 seg
             }
@@ -1693,6 +1801,13 @@ pub fn run(config: Config) -> Result<()> {
             }
             app.run_timers(Instant::now());
             app.after_event();
+            if !app.host_out.is_empty() {
+                let out = terminal.backend_mut();
+                for bytes in app.host_out.drain(..) {
+                    out.write_all(&bytes)?;
+                }
+                out.flush()?;
+            }
             if app.quit {
                 break;
             }

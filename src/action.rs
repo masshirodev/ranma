@@ -26,6 +26,13 @@ pub enum WorkspaceTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionTarget {
+    Name(String),
+    Next,
+    Prev,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     NewPane,
     ClosePane,
@@ -48,6 +55,17 @@ pub enum Action {
     MoveToScratchpad,
     PaneSwitcher,
     SessionSwitcher,
+    /// Every bind, filterable; Enter runs the selected one.
+    Help,
+    /// Keyboard scrollback and selection (vi keys) in the focused pane.
+    CopyMode,
+    /// Search the focused pane's history (copy mode with the search prompt open).
+    Search,
+    /// Create a session (named, or numbered) and switch to it.
+    NewSession(Option<String>),
+    Session(SessionTarget),
+    /// Rename the current session; without a name, ask for one.
+    RenameSession(Option<String>),
     /// Open a new pane running this command line.
     Exec(String),
     ExitMode,
@@ -72,6 +90,11 @@ impl Action {
                 | Action::SendLeader
                 | Action::PaneSwitcher
                 | Action::SessionSwitcher
+                | Action::Help
+                | Action::CopyMode
+                | Action::Search
+                | Action::NewSession(_)
+                | Action::RenameSession(_)
                 | Action::Quit
         )
     }
@@ -192,6 +215,20 @@ impl FromStr for Action {
             "move_to_scratchpad" => no_arg(Action::MoveToScratchpad),
             "pane_switcher" => no_arg(Action::PaneSwitcher),
             "session_switcher" => no_arg(Action::SessionSwitcher),
+            "help" => no_arg(Action::Help),
+            "copy_mode" => no_arg(Action::CopyMode),
+            "search" => no_arg(Action::Search),
+            "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
+            "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
+            "session" => match rest {
+                Some("next") => Ok(Action::Session(SessionTarget::Next)),
+                Some("prev") => Ok(Action::Session(SessionTarget::Prev)),
+                Some(name) => Ok(Action::Session(SessionTarget::Name(name.to_string()))),
+                None => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a session name, next or prev",
+                }),
+            },
             "exec" => {
                 rest.map(|cmd| Action::Exec(cmd.to_string()))
                     .ok_or(ActionError::MissingArg {
@@ -251,6 +288,16 @@ impl fmt::Display for Action {
             Action::MoveToScratchpad => f.write_str("move_to_scratchpad"),
             Action::PaneSwitcher => f.write_str("pane_switcher"),
             Action::SessionSwitcher => f.write_str("session_switcher"),
+            Action::Help => f.write_str("help"),
+            Action::CopyMode => f.write_str("copy_mode"),
+            Action::Search => f.write_str("search"),
+            Action::NewSession(None) => f.write_str("new_session"),
+            Action::NewSession(Some(n)) => write!(f, "new_session {n}"),
+            Action::RenameSession(None) => f.write_str("rename_session"),
+            Action::RenameSession(Some(n)) => write!(f, "rename_session {n}"),
+            Action::Session(SessionTarget::Next) => f.write_str("session next"),
+            Action::Session(SessionTarget::Prev) => f.write_str("session prev"),
+            Action::Session(SessionTarget::Name(n)) => write!(f, "session {n}"),
             Action::Exec(cmd) => write!(f, "exec {cmd}"),
             Action::ExitMode => f.write_str("exit_mode"),
             Action::SendLeader => f.write_str("send_leader"),
@@ -328,6 +375,14 @@ mod tests {
             "workspace empty",
             "move_to_workspace 10",
             "exec htop",
+            "help",
+            "copy_mode",
+            "search",
+            "new_session",
+            "new_session work",
+            "session next",
+            "session kumiko",
+            "rename_session",
         ] {
             assert_eq!(a(&a(s).to_string()), a(s), "{s}");
         }

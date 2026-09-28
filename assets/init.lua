@@ -86,9 +86,29 @@ ranma.bind("ctrl+down", "workspace empty")
 ranma.bind("s", "scratchpad_toggle")
 ranma.bind("alt+s", "move_to_scratchpad")
 
--- Switchers ---------------------------------------------------------------------
+-- Switchers and sessions ---------------------------------------------------------
+-- Sessions are separate sets of workspaces (a project each, say). The session
+-- switcher lists them; typing a name that does not exist offers to create it,
+-- and Ctrl+R renames the selected one. The keys below follow tmux: ( and ) for
+-- the previous and next session, $ to rename.
 ranma.bind("tab", "pane_switcher")
 ranma.bind("backspace", "session_switcher")
+ranma.bind("shift+n", "new_session")
+ranma.bind("(", "session prev")
+ranma.bind(")", "session next")
+ranma.bind("$", "rename_session")
+
+-- History ----------------------------------------------------------------------
+-- / searches the focused pane's history (what you typed and what it printed),
+-- most recent match first. [ enters copy mode without searching. In copy mode:
+-- vi motions (hjkl, w b e, 0 $, g G, Ctrl+u/d), v / V / Ctrl+v to select,
+-- y or Enter to copy to the system clipboard, / and ? to search, n and N for
+-- the next and previous match, q or Esc to leave.
+ranma.bind("/", "search")
+ranma.bind("[", "copy_mode")
+
+-- Help: every bind, filterable, and Enter runs the selected one.
+ranma.bind("?", "help")
 
 -- Global binds -------------------------------------------------------------------
 -- { global = true } binds a key outside WM mode, with no leader. The program in
@@ -103,11 +123,12 @@ ranma.bind("return", "exit_mode")
 ranma.bind("r", "reload_config")
 
 -- Bar ---------------------------------------------------------------------------
--- Which modules go where. Built in: mode (the WM indicator), workspaces, title
--- (the focused pane's), panes (a count). Anything else is defined with
+-- Which modules go where. Built in: mode (WM, COPY, SEARCH), session (its name,
+-- once there is more than one), workspaces, title (the focused pane's), panes
+-- (a count). Anything else is defined with
 -- ranma.module, below or in your own init.lua.
 ranma.bar {
-  left = { "mode", "workspaces" },
+  left = { "mode", "session", "workspaces" },
   center = { "title" },
   right = { "clock" },
 }
@@ -139,6 +160,13 @@ ranma.module("clock", {
 --
 -- Events: pane_open, pane_close, focus_change, workspace_change,
 -- session_switch, mode_change, config_reload. doc/CONFIG.md lists their fields.
+--
+-- Window rules: float, size or place a pane when its command (for exec panes)
+-- or its title matches a glob. Title rules apply once per pane, the first time
+-- the title matches.
+--
+--   ranma.rule { command = "htop*", float = true, size = { 70, 60 } }
+--   ranma.rule { title = "*NVIM*", workspace = 2 }
 --
 -- Modules:
 --

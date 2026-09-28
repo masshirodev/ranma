@@ -98,6 +98,12 @@ pub struct Colors {
     pub tab_active_bg: Color,
     pub tab_inactive_fg: Color,
     pub tab_inactive_bg: Color,
+    pub picker_selected_fg: Color,
+    pub picker_selected_bg: Color,
+    pub search_fg: Color,
+    pub search_bg: Color,
+    pub search_current_fg: Color,
+    pub search_current_bg: Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

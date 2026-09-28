@@ -191,6 +191,46 @@ the current workspace at 80%, its panes tiled inside it. Summoning an empty one
 opens a shell, because the point of the key is a quick terminal. Summoning it ends
 WM mode for the same reason `new_pane` does: the next thing you do is type.
 
+### Sessions swap in and out
+
+A session is a set of workspaces with its own current one. The shown session's
+set lives in the window manager's ordinary fields, and switching swaps it with the
+stored copy, so every piece of workspace logic works on "the workspaces" without
+knowing sessions exist. Hidden sessions keep running and cost nothing to draw,
+like hidden workspaces. A session whose last pane closes ends; if it was the shown
+one, the next session with panes is shown first. ranma quits only when no pane is
+left anywhere. The scratchpad is one for all sessions: a quick shell should not
+depend on which project is shown.
+
+### One picker for switching, renaming and help
+
+The pane switcher, the session switcher, the rename prompt and help are one
+component: a query line over a fuzzy-filtered list. Creating a session is typing a
+name that does not exist, the way `tmux new -A` and most fuzzy finders do it, rather
+than a separate dialog. **Help is a palette**: it lists every bind by key and
+action, filterable by either, and `Enter` runs the selected one, so it answers
+"what was the key for…" and "just do the thing" with the same window.
+
+### Copy mode is alacritty's vi mode
+
+alacritty_terminal already has a vi cursor independent of the program's, the
+motions, selections that follow the cursor, and a regex search over the whole
+grid. Copy mode is a keymap over those and nothing more. Search is incremental
+from where it started (editing the query refines the match instead of walking
+away from it), goes backward by default because history is above, and matches
+are computed for the visible rows only, capped, so a pathological regex cannot
+stall a keypress. Copies leave through OSC 52 to the host terminal, which owns
+the clipboard; ranma never touches a clipboard of its own, and programs' own OSC
+52 writes are passed through the same way. Reads are refused.
+
+### Window rules match what a terminal knows
+
+A terminal window has no X11 class. What it does know is the command an `exec`
+pane started and the title programs set. Command rules apply at open; title rules
+apply the first time a title matches, once per pane and rule, because titles change
+constantly (the shell sets one per prompt) and a pane that moves every time its
+title flickers is worse than no rule.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

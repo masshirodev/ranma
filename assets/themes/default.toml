@@ -23,6 +23,14 @@ ws_active_bg = "#89b4fa"
 ws_occupied = "#cdd6f4"
 ws_empty = "#6c7086"
 ws_urgent = "#f38ba8"
+# The session switcher, pane switcher and help: the selected row.
+picker_selected_fg = "#1e1e2e"
+picker_selected_bg = "#89b4fa"
+# Search matches in copy mode: every visible match, and the current one.
+search_fg = "#1e1e2e"
+search_bg = "#f9e2af"
+search_current_fg = "#1e1e2e"
+search_current_bg = "#fab387"
 # Tab bars of grouped (tabbed) containers.
 tab_active_fg = "#1e1e2e"
 tab_active_bg = "#89b4fa"

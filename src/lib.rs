@@ -11,6 +11,7 @@ pub mod input;
 pub mod keys;
 pub mod layout;
 pub mod pane;
+pub mod picker;
 pub mod render;
 pub mod theme;
 pub mod workspace;

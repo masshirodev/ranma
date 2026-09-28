@@ -17,6 +17,8 @@ Everything that can be pure is, and is tested without a terminal:
 | `render` | cell characters as drawn |
 | `bar` | fitting three sides into a row (budget order, truncation, wide chars), exec modules (first line, timeout killing the whole process group), wall-clock alignment |
 | `workspace` | taking panes out of the tree or the floating layer |
+| `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
+| `app::copy` | base64 for OSC 52 |
 
 Seconds to run. Run them on every change.
 
@@ -34,6 +36,12 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - typed input reaches the focused pane; tabs leave no stale cells
 - workspace 2 shows in the bar while current and disappears once left empty
 - a broken config written while running is reported at once, and the old one kept
+- help opens and filters by action
+- `leader /` finds a string in the history, and `y` puts the match on the
+  clipboard: the tmux server runs with `set-clipboard on`, so the OSC 52 write
+  lands in its buffer and is read back with `show-buffer`
+- a new session shows in the bar; when its only shell exits, it ends and main is
+  shown again
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize
@@ -43,6 +51,11 @@ It uses an empty `RANMA_CONFIG_DIR`, so it tests the defaults, not your config.
 About 15 seconds. Run it when a change touches `app`, `pane`, `render` or `input`.
 
 ## By hand
+
+Milestone 3 was exercised by hand in the harness as well: the session switcher
+creating a session by name, `(`/`)`, the pane switcher across three sessions, the
+`session_switch` hook, a command rule floating `htop` at 50%, `v e w e y` copying
+exactly "alpha beta", and a floated pane returning to its dragged position.
 
 Milestone 2 was also exercised by hand in the same harness: floating (keyboard
 move and resize), groups and `group_next`, the scratchpad (typing reaches it),

@@ -22,10 +22,12 @@ trap 'T kill-server 2>/dev/null || true' EXIT
 
 # An empty config dir: the smoke test checks the defaults, not the user's config.
 CFG=$(mktemp -d)
-T new-session -d -s s -x 120 -y 30 \
+T -f /dev/null new-session -d -s s -x 120 -y 30 \
   "env RANMA_CONFIG_DIR=$CFG SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
 
 bar() { screen | tail -1; }
+# Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.
+T set -g set-clipboard on
 wait_for '╭' || fail "no pane border drawn"
 bar | grep -q '^ 1 ' || fail "no workspaces module in the bar"
 bar | grep -Eq '[0-9]{2}:[0-9]{2} *$' || fail "no clock module in the bar"
@@ -80,6 +82,28 @@ T send-keys -t s 'time seq 1 2000000' Enter
 wait_for '^│*real' 160 || wait_for 'real' 160 || fail "flood did not finish"
 screen | grep -q 'real[0-9]' && fail "stale cells after flood"
 echo "flood: $(screen | grep -o 'real.*s' | head -1)"
+
+# Help lists the binds and filters them.
+T send-keys -t s C-b '?'; sleep 0.3
+wait_for 'keys  (type to filter' || fail "help did not open"
+T send-keys -t s 'copy_m'; sleep 0.3
+screen | grep -q 'ctrl+b \[ *copy_mode' || fail "help did not filter to copy_mode"
+T send-keys -t s Escape; sleep 0.3
+
+# Search the history and copy the match to the clipboard (OSC 52).
+T send-keys -t s 'echo needle-7x; seq 1 50' Enter; sleep 0.5
+T send-keys -t s C-b /; sleep 0.2
+T send-keys -t s 'needle-7'; sleep 0.3
+T send-keys -t s Enter; sleep 0.2
+T send-keys -t s y; sleep 0.4
+[ "$(T show-buffer 2>/dev/null)" = "needle-7" ] || fail "search + yank did not reach the clipboard"
+
+# A new session, then its only shell exits: the session ends, main comes back.
+T send-keys -t s C-b N; sleep 0.8
+bar | grep -q '^2 ' || fail "new session not shown in the bar"
+T send-keys -t s 'exit' Enter
+wait_for 'session 2 ended' || fail "an emptied session did not end"
+bar | grep -q '^ 1 ' || fail "not back on main after the session ended"
 
 # Resize the host: both panes follow.
 T resize-window -t s -x 90 -y 24
