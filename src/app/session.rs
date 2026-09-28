@@ -112,6 +112,43 @@ impl App {
         }
     }
 
+    /// `ranma open`: go to (or create) the session and workspace, open the pane
+    /// there, and name what was asked. A session created here gets this pane as
+    /// its first, not a shell next to it.
+    pub(super) fn open_spec(&mut self, spec: crate::ipc::OpenSpec) {
+        if let Some(name) = spec.session.as_deref() {
+            match self.sessions.iter().position(|s| s.name == name) {
+                Some(i) => self.switch_session(i),
+                None => {
+                    self.sessions.push(Session::new(name));
+                    let i = self.sessions.len() - 1;
+                    self.switch_session(i);
+                }
+            }
+        }
+        if let Some(t) = &spec.workspace {
+            let n = self.resolve(t);
+            self.switch_workspace(n);
+        }
+        self.scratch_shown = false;
+        match self.open_pane_at(spec.command.as_deref(), None, spec.cwd.clone()) {
+            Ok(id) => {
+                if let Some(name) = spec.name.as_deref() {
+                    self.rename_pane(id, name);
+                }
+                if let Some(name) = spec.workspace_name.as_deref() {
+                    self.rename_workspace(self.current, name);
+                }
+            }
+            Err(e) => {
+                self.status = Some(format!("ranma open failed: {e:#}"));
+                // A session made for this pane and left empty goes again.
+                self.drop_empty_sessions();
+            }
+        }
+        self.relayout();
+    }
+
     pub(super) fn rename_session(&mut self, i: usize, name: &str) {
         let name = name.trim();
         if self.sessions.get(i).is_some_and(|s| s.name == name) {

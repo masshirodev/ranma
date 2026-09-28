@@ -267,6 +267,9 @@ its path in its panes' environment. `ranma notify` in a pane reaches exactly the
 ranma it runs in; with two terminals open, each gets its own. The socket is in
 `$XDG_RUNTIME_DIR`, mode 0600, one request per connection, a few lines of text.
 Once it existed, `ranma action` came for free: any bind's action, from a script.
+`ranma open` is the one request that is more than an action: session, workspace,
+directory, command and names in one go, because doing it as a chain of actions
+means renaming "whatever is focused now" and hoping nothing moved in between.
 
 Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
 alacritty_terminal drops those sequences before ranma sees them, and catching

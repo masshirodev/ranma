@@ -266,7 +266,26 @@ or when clicked. They come from three places:
 `ranma action "workspace 3"` or `ranma action "exec htop"`, which makes ranma
 scriptable from the shell.
 
-Both find the ranma they run in through `RANMA_SOCKET`, which ranma sets in every
+`ranma open` opens a pane somewhere in particular, in one request:
+
+```sh
+ranma open --session ai --workspace empty --cwd ~/projects/kumiko \
+           --name kumiko --workspace-name kumiko -- 'ai; exec zsh'
+```
+
+| Option | Does |
+| --- | --- |
+| `--session NAME` | switch to that session, creating it if there is none (with this pane as its first) |
+| `--workspace WS` | then to that workspace: a number, `next`, `prev`, or `empty` (the first free one) |
+| `--cwd DIR` | start there instead of in the focused pane's directory |
+| `--name NAME` | name the pane, as `rename_pane` |
+| `--workspace-name NAME` | name the workspace it lands in, as `rename_workspace` |
+| `-- COMMAND` | what to run; the shell when left out. One argument is a command line for the shell (`'ai; exec zsh'`); several are a command and its arguments, quoted for you. |
+
+It is how scripts lay things out: one project per workspace, say, each started
+in its directory and named after it.
+
+All three find the ranma they run in through `RANMA_SOCKET`, which ranma sets in every
 pane; outside ranma they say so and exit 1. The socket is
 `$XDG_RUNTIME_DIR/ranma-<pid>.sock`, mode 0600, removed when ranma exits.
 

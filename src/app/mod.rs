@@ -454,17 +454,25 @@ impl App {
     // ---- panes ---------------------------------------------------------------
 
     pub fn open_pane(&mut self, command: Option<&str>) -> Result<()> {
-        self.open_pane_at(command, None)
+        self.open_pane_at(command, None, None).map(|_| ())
     }
 
     /// Open a pane; with `side`, on that side of the focused tile rather than
     /// where the layout would put it.
-    pub fn open_pane_at(&mut self, command: Option<&str>, side: Option<Dir>) -> Result<()> {
-        let spawn_cwd = self
-            .focused()
-            .or(self.last_focused)
-            .and_then(|f| self.panes.get(&f))
-            .and_then(|p| p.cwd());
+    /// With `cwd`, it starts there instead of in the focused pane's directory.
+    /// Returns the new pane.
+    pub fn open_pane_at(
+        &mut self,
+        command: Option<&str>,
+        side: Option<Dir>,
+        cwd: Option<std::path::PathBuf>,
+    ) -> Result<PaneId> {
+        let spawn_cwd = cwd.or_else(|| {
+            self.focused()
+                .or(self.last_focused)
+                .and_then(|f| self.panes.get(&f))
+                .and_then(|p| p.cwd())
+        });
         let id = self.next_id;
         self.next_id += 1;
         let focused = self.focused().filter(|f| self.active().tree.contains(*f));
@@ -524,7 +532,7 @@ impl App {
                     t.set("pane", id)?;
                     t.set("workspace", ws)
                 });
-                Ok(())
+                Ok(id)
             }
             Err(e) => {
                 self.active_mut().tree.remove(id);
@@ -750,6 +758,7 @@ impl App {
                 timeout,
             } => self.toast(text, level, timeout),
             AppEvent::Action(a) => self.run_action(a),
+            AppEvent::Open(spec) => self.open_spec(spec),
             AppEvent::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
         }
         self.after_event();
@@ -1261,7 +1270,7 @@ impl App {
                 }
             }
             Action::NewPaneAt(dir) => {
-                if let Err(e) = self.open_pane_at(None, Some(dir)) {
+                if let Err(e) = self.open_pane_at(None, Some(dir), None) {
                     self.status = Some(format!("new pane failed: {e:#}"));
                 }
             }

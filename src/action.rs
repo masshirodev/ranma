@@ -152,6 +152,11 @@ fn parse_dir(action: &str, arg: Option<&str>) -> Result<Dir, ActionError> {
     }
 }
 
+/// A workspace as a bind spells it: `3`, `next`, `prev`, `empty`.
+pub fn parse_workspace(s: &str) -> Result<WorkspaceTarget, ActionError> {
+    parse_ws("workspace", Some(s))
+}
+
 fn parse_ws(action: &str, arg: Option<&str>) -> Result<WorkspaceTarget, ActionError> {
     let arg = arg.ok_or(ActionError::MissingArg {
         action: action.into(),

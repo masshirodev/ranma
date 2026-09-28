@@ -43,6 +43,44 @@ enum Command {
         #[arg(required = true)]
         action: Vec<String>,
     },
+    /// Open a pane somewhere, e.g. `ranma open --session ai --workspace empty
+    /// --cwd ~/projects/x --name x -- 'ai; exec zsh'`. One argument after `--`
+    /// is a command line for the shell; several are a command and its arguments.
+    Open {
+        /// Switch to this session, creating it if there is none.
+        #[arg(long)]
+        session: Option<String>,
+        /// Then to this workspace: a number, next, prev or empty.
+        #[arg(long)]
+        workspace: Option<String>,
+        /// Name the pane.
+        #[arg(long)]
+        name: Option<String>,
+        /// Name the workspace it lands in.
+        #[arg(long)]
+        workspace_name: Option<String>,
+        /// Start in this directory instead of the focused pane's.
+        #[arg(long)]
+        cwd: Option<std::path::PathBuf>,
+        /// What to run; the shell when left out.
+        #[arg(last = true)]
+        command: Vec<String>,
+    },
+}
+
+/// One argument is a command line as written; several are quoted one by one,
+/// the way ssh treats what follows the host.
+fn command_line(args: &[String]) -> Option<String> {
+    match args {
+        [] => None,
+        [one] => Some(one.clone()),
+        many => Some(
+            many.iter()
+                .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+    }
 }
 
 fn main() -> ExitCode {
@@ -56,6 +94,33 @@ fn main() -> ExitCode {
                 text,
             } => ipc::toast_request(&text.join(" "), urgent, timeout),
             Command::Action { action } => format!("action\n{}", action.join(" ")),
+            Command::Open {
+                session,
+                workspace,
+                name,
+                workspace_name,
+                cwd,
+                command,
+            } => {
+                let workspace = match workspace.map(|w| ranma::action::parse_workspace(&w)) {
+                    None => None,
+                    Some(Ok(w)) => Some(w),
+                    Some(Err(e)) => {
+                        eprintln!("ranma: --workspace: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+                // The pane runs this with the shell, relative paths from here.
+                let cwd = cwd.map(|c| std::path::absolute(&c).unwrap_or(c));
+                ipc::open_request(&ipc::OpenSpec {
+                    session,
+                    workspace,
+                    name,
+                    workspace_name,
+                    cwd,
+                    command: command_line(&command),
+                })
+            }
         };
         return match ipc::send(&request) {
             Ok(()) => ExitCode::SUCCESS,
@@ -111,5 +176,24 @@ fn main() -> ExitCode {
             eprintln!("ranma: {e:#}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::command_line;
+
+    #[test]
+    fn one_argument_is_a_command_line_several_are_quoted() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(command_line(&[]), None);
+        assert_eq!(
+            command_line(&s(&["ai; exec zsh"])).as_deref(),
+            Some("ai; exec zsh")
+        );
+        assert_eq!(
+            command_line(&s(&["echo", "it's", "a b"])).as_deref(),
+            Some("'echo' 'it'\\''s' 'a b'")
+        );
     }
 }

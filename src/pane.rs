@@ -44,6 +44,8 @@ pub enum AppEvent {
     },
     /// An action from `ranma action`.
     Action(crate::action::Action),
+    /// A pane from `ranma open`.
+    Open(crate::ipc::OpenSpec),
 }
 
 /// Forwards a pane's terminal events to the UI thread.

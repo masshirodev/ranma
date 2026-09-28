@@ -10,6 +10,7 @@
 //! ```text
 //! toast\n<normal|urgent>\n<timeout seconds, or empty>\n<text...>
 //! action\n<action, as in a bind>
+//! open\n<key>=<value>...\n--\n<command line, or nothing for a shell>
 //! ```
 //!
 //! answered with `ok` or `error: <why>`.
@@ -24,7 +25,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
-use crate::action::Action;
+use crate::action::{Action, WorkspaceTarget};
 use crate::pane::AppEvent;
 use crate::toast::Level;
 
@@ -94,6 +95,87 @@ fn serve(stream: UnixStream, tx: &Sender<AppEvent>) {
     let _ = (&stream).write_all(reply.as_bytes());
 }
 
+/// Where and how `ranma open` opens a pane. Everything is optional: with none
+/// of it, it is `new_pane`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct OpenSpec {
+    /// Switch to this session first, creating it if there is none.
+    pub session: Option<String>,
+    /// Then to this workspace (`3`, `next`, `empty`, ...).
+    pub workspace: Option<WorkspaceTarget>,
+    /// Name the new pane (as rename_pane).
+    pub name: Option<String>,
+    /// Name the workspace it lands in (as rename_workspace).
+    pub workspace_name: Option<String>,
+    /// Start here instead of the focused pane's directory.
+    pub cwd: Option<PathBuf>,
+    /// Run this through the shell instead of starting the shell.
+    pub command: Option<String>,
+}
+
+/// Build an `open` request.
+pub fn open_request(spec: &OpenSpec) -> String {
+    let mut s = String::from("open\n");
+    let mut kv = |k: &str, v: &str| s.push_str(&format!("{k}={v}\n"));
+    if let Some(v) = &spec.session {
+        kv("session", v);
+    }
+    if let Some(v) = &spec.workspace {
+        kv("workspace", &v.to_string());
+    }
+    if let Some(v) = &spec.name {
+        kv("name", v);
+    }
+    if let Some(v) = &spec.workspace_name {
+        kv("workspace_name", v);
+    }
+    if let Some(v) = &spec.cwd {
+        kv("cwd", &v.display().to_string());
+    }
+    s.push_str("--\n");
+    if let Some(c) = &spec.command {
+        s.push_str(c);
+    }
+    s
+}
+
+fn parse_open<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<OpenSpec> {
+    let mut spec = OpenSpec::default();
+    for line in lines.by_ref() {
+        if line == "--" {
+            break;
+        }
+        let Some((k, v)) = line.split_once('=') else {
+            bail!("`{line}` is not key=value");
+        };
+        let v = v.trim();
+        if v.is_empty() {
+            bail!("`{k}` is empty");
+        }
+        match k {
+            "session" => spec.session = Some(v.into()),
+            "workspace" => {
+                spec.workspace =
+                    Some(crate::action::parse_workspace(v).map_err(|e| anyhow::anyhow!("{e}"))?)
+            }
+            "name" => spec.name = Some(v.into()),
+            "workspace_name" => spec.workspace_name = Some(v.into()),
+            "cwd" => {
+                let p = PathBuf::from(v);
+                if !p.is_dir() {
+                    bail!("cwd `{v}` is not a directory");
+                }
+                spec.cwd = Some(p);
+            }
+            _ => bail!("unknown field `{k}`"),
+        }
+    }
+    let command: Vec<&str> = lines.collect();
+    let command = command.join("\n");
+    spec.command = (!command.trim().is_empty()).then_some(command);
+    Ok(spec)
+}
+
 /// A request's text, as the event it asks for.
 pub fn parse(text: &str) -> Result<AppEvent> {
     let mut lines = text.lines();
@@ -122,6 +204,7 @@ pub fn parse(text: &str) -> Result<AppEvent> {
                 timeout,
             })
         }
+        Some("open") => Ok(AppEvent::Open(parse_open(lines)?)),
         Some("action") => {
             let spec = lines.next().unwrap_or("").trim();
             let action: Action = spec.parse().map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -195,6 +278,36 @@ mod tests {
             ("action\nfly", "fly"),
             ("dance", "dance"),
             ("", "empty"),
+        ] {
+            let err = format!("{:#}", parse(req).unwrap_err());
+            assert!(err.contains(needle), "{req:?}: {err}");
+        }
+    }
+
+    #[test]
+    fn open_requests_round_trip_and_are_checked() {
+        let spec = OpenSpec {
+            session: Some("ai-workspace".into()),
+            workspace: Some(WorkspaceTarget::Empty),
+            name: Some("kumiko".into()),
+            workspace_name: Some("kumiko".into()),
+            cwd: Some(std::env::temp_dir()),
+            command: Some("ai; exec zsh".into()),
+        };
+        match parse(&open_request(&spec)).unwrap() {
+            AppEvent::Open(got) => assert_eq!(got, spec),
+            other => panic!("{other:?}"),
+        }
+        // Nothing at all is a plain new pane.
+        match parse(&open_request(&OpenSpec::default())).unwrap() {
+            AppEvent::Open(got) => assert_eq!(got, OpenSpec::default()),
+            other => panic!("{other:?}"),
+        }
+        for (req, needle) in [
+            ("open\ncolour=red\n--\n", "colour"),
+            ("open\ncwd=/definitely/not/here\n--\n", "not a directory"),
+            ("open\nworkspace=0\n--\n", "workspace"),
+            ("open\nname\n--\n", "key=value"),
         ] {
             let err = format!("{:#}", parse(req).unwrap_err());
             assert!(err.contains(needle), "{req:?}: {err}");
