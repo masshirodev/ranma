@@ -6,20 +6,14 @@
 //! thread also writes.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::io::Write;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::event::Event as TermEvent;
 use alacritty_terminal::vte::ansi::CursorShape;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{
-    DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-    EnableFocusChange, EnableMouseCapture, Event, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
-    MouseEventKind,
-};
-use crossterm::execute;
+use crossterm::event::{Event, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use mlua::{Function, Lua, Table, Value};
 
 use crate::action::{Action, Dir, WorkspaceTarget};
@@ -28,18 +22,20 @@ use crate::config::{self, BindAction, Config, Event as HookEvent, Layout, Module
 use crate::input;
 use crate::layout::{self, PaneId, Placement, Rect, Split, TabBar};
 use crate::pane::{AppEvent, Pane, Size, SpawnOptions};
-use crate::render::{self, CursorState};
+use crate::render::CursorState;
 use crate::theme::{BarPosition, BorderStyle};
 use crate::workspace::Workspace;
 
 mod copy;
 mod drag;
 mod rules;
+mod run;
 mod session;
 mod switch;
 
 pub use copy::CopyState;
 pub use drag::drop_half;
+pub use run::{run, run_server};
 use session::Session;
 pub use switch::PickerLayout;
 
@@ -186,6 +182,8 @@ pub struct App {
     last_click: Option<(Instant, u16, u16, u8)>,
     /// The title last given to the host terminal (see `announce`).
     host_title: String,
+    /// The detach action ran; the event loop sends the client away.
+    detach_requested: bool,
 }
 
 impl App {
@@ -237,6 +235,7 @@ impl App {
             selection_pane: None,
             last_click: None,
             host_title: String::new(),
+            detach_requested: false,
         };
         app.schedule_modules(Instant::now());
         app
@@ -781,6 +780,11 @@ impl App {
             AppEvent::Action(a) => self.run_action(a),
             AppEvent::Open(spec) => self.open_spec(spec),
             AppEvent::UpdateAvailable(b) => self.update_found(b),
+            // The event loop (run.rs) deals with clients itself.
+            AppEvent::Attach { .. }
+            | AppEvent::ClientInput(..)
+            | AppEvent::ClientGone(_)
+            | AppEvent::Status(_) => {}
             AppEvent::ConfigChanged => self.reload_at = Some(Instant::now() + RELOAD_DEBOUNCE),
         }
         self.after_event();
@@ -1444,6 +1448,7 @@ impl App {
                 }
             }
             Action::ToggleFloating => self.toggle_floating(),
+            Action::Detach => self.detach_requested = true,
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
@@ -2072,7 +2077,7 @@ fn chord_bytes(chord: crate::keys::Chord, modes: input::PaneModes) -> Option<Vec
     input::encode_key(&KeyEvent::new(code, mods), modes)
 }
 
-fn spawn_input_thread(tx: Sender<AppEvent>) {
+pub(super) fn spawn_input_thread(tx: Sender<AppEvent>) {
     std::thread::Builder::new()
         .name("input".into())
         .spawn(move || {
@@ -2100,7 +2105,7 @@ fn spawn_input_thread(tx: Sender<AppEvent>) {
 /// inotify reports changes to a symlink's *target* only to a watch on the
 /// target's own directory. So the directories behind any such links are watched
 /// too, or saving through the link would never reload.
-fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
+pub(super) fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
     use notify::{RecursiveMode, Watcher};
     let dir = config::config_dir().filter(|d| d.is_dir())?;
     let mut w = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
@@ -2147,127 +2152,7 @@ fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify
     out
 }
 
-/// Run the window manager until the last pane closes or `quit`.
-pub fn run(config: Config) -> Result<()> {
-    let (tx, rx): (Sender<AppEvent>, Receiver<AppEvent>) = mpsc::channel();
-    // ratatui::init sets raw mode and the alternate screen, and installs a panic
-    // hook that restores the terminal before the panic message prints.
-    let mut terminal = ratatui::try_init().context("setting up the terminal")?;
-    let result = (|| -> Result<()> {
-        execute!(
-            terminal.backend_mut(),
-            EnableBracketedPaste,
-            EnableFocusChange
-        )?;
-        // Keep the host's title to give back on exit (xterm's title stack).
-        terminal.backend_mut().write_all(b"\x1b[22;0t")?;
-        // Before the input thread exists: the replies are read straight off the
-        // terminal here, and none may be left for crossterm to take for keys.
-        let (host_colors, typed_early) = crate::hostcolors::query(Duration::from_millis(300));
-        let size = terminal.size()?;
-        let mut app = App::new(config, tx.clone(), size.width, size.height);
-        app.host_colors = host_colors;
-        // Before the first pane: panes learn the socket from their environment.
-        // Not fatal: without it ranma works, only `ranma notify` does not.
-        let _ipc = match crate::ipc::listen(tx.clone()) {
-            Ok(l) => Some(l),
-            Err(e) => {
-                app.status = Some(format!("ranma notify unavailable: {e:#}"));
-                None
-            }
-        };
-        app.open_pane(None).context("starting the first pane")?;
-        // Keys typed while ranma was starting were read with the colour
-        // replies; they were meant for the shell.
-        if !typed_early.is_empty()
-            && let Some(p) = app.focused_pane()
-        {
-            p.write(typed_early);
-        }
-        app.after_event();
-        spawn_input_thread(tx.clone());
-        if app.config.settings.updates != crate::config::UpdateMode::Off {
-            let hours = app.config.settings.update_check_hours;
-            crate::update::spawn_checker(tx.clone(), Duration::from_secs_f64(hours * 3600.0));
-        }
-        let _watcher = watch_config(tx);
-
-        let mut last_draw = Instant::now() - FRAME;
-        let mut last_cursor: Option<CursorState> = None;
-        let mut mouse = false;
-        loop {
-            // Idle means blocked here: no timeout unless a frame is owed or a timer
-            // (a bar module, a pending reload) is due. Zero frames, zero wakeups.
-            let frame_due = app.dirty.then(|| last_draw + FRAME);
-            let deadline = [frame_due, app.next_deadline()].into_iter().flatten().min();
-            let first = match deadline {
-                Some(d) => match rx.recv_timeout(d.saturating_duration_since(Instant::now())) {
-                    Ok(ev) => Some(ev),
-                    Err(RecvTimeoutError::Timeout) => None,
-                    Err(RecvTimeoutError::Disconnected) => break,
-                },
-                None => match rx.recv() {
-                    Ok(ev) => Some(ev),
-                    Err(_) => break,
-                },
-            };
-            if let Some(ev) = first {
-                app.handle(ev);
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle(ev);
-                }
-            }
-            app.run_timers(Instant::now());
-            app.after_event();
-            if !app.host_out.is_empty() {
-                let out = terminal.backend_mut();
-                for bytes in app.host_out.drain(..) {
-                    out.write_all(&bytes)?;
-                }
-                out.flush()?;
-            }
-            if app.quit {
-                break;
-            }
-            if app.wants_mouse() != mouse {
-                mouse = app.wants_mouse();
-                if mouse {
-                    execute!(terminal.backend_mut(), EnableMouseCapture)?;
-                } else {
-                    execute!(terminal.backend_mut(), DisableMouseCapture)?;
-                }
-            }
-            if app.dirty && last_draw.elapsed() >= FRAME {
-                app.begin_frame();
-                let mut cursor = None;
-                terminal.draw(|f| cursor = render::draw(f, &app))?;
-                if cursor != last_cursor {
-                    if let Some(c) = cursor {
-                        execute!(terminal.backend_mut(), cursor_style(c))?;
-                    }
-                    last_cursor = cursor;
-                }
-                last_draw = Instant::now();
-            }
-        }
-        Ok(())
-    })();
-
-    // The title from before ranma started, back.
-    let _ = terminal.backend_mut().write_all(b"\x1b[23;0t");
-    let _ = execute!(
-        terminal.backend_mut(),
-        DisableMouseCapture,
-        DisableBracketedPaste,
-        DisableFocusChange,
-        SetCursorStyle::DefaultUserShape
-    );
-    let _ = terminal.backend_mut().flush();
-    ratatui::restore();
-    result
-}
-
-fn cursor_style(c: CursorState) -> SetCursorStyle {
+pub(super) fn cursor_style(c: CursorState) -> SetCursorStyle {
     match (c.shape, c.blinking) {
         (CursorShape::Beam, true) => SetCursorStyle::BlinkingBar,
         (CursorShape::Beam, false) => SetCursorStyle::SteadyBar,

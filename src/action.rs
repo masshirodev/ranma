@@ -49,6 +49,8 @@ pub enum Action {
     CycleFloats,
     /// Pull ranma's source and install it, in a floating pane.
     Update,
+    /// Leave this terminal; the server and everything in it keep running.
+    Detach,
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -113,6 +115,7 @@ impl Action {
                 | Action::RenamePane(_)
                 | Action::Quit { .. }
                 | Action::Update
+                | Action::Detach
         )
     }
 }
@@ -231,6 +234,7 @@ impl FromStr for Action {
             "toggle_floating" => no_arg(Action::ToggleFloating),
             "cycle_floats" => no_arg(Action::CycleFloats),
             "update" => no_arg(Action::Update),
+            "detach" => no_arg(Action::Detach),
             "toggle_group" => no_arg(Action::ToggleGroup),
             "group_next" => no_arg(Action::GroupNext),
             "group_prev" => no_arg(Action::GroupPrev),
@@ -317,6 +321,7 @@ impl fmt::Display for Action {
             Action::ToggleFloating => f.write_str("toggle_floating"),
             Action::CycleFloats => f.write_str("cycle_floats"),
             Action::Update => f.write_str("update"),
+            Action::Detach => f.write_str("detach"),
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),

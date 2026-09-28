@@ -17,27 +17,56 @@ for what to avoid, and its bugs cluster in four places:
 | --- | --- | --- |
 | Scope | agent inbox, mail overlay, remote hosts, worktree fan-out, web and SSH servers, multi-client tree sync | Not in scope. See [Non-goals](#non-goals). |
 | Memory | 4 MB parser buffer per pane on both sides (#158), client holds every pane's scrollback (#157), RSS 2-3x heap (#160), queues bounded by slots not bytes (#159) | One process, one copy of each grid, byte-bounded queues. |
-| Daemon/client desync | blank lines after reattach (#123), scrollback replaced not extended (#146), scrolled pane drifts (#143) | No daemon. Nothing to desync. |
+| Daemon/client desync | blank lines after reattach (#123), scrollback replaced not extended (#146), scrolled pane drifts (#143) | A server that owns everything and a client that holds nothing: nothing to desync. |
 | Input guessing | IME text taken for a paste (#113), vim keys taken for a paste (#89), non-Latin layouts break binds (#202), mouse motion sent as keys (#78) | Pass bytes through raw outside WM mode; trust bracketed paste instead of guessing. |
 
 ## Decisions
 
-### One process, sessions inside it — no daemon
+### A daemon, and a client that holds nothing
 
-Switching between running sessions is wanted. Surviving the terminal closing, or a
-reboot, is not: no multiplexer has made that useful here, and it is exactly the
-machinery that produces tuios's desync bugs.
+**Changed 2026-09-28.** The first version had no daemon: sessions lived in the
+one ranma process, and closing its terminal ended them. That was decided without
+it being clear that it meant *closing the terminal kills every shell and job in
+it* — which, it turned out, is a must-not. So ranma is a server now, and what runs
+in a terminal is a client.
 
-So a **session** lives in the ranma process. Switching sessions changes which tree
-is drawn; the others keep running, keep parsing their output, keep growing
-scrollback, and cost nothing to render because they are not drawn.
+The reason for "no daemon" still stands, though, and shaped how this was done:
+tuios's worst bugs (#123 blank lines after reattach, #143/#146 scrollback lost or
+drifting) come from a client that keeps its own copy of the screen and has to
+stay in step with the server's. So here **the server owns everything and the
+client owns nothing**:
 
-The accepted trade-off: closing the terminal that runs ranma ends every session in
-it, like closing a tab.
+- The **server** is the whole window manager — panes, emulators, layout,
+  sessions, Lua, rendering — unchanged, except that a frame's bytes go into a
+  buffer sent to the attached client instead of to a terminal of its own. With no
+  client it keeps running and skips drawing.
+- The **client** is a pipe: raw mode and the alternate screen on its terminal,
+  keys, mouse and resizes to the server (crossterm's events, as JSON frames),
+  the server's bytes to the terminal. No screen, no scrollback, nothing to fall
+  out of step. On attach the server starts its screen over at the client's size
+  and draws everything.
+- **Several servers, one per terminal.** `ranma` attaches to the most recently
+  used server no terminal shows, and starts a new one only when every server is
+  on screen. One shared server would have made a second terminal (a second
+  monitor) take the first one's screen; this is the rule tuios was set up with on
+  the PC. On a server reached over SSH, it is exactly "resume what the dropped
+  connection left". `ranma attach NAME` takes a server explicitly, telling the
+  terminal that had it.
+- **Detaching** is closing the terminal, losing the connection, or `detach`
+  (`leader d`). **Quitting** (`leader Delete`, `ranma kill NAME`) ends the server
+  and hangs up every shell in it, waiting for them, so their jobs go too.
+- The server runs in a session of its own (setsid), so no terminal's hangup
+  reaches it, and logs to `~/.cache/ranma/server-NAME.log`. Its sockets are
+  `$XDG_RUNTIME_DIR/ranma/NAME.sock`, mode 0600, one per server, also carrying
+  `ranma notify`/`action`/`open`.
+- A server keeps the binary it started with; an upgraded client attaching to an
+  older server says so. `--standalone` runs the old way, in one terminal only.
 
-A possible later addition that does *not* reopen this decision: saving each
-session's layout, working directories and commands on exit, and offering to respawn
-them on launch. New processes, same shape, nothing kept alive, nothing to desync.
+Two things it forced: ratatui's resize and clear ask the backend for the
+terminal's size, which a server does not have, so the server starts a fresh
+ratatui terminal of the known size (and clears with the escape sequence) instead;
+and a client attaching a server to itself (from inside one of its own panes) is
+refused, as tmux refuses it.
 
 ### The model: sessions, workspaces, a tree, a float layer
 
@@ -346,7 +375,8 @@ Rust, for predictable latency without a GC, and for the emulator:
 
 ## Non-goals
 
-- Detach/reattach, a server/client split, sessions surviving the terminal.
+- Keeping sessions across a reboot. Processes cannot survive one; saving
+  layouts to respawn is a separate, later idea (see ROADMAP).
 - Remote hosts, SSH or web servers, multi-client sync.
 - An agent inbox or any AI integration in the core. A Lua hook can do that for
   someone who wants it.

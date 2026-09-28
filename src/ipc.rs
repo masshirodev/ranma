@@ -61,10 +61,41 @@ impl Drop for Listening {
 }
 
 /// Start listening. Requests become `AppEvent`s on `tx`.
+/// Where ranma servers put their sockets: `$XDG_RUNTIME_DIR/ranma/<name>.sock`,
+/// private to the user.
+pub fn server_dir() -> PathBuf {
+    match std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
+        Some(dir) => PathBuf::from(dir).join("ranma"),
+        // SAFETY: getuid cannot fail.
+        None => std::env::temp_dir().join(format!("ranma-{}", unsafe { libc::getuid() })),
+    }
+}
+
+pub fn server_socket(name: &str) -> PathBuf {
+    server_dir().join(format!("{name}.sock"))
+}
+
+/// Listen on this process's own socket (a ranma started with --standalone).
 pub fn listen(tx: Sender<AppEvent>) -> Result<Listening> {
-    let path = default_path();
-    // A leftover from a crashed ranma with the same pid; nothing else can own it.
-    let _ = std::fs::remove_file(&path);
+    listen_at(tx, default_path())
+}
+
+/// Listen on `path`: requests from `ranma notify`/`action`/`open`, clients
+/// attaching, and `status`. Each connection gets a thread of its own, since an
+/// attached client stays connected for as long as it runs.
+pub fn listen_at(tx: Sender<AppEvent>, path: PathBuf) -> Result<Listening> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
+    // A socket nobody answers on is left over from a crash; one that answers
+    // belongs to a live ranma, and binding over it would steal its clients.
+    if path.exists() {
+        if UnixStream::connect(&path).is_ok() {
+            bail!("a ranma is already listening on {}", path.display());
+        }
+        let _ = std::fs::remove_file(&path);
+    }
     let listener =
         UnixListener::bind(&path).with_context(|| format!("binding {}", path.display()))?;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
@@ -73,26 +104,107 @@ pub fn listen(tx: Sender<AppEvent>) -> Result<Listening> {
         .name("ipc".into())
         .spawn(move || {
             for stream in listener.incoming().flatten() {
-                serve(stream, &tx);
+                let tx = tx.clone();
+                let _ = std::thread::Builder::new()
+                    .name("ipc-conn".into())
+                    .spawn(move || serve(stream, &tx));
             }
         })?;
     Ok(Listening(path))
 }
 
+static NEXT_CLIENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 fn serve(stream: UnixStream, tx: &Sender<AppEvent>) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
-    let mut text = String::new();
-    let reply = match (&stream).take(MAX_REQUEST).read_to_string(&mut text) {
-        Ok(_) => match parse(&text) {
-            Ok(ev) => {
-                let _ = tx.send(ev);
-                "ok\n".to_string()
-            }
-            Err(e) => format!("error: {e}\n"),
-        },
-        Err(e) => format!("error: reading the request: {e}\n"),
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let mut reader = BufReader::new(&stream);
+    let mut first = String::new();
+    if reader.read_line(&mut first).is_err() {
+        return;
+    }
+    match first.trim_end() {
+        "attach" => serve_client(stream.try_clone().ok(), reader, tx),
+        "status" => {
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let _ = tx.send(AppEvent::Status(reply_tx));
+            let reply = match reply_rx.recv_timeout(Duration::from_secs(2)) {
+                Ok(st) => serde_json::to_string(&st).unwrap_or_default() + "\n",
+                Err(_) => "error: no answer\n".into(),
+            };
+            let _ = (&stream).write_all(reply.as_bytes());
+        }
+        _ => {
+            let mut rest = String::new();
+            let reply = match reader.take(MAX_REQUEST).read_to_string(&mut rest) {
+                Ok(_) => match parse(&format!("{first}{rest}")) {
+                    Ok(ev) => {
+                        let _ = tx.send(ev);
+                        "ok\n".to_string()
+                    }
+                    Err(e) => format!("error: {e}\n"),
+                },
+                Err(e) => format!("error: reading the request: {e}\n"),
+            };
+            let _ = (&stream).write_all(reply.as_bytes());
+        }
+    }
+}
+
+/// An attached client: its first frame is the hello, then events until it
+/// goes. Everything it sends becomes an event for the window manager.
+fn serve_client(
+    writer: Option<UnixStream>,
+    mut reader: BufReader<&UnixStream>,
+    tx: &Sender<AppEvent>,
+) {
+    let Some(writer) = writer else {
+        return;
     };
-    let _ = (&stream).write_all(reply.as_bytes());
+    // An attached client may sit idle for hours: no read timeout from here on.
+    let _ = writer.set_read_timeout(None);
+    let id = NEXT_CLIENT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let hello = match crate::proto::read_to_server(&mut reader) {
+        Ok(Some(crate::proto::ToServer::Hello(h))) => h,
+        _ => return,
+    };
+    if tx
+        .send(AppEvent::Attach {
+            id,
+            writer,
+            hello: Box::new(hello),
+        })
+        .is_err()
+    {
+        return;
+    }
+    loop {
+        match crate::proto::read_to_server(&mut reader) {
+            Ok(Some(crate::proto::ToServer::Event(ev))) => {
+                if tx.send(AppEvent::ClientInput(id, ev)).is_err() {
+                    return;
+                }
+            }
+            Ok(Some(crate::proto::ToServer::Hello(_))) => {}
+            Ok(None) | Err(_) => {
+                let _ = tx.send(AppEvent::ClientGone(id));
+                return;
+            }
+        }
+    }
+}
+
+/// Ask the server at `path` how it is.
+pub fn status(path: &Path) -> Result<crate::proto::Status> {
+    let mut stream = UnixStream::connect(path)?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    stream.write_all(b"status\n")?;
+    stream.shutdown(std::net::Shutdown::Write)?;
+    let mut line = String::new();
+    BufReader::new(stream).read_line(&mut line)?;
+    if let Some(e) = line.strip_prefix("error: ") {
+        bail!("{}", e.trim());
+    }
+    Ok(serde_json::from_str(line.trim())?)
 }
 
 /// Where and how `ranma open` opens a pane. Everything is optional: with none
@@ -220,7 +332,12 @@ pub fn send(request: &str) -> Result<()> {
     let path = std::env::var_os(ENV)
         .filter(|p| !p.is_empty())
         .context("not inside ranma (RANMA_SOCKET is not set)")?;
-    let mut stream = UnixStream::connect(&path)
+    send_to(Path::new(&path), request)
+}
+
+/// Send a request to the ranma listening at `path`.
+pub fn send_to(path: &Path, request: &str) -> Result<()> {
+    let mut stream = UnixStream::connect(path)
         .with_context(|| format!("connecting to ranma at {}", Path::new(&path).display()))?;
     stream.write_all(request.as_bytes())?;
     stream.shutdown(std::net::Shutdown::Write)?;

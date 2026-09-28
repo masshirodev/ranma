@@ -18,16 +18,38 @@ wait_for() { # pattern, tries
   for _ in $(seq 1 "${2:-40}"); do screen | grep -q -- "$1" && return 0; sleep 0.25; done
   return 1
 }
-trap 'T kill-server 2>/dev/null || true' EXIT
 
 # An empty config dir: the smoke test checks the defaults, not the user's config.
 CFG=$(mktemp -d)
+# Private runtime and cache dirs: the servers started here have their own
+# sockets and logs, and can never be found by (or attach to) the user's.
+RT=$(mktemp -d)
+CACHE=$(mktemp -d)
+ENV="env XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+# The server process of this test (the client is a separate, thinner process).
+server_pid() {
+  for p in $(pgrep -x ranma); do
+    if tr '\0' ' ' < "/proc/$p/cmdline" | grep -q ' server ' &&
+      tr '\0' '\n' < "/proc/$p/environ" | grep -qx "XDG_RUNTIME_DIR=$RT"; then
+      echo "$p"
+    fi
+  done | tail -1
+}
+cleanup() {
+  T kill-server 2>/dev/null || true
+  # Servers outlive their terminals by design; the test's must not outlive it.
+  for p in $(pgrep -x ranma); do
+    tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
+  done
+  true
+}
+trap cleanup EXIT
 # Host colours are set in the server's config, so they exist before ranma
 # starts and asks for them (setting them after new-session is a race).
 TCONF=$(mktemp)
 echo "set -g window-style 'fg=#cdd6f4,bg=#1e1e2e'" > "$TCONF"
 T -f "$TCONF" new-session -d -s s -x 120 -y 30 \
-  "env RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
+  "$ENV PS1='$ ' $BIN; echo RANMA_EXIT=\$?; sleep 30"
 
 bar() { screen | tail -1; }
 # Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.
@@ -96,7 +118,8 @@ wait_for 'config error, kept the old one' 8 || fail "reload error not shown"
 rm "$CFG/init.lua"
 
 # Idle: zero CPU over five seconds.
-PID=$(pgrep -nx ranma)
+PID=$(server_pid)
+[ -n "$PID" ] || fail "no ranma server process found"
 ticks() { awk '{print $14+$15}' "/proc/$PID/stat"; }
 a=$(ticks); sleep 5; b=$(ticks)
 [ $((b - a)) -le 1 ] || fail "idle CPU: $((b - a)) ticks in 5s"
@@ -125,7 +148,7 @@ wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
-T send-keys -t s "RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 $BIN" Enter
+T send-keys -t s "$BIN" Enter
 wait_for '│ 1 ' 20 || fail "the inner ranma did not start"
 bar | grep -q ' ⧉ ' || fail "the outer ranma does not show the passthrough hint"
 T send-keys -t s C-b; sleep 0.4
@@ -134,6 +157,24 @@ bar | grep -q ' WM ' && fail "the outer ranma took the leader"
 T send-keys -t s Escape; sleep 0.3
 T send-keys -t s C-b; sleep 0.2; T send-keys -t s DC; sleep 0.3; T send-keys -t s y; sleep 1
 bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"
+
+# The daemon: a second terminal gets its own server (the first one is shown),
+# detaching and closing the terminal both leave it running, and the next
+# `ranma` finds it again with its shell as it was.
+T new-session -d -s d -x 100 -y 20 "bash --norc"
+sleep 0.3
+T send-keys -t d "$ENV $BIN" Enter
+dscreen() { T capture-pane -p -t d; }
+for _ in $(seq 1 40); do dscreen | grep -q '╭' && break; sleep 0.25; done
+T send-keys -t d 'echo daemon-marker' Enter; sleep 0.4
+T send-keys -t d C-b d; sleep 0.8
+dscreen | grep -q '\[ranma 2: detached\]' || fail "leader d did not detach server 2 ($(dscreen | tail -3))"
+T send-keys -t d "clear; $ENV $BIN" Enter; sleep 1.5
+dscreen | grep -q 'daemon-marker' || fail "reattaching did not bring back server 2's screen"
+T kill-session -t d; sleep 0.8
+$ENV $BIN ls | grep -q '^2 *detached' || fail "server 2 did not survive its terminal closing ($($ENV $BIN ls))"
+$ENV $BIN kill 2; sleep 0.8
+$ENV $BIN ls | grep -q '^2 ' && fail "ranma kill 2 left it running"
 
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3

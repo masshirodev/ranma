@@ -6,6 +6,7 @@
 pub mod action;
 pub mod app;
 pub mod bar;
+pub mod client;
 pub mod config;
 pub mod hostcolors;
 pub mod input;
@@ -14,6 +15,7 @@ pub mod keys;
 pub mod layout;
 pub mod pane;
 pub mod picker;
+pub mod proto;
 pub mod render;
 pub mod theme;
 pub mod toast;

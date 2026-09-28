@@ -24,13 +24,32 @@ struct Cli {
     #[arg(long)]
     dump_theme: bool,
 
+    /// Run in this terminal only, without a server: closing the terminal ends
+    /// it. For tests, and for when a server is not wanted.
+    #[arg(long)]
+    standalone: bool,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
 
-/// Commands for the ranma this shell runs in (found through RANMA_SOCKET).
+/// Commands. Without one, ranma attaches this terminal to a server: the most
+/// recently used one no terminal shows, or a new one.
 #[derive(Subcommand)]
 enum Command {
+    /// List the ranma servers, and which ones a terminal is showing.
+    Ls,
+    /// Attach this terminal to the server NAME (taking it from another
+    /// terminal showing it), or start one by that name.
+    Attach { name: String },
+    /// Quit the server NAME and everything in it, without asking.
+    Kill { name: String },
+    /// Run a server (what `ranma` starts; not for use by hand).
+    #[command(hide = true)]
+    Server {
+        #[arg(long)]
+        name: String,
+    },
     /// Show a toast, e.g. `make && ranma notify "build done"`.
     Notify {
         /// Draw it in the urgent style.
@@ -156,20 +175,37 @@ fn command_line(args: &[String]) -> Option<String> {
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
 
-    if let Some(Command::Update { check }) = cli.command {
-        return update(check);
+    match &cli.command {
+        Some(Command::Update { check }) => return update(*check),
+        Some(Command::Ls) => return ranma::client::list(),
+        Some(Command::Kill { name }) => {
+            return match ranma::client::kill(name) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("ranma: {e:#}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        _ => {}
     }
 
-    if let Some(cmd) = cli.command {
+    if let Some(cmd) = cli
+        .command
+        .take_if(|c| !matches!(c, Command::Attach { .. } | Command::Server { .. }))
+    {
         let request = match cmd {
             Command::Notify {
                 urgent,
                 timeout,
                 text,
             } => ipc::toast_request(&text.join(" "), urgent, timeout),
-            Command::Update { .. } => unreachable!("handled above"),
+            Command::Update { .. } | Command::Ls | Command::Kill { .. } => {
+                unreachable!("handled above")
+            }
+            Command::Attach { .. } | Command::Server { .. } => unreachable!("handled below"),
             Command::Action { action } => format!("action\n{}", action.join(" ")),
             Command::Open {
                 session,
@@ -251,7 +287,24 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    match ranma::app::run(cfg) {
+    // The config was loaded (and so checked) above: an error there exits 1
+    // before a server is involved, and a shell startup that runs ranma falls
+    // back to a plain shell with the message on screen.
+    let result = match (&cli.command, cli.standalone) {
+        (Some(Command::Server { name }), _) => ranma::app::run_server(cfg, name),
+        (Some(Command::Attach { name }), _) => ranma::client::run(Some(name)).map(|_| ()),
+        (_, true) => ranma::app::run(cfg),
+        (_, false) => {
+            return match ranma::client::run(None) {
+                Ok(code) => code,
+                Err(e) => {
+                    eprintln!("ranma: {e:#}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("ranma: {e:#}");

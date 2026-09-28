@@ -48,6 +48,18 @@ pub enum AppEvent {
     Open(crate::ipc::OpenSpec),
     /// The source has commits this binary lacks (see `update`).
     UpdateAvailable(crate::update::Behind),
+    /// A client attached (see `proto`): where to send its output, and its hello.
+    Attach {
+        id: u64,
+        writer: std::os::unix::net::UnixStream,
+        hello: Box<crate::proto::Hello>,
+    },
+    /// Input from the client with this id.
+    ClientInput(u64, crossterm::event::Event),
+    /// The client with this id disconnected.
+    ClientGone(u64),
+    /// Someone asks how this server is (`ranma ls`, a client choosing a server).
+    Status(Sender<crate::proto::Status>),
 }
 
 /// Forwards a pane's terminal events to the UI thread.
@@ -113,6 +125,8 @@ pub struct Pane {
     pub name: Option<String>,
     /// The pane's own child (the shell, or the `exec` command).
     pub pid: u32,
+    /// The PTY's I/O thread; it drops the PTY (hanging up the child) as it ends.
+    io_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 pub struct SpawnOptions<'a> {
@@ -188,9 +202,16 @@ impl Pane {
         let event_loop = EventLoop::new(term.clone(), proxy, pty, false, false)
             .context("starting the PTY event loop")?;
         let sender = event_loop.channel();
-        // The thread ends on Msg::Shutdown or when the child exits; dropping its
-        // PTY then sends the child SIGHUP. Nothing needs to join it.
-        let _ = event_loop.spawn();
+        // The thread ends on Msg::Shutdown or when the child exits, and drops
+        // the PTY as it goes, which hangs up the child and waits for it. Its
+        // handle is kept so quitting ranma can wait for that (see `close`).
+        let handle = event_loop.spawn();
+        let io_thread = std::thread::Builder::new()
+            .name("pty-join".into())
+            .spawn(move || {
+                let _ = handle.join();
+            })
+            .ok();
 
         Ok(Pane {
             id,
@@ -201,6 +222,7 @@ impl Pane {
             title: String::new(),
             name: None,
             pid,
+            io_thread,
         })
     }
 
@@ -292,6 +314,15 @@ impl Pane {
 
     pub fn shutdown(&self) {
         let _ = self.sender.send(Msg::Shutdown);
+    }
+
+    /// Shut the pane down and hand back a handle that finishes once its child
+    /// has been hung up and has exited. Quitting ranma waits on these: exiting
+    /// first would kill the I/O threads before they hang up the shells, and a
+    /// shell never hung up leaves its background jobs running.
+    pub fn close(mut self) -> Option<std::thread::JoinHandle<()>> {
+        self.shutdown();
+        self.io_thread.take()
     }
 }
 

@@ -28,6 +28,28 @@ force, so a typo never takes the session down. `reload_config` (`r` in WM mode)
 does the same by hand. The directory must exist when ranma starts for it to be
 watched.
 
+## Servers: closing the terminal does not end ranma
+
+`ranma` in a terminal is a client of a ranma **server**, which holds your panes,
+sessions and everything running in them. Closing the terminal, or losing an SSH
+connection, only detaches: the next `ranma` finds the server again, screen and
+shells as you left them.
+
+| Command | Does |
+| --- | --- |
+| `ranma` | Attach to the most recently used server no terminal is showing; start a new one when every server is on screen (so a second terminal gets its own). |
+| `ranma ls` | List the servers: attached or detached, panes, sessions, when last used. |
+| `ranma attach NAME` | Attach to server NAME, taking it from a terminal that shows it (that terminal is told). |
+| `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
+| `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
+| `leader d` (`detach`) | Leave this terminal; the server keeps running. |
+| `leader Delete` (`quit`) | End this server and every shell in it. |
+
+Servers are named 1, 2, 3...; their sockets are in `$XDG_RUNTIME_DIR/ranma/` and
+their logs in `~/.cache/ranma/`. A server keeps running the binary it started
+with, so after an upgrade quit it (or `ranma kill`) to switch; a newer `ranma`
+attaching to an older server says so.
+
 ## Settings — `ranma.set { ... }`
 
 Each call changes only the fields it names; call it as often as you like.
@@ -112,6 +134,7 @@ does not matter; it is ignored.
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. |
+| `detach` | Leave this terminal; the server and everything in it keep running (`leader d`). |
 | `quit` / `quit now` | Quit ranma, closing every pane in every session (`leader Delete`). `quit` asks first (`y` or `Enter` quits, any other key cancels); `quit now` does not, for scripts: `ranma action "quit now"`. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave

@@ -47,7 +47,13 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - the layout follows a host resize
 - closing the last shell exits ranma with status 0
 
-It uses an empty `RANMA_CONFIG_DIR`, so it tests the defaults, not your config.
+- a second terminal gets server 2 while server 1 is shown; `leader d` detaches
+  it, `ranma` reattaches with its screen intact, it survives its terminal being
+  killed, and `ranma kill 2` ends it
+
+It uses an empty `RANMA_CONFIG_DIR`, so it tests the defaults, not your config,
+and private `XDG_RUNTIME_DIR`/`XDG_CACHE_HOME`, so its servers can never meet
+yours; it kills any it leaves on exit.
 About 15 seconds. Run it when a change touches `app`, `pane`, `render` or `input`.
 
 ## By hand

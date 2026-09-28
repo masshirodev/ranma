@@ -58,7 +58,21 @@ scrollback otherwise. That last part was milestone 3's.
 - [x] Floating panes remember where they floated
 - [x] Help (`leader ?`): every bind, filterable, runnable
 
+## 4. A server — done
+
+Closing the terminal must not end what runs in it (DESIGN.md, "A daemon, and a
+client that holds nothing").
+
+- [x] The window manager runs as a server; the terminal runs a client that holds
+  no state (frames over a Unix socket: events up, bytes down)
+- [x] One server per terminal: attach to the most recent detached one, else a new
+  one; `ranma ls`, `attach NAME`, `kill NAME`, `--standalone`
+- [x] Detach by closing the terminal, by losing SSH, or with `leader d`; quitting
+  hangs up every shell and waits for them
+- [x] Servers outlive their terminal (setsid), log to `~/.cache/ranma/`, refuse
+  attaching to themselves
+
 ## Later, maybe
 
-- Saving layouts on exit and respawning them (see DESIGN.md: not detach).
+- Saving layouts to respawn them after a reboot (processes cannot survive one).
 - Bar widgets in Lua, on a throttled tick.

@@ -180,6 +180,10 @@ ranma.bind("r", "reload_config")
 -- Quit ranma (Hyprland's Super+Delete ends the session). It asks first, since
 -- every shell in every session closes with it; "quit now" skips the question.
 ranma.bind("delete", "quit")
+-- Leave this terminal; the server and everything in it keep running, and the
+-- next `ranma` (in any terminal) attaches to it again. Closing the terminal
+-- does the same.
+ranma.bind("d", "detach")
 -- Pull ranma's source and install it, in a floating pane you can watch.
 ranma.bind("shift+u", "update")
 

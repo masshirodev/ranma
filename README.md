@@ -7,12 +7,14 @@ Lua and themed in TOML.
 
 Named for the 欄間, the carved transom panel above sliding doors.
 
-**Status:** milestones 1-3 of [`doc/ROADMAP.md`](doc/ROADMAP.md) are done — a
+**Status:** milestones 1-4 of [`doc/ROADMAP.md`](doc/ROADMAP.md) are done — a
 daily-drivable tiling window manager: dwindle-tiled panes, tabbed groups, a
 floating layer, workspaces and sessions with fuzzy switchers, a scratchpad,
 copy mode and history search with the system clipboard, window rules, a
 waybar-style bar with Lua and shell modules, Lua binds and hooks, mouse focus,
-and live config reload. `leader ?` lists every key.
+and live config reload. It runs as a server, so closing the terminal (or losing
+SSH) only detaches: `ranma` again picks up where you were. `leader ?` lists
+every key.
 
 ## Install
 
