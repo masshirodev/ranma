@@ -10,7 +10,7 @@ use alacritty_terminal::term::cell::Flags;
 
 use super::{App, SCRATCHPAD, chord_bytes};
 use crate::input;
-use crate::ipc::{PaneInfo, Query, SendInput};
+use crate::ipc::{PaneInfo, PaneOp, Query, SendInput};
 use crate::layout::PaneId;
 use crate::workspace::Workspace;
 
@@ -28,6 +28,7 @@ impl App {
                 .map_err(|e| e.to_string()),
             Query::Send { pane, input } => self.send_input(pane, &input).map(|_| String::new()),
             Query::Capture { pane, history } => self.capture(pane, history),
+            Query::Pane { pane, op } => self.pane_op(pane, op).map(|_| String::new()),
             Query::Wait { pane } => {
                 if self.panes.contains_key(&pane) {
                     self.waiters.entry(pane).or_default().push(reply);
@@ -90,6 +91,12 @@ impl App {
             .filter_map(|id| {
                 let p = self.panes.get(&id)?;
                 let (session, workspace, ws) = self.place_of(id)?;
+                let shown = session == self.session_name()
+                    && if workspace == SCRATCHPAD {
+                        self.scratch_shown
+                    } else {
+                        !self.scratch_shown && workspace == self.current
+                    };
                 Some(PaneInfo {
                     id,
                     session,
@@ -103,9 +110,70 @@ impl App {
                     pid: p.pid,
                     cols: p.size.cols,
                     rows: p.size.rows,
+                    workspace_name: ws.name.clone(),
+                    workspace_shown: shown,
                 })
             })
             .collect()
+    }
+
+    pub(super) fn pane_op(&mut self, id: PaneId, op: PaneOp) -> Result<(), String> {
+        if !self.panes.contains_key(&id) {
+            return Err(no_pane(id));
+        }
+        match op {
+            PaneOp::Close => self.close_pane(id),
+            PaneOp::Rename(name) => self.rename_pane(id, &name),
+            PaneOp::Focus => {
+                if let Some((si, _)) = self.locate_hidden(id) {
+                    self.switch_session(si);
+                }
+                match self.locate(id) {
+                    Some(SCRATCHPAD) => self.scratch_shown = true,
+                    Some(n) => self.switch_workspace(n),
+                    None => return Err(no_pane(id)),
+                }
+                self.focus(id);
+                self.relayout();
+            }
+            PaneOp::Respawn { command, cwd } => self.respawn(id, command.as_deref(), cwd)?,
+        }
+        Ok(())
+    }
+
+    /// Replace a pane's process, keeping the pane: its place, size, id and
+    /// name. The old process is hung up as its PTY closes; its events are
+    /// muted first, so its exit does not close the pane it used to be in.
+    fn respawn(
+        &mut self,
+        id: PaneId,
+        command: Option<&str>,
+        cwd: Option<std::path::PathBuf>,
+    ) -> Result<(), String> {
+        let old = self.panes.get(&id).ok_or_else(|| no_pane(id))?;
+        let size = old.size;
+        let cwd = cwd.or_else(|| old.cwd());
+        let name = old.name.clone();
+        let s = &self.config.settings;
+        let opts = crate::pane::SpawnOptions {
+            shell: s.shell.as_deref(),
+            command,
+            scrollback_lines: s.scrollback_lines,
+            cwd,
+        };
+        let mut new = crate::pane::Pane::spawn(id, size, &opts, self.tx.clone())
+            .map_err(|e| format!("respawning pane {id}: {e:#}"))?;
+        new.name = name;
+        if let Some(old) = self.panes.insert(id, new) {
+            old.retire();
+        }
+        self.exit_codes.remove(&id);
+        self.rules_applied.retain(|(p, _)| *p != id);
+        if let Some(cmd) = command {
+            self.apply_command_rules(id, cmd);
+        }
+        self.dirty = true;
+        Ok(())
     }
 
     /// Input for a pane as if typed there. A newline in text is Enter (`\r`),

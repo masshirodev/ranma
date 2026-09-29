@@ -76,10 +76,16 @@ pub struct Proxy {
     /// Set when a wakeup is queued and not yet drawn. A pane printing as fast as it
     /// can produces a wakeup per read; without this each one would be a message.
     wakeup_pending: Arc<AtomicBool>,
+    /// Cleared when the pane's process is replaced (`respawn`): the old event
+    /// loop's last events, its exit above all, must not reach the new one.
+    live: Arc<AtomicBool>,
 }
 
 impl EventListener for Proxy {
     fn send_event(&self, event: TermEvent) {
+        if !self.live.load(Ordering::Acquire) {
+            return;
+        }
         if matches!(event, TermEvent::Wakeup) && self.wakeup_pending.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -124,6 +130,7 @@ pub struct Pane {
     pub term: Arc<FairMutex<Term<Proxy>>>,
     sender: EventLoopSender,
     wakeup_pending: Arc<AtomicBool>,
+    live: Arc<AtomicBool>,
     pub size: Size,
     /// What the program last set (OSC 0/2). Window rules match this.
     pub title: String,
@@ -156,10 +163,12 @@ impl Pane {
             rows: size.rows.max(1),
         };
         let wakeup_pending = Arc::new(AtomicBool::new(false));
+        let live = Arc::new(AtomicBool::new(true));
         let proxy = Proxy {
             id,
             tx,
             wakeup_pending: wakeup_pending.clone(),
+            live: live.clone(),
         };
 
         let config = term::Config {
@@ -224,6 +233,7 @@ impl Pane {
             term,
             sender,
             wakeup_pending,
+            live,
             size,
             title: String::new(),
             name: None,
@@ -332,6 +342,12 @@ impl Pane {
     /// output wakes the UI again.
     pub fn drawn(&self) {
         self.wakeup_pending.store(false, Ordering::Release);
+    }
+
+    /// Stop this pane's events reaching the window manager: its process is
+    /// being replaced, and whatever the old one still says is about the past.
+    pub fn retire(&self) {
+        self.live.store(false, Ordering::Release);
     }
 
     pub fn shutdown(&self) {

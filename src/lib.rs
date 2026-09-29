@@ -19,6 +19,7 @@ pub mod proto;
 pub mod render;
 pub mod sysstat;
 pub mod theme;
+pub mod tmux;
 pub mod toast;
 pub mod update;
 pub mod workspace;

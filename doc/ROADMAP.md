@@ -93,7 +93,7 @@ and SSH servers, animation).
 - [x] A per-session accent colour
 - [x] Socket commands for scripts: `ranma panes`, `send`, `capture`, `wait`
 - [x] `ranma popup`: a command in a float, its output returned
-- [ ] A tmux shim: a stated subset of tmux, for programs that drive it
+- [x] A tmux shim: a stated subset of tmux, for programs that drive it
 - [ ] Synchronized input to marked panes
 - [ ] A master-stack placement policy
 - [ ] Dim unfocused panes

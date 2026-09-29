@@ -433,6 +433,34 @@ draws on stdout (an editor, `less`) shows nothing. For those, `ranma open
 It is a command for scripts and shell functions in panes. A bind cannot run
 it through `os.execute`: that would wait on the very ranma it asks.
 
+### Programs that drive tmux: `ranma tmux-shim`
+
+```sh
+ranma tmux-shim -- env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude
+```
+
+runs the command with a `tmux` on its PATH that answers in this ranma, so a
+program that opens panes through tmux opens ranma panes instead: Claude Code's
+agent teams put each teammate in a pane beside the one it ran from, named after
+the teammate, closed when it is done. With no command it starts your shell,
+and every `tmux` call from that shell goes to the shim. Outside what it runs,
+nothing changes, and a real tmux still works under it (`tmux -L name`, or a
+`TMUX` naming a real server, go to the real one).
+
+It answers a stated subset of tmux, listed in `doc/DESIGN.md` ("The tmux
+shim"): splitting, respawning, typing into and reading panes, naming, focusing
+and killing them, listing panes, windows and the session, and formats with
+`#{var}`. The session is the one you ran it in, `@N` is workspace N, `%N` is
+pane N. Layout and style commands (`select-layout`, `resize-pane`,
+`set-option`) succeed and do nothing: the layout is ranma's. Anything else
+fails with an error naming the command or flag. A call the shim could not
+answer in full is recorded, command and flags only, in
+`~/.cache/ranma/tmux-shim.log`: that file is what to look at when a program
+misbehaves under the shim.
+
+`ranma tmux ARGS` is the shim asked for by name, from any pane:
+`ranma tmux list-panes -F '#{pane_id} #{pane_title}'`.
+
 `-p` takes a pane id from `ranma panes`; without it, each means the pane it
 runs in (`RANMA_PANE`, which every pane has). A pane id is fixed for the pane's
 life and never reused by that server.

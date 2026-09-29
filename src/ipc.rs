@@ -284,6 +284,25 @@ pub enum Query {
     Capture { pane: PaneId, history: usize },
     /// Answered when the pane ends, with its exit status (empty if unknown).
     Wait { pane: PaneId },
+    /// Do something to one pane, wherever it is.
+    Pane { pane: PaneId, op: PaneOp },
+}
+
+/// What `Query::Pane` does. What the tmux shim needs that no action does,
+/// since actions work on the focused pane.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PaneOp {
+    Close,
+    /// Show its session and workspace and focus it.
+    Focus,
+    /// As rename_pane; empty clears.
+    Rename(String),
+    /// Replace its process with this command (the shell when `None`), in the
+    /// same pane, at the same size, keeping its id and name.
+    Respawn {
+        command: Option<String>,
+        cwd: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -316,6 +335,12 @@ pub struct PaneInfo {
     pub pid: u32,
     pub cols: u16,
     pub rows: u16,
+    /// Its workspace's name, if it was given one.
+    #[serde(default)]
+    pub workspace_name: Option<String>,
+    /// Its workspace is the one on screen (in the shown session).
+    #[serde(default)]
+    pub workspace_shown: bool,
 }
 
 pub enum Request {
@@ -377,9 +402,43 @@ pub fn parse_request(text: &str) -> Result<Request> {
                 pane: pane(lines.next())?,
             }
         }
+        "pane" => {
+            let mut parts = text.splitn(5, '\n').skip(1);
+            let id = pane(parts.next())?;
+            let op = match parts.next().unwrap_or("").trim() {
+                "close" => PaneOp::Close,
+                "focus" => PaneOp::Focus,
+                "rename" => PaneOp::Rename(parts.next().unwrap_or("").trim_end().to_string()),
+                "respawn" => {
+                    let cwd = parts.next().unwrap_or("").trim();
+                    let command = parts.next().unwrap_or("");
+                    PaneOp::Respawn {
+                        cwd: (!cwd.is_empty()).then(|| PathBuf::from(cwd)),
+                        command: (!command.trim().is_empty()).then(|| command.to_string()),
+                    }
+                }
+                other => bail!("unknown pane operation `{other}` (close, focus, rename, respawn)"),
+            };
+            Query::Pane { pane: id, op }
+        }
         _ => return parse(text).map(Request::Event),
     };
     Ok(Request::Query(q))
+}
+
+pub fn pane_request(pane: PaneId, op: &PaneOp) -> String {
+    match op {
+        PaneOp::Close => format!("pane\n{pane}\nclose\n"),
+        PaneOp::Focus => format!("pane\n{pane}\nfocus\n"),
+        PaneOp::Rename(n) => format!("pane\n{pane}\nrename\n{n}\n"),
+        PaneOp::Respawn { command, cwd } => format!(
+            "pane\n{pane}\nrespawn\n{}\n{}",
+            cwd.as_ref()
+                .map(|c| c.display().to_string())
+                .unwrap_or_default(),
+            command.as_deref().unwrap_or("")
+        ),
+    }
 }
 
 pub fn send_request(pane: PaneId, input: &SendInput) -> String {
@@ -548,6 +607,22 @@ pub fn parse(text: &str) -> Result<AppEvent> {
     }
 }
 
+/// A command given as arguments, as a line for the shell: one argument is a
+/// command line as written; several are quoted one by one, the way ssh treats
+/// what follows the host (and tmux what follows `split-window`).
+pub fn command_line(args: &[String]) -> Option<String> {
+    match args {
+        [] => None,
+        [one] => Some(one.clone()),
+        many => Some(
+            many.iter()
+                .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+    }
+}
+
 /// The socket of the ranma this process runs in.
 fn own_socket() -> Result<PathBuf> {
     std::env::var_os(ENV)
@@ -645,6 +720,20 @@ mod tests {
     }
 
     #[test]
+    fn one_argument_is_a_command_line_several_are_quoted() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(command_line(&[]), None);
+        assert_eq!(
+            command_line(&s(&["ai; exec zsh"])).as_deref(),
+            Some("ai; exec zsh")
+        );
+        assert_eq!(
+            command_line(&s(&["echo", "it's", "a b"])).as_deref(),
+            Some("'echo' 'it'\\''s' 'a b'")
+        );
+    }
+
+    #[test]
     fn queries_round_trip_and_are_checked() {
         let q = |r: &str| match parse_request(r).unwrap() {
             Request::Query(q) => q,
@@ -673,6 +762,21 @@ mod tests {
             }
         );
         assert_eq!(q("wait\n9\n"), Query::Wait { pane: 9 });
+        for op in [
+            PaneOp::Close,
+            PaneOp::Focus,
+            PaneOp::Rename("teammate one".into()),
+            PaneOp::Respawn {
+                command: Some("claude --agent x\n".into()),
+                cwd: Some("/tmp".into()),
+            },
+            PaneOp::Respawn {
+                command: None,
+                cwd: None,
+            },
+        ] {
+            assert_eq!(q(&pane_request(5, &op)), Query::Pane { pane: 5, op });
+        }
         for (req, needle) in [
             ("send\nx\ntext\nhi", "pane id"),
             ("send\n1\nshout\nhi", "shout"),
@@ -680,6 +784,7 @@ mod tests {
             ("send\n1\nkeys\n", "no keys"),
             ("capture\n1\nlots", "lots"),
             ("wait\n", "pane id"),
+            ("pane\n1\nexplode\n", "explode"),
         ] {
             let err = format!("{:#}", parse_request(req).err().unwrap());
             assert!(err.contains(needle), "{req:?}: {err}");

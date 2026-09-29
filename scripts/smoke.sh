@@ -186,6 +186,14 @@ wait_for '╭ read x' 20 || wait_for '╭ ' 4 || fail "the popup did not open"
 sleep 0.5; T send-keys -t s 'ok' Enter
 wait_for 'POPUP=popped-ok/4' 20 || fail "ranma popup did not return the output and status"
 
+# The tmux shim, the way Claude Code's agent teams drive it: a placeholder pane
+# split off in the background, named, its process replaced, then killed.
+T send-keys -t s "$BIN tmux-shim -- bash -c 'P=\$(tmux split-window -d -h -l 70% -P -F \"#{pane_id}\" -- cat); tmux select-pane -t \$P -T shimmed; tmux respawn-pane -k -t \$P -- \"echo respawned-ok; sleep 30\"; echo SHIM=\$P; sleep 2; tmux kill-pane -t \$P; tmux -V'" Enter
+wait_for '╭ shimmed' 20 || fail "the tmux shim did not open and name a pane"
+wait_for 'respawned-ok' 12 || fail "respawn-pane did not replace the pane's process"
+wait_for 'tmux 3.4' 20 || fail "the shim's pane was not killed, or tmux -V failed"
+screen | grep -q '╭ shimmed' && fail "kill-pane left the shim's pane open"
+
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
 # The inner one as if reached over SSH: its host reaches the outer terminal's

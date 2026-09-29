@@ -16,6 +16,8 @@ Everything that can be pure is, and is tested without a terminal:
 | `input` | host key → chord, key/paste/focus/mouse encoding per pane mode |
 | `render` | cell characters as drawn |
 | `bar` | fitting three sides into a row (budget order, truncation, wide chars), exec modules (first line, timeout killing the whole process group), wall-clock alignment |
+| `tmux` | the shim's global flags, tmux-style flag parsing (grouped, stuck values, unknown ones refused), `;` separators, targets resolved inside the caller's session, formats (`#{}`, aliases, conditionals, comparisons, unknown variables), key names |
+| `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -50,6 +52,9 @@ Builds the release binary and drives it inside a **private headless tmux server*
   its exit status; `ranma panes` prints its table
 - `ranma popup` opens a float, reads what is typed in it, and returns the
   command's output and exit status to the shell that asked
+- `ranma tmux-shim` runs a script that drives tmux the way Claude Code's agent
+  teams do: a placeholder pane split off in the background, named with
+  `select-pane -T`, its process replaced with `respawn-pane -k`, then killed
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize

@@ -274,6 +274,8 @@ ranma.module("datetime", {
 -- `ranma capture -p ID` prints its screen, `ranma wait -p ID` waits for it.
 -- `ranma popup -- 'ls | fzf'` runs a picker in a float and prints its answer:
 --   cd "$(ranma popup -- 'fd -td . ~/projects | fzf')"
+-- `ranma tmux-shim -- claude` gives a program that drives tmux (Claude Code's
+-- agent teams) a tmux that opens ranma panes instead.
 
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind

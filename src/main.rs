@@ -91,6 +91,17 @@ enum Command {
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
+    /// Run COMMAND (your shell when left out) with a `tmux` on its PATH that
+    /// answers in this ranma: `ranma tmux-shim -- claude`. See CONFIG.md.
+    TmuxShim {
+        #[arg(last = true)]
+        command: Vec<String>,
+    },
+    /// The tmux shim asked for by name: `ranma tmux list-panes -F '#{pane_id}'`.
+    Tmux {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// List every pane in every session: id, where it is, what runs in it.
     Panes {
         /// As JSON, one object per pane, for scripts.
@@ -233,21 +244,6 @@ fn update(check: bool) -> ExitCode {
     }
 }
 
-/// One argument is a command line as written; several are quoted one by one,
-/// the way ssh treats what follows the host.
-fn command_line(args: &[String]) -> Option<String> {
-    match args {
-        [] => None,
-        [one] => Some(one.clone()),
-        many => Some(
-            many.iter()
-                .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
-                .collect::<Vec<_>>()
-                .join(" "),
-        ),
-    }
-}
-
 /// A command that is a request to the ranma this runs in, and what it prints.
 fn request(cmd: Command) -> anyhow::Result<ExitCode> {
     use anyhow::Context;
@@ -352,7 +348,7 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
                 name,
                 workspace_name,
                 cwd,
-                command: command_line(&command),
+                command: ipc::command_line(&command),
                 accent,
                 beside,
                 background,
@@ -361,6 +357,8 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             }))?;
             if print { id } else { String::new() }
         }
+        Command::Tmux { args } => return Ok(ranma::tmux::run(&args)),
+        Command::TmuxShim { command } => return ranma::tmux::launch(&command),
         Command::Popup {
             width,
             height,
@@ -406,7 +404,7 @@ fn popup(
     let quoted = out.display().to_string().replace('\'', "'\\''");
     let cmd = format!(
         "( {} ) > '{quoted}'",
-        command_line(command).unwrap_or_default()
+        ipc::command_line(command).unwrap_or_default()
     );
     let result = (|| {
         let id = ipc::send(&ipc::open_request(&ipc::OpenSpec {
@@ -469,6 +467,12 @@ fn pane_table(panes: &[ipc::PaneInfo]) -> String {
 }
 
 fn main() -> ExitCode {
+    // Called as `tmux` (the shim's link): answer, or hand the call on.
+    let mut argv = std::env::args();
+    let argv0 = argv.next().unwrap_or_default();
+    if std::path::Path::new(&argv0).file_name() == Some(std::ffi::OsStr::new("tmux")) {
+        return ranma::tmux::main_as_tmux(argv.collect());
+    }
     let mut cli = Cli::parse();
 
     match &cli.command {
@@ -570,7 +574,6 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::command_line;
 
     #[test]
     fn commented_defaults_run_as_nothing() {
@@ -602,19 +605,5 @@ mod tests {
                 "{key}"
             );
         }
-    }
-
-    #[test]
-    fn one_argument_is_a_command_line_several_are_quoted() {
-        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        assert_eq!(command_line(&[]), None);
-        assert_eq!(
-            command_line(&s(&["ai; exec zsh"])).as_deref(),
-            Some("ai; exec zsh")
-        );
-        assert_eq!(
-            command_line(&s(&["echo", "it's", "a b"])).as_deref(),
-            Some("'echo' 'it'\\''s' 'a b'")
-        );
     }
 }

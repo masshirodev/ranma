@@ -441,6 +441,58 @@ Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
 alacritty_terminal drops those sequences before ranma sees them, and catching
 them would mean parsing the PTY stream a second time.
 
+### The tmux shim: a stated subset, grown only from its log
+
+Some programs open panes of their own by driving tmux; Claude Code's agent
+teams is the one that matters here (2026-09-29, from tuios's tmux-shim). Found
+inside tmux, it splits a placeholder pane per teammate, names it, replaces the
+placeholder's process with the teammate (`respawn-pane -k`), and kills the
+pane when the teammate is done. Inside ranma there is no tmux, so those
+teammates could not get panes.
+
+`ranma tmux-shim -- CMD` runs CMD with a `tmux` first on its PATH that is the
+ranma binary, `TMUX` naming this ranma's socket, and `TMUX_PANE` the pane it
+ran from. Called as `tmux`, ranma answers a call whose `TMUX` (or `-S`) names
+its socket, and hands anything else (`-L`, another socket, no ranma) to the
+next `tmux` on PATH, so a real tmux keeps working under the shim. It is off
+until asked for, per command.
+
+**The subset is a list, not a direction.** "Matching tmux feature for feature"
+is a non-goal, and a shim is how that happens one `#{format}` at a time. What
+it answers:
+
+| tmux | ranma |
+| --- | --- |
+| `split-window` `-d -h -v -b -t -c -P -F` | `ranma open --beside`: `-h` right, `-v` below, `-b` the other side, `-d` in the background. `-l`/`-p` (sizes) are accepted and left to the layout |
+| `respawn-pane -k -t -c` | the pane's process replaced in place (below) |
+| `send-keys -t -l` | `ranma send`: key names (`Enter`, `C-c`, `M-x`, `Up`, `BSpace`, `F1`...) as keys, other words as text |
+| `capture-pane -p -t -S` | `ranma capture`; `-J` and `-E` noted as not honoured |
+| `display-message -p -t -F` | a format for a pane; without `-p`, a toast |
+| `list-panes -t -F -s -a`, `list-windows`, `list-sessions`, `has-session` | from `ranma panes` |
+| `kill-pane -t`, `select-pane -t -T` | close, focus, rename |
+| `select-layout`, `resize-pane`, `set-option`, `set-window-option`, `set-hook`, `show-options`, `refresh-client`, `start-server` | accepted, do nothing: ranma owns layout, style and options |
+| `new-session`, `attach`, `kill-session`, `kill-server`, `switch-client`, `detach-client` | refused: the shim never starts or ends a session |
+| `-V` | `tmux 3.4` |
+
+The map: the tmux session is the caller's ranma session (nothing reaches
+another), window `@N` is workspace N, pane `%N` is ranma pane N. Formats take
+`#{var}`, the one-letter aliases, `#{?c,a,b}`, `#{==:a,b}` and `#{!=:a,b}`; an
+unknown variable is empty, as in tmux. Every other command and every flag not
+listed is an error naming it, **and every call not answered in full is logged**
+to `~/.cache/ranma/tmux-shim.log` (command and flags only, never text). The
+list grows from that log, when a real program needs more, and not otherwise.
+
+**Respawning is ranma's, not a holder's.** tuios cannot swap a window's process
+from outside, so every shim pane there runs a holder process that does it.
+ranma owns its PTYs, so `respawn-pane` spawns a new PTY and emulator for the
+same pane id, at the same size, and drops the old one, which hangs up the old
+process. The old event loop's proxy is muted first: its last events, its exit
+above all, would otherwise close the pane it used to be in.
+
+Panes the shim opens run with ranma's environment, not the shim's: a teammate
+that itself called `tmux` would reach the real one. Claude Code's teammates do
+not.
+
 ### ranma inside ranma
 
 Nesting (ranma over SSH in ranma) is solved by the inner ranma telling the
@@ -514,4 +566,5 @@ Rust, for predictable latency without a GC, and for the emulator:
 - Remote hosts, SSH or web servers, multi-client sync.
 - An agent inbox or any AI integration in the core. A Lua hook can do that for
   someone who wants it.
-- Matching tmux feature for feature.
+- Matching tmux feature for feature. The tmux shim is a stated subset for
+  programs that drive tmux, grown only from its log (see above).
