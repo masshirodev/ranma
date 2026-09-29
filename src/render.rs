@@ -71,6 +71,11 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     for tb in &frame.tab_bars {
         draw_tab_bar(f, app, tb);
     }
+    if let Some(h) = app.hint_state()
+        && let Some(v) = frame.views.iter().find(|v| v.id == h.pane)
+    {
+        draw_hints(f, app, v, h);
+    }
     // Where a dragged tile would land: an outline over that half of the target.
     if let Some((target, dir)) = app.drop_preview()
         && let Some(v) = frame.views.iter().find(|v| v.id == target)
@@ -252,6 +257,35 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         block = block.title(Line::from(format!(" {mark}{title} ")));
     }
     f.render_widget(block, rrect(view.outer));
+}
+
+/// Each link's label over its first cells, in the mode colours; labels that
+/// no longer match what was typed are left out, and the typed part is dimmed.
+fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintState) {
+    let c = &app.config.theme.colors;
+    let label = Style::default()
+        .fg(color(c.mode_fg))
+        .bg(color(c.mode_bg))
+        .add_modifier(Modifier::BOLD);
+    let typed = label.add_modifier(Modifier::DIM);
+    let inner = view.inner;
+    let buf = f.buffer_mut();
+    for (text, link) in &h.links {
+        let Some(rest) = text.strip_prefix(h.typed.as_str()) else {
+            continue;
+        };
+        let (row, col) = (link.at.0 as u16, link.at.1 as u16);
+        if row >= inner.h || col >= inner.w {
+            continue;
+        }
+        let (x, y) = (inner.x + col, inner.y + row);
+        let room = (inner.w - col) as usize;
+        buf.set_stringn(x, y, &h.typed, room, typed);
+        let done = h.typed.chars().count() as u16;
+        if done < inner.w - col {
+            buf.set_stringn(x + done, y, rest, room - done as usize, label);
+        }
+    }
 }
 
 /// Tabs share the row equally; a click maps back the same way (see App's mouse).

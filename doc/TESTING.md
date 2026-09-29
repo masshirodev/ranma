@@ -18,6 +18,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `bar` | fitting three sides into a row (budget order, truncation, wide chars), exec modules (first line, timeout killing the whole process group), wall-clock alignment |
 | `tmux` | the shim's global flags, tmux-style flag parsing (grouped, stuck values, unknown ones refused), `;` separators, targets resolved inside the caller's session, formats (`#{}`, aliases, conditionals, comparisons, unknown variables), key names |
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
+| `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -47,6 +48,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - `leader /` finds a string in the history, and `y` puts the match on the
   clipboard: the tmux server runs with `set-clipboard on`, so the OSC 52 write
   lands in its buffer and is read back with `show-buffer`
+- a link printed in a pane gets a label from `leader o`, and typing it puts
+  the link on the clipboard
 - a new session shows in the bar; when its only shell exits, it ends and main is
   shown again
 - `ranma open -P -d` opens a pane in the background and prints its id;

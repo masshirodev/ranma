@@ -377,6 +377,21 @@ stall a keypress. Copies leave through OSC 52 to the host terminal, which owns
 the clipboard; ranma never touches a clipboard of its own, and programs' own OSC
 52 writes are passed through the same way. Reads are refused.
 
+### Links are hints, not clicks
+
+Picking a link from the keyboard (2026-09-29, from tuios's clickable links and
+kitty's hints): `hints` labels every link on the focused pane's screen, and
+typing a label copies it, or in capitals opens it. Not clicks, because the
+mouse in a pane belongs to the program when it asks for it, and a modifier to
+take it back is one more thing to remember. Links are found in the visible
+rows only, so the cost is the screen's, never the scrollback's: URLs by a
+scanner with no regex (a scheme at a word start, up to whitespace, minus the
+sentence's punctuation and a bracket it did not open), wrapped rows joined,
+and OSC 8 links, which alacritty_terminal keeps on the cells. **Copying is the
+default** because a ranma server may run on another machine: `xdg-open` there
+opens the link on a screen nobody is looking at, so from a client that came
+over SSH opening copies instead and says so.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

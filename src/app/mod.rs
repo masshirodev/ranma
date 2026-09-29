@@ -28,6 +28,7 @@ use crate::workspace::Workspace;
 
 mod copy;
 mod drag;
+mod hints;
 mod query;
 mod rules;
 mod run;
@@ -36,6 +37,7 @@ mod switch;
 
 pub use copy::CopyState;
 pub use drag::drop_half;
+pub use hints::HintState;
 pub use run::{run, run_server};
 use session::Session;
 pub use switch::PickerLayout;
@@ -219,6 +221,8 @@ pub struct App {
     return_focus: HashMap<PaneId, PaneId>,
     /// Panes marked for synchronized input (see `typed`).
     synced: HashSet<PaneId>,
+    /// Labelled links over the focused pane, waiting for a label (see `hints`).
+    hints: Option<HintState>,
 }
 
 impl App {
@@ -285,6 +289,7 @@ impl App {
             ended: Default::default(),
             return_focus: HashMap::new(),
             synced: HashSet::new(),
+            hints: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -899,6 +904,13 @@ impl App {
         {
             self.exit_copy_mode();
         }
+        if self
+            .hints
+            .as_ref()
+            .is_some_and(|h| Some(h.pane) != self.focused())
+        {
+            self.exit_hints();
+        }
         let now = Observed {
             engaged: self.engaged(),
             session: self.session_name().to_string(),
@@ -1063,6 +1075,18 @@ impl App {
                 _ => {}
             }
             return;
+        }
+        // Hints take the keyboard until a label is typed or Esc; any click,
+        // or focus moving away, ends them.
+        if self.hints.is_some() {
+            match ev {
+                Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    return self.hint_key(&key);
+                }
+                Event::Mouse(m) if matches!(m.kind, MouseEventKind::Down(_)) => self.exit_hints(),
+                Event::Paste(_) => return,
+                _ => {}
+            }
         }
         if self.mode == Mode::Copy {
             match ev {
@@ -1738,6 +1762,7 @@ impl App {
             Action::Help => self.open_palette(crate::picker::PaletteMode::Help),
             Action::CommandPalette => self.open_palette(crate::picker::PaletteMode::Command),
             Action::CopyMode => self.enter_copy_mode(None),
+            Action::Hints => self.enter_hints(),
             // Backward: the most recent match first, which is what searching
             // history usually wants.
             Action::Search => self.enter_copy_mode(Some(true)),
@@ -2176,6 +2201,7 @@ impl App {
                     vec![Piece::new(label, Style::Mode)]
                 }
                 // Keys are going to a ranma inside the focused pane.
+                Mode::Normal if self.hints.is_some() => vec![Piece::new(" LINK ", Style::Mode)],
                 Mode::Normal if self.passes_through() => vec![Piece::new(" ⧉ ", Style::Dim)],
                 Mode::Normal => Vec::new(),
             }

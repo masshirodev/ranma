@@ -97,7 +97,7 @@ and SSH servers, animation).
 - [x] Synchronized input to marked panes
 - [x] A master-stack placement policy
 - [x] Dim unfocused panes
-- [ ] URL hints
+- [x] URL hints
 - [ ] A right-click pane menu
 - [ ] A `command_finished` hook from OSC 133
 - [ ] A which-key hint after the leader (waiting on a design)

@@ -116,6 +116,9 @@ pub enum Action {
     CommandPalette,
     /// Keyboard scrollback and selection (vi keys) in the focused pane.
     CopyMode,
+    /// Label the links on the focused pane's screen; typing a label copies it,
+    /// in capitals opens it.
+    Hints,
     /// Search the focused pane's history (copy mode with the search prompt open).
     Search,
     /// Create a session (named, or numbered) and switch to it.
@@ -164,6 +167,7 @@ impl Action {
                 | Action::Help
                 | Action::CommandPalette
                 | Action::CopyMode
+                | Action::Hints
                 | Action::Search
                 | Action::NewSession(_)
                 | Action::MoveWorkspaceToSession(_)
@@ -233,6 +237,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("help", ""),
     ("command_palette", ""),
     ("copy_mode", ""),
+    ("hints", ""),
     ("search", ""),
     ("new_session", "[name]"),
     ("session", "<name|next|prev>"),
@@ -428,6 +433,7 @@ impl FromStr for Action {
             "help" => no_arg(Action::Help),
             "command_palette" => no_arg(Action::CommandPalette),
             "copy_mode" => no_arg(Action::CopyMode),
+            "hints" => no_arg(Action::Hints),
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
@@ -561,6 +567,7 @@ impl fmt::Display for Action {
             Action::Help => f.write_str("help"),
             Action::CommandPalette => f.write_str("command_palette"),
             Action::CopyMode => f.write_str("copy_mode"),
+            Action::Hints => f.write_str("hints"),
             Action::Search => f.write_str("search"),
             Action::NewSession(None) => f.write_str("new_session"),
             Action::NewSession(Some(n)) => write!(f, "new_session {n}"),
@@ -697,6 +704,7 @@ mod tests {
             "snap center",
             "command_palette",
             "copy_mode",
+            "hints",
             "search",
             "new_session",
             "new_session work",

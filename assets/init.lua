@@ -179,6 +179,10 @@ ranma.bind(".", "rename_workspace")
 -- the next and previous match, q or Esc to leave.
 ranma.bind("/", "search")
 ranma.bind("[", "copy_mode")
+-- Links: o labels every link on the focused pane's screen (URLs in the text
+-- and OSC 8 links); type a label to copy that link, or type it in capitals
+-- to open it with xdg-open. Esc cancels.
+ranma.bind("o", "hints")
 
 -- The palette. "?" opens it on the keys (help: every bind, filterable, Enter
 -- runs it); ":" on the commands (every action, bound or not; Tab completes one,

@@ -148,6 +148,7 @@ does not matter; it is ignored.
 | `command_palette` | The palette in command mode (`:`, `leader :`): every action, bound or not, with its argument and key. `Tab` completes one into the query; type its argument and the line heads the list as `run: …`, or as the parser's error if it would not parse. `Enter` runs it (one that needs an argument completes instead). The query's first character is the mode: `?` keys, `:` or `>` commands; typing it switches, `Ctrl+U` clears the rest. |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
+| `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
@@ -312,7 +313,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 
 | Module | Shows | Options |
 | --- | --- | --- |
-| `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise; ` ⇉ sync N ` while N panes here are marked for synchronized input | — |
+| `mode` | ` WM `, ` COPY `, ` SEARCH ` or ` LINK `, nothing otherwise; ` ⇉ sync N ` while N panes here are marked for synchronized input | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
 | `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named) |
 | `title` | The focused pane's title | — |

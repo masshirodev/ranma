@@ -296,6 +296,16 @@ T send-keys -t s 'exit' Enter
 wait_for 'session 2 ended' || fail "an emptied session did not end"
 bar | grep -Eq '^ 1[: ]' || fail "not back on main after the session ended"
 
+# URL hints: a link printed in the pane gets a label; typing it copies the link.
+T send-keys -t s 'clear; echo "docs at https://example.com/smoke-link, see"' Enter; sleep 0.4
+T send-keys -t s C-b o; sleep 0.4
+bar | grep -q ' LINK ' || fail "hints did not open ($(bar))"
+screen | grep -q 'docs at attps://' || fail "no label over the link"
+T send-keys -t s a; sleep 0.4
+[ "$(T show-buffer 2>/dev/null)" = "https://example.com/smoke-link" ] ||
+  fail "typing the label did not copy the link ($(T show-buffer 2>/dev/null))"
+bar | grep -q ' LINK ' && fail "hints stayed open after a pick"
+
 # Resize the host: both panes follow.
 T resize-window -t s -x 90 -y 24
 sleep 0.5

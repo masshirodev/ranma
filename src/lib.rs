@@ -8,6 +8,7 @@ pub mod app;
 pub mod bar;
 pub mod client;
 pub mod config;
+pub mod hints;
 pub mod hostcolors;
 pub mod input;
 pub mod ipc;
