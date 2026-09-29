@@ -16,6 +16,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `input` | host key → chord, key/paste/focus/mouse encoding per pane mode |
 | `render` | cell characters as drawn |
 | `bar` | fitting three sides into a row (budget order, truncation, wide chars), exec modules (first line, timeout killing the whole process group), wall-clock alignment |
+| `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |

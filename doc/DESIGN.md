@@ -235,6 +235,14 @@ the two kept in sync by hand. So:
   wakeups. The foreground program, not the title: titles are whatever the shell
   last set (`user@host: ~/dir`), and the program is what you would name the
   workspace yourself.
+- **cpu and mem are built in** (2026-09-29, from tuios's `show_cpu` and
+  `show_ram`), not left to an exec module, because a shell started every two
+  seconds is exactly the cost built-ins avoid: they read `/proc/stat` and
+  `/proc/meminfo` on their own tick, on the UI thread, which takes
+  microseconds. They are defined by naming them in the bar. **A timed module
+  ticks only while the bar shows it**, a rule that came with them: the
+  default config defined `clock` without showing it, and it woke ranma every
+  minute for nothing.
 - **Exec modules cannot hang ranma.** They run on their own thread, in their own
   process group, one run at a time per module, and a 5-second timeout kills the
   whole group, so a grandchild holding the output pipe open cannot wedge the read

@@ -297,6 +297,8 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
+| `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`) |
+| `mem` | Memory in use (total minus available), from `/proc/meminfo` (`mem 24.1G`). Urgent at 90% of total and above. | `interval` (default `5`), `format` (`%s` is `24.1G`, default `"mem %s"`) |
 
 Two more come defined in Lua in the defaults, and are redefined like any module:
 `datetime` (`Mon 28 Sep  14:45`, the default on the right) and `clock` (`14:45`).
@@ -304,7 +306,12 @@ For another format, e.g.
 `ranma.module("datetime", { interval = 60, render = function() return os.date("%Y-%m-%d %H:%M") end })`.
 
 Options go through `ranma.module` with the built-in's name:
-`ranma.module("workspaces", { show = "all" })`.
+`ranma.module("workspaces", { show = "all" })`, `ranma.module("cpu", { interval
+= 1, format = "CPU %s" })`. `cpu` and `mem` read `/proc` directly on their own
+tick, with no command started. Naming them in `ranma.bar` is enough.
+
+A timed module ticks only while the bar shows it. One that is defined but in
+none of the three lists costs nothing.
 
 ### Your own modules — `ranma.module(name, opts)`
 

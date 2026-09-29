@@ -17,6 +17,7 @@ pub mod pane;
 pub mod picker;
 pub mod proto;
 pub mod render;
+pub mod sysstat;
 pub mod theme;
 pub mod toast;
 pub mod update;

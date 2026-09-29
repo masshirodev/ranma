@@ -224,8 +224,10 @@ ranma.bind("shift+u", "update")
 -- Bar ---------------------------------------------------------------------------
 -- Which modules go where. Built in: mode (WM, COPY, SEARCH), session (its name,
 -- once there is more than one), workspaces, title (the focused pane's), panes
--- (a count), update (a marker while an update is waiting; click to install). Anything else is defined with
--- ranma.module, below or in your own init.lua.
+-- (a count), update (a marker while an update is waiting; click to install),
+-- cpu and mem (read from /proc every 2 and 5 seconds: "cpu 12%", "mem 24.1G").
+-- Anything else is defined with ranma.module, below or in your own init.lua.
+-- A timed module only ticks while it is in the bar.
 ranma.bar {
   left = { "mode", "session", "workspaces" },
   center = { "title" },
@@ -237,6 +239,10 @@ ranma.bar {
 -- pane (" 3:nvim ", the shell at its prompt); "number" shows only " 3 ". A name
 -- given with rename_workspace (leader .) always wins.
 ranma.module("workspaces", { show = "occupied", label = "program" })
+
+-- cpu and mem take interval and format ("%s" is the reading):
+--   ranma.module("cpu", { interval = 1, format = "CPU %s" })
+--   ranma.bar { right = { "cpu", "mem", "update", "datetime" } }
 
 -- A module is a Lua function or a shell command. Timed modules tick on the wall
 -- clock: interval = 60 fires on the minute, not 60 s after ranma started.

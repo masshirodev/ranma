@@ -206,6 +206,8 @@ pub struct App {
     programs: HashMap<PaneId, String>,
     programs_read: Option<Instant>,
     programs_due: Option<Instant>,
+    /// The cpu module's previous /proc/stat sample: usage is the change since.
+    cpu_prev: Option<crate::sysstat::CpuSample>,
 }
 
 impl App {
@@ -265,6 +267,7 @@ impl App {
             programs: HashMap::new(),
             programs_read: None,
             programs_due: None,
+            cpu_prev: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -1798,12 +1801,15 @@ impl App {
 
     // ---- bar modules ---------------------------------------------------------------
 
+    /// Timed modules the bar shows are due now. One defined but not in the bar
+    /// never ticks: idle means no wakeups, and nobody would see the result.
     fn schedule_modules(&mut self, now: Instant) {
+        let shown: HashSet<&String> = self.config.bar.all().collect();
         self.module_due = self
             .config
             .modules
             .iter()
-            .filter(|(_, m)| m.interval.is_some())
+            .filter(|(name, m)| m.interval.is_some() && shown.contains(name))
             .map(|(name, _)| (name.clone(), now))
             .collect();
     }
@@ -1994,6 +2000,35 @@ impl App {
                     );
                 }
             }
+            ModuleKind::Cpu { format } => {
+                use crate::sysstat;
+                let now = sysstat::read_cpu();
+                let pct = self
+                    .cpu_prev
+                    .zip(now)
+                    .and_then(|(a, b)| sysstat::cpu_percent(a, b));
+                self.cpu_prev = now;
+                // The first tick has nothing to compare with: show nothing yet.
+                let seg = pct.map_or_else(Vec::new, |p| {
+                    let text = bar::format_output(
+                        Some(format.as_deref().unwrap_or("cpu %s")),
+                        &format!("{p}%"),
+                    );
+                    vec![Piece::new(text, sys_style(p))]
+                });
+                self.set_module_value(name.to_string(), seg);
+            }
+            ModuleKind::Mem { format } => {
+                use crate::sysstat;
+                let seg = sysstat::read_mem().map_or_else(Vec::new, |m| {
+                    let text = bar::format_output(
+                        Some(format.as_deref().unwrap_or("mem %s")),
+                        &sysstat::gib(m.used_kib()),
+                    );
+                    vec![Piece::new(text, sys_style(m.used_percent()))]
+                });
+                self.set_module_value(name.to_string(), seg);
+            }
             ModuleKind::Lua(key) => {
                 let Ok(f) = self.config.lua.registry_value::<Function>(key) else {
                     return;
@@ -2161,6 +2196,15 @@ fn nearest_by_centre(rects: &[(PaneId, Rect)], from: PaneId, dir: Dir) -> Option
         })
         .min_by_key(|(_, d)| *d)
         .map(|(id, _)| id)
+}
+
+/// A cpu or mem reading at or above `URGENT_PERCENT` is urgent.
+fn sys_style(percent: u8) -> Style {
+    if percent >= crate::sysstat::URGENT_PERCENT {
+        Style::Urgent
+    } else {
+        Style::Normal
+    }
 }
 
 /// What a Lua module returned, as bar pieces.

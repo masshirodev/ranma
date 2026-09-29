@@ -185,6 +185,11 @@ impl FromStr for Event {
 pub const BUILTIN_MODULES: [&str; 6] =
     ["mode", "session", "workspaces", "title", "panes", "update"];
 
+/// Built-in modules that read the machine on a timer (see `sysstat`), with
+/// their default interval in seconds. Named in the bar, they are defined with
+/// these defaults; `ranma.module` changes only `interval` and `format`.
+pub const SYSTEM_MODULES: [(&str, f64); 2] = [("cpu", 2.0), ("mem", 5.0)];
+
 /// Which modules the bar shows, in order, on each side.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BarLayout {
@@ -209,6 +214,30 @@ pub enum ModuleKind {
         /// `%s` is replaced by the output line.
         format: Option<String>,
     },
+    /// CPU usage since the last tick, from /proc/stat. `%s` is `12%`.
+    Cpu { format: Option<String> },
+    /// Memory in use, from /proc/meminfo. `%s` is `24.1G`.
+    Mem { format: Option<String> },
+}
+
+impl ModuleKind {
+    fn system(name: &str, format: Option<String>) -> Option<ModuleKind> {
+        match name {
+            "cpu" => Some(ModuleKind::Cpu { format }),
+            "mem" => Some(ModuleKind::Mem { format }),
+            _ => None,
+        }
+    }
+}
+
+fn system_module(name: &str, interval: Option<f64>, format: Option<String>) -> Option<ModuleDef> {
+    let default = SYSTEM_MODULES.iter().find(|(n, _)| *n == name)?.1;
+    Some(ModuleDef {
+        interval: Some(std::time::Duration::from_secs_f64(
+            interval.unwrap_or(default),
+        )),
+        kind: ModuleKind::system(name, format)?,
+    })
 }
 
 #[derive(Debug)]
@@ -636,6 +665,25 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 }
                 return Ok(());
             }
+            if SYSTEM_MODULES.iter().any(|(n, _)| *n == name) {
+                if let Some(k) = keys.iter().find(|k| !["interval", "format"].contains(&k.as_str())) {
+                    return Err(rt_err(format!(
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format; `{k}` is not one"
+                    )));
+                }
+                let interval = opts.get::<Option<f64>>("interval")?;
+                if let Some(secs) = interval.filter(|s| *s <= 0.0) {
+                    return Err(rt_err(format!(
+                        "ranma.module(\"{name}\"): interval must be positive, not {secs}"
+                    )));
+                }
+                let def = system_module(&name, interval, opts.get("format")?).expect("listed above");
+                lua.app_data_mut::<Builder>()
+                    .expect("builder installed")
+                    .modules
+                    .insert(name, def);
+                return Ok(());
+            }
             if let Some(k) = keys
                 .iter()
                 .find(|k| !["render", "exec", "format", "interval"].contains(&k.as_str()))
@@ -870,9 +918,18 @@ pub fn load_from(
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
-    let builder = lua
+    let mut builder = lua
         .remove_app_data::<Builder>()
         .expect("builder installed above");
+    // A system module the bar names but nobody configured gets its defaults.
+    let named: Vec<String> = builder.bar.all().cloned().collect();
+    for name in named {
+        if !builder.modules.contains_key(&name)
+            && let Some(def) = system_module(&name, None, None)
+        {
+            builder.modules.insert(name, def);
+        }
+    }
     // Checked after the whole file ran, so a module may be defined after the
     // ranma.bar call that uses it.
     if let Some(unknown) = builder
@@ -880,9 +937,14 @@ pub fn load_from(
         .all()
         .find(|m| !BUILTIN_MODULES.contains(&m.as_str()) && !builder.modules.contains_key(*m))
     {
+        let builtins: Vec<&str> = BUILTIN_MODULES
+            .iter()
+            .copied()
+            .chain(SYSTEM_MODULES.iter().map(|(n, _)| *n))
+            .collect();
         anyhow::bail!(
             "ranma.bar: unknown module `{unknown}` (define it with ranma.module, or use a built-in: {})",
-            BUILTIN_MODULES.join(", ")
+            builtins.join(", ")
         );
     }
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
@@ -1117,6 +1179,38 @@ mod tests {
     }
 
     #[test]
+    fn system_modules_are_defined_by_naming_them() {
+        let cfg = with_user("ranma.bar { right = { 'cpu', 'mem' } }").unwrap();
+        assert_eq!(
+            cfg.modules["cpu"].interval,
+            Some(std::time::Duration::from_secs(2))
+        );
+        assert!(matches!(
+            cfg.modules["mem"].kind,
+            ModuleKind::Mem { format: None }
+        ));
+        // Configured, before or after the bar names it.
+        let cfg = with_user(
+            "ranma.module('cpu', { interval = 1, format = 'C %s' })\nranma.bar { right = { 'cpu' } }",
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.modules["cpu"].interval,
+            Some(std::time::Duration::from_secs(1))
+        );
+        assert!(
+            matches!(&cfg.modules["cpu"].kind, ModuleKind::Cpu { format: Some(f) } if f == "C %s")
+        );
+        // Not named, not defined: nothing ticks for a module nobody sees.
+        assert!(
+            !load_from(None, None, None)
+                .unwrap()
+                .modules
+                .contains_key("cpu")
+        );
+    }
+
+    #[test]
     fn bar_mistakes_are_named() {
         for (src, needle) in [
             ("ranma.bar { right = { 'nope' } }", "nope"),
@@ -1137,6 +1231,11 @@ mod tests {
             ),
             ("ranma.module('title', { show = 'all' })", "built in"),
             ("ranma.module('workspaces', { show = 'some' })", "some"),
+            (
+                "ranma.module('cpu', { exec = 'true' })",
+                "only interval, format",
+            ),
+            ("ranma.module('mem', { interval = -1 })", "positive"),
         ] {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");
