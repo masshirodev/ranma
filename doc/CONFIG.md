@@ -288,6 +288,15 @@ moves their shared edge, on a float's right or bottom edge it sizes the float.
 Programs are resized once, when the button is released. (With `border.style =
 "none"` there are no borders to grab; the keyboard still does all of it.)
 
+**A right click opens the pane's menu**: on its border or title bar, or in
+its text when its program does not use the mouse (a shell at its prompt, say).
+The menu opens at the pointer and lists what can be done to that pane, float
+or tile, fullscreen, group, swap with the master, synced input, links, copy
+mode, rename, move and close, each with the key that does it. Click an entry
+or pick it with the arrows and `Enter`; typing filters it; `Esc` or a click
+outside closes it. A program that asked for the mouse keeps its right clicks;
+its border still opens the menu.
+
 In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
 anywhere with the left button, resize it with the right. `mouse = "off"` limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.

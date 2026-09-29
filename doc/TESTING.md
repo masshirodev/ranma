@@ -48,6 +48,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - `leader /` finds a string in the history, and `y` puts the match on the
   clipboard: the tmux server runs with `set-clipboard on`, so the OSC 52 write
   lands in its buffer and is read back with `show-buffer`
+- a right click in a shell opens its menu at the pointer; Float floats the
+  pane, and its menu then offers Tile
 - a link printed in a pane gets a label from `leader o`, and typing it puts
   the link on the clipboard
 - a new session shows in the bar; when its only shell exits, it ends and main is

@@ -72,6 +72,8 @@ pub enum Kind {
     Servers,
     /// "Kill server NAME?", answered as ConfirmQuit.
     ConfirmKill(String),
+    /// A pane's right-click menu: entries that run an action on it.
+    Menu,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

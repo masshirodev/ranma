@@ -33,6 +33,37 @@ impl App {
         // (a nested ranma in a narrow pane) still gets a picker, cut short,
         // rather than a panic.
         let fit = s.w.saturating_sub(4).max(10).min(s.w);
+        // A menu opens at the pointer, as small as its entries, kept on screen.
+        if p.kind == Kind::Menu
+            && let Some((mx, my)) = self.menu_at
+        {
+            let widest = p
+                .visible()
+                .iter()
+                .map(|it| {
+                    UnicodeWidthStr::width(it.label.as_str())
+                        + UnicodeWidthStr::width(it.detail.as_str())
+                })
+                .max()
+                .unwrap_or(10)
+                .max(UnicodeWidthStr::width(p.title.as_str()));
+            let w = (widest as u16 + 7).min(s.w);
+            let h = (items.max(1) + 3).min(s.h);
+            let outer = Rect::new(
+                mx.min(s.right().saturating_sub(w)),
+                my.min(s.bottom().saturating_sub(h)),
+                w,
+                h,
+            );
+            let inner = outer.inset(1, 1);
+            let list = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
+            return Some(PickerLayout {
+                outer,
+                query: Rect::new(inner.x, inner.y, inner.w, inner.h.min(1)),
+                list,
+                offset: p.selected.saturating_sub(list.h.saturating_sub(1) as usize),
+            });
+        }
         let (w, h) = if p.is_prompt() {
             // A prompt is one row between borders, as wide as its text needs:
             // cutting a question short is worse than a wide box.
@@ -322,6 +353,28 @@ impl App {
 
     /// Every action in the catalogue, with its key when one runs it exactly.
     fn command_items(&self) -> Vec<Item> {
+        let keys = self.bound_keys();
+        crate::action::CATALOGUE
+            .iter()
+            .map(|(name, hint)| Item {
+                label: if hint.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{name} {hint}")
+                },
+                detail: keys.get(*name).cloned().unwrap_or_default(),
+                target: Target::Action {
+                    name: name.to_string(),
+                    needs_arg: crate::action::needs_arg(hint),
+                },
+                current: false,
+            })
+            .collect()
+    }
+
+    /// The key each bound action is on, as `leader t` or `alt+left`, by the
+    /// action as written (`toggle_floating`, `workspace 3`).
+    fn bound_keys(&self) -> std::collections::HashMap<String, String> {
         let leader = self.config.settings.leader;
         let mut keys: std::collections::HashMap<String, String> = Default::default();
         for (global, table) in [
@@ -346,22 +399,65 @@ impl App {
                 }
             }
         }
-        crate::action::CATALOGUE
-            .iter()
-            .map(|(name, hint)| Item {
-                label: if hint.is_empty() {
-                    name.to_string()
+        keys
+    }
+
+    /// The right-click menu of a pane, at the pointer: what can be done to it,
+    /// with the key that does it. It focuses the pane first, so every entry is
+    /// the ordinary action on the focused pane.
+    pub(super) fn open_pane_menu(&mut self, id: crate::layout::PaneId, x: u16, y: u16) {
+        if !self.active().contains(id) {
+            return;
+        }
+        if self.focused() != Some(id) {
+            self.focus(id);
+            self.relayout();
+        }
+        let ws = self.active();
+        let floating = ws.is_floating(id);
+        let grouped = ws.tree.is_grouped(id);
+        let synced = self.is_synced(id);
+        let mut entries: Vec<(&str, &str)> = vec![
+            (if floating { "Tile" } else { "Float" }, "toggle_floating"),
+            ("Fullscreen", "fullscreen"),
+        ];
+        if !floating && !self.scratch_shown {
+            entries.push((if grouped { "Ungroup" } else { "Group" }, "toggle_group"));
+            entries.push(("Swap with master", "swap_master"));
+        }
+        entries.extend([
+            (
+                if synced {
+                    "Stop synced input"
                 } else {
-                    format!("{name} {hint}")
+                    "Synced input"
                 },
-                detail: keys.get(*name).cloned().unwrap_or_default(),
-                target: Target::Action {
-                    name: name.to_string(),
-                    needs_arg: crate::action::needs_arg(hint),
-                },
+                "sync_toggle",
+            ),
+            ("Links on screen", "hints"),
+            ("Copy mode", "copy_mode"),
+            ("Rename", "rename_pane"),
+            ("Move to an empty workspace", "move_to_workspace empty"),
+            ("Move to the scratchpad", "move_to_scratchpad"),
+            ("Close", "close_pane"),
+        ]);
+        if self.scratch_shown {
+            entries.retain(|(_, a)| *a != "move_to_scratchpad");
+        }
+        let keys = self.bound_keys();
+        let items = entries
+            .into_iter()
+            .map(|(label, action)| Item {
+                label: label.to_string(),
+                detail: keys.get(action).cloned().unwrap_or_default(),
+                target: Target::Run(action.to_string()),
                 current: false,
             })
-            .collect()
+            .collect();
+        let title = self.pane_title(id);
+        self.picker = Some(Picker::new(Kind::Menu, title, items));
+        self.menu_at = Some((x, y));
+        self.dirty = true;
     }
 
     fn help_items(&self) -> Vec<Item> {

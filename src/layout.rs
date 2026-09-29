@@ -421,6 +421,30 @@ impl Tree {
         }
     }
 
+    /// Whether `id` sits in a tabbed container (a group).
+    pub fn is_grouped(&self, id: PaneId) -> bool {
+        let Some(root) = self.root.as_ref() else {
+            return false;
+        };
+        let Some(path) = find_path(root, id) else {
+            return false;
+        };
+        let mut n = root;
+        for &i in &path {
+            let Node::Container {
+                tabbed, children, ..
+            } = n
+            else {
+                break;
+            };
+            if tabbed.is_some() {
+                return true;
+            }
+            n = &children[i].0;
+        }
+        false
+    }
+
     /// Cycle the nearest tabbed container around `id`. Returns the pane to focus.
     pub fn cycle_group(&mut self, id: PaneId, forward: bool) -> Option<PaneId> {
         let root = self.root.as_mut()?;

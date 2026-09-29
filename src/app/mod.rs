@@ -223,6 +223,8 @@ pub struct App {
     synced: HashSet<PaneId>,
     /// Labelled links over the focused pane, waiting for a label (see `hints`).
     hints: Option<HintState>,
+    /// Where a right-click menu was opened: it is drawn there.
+    menu_at: Option<(u16, u16)>,
 }
 
 impl App {
@@ -290,6 +292,7 @@ impl App {
             return_focus: HashMap::new(),
             synced: HashSet::new(),
             hints: None,
+            menu_at: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -1219,6 +1222,21 @@ impl App {
             return;
         }
         let under = self.pane_at(&frame, x, y);
+        // A right press opens the pane's menu: on its border or title bar, or
+        // in its text when its program does not use the mouse. A program that
+        // asked for the mouse keeps its right clicks.
+        if let MouseEventKind::Down(MouseButton::Right) = m.kind
+            && let Some(v) = under
+            && (!v.inner.contains(x, y)
+                || self
+                    .panes
+                    .get(&v.id)
+                    .is_some_and(|p| !p.modes().wants_mouse()))
+        {
+            self.clear_selection();
+            self.open_pane_menu(v.id, x, y);
+            return;
+        }
         // A left press in the text of a pane whose program does not use the
         // mouse starts a selection; everything below is for the other cases.
         if let MouseEventKind::Down(MouseButton::Left) = m.kind {
@@ -2552,6 +2570,37 @@ mod tests {
         assert_eq!(a.typing_targets(), vec![2]);
         a.run_action(Action::SyncClear);
         assert_eq!(a.synced_here(), 0);
+    }
+
+    #[test]
+    fn the_pane_menu_opens_at_the_pointer_on_that_pane() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        a.workspaces.get_mut(&1).unwrap().focused = Some(1);
+        a.open_pane_menu(2, 70, 20);
+        assert_eq!(a.focused(), Some(2), "the menu is about the pane clicked");
+        let p = a.picker.as_ref().unwrap();
+        let labels: Vec<String> = p.visible().into_iter().map(|i| i.label).collect();
+        assert_eq!(labels.first().map(String::as_str), Some("Float"));
+        assert!(labels.iter().any(|l| l == "Close"));
+        // Kept on the 80x24 screen however near the corner it was opened.
+        let l = a.picker_layout().unwrap();
+        assert!(
+            l.outer.right() <= 80 && l.outer.bottom() <= 24,
+            "{:?}",
+            l.outer
+        );
+        assert!(l.outer.x <= 70 && l.outer.y <= 20);
+        // Every entry is an action that parses.
+        for it in p.visible() {
+            match it.target {
+                crate::picker::Target::Run(line) => {
+                    assert!(line.parse::<Action>().is_ok(), "{line}")
+                }
+                other => panic!("{other:?}"),
+            }
+        }
     }
 
     fn names(app: &App) -> Vec<Option<String>> {

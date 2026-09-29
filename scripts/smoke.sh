@@ -296,6 +296,15 @@ T send-keys -t s 'exit' Enter
 wait_for 'session 2 ended' || fail "an emptied session did not end"
 bar | grep -Eq '^ 1[: ]' || fail "not back on main after the session ended"
 
+# The pane menu: a right click in a shell opens it at the pointer; picking
+# Float floats the pane, and Tile from the same menu puts it back.
+T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
+screen | grep -q '│ *Float' || fail "a right click did not open the pane menu"
+T send-keys -t s Enter; sleep 0.5
+T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
+screen | grep -q '│ *Tile' || fail "the menu of a floated pane does not offer Tile"
+T send-keys -t s Enter; sleep 0.5
+
 # URL hints: a link printed in the pane gets a label; typing it copies the link.
 T send-keys -t s 'clear; echo "docs at https://example.com/smoke-link, see"' Enter; sleep 0.4
 T send-keys -t s C-b o; sleep 0.4

@@ -183,6 +183,15 @@ over it. A press ranma keeps, on the bar, a tab or a border, reaches no program 
 all, release included; the release used to follow focus, clamped to the pane's
 edge, and clicked whatever the program drew on the row nearest the bar.
 
+**A right click opens a pane's menu** (2026-09-29, from tuios's
+right_click_opens_menu, which the author had on). Where it opens was the
+decision: never inside a program that asked for the mouse, since its right
+clicks are its own (a file manager's context menu, say). So: on a border or
+the title bar of any pane, and in the text of a pane whose program does not
+use the mouse. WM mode keeps its right-drag resizing floats. The menu is the
+one picker again, anchored at the pointer, whose entries are ordinary actions
+on the pane it focused, shown with their keys, so the menu also teaches them.
+
 Text selection stays one modifier away, since every common terminal lets Shift
 override a program's mouse capture. `mouse = "off"` restores the milestone 1
 behaviour for anyone who prefers the host's own selection: the mouse is captured
