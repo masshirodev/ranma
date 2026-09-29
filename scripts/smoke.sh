@@ -174,6 +174,13 @@ T send-keys -t s 'exit' Enter; sleep 0.5
 T send-keys -t s "$BIN notify smoke-toast-ok" Enter
 wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
+# Scripting over the socket: open a pane in the background and get its id,
+# read its screen, type into it, and wait for it with its exit status.
+T send-keys -t s "P=\$($BIN open -P -d -- 'echo smoke-captured; read x; exit \$x'); sleep 0.5; $BIN capture -p \$P | grep -q smoke-captured && echo CAPTURE-OK; $BIN send -p \$P -e 7; $BIN wait -p \$P; echo WAIT=\$?; $BIN panes | head -1" Enter
+wait_for 'CAPTURE-OK' 20 || fail "ranma capture did not read a background pane"
+wait_for 'WAIT=7' 20 || fail "ranma send/wait did not return the pane's exit status"
+wait_for 'ID *WHERE *PROGRAM' 8 || fail "ranma panes printed no table"
+
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
 # The inner one as if reached over SSH: its host reaches the outer terminal's

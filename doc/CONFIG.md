@@ -384,14 +384,40 @@ ranma open --session ai --workspace empty --cwd ~/projects/kumiko \
 | `--name NAME` | name the pane, as `rename_pane` |
 | `--workspace-name NAME` | name the workspace it lands in, as `rename_workspace` |
 | `--accent COLOUR` | colour the session it lands in, as `session_accent` |
+| `--beside PANE` | open it beside that pane (an id from `ranma panes`), in the pane's own session and workspace, instead of where the layout would put it in the shown one. Not with `--session` or `--workspace`. |
+| `--side DIR` | with `--beside`: `left`, `right` (the default), `up` or `down` |
+| `-d`, `--background` | leave focus, the shown session and the shown workspace as they were |
+| `-P`, `--print` | print the new pane's id |
 | `-- COMMAND` | what to run; the shell when left out. One argument is a command line for the shell (`'ai; exec zsh'`); several are a command and its arguments, quoted for you. |
 
 It is how scripts lay things out: one project per workspace, say, each started
 in its directory and named after it.
 
-All three find the ranma they run in through `RANMA_SOCKET`, which ranma sets in every
-pane; outside ranma they say so and exit 1. The socket is
-`$XDG_RUNTIME_DIR/ranma-<pid>.sock`, mode 0600, removed when ranma exits.
+### Scripting panes: `ranma panes`, `send`, `capture`, `wait`
+
+```sh
+id=$(ranma open -P -d -- 'make test')   # a pane in the background, and its id
+ranma capture -p "$id" | tail -5         # what it shows
+ranma send -p "$id" --keys ctrl+c        # stop it
+ranma wait -p "$id"; echo $?             # until it ends; its exit status
+```
+
+| Command | Does |
+| --- | --- |
+| `ranma panes [--json]` | Every pane in every session: its id (`*` on the focused one of its workspace), `session:workspace` (`S` is the scratchpad), the program in its foreground and its title. `--json` gives one object per pane with `id session workspace focused visible floating title program cwd pid cols rows`. |
+| `ranma send [-p PANE] [-e] TEXT...` | Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and `-e` presses Enter after it. `--paste` sends it as a paste instead, bracketed if the program asked for bracketed paste. |
+| `ranma send [-p PANE] --keys KEY...` | Press keys, each spelled as in a bind (`ctrl+c`, `return`, `alt+x`, `up`), encoded for the modes the program asked for. |
+| `ranma capture [-p PANE] [-H N]` | Print the pane's screen, with `N` lines of history above it. Each line is trimmed on the right; blank lines at the end are left out. |
+| `ranma wait [-p PANE]` | Wait until the pane ends and exit with its program's status (1 when there is none, as for a pane closed by ranma). |
+
+`-p` takes a pane id from `ranma panes`; without it, each means the pane it
+runs in (`RANMA_PANE`, which every pane has). A pane id is fixed for the pane's
+life and never reused by that server.
+
+All of these find the ranma they run in through `RANMA_SOCKET`, which ranma
+sets in every pane; outside ranma they say so and exit 1. A server's socket is
+`$XDG_RUNTIME_DIR/ranma/<name>.sock` (a `--standalone` ranma's is
+`$XDG_RUNTIME_DIR/ranma-<pid>.sock`), mode 0600, removed when it exits.
 
 ## Lua at run time
 

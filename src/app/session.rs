@@ -142,23 +142,50 @@ impl App {
     /// `ranma open`: go to (or create) the session and workspace, open the pane
     /// there, and name what was asked. A session created here gets this pane as
     /// its first, not a shell next to it.
-    pub(super) fn open_spec(&mut self, spec: crate::ipc::OpenSpec) {
-        if let Some(name) = spec.session.as_deref() {
-            match self.sessions.iter().position(|s| s.name == name) {
-                Some(i) => self.switch_session(i),
-                None => {
-                    self.sessions.push(Session::new(name));
-                    let i = self.sessions.len() - 1;
-                    self.switch_session(i);
+    /// `ranma open`: a pane in a given session and workspace, or beside a given
+    /// pane, named and coloured as asked. Returns the new pane. In the
+    /// background, focus and the shown session and workspace stay as they were.
+    pub(super) fn open_spec(&mut self, spec: crate::ipc::OpenSpec) -> Result<PaneId, String> {
+        let back = (self.active_session, self.current, self.scratch_shown);
+        let mut side = None;
+        if let Some((target, dir)) = spec.beside {
+            if spec.session.is_some() || spec.workspace.is_some() {
+                return Err("beside a pane is in that pane's session and workspace; \
+                            --session and --workspace do not go with it"
+                    .into());
+            }
+            if let Some((si, _)) = self.locate_hidden(target) {
+                self.switch_session(si);
+            }
+            match self.locate(target) {
+                Some(super::SCRATCHPAD) => self.scratch_shown = true,
+                Some(n) => self.switch_workspace(n),
+                None => return Err(format!("no pane {target} (see `ranma panes`)")),
+            }
+            side = Some(dir);
+        } else {
+            if let Some(name) = spec.session.as_deref() {
+                match self.sessions.iter().position(|s| s.name == name) {
+                    Some(i) => self.switch_session(i),
+                    None => {
+                        self.sessions.push(Session::new(name));
+                        let i = self.sessions.len() - 1;
+                        self.switch_session(i);
+                    }
                 }
             }
+            if let Some(t) = &spec.workspace {
+                let n = self.resolve(t);
+                self.switch_workspace(n);
+            }
+            self.scratch_shown = false;
         }
-        if let Some(t) = &spec.workspace {
-            let n = self.resolve(t);
-            self.switch_workspace(n);
+        let prior = self.focused();
+        if let Some((target, _)) = spec.beside {
+            self.focus(target);
         }
-        self.scratch_shown = false;
-        match self.open_pane_at(spec.command.as_deref(), None, spec.cwd.clone()) {
+        let result = self.open_pane_at(spec.command.as_deref(), side, spec.cwd.clone());
+        match result {
             Ok(id) => {
                 if let Some(name) = spec.name.as_deref() {
                     self.rename_pane(id, name);
@@ -169,14 +196,26 @@ impl App {
                 if spec.accent.is_some() {
                     self.sessions[self.active_session].accent = spec.accent;
                 }
+                if spec.background {
+                    if let Some(p) = prior {
+                        self.focus(p);
+                    }
+                    self.switch_session(back.0);
+                    if self.current != back.1 && !self.sessions.is_empty() {
+                        self.switch_workspace(back.1);
+                    }
+                    self.scratch_shown = back.2;
+                }
+                self.relayout();
+                Ok(id)
             }
             Err(e) => {
-                self.status = Some(format!("ranma open failed: {e:#}"));
                 // A session made for this pane and left empty goes again.
                 self.drop_empty_sessions();
+                self.relayout();
+                Err(format!("{e:#}"))
             }
         }
-        self.relayout();
     }
 
     /// The workspace `move_workspace_to_session` would send: the current one, if

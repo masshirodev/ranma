@@ -300,7 +300,7 @@ pub fn list() -> ExitCode {
 /// `ranma kill NAME`: quit a server and everything in it, without asking.
 pub fn kill(name: &str) -> Result<()> {
     let sock = ipc::server_socket(name);
-    ipc::send_to(&sock, "action\nquit now")
+    ipc::send_to(&sock, "action\nquit now").map(|_| ())
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
-//! Talking to a running ranma from inside it: `ranma notify` and `ranma action`.
+//! Talking to a running ranma from inside it: `ranma notify`, `action`,
+//! `open`, `panes`, `send`, `capture` and `wait`.
 //!
 //! Each ranma listens on a Unix socket of its own and tells its panes where, in
 //! `RANMA_SOCKET`. A command run in any pane — `make && ranma notify "build done"`
@@ -11,9 +12,16 @@
 //! toast\n<normal|urgent>\n<timeout seconds, or empty>\n<text...>
 //! action\n<action, as in a bind>
 //! open\n<key>=<value>...\n--\n<command line, or nothing for a shell>
+//! panes
+//! send\n<pane>\n<text|paste|keys>\n<payload...>
+//! capture\n<pane>\n<history lines, or empty>
+//! wait\n<pane>
 //! ```
 //!
-//! answered with `ok` or `error: <why>`.
+//! answered with `ok` or `error: <why>`. The last five are *queries*: their
+//! `ok` line is followed by a body (the new pane's id, the panes as JSON, a
+//! pane's text, an exit status), which the window manager writes from its own
+//! thread; the connection's thread only waits for it.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -25,7 +33,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 
-use crate::action::{Action, WorkspaceTarget};
+use crate::action::{Action, Dir, WorkspaceTarget};
+use crate::keys::Chord;
+use crate::layout::PaneId;
 use crate::pane::AppEvent;
 use crate::toast::Level;
 
@@ -136,11 +146,12 @@ fn serve(stream: UnixStream, tx: &Sender<AppEvent>) {
         _ => {
             let mut rest = String::new();
             let reply = match reader.take(MAX_REQUEST).read_to_string(&mut rest) {
-                Ok(_) => match parse(&format!("{first}{rest}")) {
-                    Ok(ev) => {
+                Ok(_) => match parse_request(&format!("{first}{rest}")) {
+                    Ok(Request::Event(ev)) => {
                         let _ = tx.send(ev);
                         "ok\n".to_string()
                     }
+                    Ok(Request::Query(q)) => answer(q, tx),
                     Err(e) => format!("error: {e}\n"),
                 },
                 Err(e) => format!("error: reading the request: {e}\n"),
@@ -193,6 +204,29 @@ fn serve_client(
     }
 }
 
+/// Hand a query to the window manager and wait for its answer. `wait` waits
+/// for as long as the pane lives; everything else is answered at once.
+fn answer(q: Query, tx: &Sender<AppEvent>) -> String {
+    let patient = matches!(q, Query::Wait { .. });
+    let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+    if tx.send(AppEvent::Query(q, reply_tx)).is_err() {
+        return "error: ranma is going away\n".into();
+    }
+    let got = if patient {
+        reply_rx.recv().map_err(|_| ())
+    } else {
+        reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| ())
+    };
+    match got {
+        Ok(Ok(body)) => format!("ok\n{body}"),
+        Ok(Err(e)) => format!("error: {e}\n"),
+        Err(()) if patient => "error: ranma quit before the pane ended\n".into(),
+        Err(()) => "error: no answer\n".into(),
+    }
+}
+
 /// Ask the server at `path` how it is.
 pub fn status(path: &Path) -> Result<crate::proto::Status> {
     let mut stream = UnixStream::connect(path)?;
@@ -225,6 +259,137 @@ pub struct OpenSpec {
     pub command: Option<String>,
     /// Colour the session it lands in (as session_accent).
     pub accent: Option<crate::theme::Color>,
+    /// Open it on this side of this pane, in that pane's workspace and
+    /// session, instead of where the layout would put it in the shown one.
+    pub beside: Option<(PaneId, Dir)>,
+    /// Leave focus where it is (tmux's `split-window -d`).
+    pub background: bool,
+}
+
+/// A request answered with data (see the module docs).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Query {
+    /// Open a pane; answered with its id.
+    Open(OpenSpec),
+    /// Every pane in every session, as a JSON array of [`PaneInfo`].
+    Panes,
+    /// Input for a pane, as if typed.
+    Send { pane: PaneId, input: SendInput },
+    /// A pane's text: the screen, and this many lines of history above it.
+    Capture { pane: PaneId, history: usize },
+    /// Answered when the pane ends, with its exit status (empty if unknown).
+    Wait { pane: PaneId },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SendInput {
+    /// Written as it is: a newline in it is Enter.
+    Text(String),
+    /// Wrapped in bracketed paste when the program asked for it.
+    Paste(String),
+    /// Chords, as a bind spells them, encoded for the pane's modes.
+    Keys(Vec<Chord>),
+}
+
+/// One pane, as `ranma panes` reports it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PaneInfo {
+    pub id: PaneId,
+    pub session: String,
+    /// 0 is the scratchpad.
+    pub workspace: u8,
+    /// The pane keys go to in its workspace.
+    pub focused: bool,
+    /// On screen now: its session and workspace are shown and it is not a
+    /// background tab.
+    pub visible: bool,
+    pub floating: bool,
+    /// Its name if it has one, else its title.
+    pub title: String,
+    pub program: Option<String>,
+    pub cwd: Option<PathBuf>,
+    pub pid: u32,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+pub enum Request {
+    Event(AppEvent),
+    Query(Query),
+}
+
+/// Any request: an event to hand over, or a query to answer.
+pub fn parse_request(text: &str) -> Result<Request> {
+    let mut lines = text.lines();
+    let head = lines.clone().next().unwrap_or("");
+    let pane = |l: Option<&str>| -> Result<PaneId> {
+        let l = l.unwrap_or("").trim();
+        l.parse()
+            .map_err(|_| anyhow::anyhow!("`{l}` is not a pane id (see `ranma panes`)"))
+    };
+    let q = match head {
+        "open" => {
+            lines.next();
+            Query::Open(parse_open(lines)?)
+        }
+        "panes" => Query::Panes,
+        "send" => {
+            // The payload is the rest verbatim: a trailing newline is an Enter.
+            let mut parts = text.splitn(4, '\n').skip(1);
+            let pane = pane(parts.next())?;
+            let kind = parts.next().unwrap_or("").trim();
+            let payload = parts.next().unwrap_or("").to_string();
+            let input = match kind {
+                "text" => SendInput::Text(payload),
+                "paste" => SendInput::Paste(payload),
+                "keys" => SendInput::Keys(
+                    payload
+                        .split_whitespace()
+                        .map(|k| k.parse().map_err(|e| anyhow::anyhow!("key `{k}`: {e}")))
+                        .collect::<Result<_>>()?,
+                ),
+                other => bail!("unknown input kind `{other}` (text, paste or keys)"),
+            };
+            if matches!(&input, SendInput::Keys(k) if k.is_empty()) {
+                bail!("no keys to send");
+            }
+            Query::Send { pane, input }
+        }
+        "capture" => {
+            lines.next();
+            let pane = pane(lines.next())?;
+            let history = match lines.next().map(str::trim) {
+                None | Some("") => 0,
+                Some(n) => n
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("`{n}` is not a number of lines"))?,
+            };
+            Query::Capture { pane, history }
+        }
+        "wait" => {
+            lines.next();
+            Query::Wait {
+                pane: pane(lines.next())?,
+            }
+        }
+        _ => return parse(text).map(Request::Event),
+    };
+    Ok(Request::Query(q))
+}
+
+pub fn send_request(pane: PaneId, input: &SendInput) -> String {
+    let (kind, payload) = match input {
+        SendInput::Text(t) => ("text", t.clone()),
+        SendInput::Paste(t) => ("paste", t.clone()),
+        SendInput::Keys(k) => (
+            "keys",
+            k.iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+    };
+    format!("send\n{pane}\n{kind}\n{payload}")
 }
 
 /// Build an `open` request.
@@ -248,6 +413,12 @@ pub fn open_request(spec: &OpenSpec) -> String {
     }
     if let Some(v) = &spec.accent {
         kv("accent", &v.to_string());
+    }
+    if let Some((p, d)) = &spec.beside {
+        kv("beside", &format!("{p} {d}"));
+    }
+    if spec.background {
+        kv("background", "yes");
     }
     s.push_str("--\n");
     if let Some(c) = &spec.command {
@@ -276,6 +447,24 @@ fn parse_open<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<OpenSpec> 
                     Some(crate::action::parse_workspace(v).map_err(|e| anyhow::anyhow!("{e}"))?)
             }
             "name" => spec.name = Some(v.into()),
+            "beside" => {
+                let (p, d) = v
+                    .split_once(' ')
+                    .ok_or_else(|| anyhow::anyhow!("beside `{v}` is not `<pane> <direction>`"))?;
+                let p = p
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("`{p}` is not a pane id"))?;
+                let d = format!("new_pane {d}")
+                    .parse::<Action>()
+                    .ok()
+                    .and_then(|a| match a {
+                        Action::NewPaneAt(d) => Some(d),
+                        _ => None,
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("`{d}` is not left, right, up or down"))?;
+                spec.beside = Some((p, d));
+            }
+            "background" => spec.background = v == "yes",
             "accent" => {
                 spec.accent = Some(
                     v.parse()
@@ -327,7 +516,6 @@ pub fn parse(text: &str) -> Result<AppEvent> {
                 timeout,
             })
         }
-        Some("open") => Ok(AppEvent::Open(parse_open(lines)?)),
         Some("action") => {
             let spec = lines.next().unwrap_or("").trim();
             let action: Action = spec.parse().map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -338,27 +526,49 @@ pub fn parse(text: &str) -> Result<AppEvent> {
     }
 }
 
-/// Send a request to the ranma this process runs in. Returns its answer.
-pub fn send(request: &str) -> Result<()> {
-    let path = std::env::var_os(ENV)
+/// The socket of the ranma this process runs in.
+fn own_socket() -> Result<PathBuf> {
+    std::env::var_os(ENV)
         .filter(|p| !p.is_empty())
-        .context("not inside ranma (RANMA_SOCKET is not set)")?;
-    send_to(Path::new(&path), request)
+        .map(PathBuf::from)
+        .context("not inside ranma (RANMA_SOCKET is not set)")
+}
+
+/// Send a request to the ranma this process runs in. Returns its answer's
+/// body: empty for plain requests, the data for a query.
+pub fn send(request: &str) -> Result<String> {
+    send_to(&own_socket()?, request)
 }
 
 /// Send a request to the ranma listening at `path`.
-pub fn send_to(path: &Path, request: &str) -> Result<()> {
+pub fn send_to(path: &Path, request: &str) -> Result<String> {
     let mut stream = UnixStream::connect(path)
         .with_context(|| format!("connecting to ranma at {}", Path::new(&path).display()))?;
     stream.write_all(request.as_bytes())?;
     stream.shutdown(std::net::Shutdown::Write)?;
+    let mut reader = BufReader::new(stream);
     let mut answer = String::new();
-    BufReader::new(stream).read_line(&mut answer)?;
+    reader.read_line(&mut answer)?;
     match answer.trim_end() {
-        "ok" => Ok(()),
+        "ok" => {
+            let mut body = String::new();
+            reader.read_to_string(&mut body)?;
+            Ok(body)
+        }
         "" => bail!("ranma closed the connection without answering"),
         other => bail!("{}", other.strip_prefix("error: ").unwrap_or(other)),
     }
+}
+
+/// The pane a command means: the one given, else the one it runs in.
+pub fn pane_or_own(pane: Option<PaneId>) -> Result<PaneId> {
+    if let Some(p) = pane {
+        return Ok(p);
+    }
+    std::env::var("RANMA_PANE")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .context("no pane given, and not inside a ranma pane (RANMA_PANE is not set)")
 }
 
 pub fn toast_request(text: &str, urgent: bool, timeout: Option<f64>) -> String {
@@ -413,6 +623,48 @@ mod tests {
     }
 
     #[test]
+    fn queries_round_trip_and_are_checked() {
+        let q = |r: &str| match parse_request(r).unwrap() {
+            Request::Query(q) => q,
+            Request::Event(e) => panic!("{e:?}"),
+        };
+        for input in [
+            SendInput::Text("echo hi\nls\n".into()),
+            SendInput::Paste("a\nb".into()),
+            SendInput::Keys(vec!["ctrl+c".parse().unwrap(), "return".parse().unwrap()]),
+        ] {
+            assert_eq!(q(&send_request(3, &input)), Query::Send { pane: 3, input });
+        }
+        assert_eq!(q("panes\n"), Query::Panes);
+        assert_eq!(
+            q("capture\n4\n200\n"),
+            Query::Capture {
+                pane: 4,
+                history: 200
+            }
+        );
+        assert_eq!(
+            q("capture\n4\n"),
+            Query::Capture {
+                pane: 4,
+                history: 0
+            }
+        );
+        assert_eq!(q("wait\n9\n"), Query::Wait { pane: 9 });
+        for (req, needle) in [
+            ("send\nx\ntext\nhi", "pane id"),
+            ("send\n1\nshout\nhi", "shout"),
+            ("send\n1\nkeys\nctrl+nope", "nope"),
+            ("send\n1\nkeys\n", "no keys"),
+            ("capture\n1\nlots", "lots"),
+            ("wait\n", "pane id"),
+        ] {
+            let err = format!("{:#}", parse_request(req).err().unwrap());
+            assert!(err.contains(needle), "{req:?}: {err}");
+        }
+    }
+
+    #[test]
     fn open_requests_round_trip_and_are_checked() {
         let spec = OpenSpec {
             session: Some("ai-workspace".into()),
@@ -422,24 +674,34 @@ mod tests {
             cwd: Some(std::env::temp_dir()),
             command: Some("ai; exec zsh".into()),
             accent: Some(crate::theme::Color::Rgb(0xff, 0x6a, 0x6a)),
+            ..Default::default()
         };
-        match parse(&open_request(&spec)).unwrap() {
-            AppEvent::Open(got) => assert_eq!(got, spec),
-            other => panic!("{other:?}"),
-        }
+        let open = |r: &str| match parse_request(r).unwrap() {
+            Request::Query(Query::Open(got)) => got,
+            _ => panic!("not an open query"),
+        };
+        assert_eq!(open(&open_request(&spec)), spec);
         // Nothing at all is a plain new pane.
-        match parse(&open_request(&OpenSpec::default())).unwrap() {
-            AppEvent::Open(got) => assert_eq!(got, OpenSpec::default()),
-            other => panic!("{other:?}"),
-        }
+        assert_eq!(
+            open(&open_request(&OpenSpec::default())),
+            OpenSpec::default()
+        );
+        let beside = OpenSpec {
+            beside: Some((7, Dir::Down)),
+            background: true,
+            ..Default::default()
+        };
+        assert_eq!(open(&open_request(&beside)), beside);
         for (req, needle) in [
             ("open\ncolour=red\n--\n", "colour"),
             ("open\ncwd=/definitely/not/here\n--\n", "not a directory"),
             ("open\nworkspace=0\n--\n", "workspace"),
             ("open\nname\n--\n", "key=value"),
             ("open\naccent=pink\n--\n", "accent"),
+            ("open\nbeside=7 sideways\n--\n", "sideways"),
+            ("open\nbeside=x down\n--\n", "pane id"),
         ] {
-            let err = format!("{:#}", parse(req).unwrap_err());
+            let err = format!("{:#}", parse_request(req).err().unwrap());
             assert!(err.contains(needle), "{req:?}: {err}");
         }
     }

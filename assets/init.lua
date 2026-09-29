@@ -268,6 +268,10 @@ ranma.module("datetime", {
 -- toast in this ranma: `make && ranma notify "build done"`. `ranma action
 -- "workspace 3"` runs any action the same way. A bell in a pane you cannot see
 -- shows a toast saying where. Click a toast to dismiss it.
+--
+-- Scripts drive panes the same way: `ranma panes` lists them, `ranma open -P`
+-- opens one and prints its id, `ranma send -p ID -e "make"` types into it,
+-- `ranma capture -p ID` prints its screen, `ranma wait -p ID` waits for it.
 
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind

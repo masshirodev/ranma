@@ -28,6 +28,7 @@ use crate::workspace::Workspace;
 
 mod copy;
 mod drag;
+mod query;
 mod rules;
 mod run;
 mod session;
@@ -208,6 +209,10 @@ pub struct App {
     programs_due: Option<Instant>,
     /// The cpu module's previous /proc/stat sample: usage is the change since.
     cpu_prev: Option<crate::sysstat::CpuSample>,
+    /// `ranma wait` requests, answered when their pane ends (see `query`).
+    waiters: HashMap<PaneId, Vec<query::Reply>>,
+    /// Exit statuses of children that ended, until their pane is closed.
+    exit_codes: HashMap<PaneId, i32>,
 }
 
 impl App {
@@ -269,6 +274,8 @@ impl App {
             programs_read: None,
             programs_due: None,
             cpu_prev: None,
+            waiters: HashMap::new(),
+            exit_codes: HashMap::new(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -660,6 +667,7 @@ impl App {
         }
         self.panes.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
+        self.pane_ended(id);
         if self.panes.is_empty() {
             self.quit = true;
             return;
@@ -838,7 +846,7 @@ impl App {
                 timeout,
             } => self.toast(text, level, timeout),
             AppEvent::Action(a) => self.run_action(a),
-            AppEvent::Open(spec) => self.open_spec(spec),
+            AppEvent::Query(q, reply) => self.answer(q, reply),
             AppEvent::UpdateAvailable(b) => self.update_found(b),
             AppEvent::Servers(list) => self.open_server_switcher(list),
             // The event loop (run.rs) deals with clients itself.
@@ -1000,7 +1008,13 @@ impl App {
             // SSH): passed on to the host terminal, which owns the clipboard.
             // Reading the clipboard back is refused, alacritty_terminal's default.
             TermEvent::ClipboardStore(_, text) => self.set_host_clipboard(&text),
-            TermEvent::ChildExit(_) | TermEvent::Exit => self.close_pane(id),
+            TermEvent::ChildExit(status) => {
+                if let Some(code) = status.code() {
+                    self.exit_codes.insert(id, code);
+                }
+                self.close_pane(id);
+            }
+            TermEvent::Exit => self.close_pane(id),
             // Clipboard (OSC 52) and colour queries: milestone 3.
             _ => {}
         }
@@ -2238,7 +2252,7 @@ fn lua_segment(v: &Value) -> Segment {
 }
 
 /// The bytes a chord would have sent had it not been the leader.
-fn chord_bytes(chord: crate::keys::Chord, modes: input::PaneModes) -> Option<Vec<u8>> {
+pub(super) fn chord_bytes(chord: crate::keys::Chord, modes: input::PaneModes) -> Option<Vec<u8>> {
     use crate::keys::Key;
     use crossterm::event::{KeyCode, KeyModifiers};
     let code = match chord.key {

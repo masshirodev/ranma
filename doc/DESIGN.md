@@ -414,6 +414,18 @@ Once it existed, `ranma action` came for free: any bind's action, from a script.
 directory, command and names in one go, because doing it as a chain of actions
 means renaming "whatever is focused now" and hoping nothing moved in between.
 
+**Scripts can drive panes** (2026-09-29, from tuios's send-keys and
+capture-pane): `ranma panes`, `send`, `capture` and `wait` over the same
+socket. They are *queries*: the connection's thread hands the request to the
+window manager and waits for its answer, so everything is read and written on
+the one thread that owns the state, as with every other event. `open` became
+one too, answering with the new pane's id, since a script that opens a pane
+wants to address it next. Text is typed, not pasted, by default: a newline is
+Enter (`\r`, what the key sends), which is what a script sending a command
+means; `--paste` is there for text that should arrive as a paste. Pane ids are
+the ones every pane already had in `RANMA_PANE`. This is plain IPC, the same
+in kind as `ranma action`; nothing in it knows about agents (a non-goal).
+
 Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
 alacritty_terminal drops those sequences before ranma sees them, and catching
 them would mean parsing the PTY stream a second time.

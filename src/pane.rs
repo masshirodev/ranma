@@ -44,8 +44,12 @@ pub enum AppEvent {
     },
     /// An action from `ranma action`.
     Action(crate::action::Action),
-    /// A pane from `ranma open`.
-    Open(crate::ipc::OpenSpec),
+    /// A request answered with data (`ranma open`, `panes`, `send`, `capture`,
+    /// `wait`), and where the answer goes.
+    Query(
+        crate::ipc::Query,
+        Sender<std::result::Result<String, String>>,
+    ),
     /// The source has commits this binary lacks (see `update`).
     UpdateAvailable(crate::update::Behind),
     /// A client attached (see `proto`): where to send its output, and its hello.

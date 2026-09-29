@@ -73,6 +73,43 @@ enum Command {
         #[arg(required = true)]
         action: Vec<String>,
     },
+    /// List every pane in every session: id, where it is, what runs in it.
+    Panes {
+        /// As JSON, one object per pane, for scripts.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Type into a pane as if at its keyboard: `ranma send -p 3 -e 'make test'`.
+    Send {
+        /// The pane (from `ranma panes`); the one this runs in when left out.
+        #[arg(long, short)]
+        pane: Option<u64>,
+        /// Each argument is a key as a bind spells it: `ranma send --keys ctrl+c`.
+        #[arg(long, conflicts_with_all = ["paste", "enter"])]
+        keys: bool,
+        /// Send the text as a paste, bracketed if the program asked for that.
+        #[arg(long)]
+        paste: bool,
+        /// Press Enter after the text.
+        #[arg(long, short)]
+        enter: bool,
+        /// The text (arguments joined by spaces), or the keys.
+        #[arg(required = true)]
+        input: Vec<String>,
+    },
+    /// Print a pane's text: its screen, and with --history that many lines of
+    /// scrollback above it.
+    Capture {
+        #[arg(long, short)]
+        pane: Option<u64>,
+        #[arg(long, short = 'H', default_value_t = 0)]
+        history: usize,
+    },
+    /// Wait for a pane to end, and exit with its program's status.
+    Wait {
+        #[arg(long, short)]
+        pane: Option<u64>,
+    },
     /// Open a pane somewhere, e.g. `ranma open --session ai --workspace empty
     /// --cwd ~/projects/x --name x -- 'ai; exec zsh'`. One argument after `--`
     /// is a command line for the shell; several are a command and its arguments.
@@ -95,6 +132,19 @@ enum Command {
         /// Colour the session it lands in: #rrggbb, 0-255 or an ANSI name.
         #[arg(long)]
         accent: Option<String>,
+        /// Open it beside this pane (an id from `ranma panes`), in that pane's
+        /// session and workspace, on the --side given.
+        #[arg(long, conflicts_with_all = ["session", "workspace"])]
+        beside: Option<u64>,
+        /// With --beside: left, right, up or down (default right).
+        #[arg(long, requires = "beside")]
+        side: Option<String>,
+        /// Leave focus, the session and the workspace as they are.
+        #[arg(long, short = 'd')]
+        background: bool,
+        /// Print the new pane's id.
+        #[arg(long, short = 'P')]
+        print: bool,
         /// What to run; the shell when left out.
         #[arg(last = true)]
         command: Vec<String>,
@@ -177,6 +227,160 @@ fn command_line(args: &[String]) -> Option<String> {
     }
 }
 
+/// A command that is a request to the ranma this runs in, and what it prints.
+fn request(cmd: Command) -> anyhow::Result<ExitCode> {
+    use anyhow::Context;
+    let out = match cmd {
+        Command::Notify {
+            urgent,
+            timeout,
+            text,
+        } => ipc::send(&ipc::toast_request(&text.join(" "), urgent, timeout))?,
+        Command::Action { action } => ipc::send(&format!("action\n{}", action.join(" ")))?,
+        Command::Panes { json } => {
+            let body = ipc::send("panes\n")?;
+            if json {
+                body
+            } else {
+                let panes: Vec<ipc::PaneInfo> =
+                    serde_json::from_str(body.trim()).context("reading the pane list")?;
+                pane_table(&panes)
+            }
+        }
+        Command::Send {
+            pane,
+            keys,
+            paste,
+            enter,
+            input,
+        } => {
+            let pane = ipc::pane_or_own(pane)?;
+            let input = if keys {
+                ipc::SendInput::Keys(
+                    input
+                        .iter()
+                        .map(|k| k.parse().map_err(|e| anyhow::anyhow!("key `{k}`: {e}")))
+                        .collect::<anyhow::Result<_>>()?,
+                )
+            } else {
+                let mut text = input.join(" ");
+                if enter {
+                    text.push('\n');
+                }
+                if paste {
+                    ipc::SendInput::Paste(text)
+                } else {
+                    ipc::SendInput::Text(text)
+                }
+            };
+            ipc::send(&ipc::send_request(pane, &input))?
+        }
+        Command::Capture { pane, history } => {
+            let pane = ipc::pane_or_own(pane)?;
+            ipc::send(&format!("capture\n{pane}\n{history}\n"))?
+        }
+        Command::Wait { pane } => {
+            let pane = ipc::pane_or_own(pane)?;
+            let body = ipc::send(&format!("wait\n{pane}\n"))?;
+            // Unknown (killed by a signal, or closed by ranma) counts as failure.
+            let code = body.trim().parse::<i32>().unwrap_or(1);
+            return Ok(ExitCode::from(code.clamp(0, 255) as u8));
+        }
+        Command::Open {
+            session,
+            workspace,
+            name,
+            workspace_name,
+            cwd,
+            accent,
+            beside,
+            side,
+            background,
+            print,
+            command,
+        } => {
+            let workspace = workspace
+                .map(|w| ranma::action::parse_workspace(&w))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("--workspace: {e}"))?;
+            let accent = accent
+                .map(|a| a.parse::<ranma::theme::Color>())
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("--accent: {e}"))?;
+            let beside = match beside {
+                None => None,
+                Some(p) => {
+                    let side = side.as_deref().unwrap_or("right");
+                    match format!("new_pane {side}").parse() {
+                        Ok(ranma::action::Action::NewPaneAt(d)) => Some((p, d)),
+                        _ => anyhow::bail!("--side: `{side}` is not left, right, up or down"),
+                    }
+                }
+            };
+            // The pane runs this with the shell, relative paths from here.
+            let cwd = cwd.map(|c| std::path::absolute(&c).unwrap_or(c));
+            let id = ipc::send(&ipc::open_request(&ipc::OpenSpec {
+                session,
+                workspace,
+                name,
+                workspace_name,
+                cwd,
+                command: command_line(&command),
+                accent,
+                beside,
+                background,
+            }))?;
+            if print { id } else { String::new() }
+        }
+        Command::Update { .. }
+        | Command::Ls
+        | Command::Kill { .. }
+        | Command::Attach { .. }
+        | Command::Server { .. } => unreachable!("not a request"),
+    };
+    print!("{out}");
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `ranma panes` for people: one row per pane, `*` on the focused one of each
+/// workspace, where it is as session:workspace (`S` for the scratchpad).
+fn pane_table(panes: &[ipc::PaneInfo]) -> String {
+    let rows: Vec<[String; 4]> = panes
+        .iter()
+        .map(|p| {
+            let ws = if p.workspace == 0 {
+                "S".to_string()
+            } else {
+                p.workspace.to_string()
+            };
+            [
+                format!("{}{}", p.id, if p.focused { "*" } else { "" }),
+                format!("{}:{ws}", p.session),
+                p.program.clone().unwrap_or_default(),
+                p.title.clone(),
+            ]
+        })
+        .collect();
+    let head = ["ID", "WHERE", "PROGRAM", "TITLE"].map(String::from);
+    let width = |i: usize| {
+        std::iter::once(&head)
+            .chain(&rows)
+            .map(|r| r[i].chars().count())
+            .max()
+            .unwrap_or(0)
+    };
+    let (w0, w1, w2) = (width(0), width(1), width(2));
+    std::iter::once(&head)
+        .chain(&rows)
+        .map(|r| {
+            format!("{:w0$}  {:w1$}  {:w2$}  {}\n", r[0], r[1], r[2], r[3])
+                .trim_end()
+                .to_string()
+                + "\n"
+        })
+        .collect()
+}
+
 fn main() -> ExitCode {
     let mut cli = Cli::parse();
 
@@ -199,57 +403,8 @@ fn main() -> ExitCode {
         .command
         .take_if(|c| !matches!(c, Command::Attach { .. } | Command::Server { .. }))
     {
-        let request = match cmd {
-            Command::Notify {
-                urgent,
-                timeout,
-                text,
-            } => ipc::toast_request(&text.join(" "), urgent, timeout),
-            Command::Update { .. } | Command::Ls | Command::Kill { .. } => {
-                unreachable!("handled above")
-            }
-            Command::Attach { .. } | Command::Server { .. } => unreachable!("handled below"),
-            Command::Action { action } => format!("action\n{}", action.join(" ")),
-            Command::Open {
-                session,
-                workspace,
-                name,
-                workspace_name,
-                cwd,
-                accent,
-                command,
-            } => {
-                let accent = match accent.map(|a| a.parse::<ranma::theme::Color>()) {
-                    None => None,
-                    Some(Ok(c)) => Some(c),
-                    Some(Err(e)) => {
-                        eprintln!("ranma: --accent: {e}");
-                        return ExitCode::FAILURE;
-                    }
-                };
-                let workspace = match workspace.map(|w| ranma::action::parse_workspace(&w)) {
-                    None => None,
-                    Some(Ok(w)) => Some(w),
-                    Some(Err(e)) => {
-                        eprintln!("ranma: --workspace: {e}");
-                        return ExitCode::FAILURE;
-                    }
-                };
-                // The pane runs this with the shell, relative paths from here.
-                let cwd = cwd.map(|c| std::path::absolute(&c).unwrap_or(c));
-                ipc::open_request(&ipc::OpenSpec {
-                    session,
-                    workspace,
-                    name,
-                    workspace_name,
-                    cwd,
-                    command: command_line(&command),
-                    accent,
-                })
-            }
-        };
-        return match ipc::send(&request) {
-            Ok(()) => ExitCode::SUCCESS,
+        return match request(cmd) {
+            Ok(code) => code,
             Err(e) => {
                 eprintln!("ranma: {e:#}");
                 ExitCode::FAILURE
