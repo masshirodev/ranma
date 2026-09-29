@@ -143,8 +143,13 @@ ranma.bind(".", "rename_workspace")
 ranma.bind("/", "search")
 ranma.bind("[", "copy_mode")
 
--- Help: every bind, filterable, and Enter runs the selected one.
+-- The palette. "?" opens it on the keys (help: every bind, filterable, Enter
+-- runs it); ":" on the commands (every action, bound or not; Tab completes one,
+-- then type its argument: "move_workspace_to_session ai", "exec htop"). The
+-- first character of the query is the mode: typing ":" or "?" there switches,
+-- and ">" is ":" for hands used to other palettes.
 ranma.bind("?", "help")
+ranma.bind(":", "command_palette")
 
 -- Global binds -------------------------------------------------------------------
 -- { global = true } binds a key outside WM mode, with no leader. The program in

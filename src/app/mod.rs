@@ -1549,7 +1549,8 @@ impl App {
             Action::Quit { now: false } => self.confirm_quit(),
             Action::PaneSwitcher => self.open_pane_switcher(),
             Action::SessionSwitcher => self.open_session_switcher(),
-            Action::Help => self.open_help(),
+            Action::Help => self.open_palette(crate::picker::PaletteMode::Help),
+            Action::CommandPalette => self.open_palette(crate::picker::PaletteMode::Command),
             Action::CopyMode => self.enter_copy_mode(None),
             // Backward: the most recent match first, which is what searching
             // history usually wants.

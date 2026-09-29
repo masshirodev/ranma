@@ -65,6 +65,8 @@ pub enum Action {
     SessionSwitcher,
     /// Every bind, filterable; Enter runs the selected one.
     Help,
+    /// The same picker listing every action, bound or not, and running a typed one.
+    CommandPalette,
     /// Keyboard scrollback and selection (vi keys) in the focused pane.
     CopyMode,
     /// Search the focused pane's history (copy mode with the search prompt open).
@@ -110,6 +112,7 @@ impl Action {
                 | Action::PaneSwitcher
                 | Action::SessionSwitcher
                 | Action::Help
+                | Action::CommandPalette
                 | Action::CopyMode
                 | Action::Search
                 | Action::NewSession(_)
@@ -141,6 +144,53 @@ pub enum ActionError {
     },
     #[error("`{0}` takes no argument")]
     UnexpectedArg(String),
+}
+
+/// Every action by name, with what it takes: `<...>` is required, `[...]`
+/// optional, empty is nothing. The command palette lists these, so an action
+/// missing here can be bound but not found; a test holds the two together.
+pub const CATALOGUE: &[(&str, &str)] = &[
+    ("new_pane", "[left|right|up|down]"),
+    ("close_pane", ""),
+    ("focus", "<left|right|up|down>"),
+    ("move", "<left|right|up|down>"),
+    ("resize", "<left|right|up|down> [cells]"),
+    ("toggle_split", ""),
+    ("toggle_floating", ""),
+    ("cycle_floats", ""),
+    ("toggle_group", ""),
+    ("group_next", ""),
+    ("group_prev", ""),
+    ("fullscreen", ""),
+    ("workspace", "<1-99|next|prev|empty>"),
+    ("move_to_workspace", "<1-99|next|prev|empty>"),
+    ("move_to_workspace_silent", "<1-99|next|prev|empty>"),
+    ("scratchpad_toggle", ""),
+    ("move_to_scratchpad", ""),
+    ("pane_switcher", ""),
+    ("session_switcher", ""),
+    ("help", ""),
+    ("command_palette", ""),
+    ("copy_mode", ""),
+    ("search", ""),
+    ("new_session", "[name]"),
+    ("session", "<name|next|prev>"),
+    ("rename_session", "[name]"),
+    ("move_workspace_to_session", "[name|next|prev]"),
+    ("rename_workspace", "[name]"),
+    ("rename_pane", "[name]"),
+    ("exec", "<command line>"),
+    ("exit_mode", ""),
+    ("send_leader", ""),
+    ("reload_config", ""),
+    ("update", ""),
+    ("detach", ""),
+    ("quit", "[now]"),
+];
+
+/// Whether an action from the catalogue cannot run without an argument.
+pub fn needs_arg(hint: &str) -> bool {
+    hint.starts_with('<')
 }
 
 const DIR: &str = "a direction (left, right, up, down)";
@@ -251,6 +301,7 @@ impl FromStr for Action {
             "pane_switcher" => no_arg(Action::PaneSwitcher),
             "session_switcher" => no_arg(Action::SessionSwitcher),
             "help" => no_arg(Action::Help),
+            "command_palette" => no_arg(Action::CommandPalette),
             "copy_mode" => no_arg(Action::CopyMode),
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
@@ -357,6 +408,7 @@ impl fmt::Display for Action {
             Action::PaneSwitcher => f.write_str("pane_switcher"),
             Action::SessionSwitcher => f.write_str("session_switcher"),
             Action::Help => f.write_str("help"),
+            Action::CommandPalette => f.write_str("command_palette"),
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Search => f.write_str("search"),
             Action::NewSession(None) => f.write_str("new_session"),
@@ -454,6 +506,7 @@ mod tests {
             "move_to_workspace 10",
             "exec htop",
             "help",
+            "command_palette",
             "copy_mode",
             "search",
             "new_session",
@@ -470,6 +523,32 @@ mod tests {
             "quit now",
         ] {
             assert_eq!(a(&a(s).to_string()), a(s), "{s}");
+        }
+    }
+
+    #[test]
+    fn the_catalogue_is_every_action() {
+        for (name, hint) in CATALOGUE {
+            match name.parse::<Action>() {
+                Ok(a) => {
+                    assert!(
+                        !needs_arg(hint),
+                        "{name} parses bare but says it needs {hint}"
+                    );
+                    assert_eq!(a.to_string().split(' ').next(), Some(*name));
+                }
+                Err(ActionError::MissingArg { .. }) => assert!(needs_arg(hint), "{name}"),
+                Err(e) => panic!("{name}: {e}"),
+            }
+        }
+        // And the other way: every action the default config binds is listed.
+        let cfg = crate::config::load_from(None, None, None).unwrap();
+        for bind in cfg.binds.values().chain(cfg.global_binds.values()) {
+            if let crate::config::BindAction::Builtin(a) = &bind.action {
+                let s = a.to_string();
+                let name = s.split(' ').next().unwrap();
+                assert!(CATALOGUE.iter().any(|(n, _)| *n == name), "{name}");
+            }
         }
     }
 }

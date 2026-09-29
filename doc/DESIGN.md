@@ -259,7 +259,26 @@ component: a query line over a fuzzy-filtered list. Creating a session is typing
 name that does not exist, the way `tmux new -A` and most fuzzy finders do it, rather
 than a separate dialog. **Help is a palette**: it lists every bind by key and
 action, filterable by either, and `Enter` runs the selected one, so it answers
-"what was the key for…" and "just do the thing" with the same window. A switcher
+"what was the key for…" and "just do the thing" with the same window.
+
+**Help and the command palette are one picker with two modes** (2026-09-28),
+and the mode is the query's first character: `?` is the keys, `:` is every
+action — bound or not — and a typed command line with its argument. Typing the
+other prefix switches without closing anything; `leader ?` and `leader :` only
+choose which one is already typed. `>` is an alias of `:`, for hands trained on
+other palettes; a third prefix meaning something else would make you remember
+which "run a command" takes what. In command mode only the first word filters
+the list, and once an argument is typed the line itself heads the list, parsed
+exactly as a bind is: `run: …` if it parses, the parser's own error if not, so
+a typo is visible before Enter instead of failing silently after. An action
+that needs an argument completes into the query on Enter (and any one on Tab)
+rather than running bare into an error. The actions listed come from
+`action::CATALOGUE`, which a test holds against the parser and the default
+binds. Servers (`ranma ls`, attach, kill) are not a palette mode: attaching
+from inside needs the server to move its client, which is protocol work of its
+own.
+
+A switcher
 **opens on where you are**, marked `●` and bold: the session switcher selects the
 shown session so the arrows move from it, and the pane switcher marks the focused
 pane but still starts at the top, since the pane you want is another one.

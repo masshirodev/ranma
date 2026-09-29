@@ -59,6 +59,8 @@ scrollback otherwise. That last part was milestone 3's.
 - [x] Help (`leader ?`): every bind, filterable, runnable
 - [x] Move a workspace, whole, to another session (`leader m`); switchers open
   on and mark where you are
+- [x] Command palette (`leader :`): help and every action in one picker, the
+  mode by prefix (`?`, `:`/`>`), typed command lines parsed before they run
 
 ## 4. A server — done
 

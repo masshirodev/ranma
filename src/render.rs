@@ -343,7 +343,7 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
         .borders(Borders::ALL)
         .border_type(border_type)
         .border_style(Style::default().fg(color(c.mode_bg)))
-        .title(Line::from(format!(" {} ", p.title)));
+        .title(Line::from(format!(" {} ", p.heading())));
     f.render_widget(block, rrect(l.outer));
 
     let buf = f.buffer_mut();

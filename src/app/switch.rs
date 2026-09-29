@@ -1,5 +1,5 @@
 //! The pickers ranma opens: the pane switcher, the session switcher, the rename
-//! prompt, and help (every bind, runnable).
+//! prompt, and the palette (help, every bind runnable, and every action).
 
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 use unicode_width::UnicodeWidthStr;
@@ -7,7 +7,7 @@ use unicode_width::UnicodeWidthStr;
 use super::{App, SCRATCHPAD};
 use crate::keys::Chord;
 use crate::layout::Rect;
-use crate::picker::{Item, Kind, Outcome, Picker, Target};
+use crate::picker::{Item, Kind, Outcome, PaletteMode, Picker, Target};
 
 /// Where the picker is drawn, shared by the renderer and mouse hit-testing.
 #[derive(Debug, Clone, Copy)]
@@ -221,7 +221,60 @@ impl App {
         self.dirty = true;
     }
 
-    pub(super) fn open_help(&mut self) {
+    /// Help (`?`) and the command palette (`:`) are one picker: both lists are
+    /// in it, and the query's prefix says which one shows.
+    pub(super) fn open_palette(&mut self, mode: PaletteMode) {
+        let mut items = self.help_items();
+        items.extend(self.command_items());
+        self.picker = Some(Picker::palette(items, mode));
+        self.dirty = true;
+    }
+
+    /// Every action in the catalogue, with its key when one runs it exactly.
+    fn command_items(&self) -> Vec<Item> {
+        let leader = self.config.settings.leader;
+        let mut keys: std::collections::HashMap<String, String> = Default::default();
+        for (global, table) in [
+            (false, &self.config.binds),
+            (true, &self.config.global_binds),
+        ] {
+            for (chord, bind) in table {
+                if let crate::config::BindAction::Builtin(a) = &bind.action {
+                    let k = if global {
+                        chord.to_string()
+                    } else {
+                        format!("{leader} {chord}")
+                    };
+                    // One key is enough to say it is bound; the shortest reads best.
+                    keys.entry(a.to_string())
+                        .and_modify(|e| {
+                            if k.len() < e.len() {
+                                e.clone_from(&k)
+                            }
+                        })
+                        .or_insert(k);
+                }
+            }
+        }
+        crate::action::CATALOGUE
+            .iter()
+            .map(|(name, hint)| Item {
+                label: if hint.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{name} {hint}")
+                },
+                detail: keys.get(*name).cloned().unwrap_or_default(),
+                target: Target::Action {
+                    name: name.to_string(),
+                    needs_arg: crate::action::needs_arg(hint),
+                },
+                current: false,
+            })
+            .collect()
+    }
+
+    fn help_items(&self) -> Vec<Item> {
         let mut items: Vec<Item> = Vec::new();
         let leader = self.config.settings.leader;
         for (global, table) in [
@@ -252,12 +305,7 @@ impl App {
             let action = |i: &Item| i.label[22.min(i.label.len())..].to_string();
             action(a).cmp(&action(b)).then(a.label.cmp(&b.label))
         });
-        self.picker = Some(Picker::new(
-            Kind::Help,
-            "keys  (type to filter · enter runs it)",
-            items,
-        ));
-        self.dirty = true;
+        items
     }
 
     fn pane_title(&self, id: crate::layout::PaneId) -> String {
@@ -291,14 +339,22 @@ impl App {
         };
         let (x, y) = (m.column, m.row);
         match m.kind {
+            // A click is Enter on that row, so it does what Enter would: an action
+            // that needs an argument completes rather than runs.
             MouseEventKind::Down(_) if l.list.contains(x, y) => {
                 let i = l.offset + (y - l.list.y) as usize;
-                let target = self
-                    .picker
-                    .as_ref()
-                    .and_then(|p| p.visible().get(i).map(|it| it.target.clone()));
-                if let Some(t) = target {
-                    self.picker_outcome(Outcome::Accept(t));
+                let Some(p) = self.picker.as_mut() else {
+                    return;
+                };
+                if i < p.visible().len() {
+                    p.selected = i;
+                    let enter = KeyEvent::new(
+                        crossterm::event::KeyCode::Enter,
+                        crossterm::event::KeyModifiers::NONE,
+                    );
+                    let outcome = p.key(&enter);
+                    self.dirty = true;
+                    self.picker_outcome(outcome);
                 }
             }
             MouseEventKind::Down(_) if !l.outer.contains(x, y) => {
@@ -353,6 +409,10 @@ impl App {
                     (_, Target::NewSession) => self.new_session(Some(&query)),
                     (_, Target::Pane(id)) => self.reveal_pane(id),
                     (_, Target::Bind(chord, global)) => self.run_help_bind(chord, global),
+                    (_, Target::Action { name: line, .. } | Target::Run(line)) => {
+                        self.run_command(&line)
+                    }
+                    (_, Target::Invalid) => {}
                 }
             }
         }
@@ -373,6 +433,18 @@ impl App {
         }
         self.focus(id);
         self.relayout();
+    }
+
+    /// Run a command line from the palette, as `ranma action` would. Like a bind
+    /// from help, it leaves ranma in normal mode: the palette is not a mode.
+    fn run_command(&mut self, line: &str) {
+        match line.parse::<crate::action::Action>() {
+            Ok(a) => self.run_action(a),
+            Err(e) => self.status = Some(e.to_string()),
+        }
+        if self.mode == super::Mode::Wm {
+            self.set_mode(super::Mode::Normal);
+        }
     }
 
     /// Run a bind picked from help. A WM bind runs as if pressed in WM mode, but

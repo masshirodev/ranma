@@ -14,7 +14,7 @@ copy mode and history search with the system clipboard, window rules, a
 waybar-style bar with Lua and shell modules, Lua binds and hooks, mouse focus,
 and live config reload. It runs as a server, so closing the terminal (or losing
 SSH) only detaches: `ranma` again picks up where you were. `leader ?` lists
-every key.
+every key, and `leader :` runs any action by name.
 
 ## Install
 
