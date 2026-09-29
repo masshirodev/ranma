@@ -376,6 +376,15 @@ the two kept in sync by hand. So:
   wakeups. The foreground program, not the title: titles are whatever the shell
   last set (`user@host: ~/dir`), and the program is what you would name the
   workspace yourself.
+  **A connection is named for where it goes** (2026-09-29): ` 1:vps `, not
+  ` 1:ssh `. Every ssh workspace used to read the same. The name is the
+  destination the `ssh` command line gives (the one the title reads,
+  `ssh_destination`), because that is what was typed and so what is
+  recognised: the VPS calls itself `masshiro`, which names nothing at the desk.
+  With no plain `ssh` to read (mosh, a wrapper), the host a ranma on the far
+  side puts in its mark stands in. A ranma running locally keeps the name
+  `ranma`, since its workspaces are its own and not a host's. It is the same
+  cached read, so it costs a frame nothing.
 - **cpu and mem are built in** (2026-09-29, from tuios's `show_cpu` and
   `show_ram`), not left to an exec module, because a shell started every two
   seconds is exactly the cost built-ins avoid: they read `/proc/stat` and
@@ -799,6 +808,18 @@ Where it departs from the handoff, and why:
   is not affected by it.
 - Reports go out only to a ranma that answered: a plain terminal never
   receives the private sequence at all.
+
+**A collapsed holder says how many are inside** (2026-09-29): ` 3:vps[2] `
+is a workspace holding a ranma with two workspaces in use, shown while that
+ranma is not the one you are in. Once it is on your path it expands, and its
+workspaces say it themselves, so an expanded holder has no count. The count
+is dim, clicks like its holder, and counts only workspaces in use: an inner
+ranma's current empty workspace, or its `show_all` list, would otherwise
+inflate it. The count goes with the name when the ladder drops names. This
+departs from the handoff, whose mock
+(`doc/handoffs/done/NESTED_BAR_MOCK.txt`) is left as it was drawn: the
+lines that changed are pinned beside it in `nestbar`'s tests
+(`SINCE_HANDOFF`), and differ from it only by the count.
 
 What it does not do yet: the title is still shown twice when the focused pane
 is a nested ranma (the outer's centre and the inner's own border); the handoff

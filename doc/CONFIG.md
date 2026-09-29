@@ -286,6 +286,9 @@ Over SSH, three levels deep, each machine starting ranma: with
   does this has no title on its border, and no border at all when it fills
   the workspace: the ranma inside draws its own. Clicking an inner workspace
   goes there (ranma types the outer leader and that workspace's key for you).
+  A holder that is not expanded (a ranma you are not in) says how many
+  workspaces it has in use, dim after its name: ` 3:vps[2] `. It has no count
+  once it expands, since its workspaces are then shown.
   An urgent inner workspace behind a collapsed holder marks the holder urgent.
   When the bar runs out of room, other expanded holders collapse first, then
   names give way one level at a time, deepest first, numbers last; the title
@@ -373,7 +376,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | --- | --- | --- |
 | `mode` | ` WM `, ` COPY `, ` SEARCH ` or ` LINK `, nothing otherwise; ` ⇉ sync N ` while N panes here are marked for synchronized input | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
-| `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named); `nested = "focused"` (default), `"all"` or `"off"`: which workspaces show the workspaces of a ranma inside them (see [ranma inside ranma](#ranma-inside-ranma)) |
+| `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. A connection is named for where it goes: ` 2:vps ` for `ssh vps` (the destination as typed); with no plain `ssh` to read, such as under mosh, the host a ranma on the far side reports. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named); `nested = "focused"` (default), `"all"` or `"off"`: which workspaces show the workspaces of a ranma inside them (see [ranma inside ranma](#ranma-inside-ranma)) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
 | `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`) |

@@ -2194,7 +2194,7 @@ impl App {
             .workspaces
             .values()
             .filter_map(|ws| ws.focused)
-            .filter_map(|id| Some((id, self.panes.get(&id)?.program()?)))
+            .filter_map(|id| Some((id, self.panes.get(&id)?.workspace_label()?)))
             .collect();
         if programs != self.programs {
             self.programs = programs;

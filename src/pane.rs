@@ -492,6 +492,12 @@ impl Pane {
         foreground_program(self.pid)
     }
 
+    /// What a workspace is called after this pane when it has no name of its
+    /// own (see [`workspace_label`]).
+    pub fn workspace_label(&self) -> Option<String> {
+        workspace_label(self.program(), || self.ssh_host(), self.inner_host())
+    }
+
     /// The directory the pane's child is in now: where `cd` last took the shell.
     /// Read from /proc, so it follows the shell without any shell integration.
     pub fn cwd(&self) -> Option<std::path::PathBuf> {
@@ -708,6 +714,25 @@ pub fn foreground_program(pid: u32) -> Option<String> {
     Some(comm.trim().to_string()).filter(|c| !c.is_empty())
 }
 
+/// A workspace's automatic name: the program in its focused pane, except that
+/// a connection is named for where it goes. `ssh vps` is `vps`, which is what
+/// was typed and so what is recognised; with no plain `ssh` to read (mosh, a
+/// wrapper), the host a ranma on the far side reports stands in. A ranma
+/// running here keeps its own name: its workspaces are its own, not a host's.
+pub fn workspace_label(
+    program: Option<String>,
+    ssh_host: impl FnOnce() -> Option<String>,
+    inner_host: Option<&str>,
+) -> Option<String> {
+    match program.as_deref() {
+        Some("ssh") => ssh_host()
+            .or_else(|| inner_host.map(str::to_string))
+            .or(program),
+        Some("ranma") | None => program,
+        Some(_) => inner_host.map(str::to_string).or(program),
+    }
+}
+
 /// Where the `ssh` in the foreground of that terminal went, if one is there:
 /// `vps` for `ssh -p 22 masshiro@vps htop`.
 pub fn foreground_ssh_host(pid: u32) -> Option<String> {
@@ -798,6 +823,31 @@ fn terminfo_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_connection_is_named_for_where_it_goes() {
+        let p = |s: &str| Some(s.to_string());
+        let host = || p("vps");
+        let none = || None;
+        // `ssh vps` is `vps`, whatever the far side calls itself.
+        assert_eq!(workspace_label(p("ssh"), host, Some("masshiro")), p("vps"));
+        // An ssh whose destination could not be read: the far ranma's host,
+        // else still `ssh`.
+        assert_eq!(
+            workspace_label(p("ssh"), none, Some("masshiro")),
+            p("masshiro")
+        );
+        assert_eq!(workspace_label(p("ssh"), none, None), p("ssh"));
+        // mosh and the like carry no destination we read; the ranma there says.
+        assert_eq!(
+            workspace_label(p("mosh-client"), none, Some("vps")),
+            p("vps")
+        );
+        // Everything else keeps its program, and a ranma here stays `ranma`.
+        assert_eq!(workspace_label(p("nvim"), none, None), p("nvim"));
+        assert_eq!(workspace_label(p("ranma"), host, Some("vps")), p("ranma"));
+        assert_eq!(workspace_label(None, host, Some("vps")), None);
+    }
 
     #[test]
     fn the_marker_is_not_part_of_the_title() {

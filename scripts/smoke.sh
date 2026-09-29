@@ -309,6 +309,9 @@ T send-keys -t s "$FAKE/ssh -c 'import time; time.sleep(60)' me@fakehost" Enter
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' && break; sleep 0.25; done
 T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' ||
   fail "a running ssh does not name its host ($(T display -p -t s '#{pane_title}'))"
+# The workspace is named for it too: 1:fakehost, not 1:ssh.
+for _ in $(seq 1 20); do bar | grep -Eq ' [0-9]+:fakehost ' && break; sleep 0.25; done
+bar | grep -Eq ' [0-9]+:fakehost ' || fail "the workspace is not named for the ssh destination ($(bar))"
 T send-keys -t s C-c; sleep 1.2
 T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@' &&
   fail "the host stayed in the title after ssh ended ($(T display -p -t s '#{pane_title}'))"

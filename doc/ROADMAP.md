@@ -118,6 +118,8 @@ an outer shows it.
 - [x] The outer bar nests the focused pane's ranma; a setting expands all
 - [x] A nested pane's border: no title, and none at all when it fills the
   workspace
+- [x] A collapsed holder counts the inner's workspaces in use (` 3:vps[2] `),
+  and a connection is named for where it goes (` 2:vps `, not ` 2:ssh `)
 
 ## 7. Upgrading without closing anything
 

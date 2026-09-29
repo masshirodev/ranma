@@ -295,6 +295,13 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
             (Some(name), true) => format!("{}:{name}", w.n),
             _ => w.n.to_string(),
         };
+        // A collapsed holder says how many workspaces the ranma inside has in
+        // use, so `1:vps[2]` reads as "two in there" without expanding it. The
+        // count goes with the name when the ladder drops names.
+        let inside = nest
+            .filter(|_| keep_name && w.name.is_some())
+            .map(|n| n.ws.iter().filter(|w| w.occ).count())
+            .filter(|k| *k > 0);
         let style = if cur && level == 0 {
             Style::WsActive
         } else if here {
@@ -308,8 +315,24 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
         } else {
             Style::WsEmpty
         };
-        let text = if pad { format!(" {label} ") } else { label };
-        out.push(with(Piece::new(text, style), click(w.n)));
+        match inside {
+            Some(k) => {
+                let hold = click(w.n);
+                out.push(with(
+                    Piece::new(if pad { format!(" {label}") } else { label }, style),
+                    hold,
+                ));
+                let count = format!("[{k}]");
+                out.push(with(
+                    Piece::new(if pad { format!("{count} ") } else { count }, Style::Dim),
+                    hold,
+                ));
+            }
+            None => {
+                let text = if pad { format!(" {label} ") } else { label };
+                out.push(with(Piece::new(text, style), click(w.n)));
+            }
+        }
     }
     if set.scratch {
         if !pad {
@@ -509,16 +532,68 @@ mod tests {
             .to_string()
     }
 
+    /// Lines that changed on purpose after the handoff, which
+    /// `doc/handoffs/done/NESTED_BAR_MOCK.txt` still records as drawn. A
+    /// collapsed holder carries its inner ranma's count of workspaces in use
+    /// (2026-09-29, `3:ai[2]`); nothing else in these lines moved. The mock
+    /// file stays as the design was handed over.
+    const SINCE_HANDOFF: &[(&str, &str)] = &[
+        (
+            "one level, default, 80",
+            " ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai[2]  ✳Features to yan… Tue 29 Sep  14:42",
+        ),
+        (
+            "one level, default, 200",
+            " ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh S]  3:ai[2]               ✳Features to yank from tuios                                                                     Tue 29 Sep  14:42",
+        ),
+        (
+            "one level, expand all, 80",
+            " ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai[2]  ✳Features to yan… Tue 29 Sep  14:42",
+        ),
+        (
+            "two levels, default (inner on 5), 80",
+            " ⧉    1:zsh  2 [1 2 3 4 5 [1 2:logs] S]  3:ai[2]  ✳Features t… Tue 29 Sep  14:42",
+        ),
+        (
+            "two levels, default (inner on 5), 200",
+            " ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5 [1:htop 2:logs] S]  3:ai[2]   ✳Features to yank from tuios                                                                     Tue 29 Sep  14:42",
+        ),
+        (
+            "two levels, expand all, 80",
+            " ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai[2]  ✳Features to yan… Tue 29 Sep  14:42",
+        ),
+        (
+            "overflow step 1",
+            " ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh[2… Tue 29 Sep  14:42",
+        ),
+        (
+            "overflow step 2",
+            " ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh[2… Tue 29 Sep  14:42",
+        ),
+        (
+            "overflow step 3",
+            " ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai[2]  ✳Features to yan… Tue 29 Sep  14:42",
+        ),
+    ];
+
+    /// The line a case should draw: the handoff's, or its replacement above.
+    fn design(name: &str) -> String {
+        SINCE_HANDOFF
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map_or_else(|| mock(name), |(_, line)| line.to_string())
+    }
+
     // The handoff computes every bar cell for cell; these hold the spelling
     // and the ladder to it.
 
     #[test]
     fn one_level_matches_the_design() {
         let s = scenario(1, 3);
-        assert_eq!(draw(&s, 80, false), mock("one level, default, 80"));
-        assert_eq!(draw(&s, 200, false), mock("one level, default, 200"));
-        assert_eq!(draw(&s, 80, true), mock("one level, expand all, 80"));
-        assert_eq!(draw(&s, 200, true), mock("one level, expand all, 200"));
+        assert_eq!(draw(&s, 80, false), design("one level, default, 80"));
+        assert_eq!(draw(&s, 200, false), design("one level, default, 200"));
+        assert_eq!(draw(&s, 80, true), design("one level, expand all, 80"));
+        assert_eq!(draw(&s, 200, true), design("one level, expand all, 200"));
     }
 
     #[test]
@@ -526,15 +601,15 @@ mod tests {
         let on5 = scenario(2, 5);
         assert_eq!(
             draw(&on5, 80, false),
-            mock("two levels, default (inner on 5), 80")
+            design("two levels, default (inner on 5), 80")
         );
         assert_eq!(
             draw(&on5, 200, false),
-            mock("two levels, default (inner on 5), 200")
+            design("two levels, default (inner on 5), 200")
         );
         let on3 = scenario(2, 3);
-        assert_eq!(draw(&on3, 80, true), mock("two levels, expand all, 80"));
-        assert_eq!(draw(&on3, 200, true), mock("two levels, expand all, 200"));
+        assert_eq!(draw(&on3, 80, true), design("two levels, expand all, 80"));
+        assert_eq!(draw(&on3, 200, true), design("two levels, expand all, 200"));
     }
 
     #[test]
@@ -562,7 +637,7 @@ mod tests {
             let got: String = row.into_iter().collect();
             assert_eq!(
                 got.trim_end(),
-                mock(&format!("overflow step {k}")),
+                design(&format!("overflow step {k}")),
                 "step {k}"
             );
         }
@@ -590,6 +665,43 @@ mod tests {
         let p = pieces(&s, 0, true, &Opts::default(), &[]);
         let ai = p.iter().find(|p| p.text.contains("3:ai")).unwrap();
         assert_eq!(ai.style, Style::WsUrgent);
+    }
+
+    #[test]
+    fn a_collapsed_holder_counts_what_is_inside() {
+        let s = scenario(1, 3);
+        let texts = |o: &Opts| -> Vec<String> {
+            pieces(&s, 0, true, o, &[])
+                .into_iter()
+                .map(|p| p.text)
+                .collect()
+        };
+        let t = texts(&Opts::default());
+        // 3 is collapsed: its count follows the name, dim, on the same click.
+        let i = t.iter().position(|p| p == " 3:ai").unwrap();
+        assert_eq!(t[i + 1], "[2] ");
+        let p = pieces(&s, 0, true, &Opts::default(), &[]);
+        assert_eq!(p[i + 1].style, Style::Dim);
+        assert_eq!(p[i + 1].click, Some(Click::Workspace(3)));
+        // 2 is open: its workspaces are shown, so no count.
+        assert!(t.contains(&" 2 ".to_string()));
+        assert!(!t.iter().any(|p| p.starts_with("[5") || p.starts_with("[6")));
+        // Out of room, the count goes with the name.
+        let bare = texts(&Opts {
+            drop_from: Some(0),
+            ..Opts::default()
+        });
+        assert!(bare.contains(&" 3 ".to_string()) && !bare.iter().any(|p| p.contains("[2]")));
+        // Only workspaces in use count, and none is no count at all.
+        let mut idle = scenario(1, 3);
+        for w in &mut idle.ws[2].nest.as_mut().unwrap().ws {
+            w.occ = false;
+        }
+        let t: Vec<String> = pieces(&idle, 0, true, &Opts::default(), &[])
+            .into_iter()
+            .map(|p| p.text)
+            .collect();
+        assert!(t.contains(&" 3:ai ".to_string()));
     }
 
     #[test]
