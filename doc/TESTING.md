@@ -20,6 +20,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
 | `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), long and unrelated sequences passed without keeping state |
+| `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -36,6 +37,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - panes and the bar draw, with the workspaces and clock modules; a split puts two
   panes side by side
 - WM mode shows in the bar, and `Esc` and `Enter` both leave it
+- a pause in WM mode shows the which-key hint with its footer, and `Esc`
+  takes it away
 - `Alt+Left` (a global bind) moves focus without the leader
 - a click (raw SGR mouse bytes, as a terminal sends them) focuses the pane under it
 - a click on the bar reaches no program: a mouse-reporting probe in the focused

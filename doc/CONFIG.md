@@ -72,6 +72,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot). |
+| `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -92,6 +93,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 | --- | --- |
 | `exit` | Whether WM mode ends after the bind fires. Left out, it follows the action: `new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it. |
 | `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+s` to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used `M-s` spell-word), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
+| `desc` | A short name for the bind in the which-key hint (up to 16 cells show). A Lua function has no action to be named by, so without it the hint calls it `lua`. |
 
 ### Keys
 
@@ -163,6 +165,21 @@ is gone. Floats overlap freely and cascade as they open. **Sessions** are separa
 others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of free floating panes
 over whatever workspace is shown. Its first pane opens centred at 80%, later ones
 cascade; move, size and stack them like any float.
+
+### The which-key hint
+
+Pause in WM mode (half a second, `wm_mode.hint`) and a panel opens on the
+bar, next to ` WM `, listing what the keys do, grouped: layout, panes,
+workspaces, your own binds, sessions, history, ranma. It never takes a key:
+press one and it goes away and the key does what it does; pause again (twice
+as long this time) and it is back. Families read as one row, as you press
+them: `←↓↑→ focus`, `shift+←↓↑→ resize`, `1-0 workspace`, `ctrl+h/l prev/next
+tab`. The keys are your binds, so rebinding changes it; a Lua bind is named
+by its `desc`. It is at most half the screen high and takes more columns on a
+wide one; groups that do not fit are named in its bottom frame
+(`+sessions · history · ranma`), and `? all keys` is there for the rest. A
+small screen gets the binds flowed without headings, and one under 30×6
+nothing. `wm_mode = { hint = false }` turns it off.
 
 ## Copy mode and search
 

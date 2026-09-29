@@ -165,6 +165,41 @@ place and the place is in one pane. The bar says ` ⇉ sync N ` in the urgent
 style while any mark is on: input going somewhere you are not looking is the
 one thing about this feature that must never be forgotten.
 
+**The which-key hint** (2026-09-29, card c64; designed from
+`doc/briefs/done/WHICH_KEY.md`, handoff in `doc/handoffs/`). A pause in WM mode
+(`wm_mode.hint`, 0.5 s) opens a panel standing on the bar at its left end,
+next to ` WM `, listing what the keys do. It never takes a key: any key puts
+it away and does what it does, and the next pause brings it back after twice
+the wait, so looking between deliberate presses does not make it flash. It
+stays away while a picker, copy mode or link hints are up. Its rows come from
+the real WM-mode binds (`whichkey::groups`): four directions of one action on
+the arrows make one row (`shift+←↓↑→ resize`), ten workspaces on the digits
+make `1-0`, prev/next pairs join (`ctrl+h/l`, `( )`, `ctrl+←→`); a member
+rebound elsewhere stands on its own row. Actions the hint knows have a group
+and a short name; anything else, and Lua binds (named by `{ desc = ... }`), go
+in "yours", after workspaces. The layout (`whichkey::layout`) is the design's
+own algorithm: at most half the screen high, the lowest height at which every
+group fits across, trailing groups dropped whole and named in the frame if
+none does, a flowed form without headings when even the first group does not
+fit, nothing below 30×6. Tests hold it to the handoff's panels cell for cell.
+
+Where it departs from the handoff, and why:
+
+- Keys are spelled short (`M`, `alt+⏎`, `bksp`) in the hint only. The help
+  palette still spells them long; the handoff hoped the two would agree, but
+  the palette filters on what you type, and `shift+m` is what people type.
+- One action on several keys is one row. The handoff shows only `esc leave
+  WM` for the two keys that leave WM mode; the rule is `esc` when it is one of
+  them, else the first key by spelling.
+- The group of your own binds is named "yours", and a Lua bind with no `desc`
+  is named "lua". The handoff asked for such a group without naming it.
+- `? all keys` shows the key help is actually on, and the footer is left out
+  when help is not bound at all.
+
+What it does not do yet: a `desc` on a built-in bind is not used (only Lua
+binds are named by it), and the panel is rebuilt from the bind table on each
+frame it shows, which is cheap but not cached.
+
 **Global binds.** A few keys are worth having without the leader — by default
 `alt+arrows` to move focus, as asked for. `{ global = true }` puts a bind in a
 second table looked up *outside* WM mode, before the program sees the key. The cost

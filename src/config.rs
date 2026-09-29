@@ -85,6 +85,8 @@ pub struct Settings {
     pub shell: Option<String>,
     pub scrollback_lines: usize,
     pub wm_mode_sticky: bool,
+    /// How long WM mode waits before showing the which-key hint; `None` is off.
+    pub wm_mode_hint: Option<std::time::Duration>,
     pub mouse: MouseMode,
     pub updates: UpdateMode,
     pub update_check_hours: f64,
@@ -108,6 +110,7 @@ impl Default for Settings {
             shell: None,
             scrollback_lines: 10_000,
             wm_mode_sticky: true,
+            wm_mode_hint: Some(std::time::Duration::from_millis(500)),
             mouse: MouseMode::Click,
             updates: UpdateMode::Remind,
             update_check_hours: 24.0,
@@ -143,6 +146,15 @@ struct SettingsPatch {
 #[serde(deny_unknown_fields)]
 struct WmModePatch {
     sticky: Option<bool>,
+    /// Seconds before the hint shows, or false for none.
+    hint: Option<HintSetting>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum HintSetting {
+    On(bool),
+    After(f64),
 }
 
 #[derive(Debug)]
@@ -158,6 +170,9 @@ pub struct Bind {
     pub exits_mode: bool,
     /// The action as written, for `--check-config` and error messages.
     pub label: String,
+    /// A short name for the which-key hint (`{ desc = "..." }`); a Lua bind
+    /// has no action to name it by otherwise.
+    pub desc: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -462,8 +477,25 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             if let Some(n) = patch.scrollback_lines {
                 s.scrollback_lines = n;
             }
-            if let Some(sticky) = patch.wm_mode.and_then(|w| w.sticky) {
-                s.wm_mode_sticky = sticky;
+            if let Some(w) = patch.wm_mode {
+                if let Some(sticky) = w.sticky {
+                    s.wm_mode_sticky = sticky;
+                }
+                match w.hint {
+                    None => {}
+                    Some(HintSetting::On(false)) => s.wm_mode_hint = None,
+                    Some(HintSetting::On(true)) => {
+                        s.wm_mode_hint = Some(std::time::Duration::from_millis(500))
+                    }
+                    Some(HintSetting::After(secs)) if (0.0..=10.0).contains(&secs) => {
+                        s.wm_mode_hint = Some(std::time::Duration::from_secs_f64(secs))
+                    }
+                    Some(HintSetting::After(secs)) => {
+                        return Err(rt_err(format!(
+                            "ranma.set: wm_mode.hint must be false or seconds from 0 to 10, not {secs}"
+                        )));
+                    }
+                }
             }
             if let Some(m) = patch.mouse {
                 s.mouse = m;
@@ -508,12 +540,20 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                     .map_err(|e| rt_err(format!("ranma.bind: key `{keys}`: {e}")))?;
                 let mut exit_override: Option<bool> = None;
                 let mut global = false;
+                let mut desc: Option<String> = None;
                 if let Some(t) = &opts {
                     for pair in t.pairs::<String, Value>() {
                         let (k, v) = pair?;
                         match (k.as_str(), v) {
                             ("exit", Value::Boolean(b)) => exit_override = Some(b),
                             ("global", Value::Boolean(b)) => global = b,
+                            ("desc", Value::String(d)) => desc = Some(d.to_str()?.to_string()),
+                            ("desc", other) => {
+                                return Err(rt_err(format!(
+                                    "ranma.bind(\"{keys}\"): `desc` must be a string, not {}",
+                                    other.type_name()
+                                )));
+                            }
                             ("exit" | "global", other) => {
                                 return Err(rt_err(format!(
                                     "ranma.bind(\"{keys}\"): `{k}` must be true or false, not {}",
@@ -522,7 +562,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                             }
                             _ => {
                                 return Err(rt_err(format!(
-                                    "ranma.bind: unknown option `{k}` (expected exit, global)"
+                                    "ranma.bind: unknown option `{k}` (expected exit, global, desc)"
                                 )));
                             }
                         }
@@ -550,12 +590,14 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                             exits_mode: exit_override.unwrap_or(parsed.exits_mode_by_default()),
                             action: BindAction::Builtin(parsed),
                             label: s,
+                            desc,
                         }
                     }
                     Value::Function(f) => Bind {
                         action: BindAction::Lua(lua.create_registry_value(f)?),
                         exits_mode: exit_override.unwrap_or(false),
                         label: "<lua function>".into(),
+                        desc,
                     },
                     other => {
                         return Err(rt_err(format!(
@@ -1227,6 +1269,28 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn the_which_key_hint_setting() {
+        let d = load_from(None, None, None).unwrap();
+        assert_eq!(
+            d.settings.wm_mode_hint,
+            Some(std::time::Duration::from_millis(500))
+        );
+        let off = with_user("ranma.set { wm_mode = { hint = false } }").unwrap();
+        assert_eq!(off.settings.wm_mode_hint, None);
+        let slow = with_user("ranma.set { wm_mode = { hint = 1.5 } }").unwrap();
+        assert_eq!(
+            slow.settings.wm_mode_hint,
+            Some(std::time::Duration::from_millis(1500))
+        );
+        let e = format!(
+            "{:#}",
+            with_user("ranma.set { wm_mode = { hint = -1 } }").unwrap_err()
+        );
+        assert!(e.contains("wm_mode.hint"), "{e}");
+        assert!(with_user("ranma.set { wm_mode = { hint = 'soon' } }").is_err());
     }
 
     #[test]

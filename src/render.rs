@@ -90,6 +90,9 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }
+    if app.which_key_shown() {
+        draw_which_key(f, app);
+    }
     draw_toasts(f, app);
     if let (Some(p), Some(_)) = (app.picker(), app.picker_layout()) {
         draw_picker(f, app, p);
@@ -340,6 +343,84 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
             area.w.saturating_sub(x) as usize,
             style,
         );
+    }
+}
+
+/// The which-key hint: a panel standing on the bar from its left end, where
+/// ` WM ` is (hanging under a top bar; on the bottom row with none). Laid out
+/// by `whichkey`, from the WM-mode binds; drawn in the theme's roles, the
+/// frame in the mode colour on the toast surface (the design's handoff).
+fn draw_which_key(f: &mut Frame, app: &App) {
+    use crate::whichkey::{self, BindKind, Role};
+    let screen = f.area();
+    let groups = whichkey::groups(app.config.binds.iter().map(|(c, b)| {
+        (
+            *c,
+            match &b.action {
+                crate::config::BindAction::Builtin(a) => BindKind::Action(a),
+                crate::config::BindAction::Lua(_) => BindKind::Lua(b.desc.as_deref()),
+            },
+        )
+    }));
+    let help = app
+        .config
+        .binds
+        .iter()
+        .find(|(_, b)| {
+            matches!(
+                b.action,
+                crate::config::BindAction::Builtin(crate::action::Action::Help)
+            )
+        })
+        .map(|(c, _)| whichkey::short(c));
+    let title = whichkey::short(&app.wm_chord());
+    let Some(p) = whichkey::layout(
+        &groups,
+        screen.width,
+        screen.height,
+        &title,
+        help.as_deref(),
+    ) else {
+        return;
+    };
+    let y = match app.bar_rect() {
+        Some(bar) if bar.y == screen.y => bar.bottom(),
+        Some(bar) => bar.y.saturating_sub(p.h),
+        None => screen.bottom().saturating_sub(p.h),
+    };
+    let area = RRect::new(screen.x, y, p.w.min(screen.width), p.h.min(screen.height));
+    let c = &app.colors();
+    let surface = Style::default().fg(color(c.toast_fg)).bg(color(c.toast_bg));
+    f.render_widget(Clear, area);
+    let mut block = Block::default().style(surface);
+    let border_type = match app.config.theme.border.style {
+        BorderStyle::None => None,
+        BorderStyle::Rounded => Some(BorderType::Rounded),
+        BorderStyle::Plain => Some(BorderType::Plain),
+        BorderStyle::Thick => Some(BorderType::Thick),
+        BorderStyle::Double => Some(BorderType::Double),
+    };
+    if let Some(t) = border_type {
+        block = block
+            .borders(Borders::ALL)
+            .border_type(t)
+            .border_style(surface.fg(color(c.mode_bg)));
+    }
+    f.render_widget(block, area);
+    let buf = f.buffer_mut();
+    for (x, y, text, role) in &p.pieces {
+        let style = match role {
+            Role::Title | Role::KeyBase | Role::FooterKey => {
+                surface.fg(color(c.mode_bg)).add_modifier(Modifier::BOLD)
+            }
+            Role::KeyMods => surface.fg(color(c.mode_bg)),
+            Role::Heading => surface.fg(color(c.bar_accent)).add_modifier(Modifier::BOLD),
+            Role::Name | Role::FooterText => surface,
+        };
+        let (x, y) = (area.x + x, area.y + y);
+        if y < area.bottom() && x < area.right() {
+            buf.set_stringn(x, y, text, (area.right() - x) as usize, style);
+        }
     }
 }
 

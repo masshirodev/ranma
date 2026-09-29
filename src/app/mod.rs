@@ -225,6 +225,12 @@ pub struct App {
     hints: Option<HintState>,
     /// Where a right-click menu was opened: it is drawn there.
     menu_at: Option<(u16, u16)>,
+    /// When the which-key hint shows, if WM mode is still waiting then.
+    hint_due: Option<Instant>,
+    /// The which-key hint is up (see `whichkey`).
+    hint_on: bool,
+    /// The chord that opened WM mode: the hint's title.
+    wm_chord: Option<crate::keys::Chord>,
 }
 
 impl App {
@@ -293,6 +299,9 @@ impl App {
             synced: HashSet::new(),
             hints: None,
             menu_at: None,
+            hint_due: None,
+            hint_on: false,
+            wm_chord: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -1463,7 +1472,7 @@ impl App {
                     }
                     return;
                 }
-                self.set_mode(Mode::Wm);
+                self.enter_wm(outer);
                 self.status = None;
                 return;
             }
@@ -1478,7 +1487,7 @@ impl App {
                 return;
             }
             if chord == Some(leader) {
-                self.set_mode(Mode::Wm);
+                self.enter_wm(leader);
                 self.status = None;
                 return;
             }
@@ -1498,6 +1507,15 @@ impl App {
 
         self.status = None;
         self.dirty = true;
+        // A key in WM mode puts the hint away, and a later pause brings it
+        // back, after twice the wait: looking between deliberate presses
+        // should not make it flash.
+        self.hint_on = false;
+        self.hint_due = self
+            .config
+            .settings
+            .wm_mode_hint
+            .map(|d| Instant::now() + d * 2);
         let Some(chord) = chord else {
             return;
         };
@@ -1597,7 +1615,38 @@ impl App {
         self.synced.contains(&id)
     }
 
+    /// WM mode, opened by `chord` (the leader, or the outer leader): the hint
+    /// is due after the configured pause.
+    fn enter_wm(&mut self, chord: crate::keys::Chord) {
+        self.set_mode(Mode::Wm);
+        self.wm_chord = Some(chord);
+        self.hint_due = self
+            .config
+            .settings
+            .wm_mode_hint
+            .map(|d| Instant::now() + d);
+    }
+
+    /// Whether the which-key hint is shown now: it is due and WM mode is on,
+    /// with nothing else up that takes the keys or the eye.
+    pub fn which_key_shown(&self) -> bool {
+        self.hint_on
+            && self.mode == Mode::Wm
+            && self.picker.is_none()
+            && self.copy.is_none()
+            && self.hints.is_none()
+    }
+
+    /// The chord the hint is titled with.
+    pub fn wm_chord(&self) -> crate::keys::Chord {
+        self.wm_chord.unwrap_or(self.config.settings.leader)
+    }
+
     fn set_mode(&mut self, mode: Mode) {
+        if mode != Mode::Wm {
+            self.hint_due = None;
+            self.hint_on = false;
+        }
         self.mode = mode;
         self.drag = None;
         self.dirty = true;
@@ -2017,6 +2066,7 @@ impl App {
             .chain(self.reload_at)
             .chain(self.programs_due)
             .chain(self.toasts.next_expiry())
+            .chain(self.hint_due)
             .min()
     }
 
@@ -2155,6 +2205,11 @@ impl App {
     }
 
     fn run_timers(&mut self, now: Instant) {
+        if self.hint_due.is_some_and(|t| t <= now) {
+            self.hint_due = None;
+            self.hint_on = self.mode == Mode::Wm;
+            self.dirty = true;
+        }
         if self.programs_due.is_some_and(|t| t <= now) {
             self.read_programs(now);
         }
@@ -2655,6 +2710,32 @@ mod tests {
                 other => panic!("{other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn the_which_key_hint_waits_for_a_pause_and_steps_aside() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(None);
+        let leader = a.config.settings.leader;
+        a.enter_wm(leader);
+        let due = a.hint_due.expect("due after the pause");
+        a.run_timers(due - Duration::from_millis(1));
+        assert!(!a.which_key_shown(), "not before the pause");
+        a.run_timers(due);
+        assert!(a.which_key_shown());
+        // A key puts it away; the next pause is twice the first.
+        let t = Instant::now();
+        a.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        assert!(!a.which_key_shown());
+        assert!(a.hint_due.unwrap() >= t + Duration::from_millis(999));
+        // Something else up (a picker) keeps it away even when due.
+        a.run_timers(a.hint_due.unwrap());
+        a.open_palette(crate::picker::PaletteMode::Help);
+        assert!(!a.which_key_shown());
+        // Off in the config: never due.
+        let mut off = app(Some("ranma.set { wm_mode = { hint = false } }"));
+        off.enter_wm(leader);
+        assert!(off.hint_due.is_none());
     }
 
     fn names(app: &App) -> Vec<Option<String>> {

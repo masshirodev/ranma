@@ -77,6 +77,14 @@ bar | grep -q ' WM ' && fail "Esc did not leave WM mode"
 T send-keys -t s C-b Enter; sleep 0.3
 bar | grep -q ' WM ' && fail "Enter did not leave WM mode"
 
+# The which-key hint: a pause in WM mode shows it on the bar; Esc takes it
+# away with WM mode.
+T send-keys -t s C-b; sleep 1
+screen | grep -q '╭ ctrl+b' || fail "a pause in WM mode did not show the which-key hint"
+screen | grep -q '? all keys' || fail "the hint has no footer"
+T send-keys -t s Escape; sleep 0.3
+screen | grep -q '╭ ctrl+b' && fail "the hint stayed after leaving WM mode"
+
 # Alt+Left is a global bind: focus moves without the leader. Typing lands left.
 T send-keys -t s M-Left; sleep 0.3
 T send-keys -t s 'echo went-left' Enter

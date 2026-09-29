@@ -36,6 +36,10 @@ ranma.set {
     -- true: WM mode stays on until Esc or Enter (or an action that ends it, like
     -- new_pane). false: every bind is one-shot and returns to the program.
     sticky = true,
+    -- Pause this many seconds in WM mode and a panel on the bar lists what the
+    -- keys do (the which-key hint); after a key it waits twice as long before
+    -- showing again. It never takes a key. false turns it off.
+    hint = 0.5,
   },
 
   -- What the mouse does outside WM mode:
@@ -299,6 +303,11 @@ ranma.module("datetime", {
 --
 --   ranma.bind("c", "exec nvim")
 --   ranma.bind("n", function() os.execute("notify-send hello") end, { exit = true })
+--
+-- { desc = "..." } names a bind in the which-key hint; a Lua function has no
+-- action to be named by otherwise:
+--
+--   ranma.bind("n", function() os.execute("notify-send hi") end, { desc = "say hi" })
 --
 -- Inside a bind, hook or module, ranma.action("workspace 2") runs an action,
 -- ranma.notify("text") puts a message in the bar, ranma.toast("text",

@@ -24,4 +24,5 @@ pub mod theme;
 pub mod tmux;
 pub mod toast;
 pub mod update;
+pub mod whichkey;
 pub mod workspace;
