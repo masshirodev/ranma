@@ -146,6 +146,10 @@ ranma.bind("(", "session prev")
 ranma.bind(")", "session next")
 -- A session by name: ranma.bind("k", "session kumiko")
 ranma.bind("$", "rename_session")
+-- A colour per session, so projects look different at a glance: the focused
+-- border, the current workspace and the session name take it.
+--   ranma.session("kumiko", { accent = "#ff6a6a" })
+-- At run time: ranma.bind("a", "session_accent #89b4fa"), or "session_accent none".
 -- Send the current workspace, whole, to another session and follow it; m asks
 -- which (typing a new name makes one). By name: "move_workspace_to_session ai".
 ranma.bind("m", "move_workspace_to_session")

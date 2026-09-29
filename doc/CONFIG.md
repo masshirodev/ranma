@@ -136,6 +136,7 @@ does not matter; it is ignored.
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
 | `session <name>` / `session next` / `session prev` | Switch sessions. |
 | `rename_session [name]` | Rename the current session; without a name, ask for one. |
+| `session_accent <colour>` / `session_accent none` | Colour the current session: its focused border, its current workspace in the bar and its name there (see [Sessions](#sessions--ranmasessionname-opts)). `none` goes back to the config's accent for it, else the theme's. |
 | `move_workspace_to_session [name]` / `... next` / `... prev` | Send the current workspace, with every pane in it, to another session and follow it (`m`). Without a target it asks, like the session switcher; a name no session has creates it, as `ranma open --session` does. The workspace keeps its number unless that session uses it, then takes the lowest free one. A session left without panes ends. The scratchpad belongs to every session and does not move. |
 | `rename_workspace [name]` | Name the current workspace, shown as `3:name` in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask. |
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
@@ -207,6 +208,21 @@ in the order written. Rules act on panes of the shown session, not in the
 scratchpad.
 
 A pane you float, tile, and float again goes back where it last floated.
+
+## Sessions — `ranma.session(name, opts)`
+
+```lua
+ranma.session("kumiko", { accent = "#ff6a6a" })
+ranma.session("wayfarer", { accent = "bright-green" })
+```
+
+| Option | Meaning |
+| --- | --- |
+| `accent` | A colour (`#rrggbb`, `0`-`255`, an ANSI name) for the session with this name, whenever it exists: the focused pane's border, the current workspace in the bar, and the session's name there take it instead of `border_active`, `ws_active_bg` and `bar_accent`. The WM-mode colour does not change. Pick a colour that reads under `ws_active_fg`. |
+
+So two projects look different at a glance. `session_accent` sets one for the
+current session at run time, and `ranma open --accent` for the session it
+opens in; either wins over the config until `session_accent none`.
 
 ## ranma inside ranma
 
@@ -367,6 +383,7 @@ ranma open --session ai --workspace empty --cwd ~/projects/kumiko \
 | `--cwd DIR` | start there instead of in the focused pane's directory |
 | `--name NAME` | name the pane, as `rename_pane` |
 | `--workspace-name NAME` | name the workspace it lands in, as `rename_workspace` |
+| `--accent COLOUR` | colour the session it lands in, as `session_accent` |
 | `-- COMMAND` | what to run; the shell when left out. One argument is a command line for the shell (`'ai; exec zsh'`); several are a command and its arguments, quoted for you. |
 
 It is how scripts lay things out: one project per workspace, say, each started

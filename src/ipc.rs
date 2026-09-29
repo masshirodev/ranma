@@ -223,6 +223,8 @@ pub struct OpenSpec {
     pub cwd: Option<PathBuf>,
     /// Run this through the shell instead of starting the shell.
     pub command: Option<String>,
+    /// Colour the session it lands in (as session_accent).
+    pub accent: Option<crate::theme::Color>,
 }
 
 /// Build an `open` request.
@@ -243,6 +245,9 @@ pub fn open_request(spec: &OpenSpec) -> String {
     }
     if let Some(v) = &spec.cwd {
         kv("cwd", &v.display().to_string());
+    }
+    if let Some(v) = &spec.accent {
+        kv("accent", &v.to_string());
     }
     s.push_str("--\n");
     if let Some(c) = &spec.command {
@@ -271,6 +276,12 @@ fn parse_open<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<OpenSpec> 
                     Some(crate::action::parse_workspace(v).map_err(|e| anyhow::anyhow!("{e}"))?)
             }
             "name" => spec.name = Some(v.into()),
+            "accent" => {
+                spec.accent = Some(
+                    v.parse()
+                        .map_err(|e: String| anyhow::anyhow!("accent: {e}"))?,
+                )
+            }
             "workspace_name" => spec.workspace_name = Some(v.into()),
             "cwd" => {
                 let p = PathBuf::from(v);
@@ -410,6 +421,7 @@ mod tests {
             workspace_name: Some("kumiko".into()),
             cwd: Some(std::env::temp_dir()),
             command: Some("ai; exec zsh".into()),
+            accent: Some(crate::theme::Color::Rgb(0xff, 0x6a, 0x6a)),
         };
         match parse(&open_request(&spec)).unwrap() {
             AppEvent::Open(got) => assert_eq!(got, spec),
@@ -425,6 +437,7 @@ mod tests {
             ("open\ncwd=/definitely/not/here\n--\n", "not a directory"),
             ("open\nworkspace=0\n--\n", "workspace"),
             ("open\nname\n--\n", "key=value"),
+            ("open\naccent=pink\n--\n", "accent"),
         ] {
             let err = format!("{:#}", parse(req).unwrap_err());
             assert!(err.contains(needle), "{req:?}: {err}");

@@ -117,6 +117,9 @@ pub enum Action {
     /// Send the current workspace, whole, to another session and follow it;
     /// without a target, pick the session (or type a new one).
     MoveWorkspaceToSession(Option<SessionTarget>),
+    /// Colour the current session's focused border, active workspace and name
+    /// in the bar; `None` goes back to the config's accent, else the theme's.
+    SessionAccent(Option<crate::theme::Color>),
     /// Rename the current session; without a name, ask for one.
     RenameSession(Option<String>),
     /// Name the current workspace (an empty name clears it); without one, ask.
@@ -224,6 +227,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("new_session", "[name]"),
     ("session", "<name|next|prev>"),
     ("rename_session", "[name]"),
+    ("session_accent", "<#rrggbb|colour|none>"),
     ("move_workspace_to_session", "[name|next|prev]"),
     ("rename_workspace", "[name]"),
     ("rename_pane", "[name]"),
@@ -414,6 +418,21 @@ impl FromStr for Action {
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
+            "session_accent" => match rest {
+                None => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a colour (#rrggbb, 0-255, an ANSI name) or none",
+                }),
+                Some("none") => Ok(Action::SessionAccent(None)),
+                Some(c) => c
+                    .parse()
+                    .map(|c| Action::SessionAccent(Some(c)))
+                    .map_err(|_| ActionError::BadArg {
+                        action: name.into(),
+                        arg: c.into(),
+                        expected: "a colour (#rrggbb, 0-255, an ANSI name) or none",
+                    }),
+            },
             "rename_workspace" => Ok(Action::RenameWorkspace(rest.map(str::to_string))),
             "rename_pane" => Ok(Action::RenamePane(rest.map(str::to_string))),
             "session" => {
@@ -529,6 +548,8 @@ impl fmt::Display for Action {
             Action::Search => f.write_str("search"),
             Action::NewSession(None) => f.write_str("new_session"),
             Action::NewSession(Some(n)) => write!(f, "new_session {n}"),
+            Action::SessionAccent(None) => f.write_str("session_accent none"),
+            Action::SessionAccent(Some(c)) => write!(f, "session_accent {c}"),
             Action::RenameSession(None) => f.write_str("rename_session"),
             Action::RenameSession(Some(n)) => write!(f, "rename_session {n}"),
             Action::RenameWorkspace(None) => f.write_str("rename_workspace"),
@@ -627,6 +648,10 @@ mod tests {
             );
         }
         assert!(matches!(
+            "session_accent pink".parse::<Action>(),
+            Err(ActionError::BadArg { .. })
+        ));
+        assert!(matches!(
             "attach".parse::<Action>(),
             Err(ActionError::MissingArg { .. })
         ));
@@ -662,6 +687,9 @@ mod tests {
             "move_workspace_to_session prev",
             "move_workspace_to_session ai-projects",
             "rename_session",
+            "session_accent #ff6a6a",
+            "session_accent bright-red",
+            "session_accent none",
             "rename_workspace web",
             "rename_pane",
             "quit",

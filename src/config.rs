@@ -358,6 +358,7 @@ struct Builder {
     workspaces_show_all: bool,
     workspaces_numbers_only: bool,
     rules: Vec<Rule>,
+    session_accents: HashMap<String, theme::Color>,
 }
 
 pub struct Config {
@@ -376,6 +377,8 @@ pub struct Config {
     pub workspaces_numbers_only: bool,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
+    /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
+    pub session_accents: HashMap<String, theme::Color>,
     pub theme: Theme,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
@@ -736,6 +739,35 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
     )?;
 
     ranma.set(
+        "session",
+        lua.create_function(|lua, (name, opts): (String, Table)| {
+            for pair in opts.pairs::<String, Value>() {
+                let (k, _) = pair?;
+                if k != "accent" {
+                    return Err(rt_err(format!(
+                        "ranma.session(\"{name}\"): unknown option `{k}` (expected accent)"
+                    )));
+                }
+            }
+            let accent: Option<String> = opts.get("accent")?;
+            let b = lua.app_data_mut::<Builder>();
+            let mut b = b.expect("builder installed");
+            match accent {
+                Some(a) => {
+                    let c = a
+                        .parse::<theme::Color>()
+                        .map_err(|e| rt_err(format!("ranma.session(\"{name}\"): accent: {e}")))?;
+                    b.session_accents.insert(name, c);
+                }
+                None => {
+                    b.session_accents.remove(&name);
+                }
+            }
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "rule",
         lua.create_function(|lua, value: Value| {
             let spec: RuleSpec = lua
@@ -959,6 +991,7 @@ pub fn load_from(
         workspaces_show_all: builder.workspaces_show_all,
         workspaces_numbers_only: builder.workspaces_numbers_only,
         rules: builder.rules,
+        session_accents: builder.session_accents,
         theme,
         source: user_file,
         lua,
@@ -1175,6 +1208,22 @@ mod tests {
                 assert_eq!(format.as_deref(), Some("L %s"));
             }
             other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn session_accents_by_name() {
+        let cfg = with_user("ranma.session('kumiko', { accent = '#ff6a6a' })").unwrap();
+        assert_eq!(
+            cfg.session_accents.get("kumiko"),
+            Some(&theme::Color::Rgb(0xff, 0x6a, 0x6a))
+        );
+        for (src, needle) in [
+            ("ranma.session('x', { colour = 'red' })", "colour"),
+            ("ranma.session('x', { accent = 'pink' })", "pink"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
         }
     }
 

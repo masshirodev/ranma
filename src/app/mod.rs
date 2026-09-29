@@ -223,6 +223,7 @@ impl App {
                 name: "main".into(),
                 workspaces: BTreeMap::new(),
                 current: 1,
+                accent: None,
             }],
             active_session: 0,
             scratch: Workspace::default(),
@@ -1658,6 +1659,10 @@ impl App {
                 Some(i) => self.move_workspace_to_session(Some(i), None),
                 None => self.move_workspace_to_session(None, Some(&t.to_string())),
             },
+            Action::SessionAccent(c) => {
+                self.sessions[self.active_session].accent = c;
+                self.dirty = true;
+            }
             Action::RenameSession(Some(name)) => self.rename_session(self.active_session, &name),
             Action::RenameSession(None) => self.open_rename_prompt(self.active_session),
             Action::RenameWorkspace(Some(name)) => self.rename_workspace(self.current, &name),
@@ -2362,6 +2367,23 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn a_session_accent_colours_its_border_workspace_and_name() {
+        use crate::theme::Color;
+        let mut a = app(Some("ranma.session('main', { accent = '#ff0000' })"));
+        let base = a.config.theme.colors.clone();
+        assert_eq!(a.colors().border_active, Color::Rgb(0xff, 0, 0));
+        assert_eq!(a.colors().ws_active_bg, Color::Rgb(0xff, 0, 0));
+        assert_eq!(a.colors().mode_bg, base.mode_bg, "WM mode keeps its colour");
+        // Set at run time, it wins over the config; `none` gives the config back.
+        a.run_action("session_accent 4".parse().unwrap());
+        assert_eq!(a.colors().bar_accent, Color::Indexed(4));
+        a.run_action("session_accent none".parse().unwrap());
+        assert_eq!(a.colors().bar_accent, Color::Rgb(0xff, 0, 0));
+        // A session with no accent anywhere draws with the theme.
+        assert_eq!(app(None).colors().border_active, base.border_active);
     }
 
     fn names(app: &App) -> Vec<Option<String>> {

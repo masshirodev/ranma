@@ -59,6 +59,17 @@ impl FromStr for Color {
     }
 }
 
+impl std::fmt::Display for Color {
+    /// As a theme or an action spells it, so it parses back to the same colour.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Color::Default => f.write_str("default"),
+            Color::Indexed(i) => write!(f, "{i}"),
+            Color::Rgb(r, g, b) => write!(f, "#{r:02x}{g:02x}{b:02x}"),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]

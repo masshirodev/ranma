@@ -293,6 +293,14 @@ one, the next session with panes is shown first. ranma quits only when no pane i
 left anywhere. The scratchpad is one for all sessions: a quick shell should not
 depend on which project is shown.
 
+**A session can have its own accent** (2026-09-29, from tuios's session
+colours): the focused border, the current workspace and the session name take
+it, so kumiko and wayfarer look different at a glance. It is keyed by *name* in
+the config (`ranma.session`), since sessions are made by name and die when
+empty, and set at run time or by `ranma open --accent` for one that exists. The
+WM-mode colour is left alone: it signals where keys go, and a session colour
+that could hide it would cost the thing it exists for.
+
 **A workspace moves between sessions whole** (`move_workspace_to_session`, added
 2026-09-28). Sessions get created after the work has started — `ranma open
 --session ai-projects` makes one while the shells for it already sit in `main` —

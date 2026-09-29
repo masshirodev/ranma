@@ -225,7 +225,7 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         BorderStyle::Thick => BorderType::Thick,
         BorderStyle::Double => BorderType::Double,
     };
-    let c = &theme.colors;
+    let c = &app.colors();
     // In WM mode the focused border takes the mode colour, so it is obvious which
     // pane the next action applies to.
     let border = match (view.focused, app.mode, view.floating) {
@@ -278,7 +278,7 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
 }
 
 fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
-    let c = &app.config.theme.colors;
+    let c = &app.colors();
     let base = Style::default().fg(color(c.bar_fg)).bg(color(c.bar_bg));
     let buf = f.buffer_mut();
     buf.set_style(rrect(area), base);

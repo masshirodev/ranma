@@ -92,6 +92,9 @@ enum Command {
         /// Start in this directory instead of the focused pane's.
         #[arg(long)]
         cwd: Option<std::path::PathBuf>,
+        /// Colour the session it lands in: #rrggbb, 0-255 or an ANSI name.
+        #[arg(long)]
+        accent: Option<String>,
         /// What to run; the shell when left out.
         #[arg(last = true)]
         command: Vec<String>,
@@ -213,8 +216,17 @@ fn main() -> ExitCode {
                 name,
                 workspace_name,
                 cwd,
+                accent,
                 command,
             } => {
+                let accent = match accent.map(|a| a.parse::<ranma::theme::Color>()) {
+                    None => None,
+                    Some(Ok(c)) => Some(c),
+                    Some(Err(e)) => {
+                        eprintln!("ranma: --accent: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
                 let workspace = match workspace.map(|w| ranma::action::parse_workspace(&w)) {
                     None => None,
                     Some(Ok(w)) => Some(w),
@@ -232,6 +244,7 @@ fn main() -> ExitCode {
                     workspace_name,
                     cwd,
                     command: command_line(&command),
+                    accent,
                 })
             }
         };

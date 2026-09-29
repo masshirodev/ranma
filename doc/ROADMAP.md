@@ -90,7 +90,7 @@ and SSH servers, animation).
 - [x] `equalize` (`leader =`); tuios's rotate is `toggle_split`, which already existed
 - [x] Floats sized by percentage and snapped to corners and halves
 - [x] Built-in `cpu` and `mem` bar modules
-- [ ] A per-session accent colour
+- [x] A per-session accent colour
 - [ ] Socket commands for scripts: `ranma panes`, `send`, `capture`, `wait`
 - [ ] `ranma popup`: a command in a float, its output returned
 - [ ] A tmux shim: a stated subset of tmux, for programs that drive it

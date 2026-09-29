@@ -18,6 +18,8 @@ pub struct Session {
     pub name: String,
     pub workspaces: BTreeMap<u8, Workspace>,
     pub current: u8,
+    /// Set by `session_accent` or `ranma open --accent`; over the config's.
+    pub accent: Option<crate::theme::Color>,
 }
 
 impl Session {
@@ -28,6 +30,7 @@ impl Session {
             name: name.into(),
             workspaces,
             current: 1,
+            accent: None,
         }
     }
 }
@@ -35,6 +38,30 @@ impl Session {
 impl App {
     pub fn session_name(&self) -> &str {
         &self.sessions[self.active_session].name
+    }
+
+    /// The shown session's accent: its own, else the config's for its name.
+    pub fn session_accent(&self) -> Option<crate::theme::Color> {
+        let s = &self.sessions[self.active_session];
+        s.accent
+            .or_else(|| self.config.session_accents.get(&s.name).copied())
+    }
+
+    /// The theme's colours, with the shown session's accent on the focused
+    /// border, the active workspace and the session name. The WM-mode colour
+    /// stays: it says which mode keys are in, whatever the session.
+    pub fn colors(&self) -> std::borrow::Cow<'_, crate::theme::Colors> {
+        let base = &self.config.theme.colors;
+        match self.session_accent() {
+            None => std::borrow::Cow::Borrowed(base),
+            Some(a) => {
+                let mut c = base.clone();
+                c.border_active = a;
+                c.ws_active_bg = a;
+                c.bar_accent = a;
+                std::borrow::Cow::Owned(c)
+            }
+        }
     }
 
     pub fn session_count(&self) -> usize {
@@ -139,6 +166,9 @@ impl App {
                 if let Some(name) = spec.workspace_name.as_deref() {
                     self.rename_workspace(self.current, name);
                 }
+                if spec.accent.is_some() {
+                    self.sessions[self.active_session].accent = spec.accent;
+                }
             }
             Err(e) => {
                 self.status = Some(format!("ranma open failed: {e:#}"));
@@ -190,6 +220,7 @@ impl App {
                         name,
                         workspaces: BTreeMap::new(),
                         current: n,
+                        accent: None,
                     });
                     self.sessions.len() - 1
                 }
