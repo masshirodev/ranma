@@ -592,6 +592,7 @@ mod tests {
             "leader",
             "theme",
             "layout",
+            "master_ratio",
             "preserve_split",
             "shell",
             "scrollback_lines",

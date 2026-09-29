@@ -72,6 +72,9 @@ pub enum Action {
     /// Grow the focused pane's edge in that direction by this many cells.
     Resize(Dir, u16),
     ToggleSplit,
+    /// Trade places with the master: the first pane of the tree (the one on the
+    /// left in layout "master"); the master trades with the next one.
+    SwapMaster,
     /// Mark or unmark the focused pane for synchronized input.
     SyncToggle,
     /// Unmark every pane.
@@ -206,6 +209,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
     ("equalize", ""),
+    ("swap_master", ""),
     ("sync_toggle", ""),
     ("sync_clear", ""),
     ("toggle_floating", ""),
@@ -346,6 +350,7 @@ impl FromStr for Action {
             }
             "toggle_split" => no_arg(Action::ToggleSplit),
             "equalize" => no_arg(Action::Equalize),
+            "swap_master" => no_arg(Action::SwapMaster),
             "sync_toggle" => no_arg(Action::SyncToggle),
             "sync_clear" => no_arg(Action::SyncClear),
             "toggle_floating" => no_arg(Action::ToggleFloating),
@@ -528,6 +533,7 @@ impl fmt::Display for Action {
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::Equalize => f.write_str("equalize"),
+            Action::SwapMaster => f.write_str("swap_master"),
             Action::SyncToggle => f.write_str("sync_toggle"),
             Action::SyncClear => f.write_str("sync_clear"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
@@ -685,6 +691,7 @@ mod tests {
             "equalize",
             "sync_toggle",
             "sync_clear",
+            "swap_master",
             "float_size 60 40",
             "snap top_right",
             "snap center",

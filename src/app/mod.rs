@@ -483,6 +483,14 @@ impl App {
 
     /// Push the current layout down to every PTY and note what is visible.
     fn relayout(&mut self) {
+        // The master layout is a shape kept by policy: whatever changed the tree
+        // (a pane opened, closed or moved in) is put back into it here.
+        if self.config.settings.layout == Layout::Master {
+            let ratio = self.config.settings.master_ratio;
+            for ws in self.workspaces.values_mut() {
+                ws.tree.arrange_master(ratio);
+            }
+        }
         let frame = self.frame();
         let sizes: Vec<(PaneId, Rect)> = frame
             .views
@@ -555,6 +563,9 @@ impl App {
             Layout::Dwindle => Placement::Dwindle,
             // i3's default for a fresh split is side by side.
             Layout::Manual => Placement::Manual(Split::Horizontal),
+            // Placed after the focused pane in tree order, then put into the
+            // master shape by relayout: it joins the stack after the focused one.
+            Layout::Master => Placement::Dwindle,
         };
         let area = self.workspace_area();
         let in_scratch = self.scratch_shown;
@@ -1604,6 +1615,14 @@ impl App {
             Action::SyncClear => {
                 self.synced.clear();
                 self.dirty = true;
+            }
+            Action::SwapMaster => {
+                if let Some(id) = focused.filter(|_| !floating)
+                    && let Some(m) = self.active().tree.master_partner(id)
+                    && self.active_mut().tree.swap(id, m)
+                {
+                    self.relayout();
+                }
             }
             Action::Equalize => {
                 if self.active_mut().tree.equalize() {

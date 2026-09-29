@@ -17,8 +17,14 @@ ranma.set {
   theme = "default",
 
   -- How new panes are placed: "dwindle" splits the focused pane along its longer
-  -- side, like Hyprland; "manual" splits the way the last toggle_split said, like i3.
+  -- side, like Hyprland; "manual" splits the way the last toggle_split said, like i3;
+  -- "master" keeps one master pane on the left and stacks the rest on the right
+  -- (a new pane joins the stack after the focused one; swap_master, leader
+  -- shift+m, trades the focused pane with the master).
   layout = "dwindle",
+  -- The master's share of the width in layout "master", 0.1-0.9. Resizing it
+  -- (shift+arrows, or the mouse) sticks.
+  master_ratio = 0.55,
   -- Keep a split's direction when its container is resized (Hyprland's dwindle option).
   preserve_split = true,
 
@@ -92,6 +98,7 @@ ranma.bind("j", "toggle_split")
 -- Every split in the workspace back to equal shares, however it was resized.
 ranma.bind("=", "equalize")
 ranma.bind("alt+return", "fullscreen")
+ranma.bind("shift+m", "swap_master")
 -- Synchronized input: a marks the focused pane (⇉ on its border); typing in a
 -- marked pane types into every marked pane of the workspace, each as if at
 -- its own keyboard (several SSH shells at once, say). A (shift+a) unmarks all.

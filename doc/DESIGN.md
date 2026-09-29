@@ -105,6 +105,17 @@ Each workspace holds:
 - **A floating layer** over the tree: panes with their own rectangle, moved and
   resized by mouse or key, drawn above the tiles.
 
+**`master` is a third policy that owns the tree's shape** (2026-09-29, from
+tuios's master-stack layout): the first pane alone on the left, the rest
+stacked on the right, in tree order. It is kept by relayout, not by insert: a
+tree already in the shape is left alone (so resizing the master or the stack
+sticks), and one that is not, after a pane closes or moves in, a split is
+toggled or a group made, is rebuilt from its panes. That keeps every other
+operation ignorant of it, at the price that `toggle_split` and groups do not
+survive in a master workspace. The tree remembers the master's share, so a
+master that closes is replaced at the same width; `master_ratio` applies when
+a master area forms, one pane becoming two.
+
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 

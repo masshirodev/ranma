@@ -66,7 +66,8 @@ Each call changes only the fields it names; call it as often as you like.
 | --- | --- | --- |
 | `leader` | `"ctrl+b"` | The chord that enters WM mode. |
 | `theme` | `"default"` | Theme name; see [Themes](#themes). |
-| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland) or `manual` (i3). |
+| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. |
+| `master_ratio` | `0.55` | With `layout = "master"`: the master's share of the width when a master area forms (0.1-0.9). Resizing it afterwards sticks. |
 | `preserve_split` | `true` | Keep a split's direction across resizes. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
@@ -120,6 +121,7 @@ does not matter; it is ignored.
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
 | `sync_toggle` | Mark or unmark the focused pane for synchronized input (`leader a`). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show `⇉` on their border, and the `mode` module shows ` ⇉ sync N ` in the urgent style while any are marked, so it is never on by accident. |
 | `sync_clear` | Unmark every pane (`leader A`). |
+| `swap_master` | Trade places with the master, the first pane of the tree (the one on the left in `layout = "master"`); on the master itself, trade with the next one (`leader M`). |
 | `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |

@@ -188,6 +188,12 @@ pub struct Layout {
 #[derive(Debug, Clone, Default)]
 pub struct Tree {
     pub root: Option<Node>,
+    /// The master's share of the width the last time the master layout saw
+    /// its shape intact: a master that closes is replaced at the same width.
+    master_share: Option<f32>,
+    /// How many panes the master layout last arranged: a master area forms
+    /// when one pane becomes two, and takes `master_ratio` then.
+    master_seen: usize,
 }
 
 /// A terminal cell is about twice as tall as it is wide; dwindle compares
@@ -301,6 +307,90 @@ impl Tree {
             changed
         }
         self.root.as_mut().is_some_and(walk)
+    }
+
+    /// Put the tree in the master layout's shape: the first pane alone on the
+    /// left, the others stacked top to bottom on the right, in tree order. A
+    /// tree already in that shape is left as it is, so resizing the master or
+    /// the stack sticks; one that is not (a pane closed, a split toggled, a
+    /// group made) is rebuilt, keeping the master's share when it had one.
+    /// Returns whether anything changed.
+    pub fn arrange_master(&mut self, ratio: f32) -> bool {
+        let share = match &self.root {
+            Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            }) if children.len() == 2 => {
+                let total: f32 = children.iter().map(|(_, w)| *w).sum();
+                Some(children[0].1 / total.max(f32::EPSILON))
+            }
+            _ => None,
+        };
+        let n = self.panes().len();
+        let forming = self.master_seen < 2 && n >= 2;
+        self.master_seen = n;
+        if self.is_master_shape() && !forming {
+            self.master_share = share.or(self.master_share);
+            return false;
+        }
+        let keep = if forming {
+            ratio
+        } else {
+            share.or(self.master_share).unwrap_or(ratio)
+        };
+        self.master_share = Some(keep);
+        let panes = self.panes();
+        self.root = match panes.as_slice() {
+            [] => None,
+            [one] => Some(Node::Pane(*one)),
+            [master, rest @ ..] => {
+                let stack = match rest {
+                    [one] => Node::Pane(*one),
+                    many => Node::split(
+                        Split::Vertical,
+                        many.iter().map(|p| (Node::Pane(*p), 1.0)).collect(),
+                    ),
+                };
+                Some(Node::split(
+                    Split::Horizontal,
+                    vec![(Node::Pane(*master), keep), (stack, 1.0 - keep)],
+                ))
+            }
+        };
+        true
+    }
+
+    fn is_master_shape(&self) -> bool {
+        let leaf = |n: &Node| matches!(n, Node::Pane(_));
+        match &self.root {
+            None | Some(Node::Pane(_)) => true,
+            Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            }) if children.len() == 2 && leaf(&children[0].0) => match &children[1].0 {
+                Node::Pane(_) => true,
+                Node::Container {
+                    split: Split::Vertical,
+                    tabbed: None,
+                    children: stack,
+                } => stack.len() >= 2 && stack.iter().all(|(n, _)| leaf(n)),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// The pane `swap_master` trades places with `id`: the tree's first pane
+    /// (the master), or, for the master itself, the next one.
+    pub fn master_partner(&self, id: PaneId) -> Option<PaneId> {
+        let panes = self.panes();
+        match panes.first() {
+            Some(m) if *m == id => panes.get(1).copied(),
+            Some(m) if panes.contains(&id) => Some(*m),
+            _ => None,
+        }
     }
 
     /// Tab or untab the container holding `id` (i3's `layout tabbed`). A pane with
@@ -1026,6 +1116,51 @@ mod tests {
         // Already even: nothing to do, so no relayout.
         assert!(!t.equalize());
         assert!(!dwindle(1).equalize());
+    }
+
+    #[test]
+    fn master_layout_keeps_one_master_and_a_stack() {
+        let mut t = Tree::default();
+        for id in 1..=4 {
+            let f = (id > 1).then_some(id - 1);
+            t.insert(id, f, None, Placement::Dwindle);
+            t.arrange_master(0.75);
+        }
+        // 1 on the left at 75%, 2-4 stacked on the right.
+        assert_eq!(rect_of(&t, 1), Rect::new(0, 0, 150, 50));
+        for id in 2..=4 {
+            assert_eq!(rect_of(&t, id).x, 150, "{id}");
+        }
+        assert!(rect_of(&t, 2).y < rect_of(&t, 3).y && rect_of(&t, 3).y < rect_of(&t, 4).y);
+        // Resizing the master sticks: the shape holds, nothing is rebuilt.
+        assert!(t.resize(1, Dir::Right, 10, AREA, 0));
+        assert!(!t.arrange_master(0.75));
+        assert_eq!(rect_of(&t, 1).w, 160);
+        // The master closes: the first of the stack takes its place, same width.
+        t.remove(1);
+        assert!(t.arrange_master(0.75));
+        // (Within a cell: the share goes through f32 weights and rounding.)
+        let r2 = rect_of(&t, 2);
+        assert_eq!((r2.x, r2.y, r2.h), (0, 0, 50));
+        assert!(r2.w.abs_diff(160) <= 1, "{r2:?}");
+        assert_eq!(rect_of(&t, 3).x, r2.w);
+        // Down to one pane, and then none.
+        t.remove(3);
+        t.remove(4);
+        t.arrange_master(0.75);
+        assert_eq!(t.layout(AREA, 0), vec![(2, AREA)]);
+        t.remove(2);
+        assert!(!t.arrange_master(0.75));
+    }
+
+    #[test]
+    fn swap_master_partners() {
+        let mut t = dwindle(3);
+        t.arrange_master(0.5);
+        assert_eq!(t.master_partner(3), Some(1));
+        assert_eq!(t.master_partner(1), Some(2));
+        assert_eq!(dwindle(1).master_partner(1), None);
+        assert_eq!(t.master_partner(9), None);
     }
 
     #[test]

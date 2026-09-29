@@ -24,6 +24,8 @@ pub const DEFAULT_INIT_LUA: &str = include_str!("../assets/init.lua");
 pub enum Layout {
     Dwindle,
     Manual,
+    /// One master pane on the left, the rest stacked on the right.
+    Master,
 }
 
 /// What the mouse does outside WM mode.
@@ -76,6 +78,9 @@ pub struct Settings {
     pub leader: Chord,
     pub theme: String,
     pub layout: Layout,
+    /// With `layout = "master"`: the master's share of the width, for a new
+    /// master area (a resized one keeps its size).
+    pub master_ratio: f32,
     pub preserve_split: bool,
     pub shell: Option<String>,
     pub scrollback_lines: usize,
@@ -98,6 +103,7 @@ impl Default for Settings {
             leader: "ctrl+b".parse().unwrap(),
             theme: theme::DEFAULT_THEME_NAME.into(),
             layout: Layout::Dwindle,
+            master_ratio: 0.55,
             preserve_split: true,
             shell: None,
             scrollback_lines: 10_000,
@@ -120,6 +126,7 @@ struct SettingsPatch {
     leader: Option<String>,
     theme: Option<String>,
     layout: Option<Layout>,
+    master_ratio: Option<f32>,
     preserve_split: Option<bool>,
     shell: Option<String>,
     scrollback_lines: Option<usize>,
@@ -434,6 +441,14 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             }
             if let Some(l) = patch.layout {
                 s.layout = l;
+            }
+            if let Some(r) = patch.master_ratio {
+                if !(0.1..=0.9).contains(&r) {
+                    return Err(rt_err(format!(
+                        "ranma.set: master_ratio must be between 0.1 and 0.9, not {r}"
+                    )));
+                }
+                s.master_ratio = r;
             }
             if let Some(p) = patch.preserve_split {
                 s.preserve_split = p;
@@ -1209,6 +1224,18 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn master_layout_and_its_ratio() {
+        let cfg = with_user("ranma.set { layout = 'master', master_ratio = 0.6 }").unwrap();
+        assert_eq!(cfg.settings.layout, Layout::Master);
+        assert_eq!(cfg.settings.master_ratio, 0.6);
+        let e = format!(
+            "{:#}",
+            with_user("ranma.set { master_ratio = 0.95 }").unwrap_err()
+        );
+        assert!(e.contains("master_ratio"), "{e}");
     }
 
     #[test]
