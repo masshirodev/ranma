@@ -13,7 +13,7 @@ use crate::config::Event as HookEvent;
 use crate::layout::PaneId;
 use crate::workspace::Workspace;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Session {
     pub name: String,
     pub workspaces: BTreeMap<u8, Workspace>,

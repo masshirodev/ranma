@@ -6,6 +6,7 @@
 #   ./install.sh --check       run the pre-commit gate first (fmt, clippy, tests, smoke)
 #   ./install.sh --root DIR    install to DIR/bin instead of ~/.cargo/bin
 #   ./install.sh --uninstall   remove the installed binary
+#   ./install.sh --no-upgrade  leave running servers on their old build
 #
 # Why the check: ranma parses its config and theme strictly, and a terminal that
 # starts ranma from its shell startup falls back to a plain shell when ranma
@@ -19,18 +20,20 @@ cd "$here"
 
 check=0
 uninstall=0
+upgrade=1
 root=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) check=1 ;;
     --uninstall) uninstall=1 ;;
+    --no-upgrade) upgrade=0 ;;
     --root)
       [ $# -ge 2 ] || { echo "install.sh: --root needs a directory" >&2; exit 2; }
       root="$2"
       shift
       ;;
     -h | --help)
-      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -113,7 +116,18 @@ case ":$PATH:" in
   *) say "note: $bin_dir is not in PATH; add it, or new shells will not find ranma" ;;
 esac
 
-running=$(pgrep -xc ranma || true)
-if [ "${running:-0}" -gt 0 ]; then
-  say "$running ranma instance(s) running still use the old binary until they exit"
+# ---- move running servers onto it (DESIGN.md, "Upgrading a server in place") --
+# Each server exec's the new build into its own process: shells, panes and
+# scrollback stay, and terminals only redraw. One from before in-place
+# upgrades says so and keeps running on its old binary until it is restarted.
+if [ "$upgrade" -eq 1 ]; then
+  status=0
+  out="$("$bin" upgrade --all 2>&1)" || status=$?
+  if [ -n "$out" ]; then
+    say "running servers, moved to the new build (nothing closes):"
+    printf '%s\n' "$out" | sed 's/^/    /'
+  fi
+  if [ "$status" -ne 0 ]; then
+    say "the servers named above stay on their old build until they are restarted"
+  fi
 fi

@@ -70,6 +70,13 @@ impl std::fmt::Display for Color {
     }
 }
 
+impl serde::Serialize for Color {
+    /// As a theme spells it, which `Deserialize` reads back.
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]

@@ -348,6 +348,17 @@ T send-keys -t s a; sleep 0.4
   fail "typing the label did not copy the link ($(T show-buffer 2>/dev/null))"
 bar | grep -q ' LINK ' && fail "hints stayed open after a pick"
 
+# Upgrading in place: the server exec's its binary again, keeping every
+# shell, its screen and its state, and the terminal stays attached.
+T send-keys -t s 'UPG=kept-across; echo before-upgrade' Enter; sleep 0.4
+PID0=$(server_pid)
+$ENV $BIN upgrade 1 >/dev/null || fail "ranma upgrade failed"
+wait_for 'ranma upgraded' 20 || fail "no toast after the upgrade"
+[ "$(server_pid)" = "$PID0" ] || fail "the upgrade changed the server's process"
+screen | grep -q 'before-upg' || fail "the screen was not kept across the upgrade"
+T send-keys -t s 'echo "after-$UPG"' Enter
+wait_for 'after-kept-across' 10 || fail "the shell did not survive the upgrade"
+
 # Resize the host: both panes follow.
 T resize-window -t s -x 90 -y 24
 sleep 0.5

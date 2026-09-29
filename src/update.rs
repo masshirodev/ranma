@@ -157,8 +157,8 @@ pub fn install_command() -> String {
     let dir = shell_quote(SOURCE_DIR);
     format!(
         "cd {dir} && git pull --ff-only && ./install.sh; status=$?; echo; \
-         if [ $status -eq 0 ]; then echo 'Updated. New terminals start the new ranma; \
-         running ones keep the old binary until they exit.'; \
+         if [ $status -eq 0 ]; then echo 'Updated. Running servers moved to the new build \
+         in place (anything that could not is named above).'; \
          else echo \"Update failed (exit $status); nothing was replaced.\"; fi"
     )
 }

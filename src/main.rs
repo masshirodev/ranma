@@ -29,6 +29,11 @@ struct Cli {
     #[arg(long)]
     standalone: bool,
 
+    /// Read a server's handover and check it, adopting nothing: what a server
+    /// taking this build asks of it before the exec (not for use by hand).
+    #[arg(long, hide = true, value_name = "FILE")]
+    check_handover: Option<std::path::PathBuf>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -49,6 +54,21 @@ enum Command {
     Server {
         #[arg(long)]
         name: String,
+        /// Take over from a server that exec'd this build (see `upgrade`).
+        #[arg(long)]
+        resume: Option<std::path::PathBuf>,
+        /// The old build, to go back to if taking over fails.
+        #[arg(long, requires = "resume")]
+        fallback: Option<std::path::PathBuf>,
+    },
+    /// Move running servers to the installed build without closing anything:
+    /// every shell, pane and scrollback stays. `install.sh` runs `--all`.
+    Upgrade {
+        /// The server (as `ranma ls` names it); the one this runs in when left out.
+        name: Option<String>,
+        /// Every server.
+        #[arg(long, conflicts_with = "name")]
+        all: bool,
     },
     /// Show a toast, e.g. `make && ranma notify "build done"`.
     Notify {
@@ -244,6 +264,66 @@ fn update(check: bool) -> ExitCode {
     }
 }
 
+/// `ranma upgrade`: ask servers to take the installed build in place. A server
+/// from before this existed does not know the request, and is named: it needs
+/// one last restart.
+fn upgrade(name: Option<&str>, all: bool) -> ExitCode {
+    let names: Vec<String> = if all {
+        let dir = ipc::server_dir();
+        let mut n: Vec<String> = std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path();
+                if p.extension()? != "sock" {
+                    return None;
+                }
+                Some(p.file_stem()?.to_string_lossy().into_owned())
+            })
+            .collect();
+        n.sort();
+        n
+    } else if let Some(n) = name {
+        vec![n.to_string()]
+    } else {
+        match std::env::var(ipc::ENV).ok().and_then(|s| {
+            std::path::Path::new(&s)
+                .file_stem()
+                .map(|n| n.to_string_lossy().into_owned())
+        }) {
+            Some(n) => vec![n],
+            None => {
+                eprintln!("ranma: name a server (ranma ls lists them), or --all");
+                return ExitCode::FAILURE;
+            }
+        }
+    };
+    let mut ok = true;
+    for n in names {
+        let sock = ipc::server_socket(&n);
+        match ipc::send_to(&sock, "upgrade\n") {
+            Ok(msg) => print!("{msg}"),
+            Err(e) => {
+                let e = e.to_string();
+                if e.contains("unknown request") {
+                    eprintln!(
+                        "ranma: server {n} is from before in-place upgrades: restart it once"
+                    );
+                } else {
+                    eprintln!("ranma: server {n}: {e}");
+                }
+                ok = false;
+            }
+        }
+    }
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 /// A command that is a request to the ranma this runs in, and what it prints.
 fn request(cmd: Command) -> anyhow::Result<ExitCode> {
     use anyhow::Context;
@@ -367,6 +447,7 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             command,
         } => return popup(width, height, title, &command),
         Command::Update { .. }
+        | Command::Upgrade { .. }
         | Command::Ls
         | Command::Kill { .. }
         | Command::Attach { .. }
@@ -476,8 +557,19 @@ fn main() -> ExitCode {
     }
     let mut cli = Cli::parse();
 
+    if let Some(file) = &cli.check_handover {
+        return match ranma::app::check_handover(file) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("{e:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
     match &cli.command {
         Some(Command::Update { check }) => return update(*check),
+        Some(Command::Upgrade { name, all }) => return upgrade(name.as_deref(), *all),
         Some(Command::Ls) => return ranma::client::list(),
         Some(Command::Kill { name }) => {
             return match ranma::client::kill(name) {
@@ -551,7 +643,15 @@ fn main() -> ExitCode {
     // before a server is involved, and a shell startup that runs ranma falls
     // back to a plain shell with the message on screen.
     let result = match (&cli.command, cli.standalone) {
-        (Some(Command::Server { name }), _) => ranma::app::run_server(cfg, name),
+        (
+            Some(Command::Server {
+                name,
+                resume: Some(file),
+                fallback,
+            }),
+            _,
+        ) => ranma::app::run_server_resume(cfg, name, file, fallback.as_deref()),
+        (Some(Command::Server { name, .. }), _) => ranma::app::run_server(cfg, name),
         (Some(Command::Attach { name }), _) => ranma::client::run(Some(name)).map(|_| ()),
         (_, true) => ranma::app::run(cfg),
         (_, false) => {

@@ -35,13 +35,15 @@ mod rules;
 mod run;
 mod session;
 mod switch;
+pub(crate) mod upgrade;
 
 pub use copy::CopyState;
 pub use drag::drop_half;
 pub use hints::HintState;
-pub use run::{run, run_server};
+pub use run::{run, run_server, run_server_resume};
 use session::Session;
 pub use switch::PickerLayout;
+pub use upgrade::check_handover;
 
 /// The frame cap. Output arriving faster than this is coalesced: the pane is drawn
 /// at its latest state once per interval, not once per read.
@@ -950,6 +952,7 @@ impl App {
             AppEvent::Servers(list) => self.open_server_switcher(list),
             // The event loop (run.rs) deals with clients itself.
             AppEvent::Attach { .. }
+            | AppEvent::Upgrade { .. }
             | AppEvent::ClientInput(..)
             | AppEvent::ClientGone(_)
             | AppEvent::Status(_) => {}

@@ -13,11 +13,13 @@
 //! work on the computed rectangles, not on tree order, which is what makes focus
 //! go where the eye expects.
 
+use serde::{Deserialize, Serialize};
+
 use crate::action::{Dir, Snap};
 
 pub type PaneId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Rect {
     pub x: u16,
     pub y: u16,
@@ -106,7 +108,7 @@ impl Rect {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Split {
     /// Children side by side, left to right.
     Horizontal,
@@ -129,7 +131,7 @@ impl Split {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Node {
     Pane(PaneId),
     Container {
@@ -185,7 +187,7 @@ pub struct Layout {
 }
 
 /// The tree of one workspace, possibly empty.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Tree {
     pub root: Option<Node>,
     /// The master's share of the width the last time the master layout saw

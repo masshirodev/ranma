@@ -41,15 +41,28 @@ shells as you left them.
 | `ranma ls` | List the servers: attached or detached, panes, sessions, when last used. |
 | `ranma attach NAME` | Attach to server NAME, taking it from a terminal that shows it (that terminal is told). |
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
+| `ranma upgrade [NAME]` / `--all` | Move a server (the one this runs in, when no name is given) or all of them to the installed build **without closing anything**: shells, panes, scrollback and the terminal attached all stay. `install.sh` does `--all` after every good install. |
 | `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
 | `leader d` (`detach`) | Leave this terminal; the server keeps running. |
 | `leader S` (`server_switcher`) | The servers, from inside ranma: `Enter` moves this terminal to one, `Ctrl+X` kills one. |
 | `leader Delete` (`quit`) | End this server and every shell in it. |
 
 Servers are named 1, 2, 3...; their sockets are in `$XDG_RUNTIME_DIR/ranma/` and
-their logs in `~/.cache/ranma/`. A server keeps running the binary it started
-with, so after an upgrade quit it (or `ranma kill`) to switch; a newer `ranma`
-attaching to an older server says so.
+their logs in `~/.cache/ranma/`.
+
+**Upgrading keeps everything.** A server takes a new build by executing it in
+its own place: the shells keep running, unaware (they are still its children,
+their PTYs never close), every pane comes back with its screen and scrollback,
+and the terminal attached only redraws. A full-screen program (nvim, htop) is
+asked to draw itself again. What resets is what a config reload resets, plus
+open pickers, toasts and WM mode. Before anything happens the new build reads
+what it is given, in a process of its own; if it cannot, nothing is done, and a
+toast (and `ranma upgrade`) says why. If it fails after all, the server goes
+back to the old build, which it kept aside, so no upgrade can close a shell.
+A server from before this existed does not know how: `ranma upgrade` names it,
+and it takes one last restart (`leader Delete`, or `ranma kill`). A standalone
+ranma is simply restarted. A newer `ranma` attaching to an older server still
+says so.
 
 **Every terminal gets its own server**, so the session switcher of one does not
 show the sessions of another: sessions live in a server. Opening a second

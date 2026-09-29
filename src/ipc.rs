@@ -109,7 +109,38 @@ pub fn listen_at(tx: Sender<AppEvent>, path: PathBuf) -> Result<Listening> {
     let listener =
         UnixListener::bind(&path).with_context(|| format!("binding {}", path.display()))?;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    accept(tx, listener, path)
+}
+
+/// The listening socket's descriptor, kept across a server's exec when it
+/// takes a new build (see `upgrade`).
+static LISTENER_FD: OnceLock<std::os::fd::RawFd> = OnceLock::new();
+
+pub fn listener_fd() -> Option<std::os::fd::RawFd> {
+    LISTENER_FD.get().copied()
+}
+
+/// Listen on a socket kept across the exec of a server that took a new
+/// build: the same socket, so nothing trying to connect meanwhile is refused.
+///
+/// # Safety
+/// `fd` must be the listening socket bound at `path`, owned by nothing else.
+pub unsafe fn adopt_listener(
+    tx: Sender<AppEvent>,
+    fd: std::os::fd::RawFd,
+    path: PathBuf,
+) -> Result<Listening> {
+    use std::os::fd::FromRawFd;
+    crate::pty::set_cloexec(fd, true)?;
+    // SAFETY: the caller hands the descriptor over.
+    let listener = unsafe { UnixListener::from_raw_fd(fd) };
+    accept(tx, listener, path)
+}
+
+fn accept(tx: Sender<AppEvent>, listener: UnixListener, path: PathBuf) -> Result<Listening> {
+    use std::os::fd::AsRawFd;
     let _ = SOCKET.set(path.clone());
+    let _ = LISTENER_FD.set(listener.as_raw_fd());
     std::thread::Builder::new()
         .name("ipc".into())
         .spawn(move || {
@@ -134,6 +165,23 @@ fn serve(stream: UnixStream, tx: &Sender<AppEvent>) {
     }
     match first.trim_end() {
         "attach" => serve_client(stream.try_clone().ok(), reader, tx),
+        "upgrade" => {
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            let (written_tx, written_rx) = std::sync::mpsc::channel();
+            let _ = tx.send(AppEvent::Upgrade {
+                reply: reply_tx,
+                written: written_rx,
+            });
+            // The server checks the new build before answering: patience.
+            let reply = match reply_rx.recv_timeout(Duration::from_secs(60)) {
+                Ok(Ok(body)) => format!("ok\n{body}"),
+                Ok(Err(e)) => format!("error: {e}\n"),
+                Err(_) => "error: no answer\n".into(),
+            };
+            let _ = (&stream).write_all(reply.as_bytes());
+            let _ = (&stream).flush();
+            let _ = written_tx.send(());
+        }
         "status" => {
             let (reply_tx, reply_rx) = std::sync::mpsc::channel();
             let _ = tx.send(AppEvent::Status(reply_tx));
@@ -178,6 +226,15 @@ fn serve_client(
         Ok(Some(crate::proto::ToServer::Hello(h))) => h,
         _ => return,
     };
+    // From here on, frames are read straight off the socket, one at a time:
+    // nothing is read ahead into a buffer. A server that takes a new build
+    // (see `upgrade`) keeps this connection across its exec, and whatever this
+    // thread has not read yet must still be in the socket, whole, for the new
+    // process to read.
+    let early = reader.buffer().to_vec();
+    let Ok(stream) = writer.try_clone() else {
+        return;
+    };
     if tx
         .send(AppEvent::Attach {
             id,
@@ -188,8 +245,27 @@ fn serve_client(
     {
         return;
     }
+    read_client(id, std::io::Read::chain(&early[..], stream), tx);
+}
+
+/// A client already attached, taken over by a server that took a new build:
+/// its connection kept across the exec. Returns its new id and its writer.
+pub fn resume_client(stream: UnixStream, tx: &Sender<AppEvent>) -> Option<(u64, UnixStream)> {
+    let id = NEXT_CLIENT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let writer = stream.try_clone().ok()?;
+    let tx = tx.clone();
+    std::thread::Builder::new()
+        .name("ipc-conn".into())
+        .spawn(move || read_client(id, stream, &tx))
+        .ok()?;
+    Some((id, writer))
+}
+
+/// A client's frames until it goes: each becomes an event for the window
+/// manager.
+fn read_client(id: u64, mut r: impl Read, tx: &Sender<AppEvent>) {
     loop {
-        match crate::proto::read_to_server(&mut reader) {
+        match crate::proto::read_to_server(&mut r) {
             Ok(Some(crate::proto::ToServer::Event(ev))) => {
                 if tx.send(AppEvent::ClientInput(id, ev)).is_err() {
                     return;

@@ -59,8 +59,8 @@ client owns nothing**:
   reaches it, and logs to `~/.cache/ranma/server-NAME.log`. Its sockets are
   `$XDG_RUNTIME_DIR/ranma/NAME.sock`, mode 0600, one per server, also carrying
   `ranma notify`/`action`/`open`.
-- A server keeps the binary it started with; an upgraded client attaching to an
-  older server says so. `--standalone` runs the old way, in one terminal only.
+- A server takes a new build without closing anything (see "Upgrading a server
+  in place"); a newer client attaching to an older server says so. `--standalone` runs the old way, in one terminal only.
 - **Moving between servers from inside** (`leader S`, the server switcher, or
   `attach NAME`): the server sends its client `Switch(NAME)` and lets it go; the
   client connects to NAME's socket and says hello again, keeping the terminal,
@@ -128,6 +128,30 @@ is at worst a restart. So:
    fails to restore anyway exec's that copy with the same handover.
 3. Only a server does this. A `--standalone` ranma owns its terminal
    directly, and is simply restarted.
+
+Found while building it:
+
+- **The client's connection is read one frame at a time.** Frames are binary
+  and length-prefixed, so a new process that started reading in the middle of
+  one could never find its way back. The old reader used a buffer that read
+  ahead; now, after the hello, each frame is read straight off the socket, so
+  whatever the old process had not read at the exec is still there, whole.
+- **Taking the state must leave the server intact**, since the dry run can
+  still refuse: workspaces and sessions are copied, not moved, and a program
+  on the alternate screen is put back there (blank) and asked to redraw if the
+  upgrade does not happen.
+- **Holding output** makes each pane's reader report "nothing yet" and waits
+  50 ms for reads already under way to be parsed. A read that took bytes in
+  that window and had not parsed them is the one way output could be lost; the
+  window is the one read already in flight.
+- **A new build started from a path**: `/proc/self/exe` names the file the
+  server was started from until `install.sh` replaces it, then reads the old
+  build. So the server remembers its path at start, exec's that path (the new
+  build), and copies `/proc/self/exe` (the old one) aside first.
+- Tried by hand with bash and nvim, twice in a row, and with a build that
+  refuses the handover: same process, same shells (a variable set before is
+  there after), scrollback and colours back exactly, nvim redrawn, an adopted
+  shell's exit status reaching `ranma wait`, no descriptor left behind.
 
 What an upgrade resets: the Lua state (the config runs again, as on a reload),
 open pickers, pending toasts, WM mode. `ranma upgrade [NAME]` upgrades one

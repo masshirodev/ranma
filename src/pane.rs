@@ -68,6 +68,13 @@ pub enum AppEvent {
     Servers(Vec<crate::proto::Status>),
     /// A shell mark or a notification a pane's program sent (see `osc`).
     Mark(PaneId, crate::osc::Mark),
+    /// `ranma upgrade`: take the new build in place (see `app::upgrade`).
+    /// The answer goes to `reply`; `written` says it has reached the asker,
+    /// which must happen before the exec closes that connection.
+    Upgrade {
+        reply: Sender<std::result::Result<String, String>>,
+        written: std::sync::mpsc::Receiver<()>,
+    },
 }
 
 /// Forwards a pane's terminal events to the UI thread.
@@ -94,8 +101,8 @@ impl Proxy {
 
 /// The PTY as alacritty_terminal's event loop drives it, with a look at what
 /// it reads on the way: the OSC sequences the emulator drops (see `osc`).
-struct ScanPty {
-    inner: tty::Pty,
+struct ScanPty<P> {
+    inner: P,
     reader: ScanReader,
 }
 
@@ -107,8 +114,16 @@ struct ScanReader {
     proxy: Proxy,
 }
 
+/// While set, no pane reads its PTY: a server handing over to a new build
+/// holds what programs print in the kernel's buffer, for the new process to
+/// read (see `upgrade`).
+pub static HOLD_OUTPUT: AtomicBool = AtomicBool::new(false);
+
 impl std::io::Read for ScanReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if HOLD_OUTPUT.load(Ordering::Acquire) {
+            return Err(std::io::ErrorKind::WouldBlock.into());
+        }
         let n = self.file.read(buf)?;
         for m in self.scanner.feed(&buf[..n], std::time::Instant::now()) {
             self.proxy.mark(m);
@@ -117,7 +132,7 @@ impl std::io::Read for ScanReader {
     }
 }
 
-impl tty::EventedReadWrite for ScanPty {
+impl<P: tty::EventedReadWrite<Writer = std::fs::File>> tty::EventedReadWrite for ScanPty<P> {
     type Reader = ScanReader;
     type Writer = std::fs::File;
 
@@ -149,13 +164,13 @@ impl tty::EventedReadWrite for ScanPty {
     }
 }
 
-impl OnResize for ScanPty {
+impl<P: OnResize> OnResize for ScanPty<P> {
     fn on_resize(&mut self, size: WindowSize) {
         self.inner.on_resize(size)
     }
 }
 
-impl tty::EventedPty for ScanPty {
+impl<P: tty::EventedPty<Writer = std::fs::File>> tty::EventedPty for ScanPty<P> {
     fn next_child_event(&mut self) -> Option<tty::ChildEvent> {
         self.inner.next_child_event()
     }
@@ -218,8 +233,22 @@ pub struct Pane {
     pub name: Option<String>,
     /// The pane's own child (the shell, or the `exec` command).
     pub pid: u32,
+    /// A descriptor of the PTY master, open for as long as the pane: what a
+    /// server keeps across its exec to take a new build.
+    pub master_fd: std::os::fd::RawFd,
     /// The PTY's I/O thread; it drops the PTY (hanging up the child) as it ends.
     io_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+/// What every pane is made of, however its PTY came to be.
+struct Parts {
+    id: PaneId,
+    term: Arc<FairMutex<Term<Proxy>>>,
+    proxy: Proxy,
+    wakeup_pending: Arc<AtomicBool>,
+    live: Arc<AtomicBool>,
+    size: Size,
+    pid: u32,
 }
 
 pub struct SpawnOptions<'a> {
@@ -301,9 +330,94 @@ impl Pane {
         };
         let pty = tty::new(&pty_opts, size.window(), id).context("opening a PTY")?;
         let pid = pty.child().id();
+        let master = pty.file().try_clone().context("duplicating the PTY")?;
+        Pane::start(
+            Parts {
+                id,
+                term,
+                proxy,
+                wakeup_pending,
+                live,
+                size,
+                pid,
+            },
+            master,
+            pty,
+        )
+    }
+
+    /// A pane around a child that is already running, after a server took a
+    /// new build (DESIGN.md, "Upgrading a server in place"): `fd` is the PTY
+    /// master kept across the exec, `snapshot` what the pane showed.
+    ///
+    /// # Safety
+    /// `fd` must be the open PTY master of `pid`, owned by nothing else.
+    pub unsafe fn adopt(
+        id: PaneId,
+        size: Size,
+        fd: std::os::fd::RawFd,
+        pid: u32,
+        snapshot: &crate::snapshot::Snapshot,
+        scrollback_lines: usize,
+        tx: Sender<AppEvent>,
+    ) -> Result<Pane> {
+        let wakeup_pending = Arc::new(AtomicBool::new(false));
+        let live = Arc::new(AtomicBool::new(true));
+        let proxy = Proxy {
+            id,
+            tx,
+            wakeup_pending: wakeup_pending.clone(),
+            live: live.clone(),
+        };
+        let config = term::Config {
+            scrolling_history: scrollback_lines,
+            ..Default::default()
+        };
+        let mut t = Term::new(config, &size, proxy.clone());
+        crate::snapshot::restore(&mut t, snapshot);
+        let term = Arc::new(FairMutex::new(t));
+        // SAFETY: the caller hands the master over.
+        let mut pty =
+            unsafe { crate::pty::AdoptedPty::adopt(fd, pid) }.context("adopting a PTY")?;
+        let master = {
+            use tty::EventedReadWrite;
+            pty.reader().try_clone().context("duplicating the PTY")?
+        };
+        Pane::start(
+            Parts {
+                id,
+                term,
+                proxy,
+                wakeup_pending,
+                live,
+                size,
+                pid,
+            },
+            master,
+            pty,
+        )
+    }
+
+    /// The rest of a pane, whichever way its PTY came: the scanner in front of
+    /// it, and alacritty's event loop on a thread of its own.
+    fn start<P>(parts: Parts, master: std::fs::File, pty: P) -> Result<Pane>
+    where
+        P: tty::EventedPty<Writer = std::fs::File> + OnResize + Send + 'static,
+    {
+        use std::os::fd::AsRawFd;
+        let Parts {
+            id,
+            term,
+            proxy,
+            wakeup_pending,
+            live,
+            size,
+            pid,
+        } = parts;
+        let master_fd = master.as_raw_fd();
         let pty = ScanPty {
             reader: ScanReader {
-                file: pty.file().try_clone().context("duplicating the PTY")?,
+                file: master,
                 scanner: Default::default(),
                 proxy: proxy.clone(),
             },
@@ -333,6 +447,7 @@ impl Pane {
             title: String::new(),
             name: None,
             pid,
+            master_fd,
             io_thread,
         })
     }

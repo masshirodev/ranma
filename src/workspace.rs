@@ -2,7 +2,7 @@
 
 use crate::layout::{PaneId, Rect, Tree};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Workspace {
     pub tree: Tree,
     /// Floating panes and where they sit, bottom first: the last one is on top.

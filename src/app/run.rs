@@ -100,6 +100,8 @@ struct Client {
     writer: UnixStream,
     /// Its build: only a client that knows `ToClient::Switch` is sent one.
     build: String,
+    /// What it said when it attached: handed over with it on an upgrade.
+    hello: proto::Hello,
 }
 
 impl Client {
@@ -139,7 +141,7 @@ pub fn run(config: Config) -> Result<()> {
         spawn_input_thread(tx.clone());
         start_background(&app, &tx);
         let _watcher = watch_config(tx);
-        event_loop(&mut app, &rx, &mut term, None, None)
+        event_loop(&mut app, &rx, &mut term, None, None, None)
     })();
     let out = term.backend_mut();
     let _ = out.write_all(b"\x1b[23;0t");
@@ -158,6 +160,7 @@ pub fn run(config: Config) -> Result<()> {
 /// Server: ranma with no terminal of its own, serving clients on the socket
 /// named `name`, until its last pane closes or it is quit.
 pub fn run_server(config: Config, name: &str) -> Result<()> {
+    remember_exe();
     let (tx, rx) = mpsc::channel();
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let mut term = terminal(Sink::Buffer(buffer.clone()), 80, 24)?;
@@ -169,7 +172,233 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
     }
     start_background(&app, &tx);
     let _watcher = watch_config(tx);
-    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer))
+    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), None)
+}
+
+/// The binary a server was started from. After `install.sh` replaces it, this
+/// path holds the new build, while `/proc/self/exe` still reads the old one.
+static SERVER_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+fn remember_exe() {
+    if let Ok(p) = std::env::current_exe() {
+        // A path that was already replaced reads "… (deleted)": not ours.
+        let p = std::path::PathBuf::from(
+            p.to_string_lossy()
+                .trim_end_matches(" (deleted)")
+                .to_string(),
+        );
+        let _ = SERVER_EXE.set(p);
+    }
+}
+
+/// A server that took a new build: everything the old one handed over,
+/// taken back. If it cannot be, the old build (kept aside by the old server)
+/// is exec'd with the same handover, so no shell is lost to a bad build.
+pub fn run_server_resume(
+    config: Config,
+    name: &str,
+    file: &std::path::Path,
+    fallback: Option<&std::path::Path>,
+) -> Result<()> {
+    remember_exe();
+    let fail = |e: anyhow::Error, h: Option<&super::upgrade::Handover>| -> anyhow::Error {
+        eprintln!("ranma: taking over from the old build failed: {e:#}");
+        if let Some(prev) = fallback {
+            // Keep every descriptor for the old build, as the old server did.
+            if let Some(h) = h {
+                keep_across_exec(h);
+            }
+            eprintln!("ranma: going back to the old build ({})", prev.display());
+            use std::os::unix::process::CommandExt;
+            let err = std::process::Command::new(prev)
+                .args(["server", "--name", name, "--resume"])
+                .arg(file)
+                .exec();
+            eprintln!("ranma: could not go back: {err}");
+        }
+        e
+    };
+    let h = match super::upgrade::check(file) {
+        Ok(h) => h,
+        Err(e) => return Err(fail(e, None)),
+    };
+    let (tx, rx) = mpsc::channel();
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let mut term = terminal(Sink::Buffer(buffer.clone()), h.cols, h.rows)?;
+    let alt: Vec<std::os::fd::RawFd> = h
+        .state
+        .panes
+        .iter()
+        .filter(|p| p.was_full_screen())
+        .map(|p| p.fd)
+        .collect();
+    // Kept aside in case: the descriptors must stay open for a fallback.
+    let listener_fd = h.listener_fd;
+    let client_h = h.client.as_ref().map(|c| (c.fd, c.hello.clone()));
+    let (cols, rows) = (h.cols, h.rows);
+    // SAFETY: the descriptors in the handover are the ones the old server
+    // kept open across its exec for exactly this.
+    let mut app = match unsafe { App::take_over(config, tx.clone(), h.state, cols, rows) } {
+        Ok(app) => app,
+        Err(e) => {
+            // The handover was consumed; read it again for the fallback's sake.
+            let again = super::upgrade::read(file).ok();
+            return Err(fail(e, again.as_ref()));
+        }
+    };
+    let path = crate::ipc::server_socket(name);
+    // SAFETY: as above.
+    let _ipc = match unsafe { crate::ipc::adopt_listener(tx.clone(), listener_fd, path) } {
+        Ok(l) => Some(l),
+        Err(e) => {
+            app.status = Some(format!("ranma notify unavailable: {e:#}"));
+            None
+        }
+    };
+    let mut client = None;
+    if let Some((fd, hello)) = client_h {
+        use std::os::fd::FromRawFd;
+        let _ = crate::pty::set_cloexec(fd, true);
+        // SAFETY: as above.
+        let stream = unsafe { UnixStream::from_raw_fd(fd) };
+        if let Some((id, writer)) = crate::ipc::resume_client(stream, &tx) {
+            restart(&mut term, Some(&buffer), hello.cols, hello.rows)?;
+            app.host_colors = hello.colors.clone();
+            app.client_inside = hello.inside.clone();
+            app.client_remote = hello.remote;
+            app.set_outer(hello.outer);
+            client = Some(Client {
+                id,
+                writer,
+                build: hello.build.clone(),
+                hello,
+            });
+        }
+    }
+    // What a full-screen program had drawn was not handed over: it draws again.
+    for fd in alt {
+        crate::pty::redraw(fd);
+    }
+    let _ = std::fs::remove_file(file);
+    if let Some(prev) = fallback {
+        let _ = std::fs::remove_file(prev);
+    }
+    app.toast(
+        format!("ranma upgraded to {}", crate::update::BUILD_SHA),
+        crate::toast::Level::Normal,
+        None,
+    );
+    app.after_event();
+    start_background(&app, &tx);
+    let _watcher = watch_config(tx);
+    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), client)
+}
+
+/// Clear close-on-exec on everything a new build takes over: the PTY masters,
+/// the listening socket, the client's connection.
+fn keep_across_exec(h: &super::upgrade::Handover) {
+    for p in &h.state.panes {
+        let _ = crate::pty::set_cloexec(p.fd, false);
+    }
+    let _ = crate::pty::set_cloexec(h.listener_fd, false);
+    if let Some(c) = &h.client {
+        let _ = crate::pty::set_cloexec(c.fd, false);
+    }
+}
+
+/// Take the new build in place (DESIGN.md, "Upgrading a server in place").
+/// Returns only if it did not happen, with why; the server then goes on as
+/// before, only full-screen programs asked to draw again.
+fn upgrade(
+    app: &mut App,
+    client: Option<&Client>,
+    name: &str,
+    cols: u16,
+    rows: u16,
+    reply: &Sender<std::result::Result<String, String>>,
+    written: &Receiver<()>,
+) -> std::result::Result<(), String> {
+    use std::os::fd::AsRawFd;
+    let exe = SERVER_EXE
+        .get()
+        .cloned()
+        .ok_or("the binary this server started from is unknown")?;
+    if !exe.is_file() {
+        return Err(format!("{} is not there any more", exe.display()));
+    }
+    let dir = crate::ipc::server_dir();
+    let file = dir.join(format!("handover-{name}.json"));
+    let prev = dir.join(format!("previous-{name}"));
+    let listener_fd = crate::ipc::listener_fd().ok_or("this server has no socket")?;
+
+    super::upgrade::hold_output();
+    let state = app.hand_over();
+    let alt: Vec<_> = state
+        .panes
+        .iter()
+        .filter(|p| p.was_full_screen())
+        .map(|p| p.fd)
+        .collect();
+    let give_up = |why: String| {
+        super::upgrade::release_output();
+        for fd in &alt {
+            crate::pty::redraw(*fd);
+        }
+        let _ = std::fs::remove_file(&file);
+        why
+    };
+    let h = super::upgrade::Handover {
+        version: super::upgrade::VERSION,
+        name: name.to_string(),
+        listener_fd,
+        client: client.map(|c| super::upgrade::ClientHandover {
+            fd: c.writer.as_raw_fd(),
+            hello: c.hello.clone(),
+        }),
+        cols,
+        rows,
+        state,
+    };
+    super::upgrade::write(&file, &h).map_err(|e| give_up(format!("{e:#}")))?;
+    // The new build reads it first, in a process of its own: if it cannot,
+    // nothing is exec'd and nothing is lost.
+    let check = std::process::Command::new(&exe)
+        .arg("--check-handover")
+        .arg(&file)
+        .output()
+        .map_err(|e| give_up(format!("running the new build: {e}")))?;
+    if !check.status.success() {
+        let why = String::from_utf8_lossy(&check.stderr).trim().to_string();
+        return Err(give_up(format!(
+            "the new build refused the handover: {why}"
+        )));
+    }
+    // The old build, kept to go back to if the new one fails anyway.
+    std::fs::copy("/proc/self/exe", &prev)
+        .map_err(|e| give_up(format!("keeping the old build: {e}")))?;
+    let _ = reply.send(Ok(format!(
+        "server {name} is taking the new build
+"
+    )));
+    let _ = written.recv_timeout(Duration::from_secs(2));
+    keep_across_exec(&h);
+    use std::os::unix::process::CommandExt;
+    let err = std::process::Command::new(&exe)
+        .args(["server", "--name", name, "--resume"])
+        .arg(&file)
+        .arg("--fallback")
+        .arg(&prev)
+        .exec();
+    // Still here: the exec failed. Everything goes back to how it was.
+    for p in &h.state.panes {
+        let _ = crate::pty::set_cloexec(p.fd, true);
+    }
+    let _ = crate::pty::set_cloexec(listener_fd, true);
+    if let Some(c) = &h.client {
+        let _ = crate::pty::set_cloexec(c.fd, true);
+    }
+    let _ = std::fs::remove_file(&prev);
+    Err(give_up(format!("exec {}: {err}", exe.display())))
 }
 
 fn listen(
@@ -205,8 +434,9 @@ fn event_loop(
     term: &mut Term,
     server: Option<&str>,
     buffer: Option<&Arc<Mutex<Vec<u8>>>>,
+    resumed: Option<Client>,
 ) -> Result<()> {
-    let mut client: Option<Client> = None;
+    let mut client: Option<Client> = resumed;
     let mut last_active = now_secs();
     let mut last_draw = Instant::now() - FRAME;
     let mut last_cursor: Option<CursorState> = None;
@@ -242,6 +472,7 @@ fn event_loop(
                         id,
                         writer,
                         build: hello.build.clone(),
+                        hello: (*hello).clone(),
                     });
                     last_active = now_secs();
                     restart(term, buffer, hello.cols, hello.rows)?;
@@ -271,6 +502,27 @@ fn event_loop(
                         last_active,
                         build: crate::update::BUILD_SHA.to_string(),
                     });
+                }
+                AppEvent::Upgrade { reply, written } => {
+                    let result = match server {
+                        None => Err("a standalone ranma cannot take a new build in place".into()),
+                        Some(name) => {
+                            let size = term.get_frame().area();
+                            upgrade(
+                                app,
+                                client.as_ref(),
+                                name,
+                                size.width,
+                                size.height,
+                                &reply,
+                                &written,
+                            )
+                        }
+                    };
+                    if let Err(why) = result {
+                        app.toast(format!("upgrade: {why}"), crate::toast::Level::Urgent, None);
+                        let _ = reply.send(Err(why));
+                    }
                 }
                 AppEvent::Input(ev) => input(app, term, buffer, ev)?,
                 other => app.handle(other),
@@ -453,6 +705,16 @@ mod tests {
             id: 1,
             writer,
             build: build.into(),
+            hello: proto::Hello {
+                build: build.into(),
+                cols: 80,
+                rows: 24,
+                colors: Default::default(),
+                typed_early: Vec::new(),
+                inside: None,
+                remote: false,
+                outer: None,
+            },
         }
     }
 

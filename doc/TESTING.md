@@ -22,6 +22,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), long and unrelated sequences passed without keeping state |
 | `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/done/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
 | `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC |
+| `snapshot` | a pane's screen as text and back: history, colours, wide characters and wrapped rows cell for cell, the cursor; the shell kept behind a full-screen program, and its modes; palette changes |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -72,6 +73,9 @@ Builds the release binary and drives it inside a **private headless tmux server*
   its caller's environment and a `TMUX_PANE` of its own), then killed
 - an OSC 9 from a pane shows a toast, and a command marked with OSC 133
   fires `command_finished` with its exit status and duration
+- `ranma upgrade 1` moves the server to its build again in place: a toast, the
+  same process, the screen kept, and a shell variable set before it still
+  there after
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize
