@@ -492,8 +492,9 @@ chunk as it is read. The look is one search for an ESC byte, and a read with
 none (almost all of a flood) is done after it. Only after `ESC ]` are bytes
 looked at one by one, up to 4 KiB, and only 133, 9 and 777 are kept, for
 their meaning, not their text. The bytes are never changed and still reach the
-emulator whole. Two million lines flooding a pane took the same server CPU
-with the reader as without it.
+emulator whole. Measured on the commit before it and after, three runs each:
+three million lines flooding a pane took 98-105 ticks of server CPU without
+the reader and 98-108 with it, which is noise.
 
 So a program's OSC 9 (`printf '\e]9;done\a'`) or OSC 777 notification is a
 toast, named after its pane when it gives no title (a ConEmu `9;N;...` progress
