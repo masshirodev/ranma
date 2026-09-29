@@ -184,7 +184,8 @@ impl App {
         if let Some((target, _)) = spec.beside {
             self.focus(target);
         }
-        let result = self.open_pane_at(spec.command.as_deref(), side, spec.cwd.clone());
+        let result =
+            self.open_pane_with(spec.command.as_deref(), side, spec.cwd.clone(), &spec.env);
         match result {
             Ok(id) => {
                 if let Some(name) = spec.name.as_deref() {

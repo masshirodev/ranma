@@ -472,6 +472,18 @@ answer in full is recorded, command and flags only, in
 `~/.cache/ranma/tmux-shim.log`: that file is what to look at when a program
 misbehaves under the shim.
 
+Panes the shim opens run with the environment of the command it was started
+for, as tmux panes run with their server's, so they share its profile and
+settings. With ai-session, the profile follows the lead into its teammates:
+
+```sh
+ranma tmux-shim -- env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 ai max2
+```
+
+(`ai` keeps `PATH`, `TMUX` and `TMUX_PANE` and sets `CLAUDE_CONFIG_DIR` for the
+profile; the teammates get that `CLAUDE_CONFIG_DIR` from the shim, since Claude
+Code does not pass it on itself.)
+
 `ranma tmux ARGS` is the shim asked for by name, from any pane:
 `ranma tmux list-panes -F '#{pane_id} #{pane_title}'`.
 

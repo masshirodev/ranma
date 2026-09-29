@@ -136,7 +136,9 @@ impl App {
                 self.focus(id);
                 self.relayout();
             }
-            PaneOp::Respawn { command, cwd } => self.respawn(id, command.as_deref(), cwd)?,
+            PaneOp::Respawn { command, cwd, env } => {
+                self.respawn(id, command.as_deref(), cwd, &env)?
+            }
         }
         Ok(())
     }
@@ -149,6 +151,7 @@ impl App {
         id: PaneId,
         command: Option<&str>,
         cwd: Option<std::path::PathBuf>,
+        env: &[(String, String)],
     ) -> Result<(), String> {
         let old = self.panes.get(&id).ok_or_else(|| no_pane(id))?;
         let size = old.size;
@@ -160,6 +163,7 @@ impl App {
             command,
             scrollback_lines: s.scrollback_lines,
             cwd,
+            env,
         };
         let mut new = crate::pane::Pane::spawn(id, size, &opts, self.tx.clone())
             .map_err(|e| format!("respawning pane {id}: {e:#}"))?;

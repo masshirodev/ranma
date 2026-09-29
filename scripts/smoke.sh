@@ -200,9 +200,13 @@ wait_for 'POPUP=popped-ok/4' 20 || fail "ranma popup did not return the output a
 
 # The tmux shim, the way Claude Code's agent teams drive it: a placeholder pane
 # split off in the background, named, its process replaced, then killed.
-T send-keys -t s "$BIN tmux-shim -- bash -c 'P=\$(tmux split-window -d -h -l 70% -P -F \"#{pane_id}\" -- cat); tmux select-pane -t \$P -T shimmed; tmux respawn-pane -k -t \$P -- \"echo respawned-ok; sleep 30\"; echo SHIM=\$P; sleep 2; tmux kill-pane -t \$P; tmux -V'" Enter
+T send-keys -t s "SHIM_MARK=from-caller $BIN tmux-shim -- bash -c 'P=\$(tmux split-window -d -h -l 70% -P -F \"#{pane_id}\" -- cat); tmux select-pane -t \$P -T shimmed; tmux respawn-pane -k -t \$P -- \"echo respawned-ok; printenv SHIM_MARK TMUX_PANE; sleep 30\"; echo SHIM=\$P; sleep 2; tmux kill-pane -t \$P; tmux -V'" Enter
 wait_for '╭ shimmed' 20 || fail "the tmux shim did not open and name a pane"
 wait_for 'respawned-ok' 12 || fail "respawn-pane did not replace the pane's process"
+# It runs with the environment of the command the shim was started for, and
+# TMUX_PANE names the pane itself.
+screen | grep -q '│from-caller' || fail "the shim's pane did not get its caller's environment"
+screen | grep -q '│%[0-9]' || fail "the shim's pane has no TMUX_PANE of its own"
 wait_for 'tmux 3.4' 20 || fail "the shim's pane was not killed, or tmux -V failed"
 screen | grep -q '╭ shimmed' && fail "kill-pane left the shim's pane open"
 

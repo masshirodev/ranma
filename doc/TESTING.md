@@ -62,7 +62,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   command's output and exit status to the shell that asked
 - `ranma tmux-shim` runs a script that drives tmux the way Claude Code's agent
   teams do: a placeholder pane split off in the background, named with
-  `select-pane -T`, its process replaced with `respawn-pane -k`, then killed
+  `select-pane -T`, its process replaced with `respawn-pane -k` (running with
+  its caller's environment and a `TMUX_PANE` of its own), then killed
 - an OSC 9 from a pane shows a toast, and a command marked with OSC 133
   fires `command_finished` with its exit status and duration
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)

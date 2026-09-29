@@ -344,6 +344,32 @@ impl View {
     }
 }
 
+/// The environment of whoever called the shim, for the panes it opens: tmux
+/// gives a new pane its server's environment, and the shim's "server" is the
+/// command it was started for (`ranma tmux-shim -- ai max2`), so a teammate
+/// runs with that command's profile (`CLAUDE_CONFIG_DIR`), `PATH` and `TMUX`,
+/// not with whatever the ranma server was started with. Left out: what ranma
+/// sets for each pane itself, and what describes one shell, not a world.
+fn caller_env() -> Vec<(String, String)> {
+    const PER_PANE: [&str; 11] = [
+        "TERM",
+        "COLORTERM",
+        "RANMA",
+        "RANMA_PANE",
+        "RANMA_SOCKET",
+        "TMUX_PANE",
+        "PWD",
+        "OLDPWD",
+        "SHLVL",
+        "_",
+        "COLUMNS",
+    ];
+    std::env::vars_os()
+        .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+        .filter(|(k, _)| !PER_PANE.contains(&k.as_str()) && k != "LINES")
+        .collect()
+}
+
 fn caller_pane() -> Result<PaneId> {
     let from_tmux = std::env::var("TMUX_PANE")
         .ok()
@@ -633,6 +659,7 @@ fn command(
                 background: p.has('d'),
                 cwd: p.value('c').map(PathBuf::from),
                 command: ipc::command_line(&p.args),
+                env: caller_env(),
                 ..Default::default()
             }))?
             .trim()
@@ -665,6 +692,7 @@ fn command(
             ipc::send(&ipc::pane_request(
                 pane,
                 &PaneOp::Respawn {
+                    env: caller_env(),
                     command: ipc::command_line(&p.args),
                     cwd: p.value('c').map(PathBuf::from),
                 },

@@ -551,6 +551,17 @@ impl App {
         side: Option<Dir>,
         cwd: Option<std::path::PathBuf>,
     ) -> Result<PaneId> {
+        self.open_pane_with(command, side, cwd, &[])
+    }
+
+    /// `open_pane_at` with variables for the child's environment.
+    pub(super) fn open_pane_with(
+        &mut self,
+        command: Option<&str>,
+        side: Option<Dir>,
+        cwd: Option<std::path::PathBuf>,
+        env: &[(String, String)],
+    ) -> Result<PaneId> {
         let spawn_cwd = cwd.or_else(|| {
             self.focused()
                 .or(self.last_focused)
@@ -608,6 +619,7 @@ impl App {
             command,
             scrollback_lines: s.scrollback_lines,
             cwd: spawn_cwd,
+            env,
         };
         match Pane::spawn(id, size, &opts, self.tx.clone()) {
             Ok(pane) => {

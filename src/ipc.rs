@@ -269,6 +269,8 @@ pub struct OpenSpec {
     /// When it closes, focus goes back to the pane that had it before
     /// (`ranma popup`), instead of to a neighbour.
     pub return_focus: bool,
+    /// Variables for the new pane's environment (see `SpawnOptions::env`).
+    pub env: Vec<(String, String)>,
 }
 
 /// A request answered with data (see the module docs).
@@ -302,7 +304,30 @@ pub enum PaneOp {
     Respawn {
         command: Option<String>,
         cwd: Option<PathBuf>,
+        env: Vec<(String, String)>,
     },
+}
+
+/// Environment variables as one line of the protocol: a JSON array of
+/// `KEY=VALUE`, so a value may hold anything, newlines included.
+fn env_line(env: &[(String, String)]) -> String {
+    let pairs: Vec<String> = env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    serde_json::to_string(&pairs).unwrap_or_else(|_| "[]".into())
+}
+
+fn parse_env_line(line: &str) -> Result<Vec<(String, String)>> {
+    if line.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let pairs: Vec<String> =
+        serde_json::from_str(line).map_err(|e| anyhow::anyhow!("env: not a JSON list ({e})"))?;
+    pairs
+        .into_iter()
+        .map(|p| match p.split_once('=') {
+            Some((k, v)) if !k.is_empty() => Ok((k.to_string(), v.to_string())),
+            _ => bail!("env: `{p}` is not KEY=VALUE"),
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -410,11 +435,16 @@ pub fn parse_request(text: &str) -> Result<Request> {
                 "focus" => PaneOp::Focus,
                 "rename" => PaneOp::Rename(parts.next().unwrap_or("").trim_end().to_string()),
                 "respawn" => {
-                    let cwd = parts.next().unwrap_or("").trim();
-                    let command = parts.next().unwrap_or("");
+                    let cwd = parts.next().unwrap_or("").trim().to_string();
+                    let (env, command) = parts
+                        .next()
+                        .unwrap_or("")
+                        .split_once('\n')
+                        .unwrap_or(("", ""));
                     PaneOp::Respawn {
                         cwd: (!cwd.is_empty()).then(|| PathBuf::from(cwd)),
                         command: (!command.trim().is_empty()).then(|| command.to_string()),
+                        env: parse_env_line(env)?,
                     }
                 }
                 other => bail!("unknown pane operation `{other}` (close, focus, rename, respawn)"),
@@ -431,11 +461,12 @@ pub fn pane_request(pane: PaneId, op: &PaneOp) -> String {
         PaneOp::Close => format!("pane\n{pane}\nclose\n"),
         PaneOp::Focus => format!("pane\n{pane}\nfocus\n"),
         PaneOp::Rename(n) => format!("pane\n{pane}\nrename\n{n}\n"),
-        PaneOp::Respawn { command, cwd } => format!(
-            "pane\n{pane}\nrespawn\n{}\n{}",
+        PaneOp::Respawn { command, cwd, env } => format!(
+            "pane\n{pane}\nrespawn\n{}\n{}\n{}",
             cwd.as_ref()
                 .map(|c| c.display().to_string())
                 .unwrap_or_default(),
+            env_line(env),
             command.as_deref().unwrap_or("")
         ),
     }
@@ -490,6 +521,9 @@ pub fn open_request(spec: &OpenSpec) -> String {
     if spec.return_focus {
         kv("return_focus", "yes");
     }
+    if !spec.env.is_empty() {
+        kv("env", &env_line(&spec.env));
+    }
     s.push_str("--\n");
     if let Some(c) = &spec.command {
         s.push_str(c);
@@ -536,6 +570,7 @@ fn parse_open<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<OpenSpec> 
             }
             "background" => spec.background = v == "yes",
             "return_focus" => spec.return_focus = v == "yes",
+            "env" => spec.env = parse_env_line(v)?,
             "float" => {
                 let pct = |n: &str| n.parse::<u8>().ok().filter(|n| (10..=100).contains(n));
                 spec.float = match v.split_once(' ') {
@@ -769,10 +804,12 @@ mod tests {
             PaneOp::Respawn {
                 command: Some("claude --agent x\n".into()),
                 cwd: Some("/tmp".into()),
+                env: vec![("CLAUDE_CONFIG_DIR".into(), "/p/max2 claude".into())],
             },
             PaneOp::Respawn {
                 command: None,
                 cwd: None,
+                env: Vec::new(),
             },
         ] {
             assert_eq!(q(&pane_request(5, &op)), Query::Pane { pane: 5, op });
@@ -822,6 +859,10 @@ mod tests {
         let popup = OpenSpec {
             float: Some((60, 40)),
             return_focus: true,
+            env: vec![
+                ("A".into(), "line one\nline two".into()),
+                ("B".into(), "x=y".into()),
+            ],
             ..Default::default()
         };
         assert_eq!(open(&open_request(&popup)), popup);
@@ -835,6 +876,7 @@ mod tests {
             ("open\nbeside=x down\n--\n", "pane id"),
             ("open\nfloat=5 50\n--\n", "float"),
             ("open\nfloat=50\n--\n", "float"),
+            ("open\nenv=[\"NOEQUALS\"]\n--\n", "KEY=VALUE"),
         ] {
             let err = format!("{:#}", parse_request(req).err().unwrap());
             assert!(err.contains(needle), "{req:?}: {err}");

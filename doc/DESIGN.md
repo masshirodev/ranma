@@ -552,9 +552,19 @@ same pane id, at the same size, and drops the old one, which hangs up the old
 process. The old event loop's proxy is muted first: its last events, its exit
 above all, would otherwise close the pane it used to be in.
 
-Panes the shim opens run with ranma's environment, not the shim's: a teammate
-that itself called `tmux` would reach the real one. Claude Code's teammates do
-not.
+**Panes the shim opens get their caller's environment** (2026-09-29). tmux
+gives a new pane its *server's* environment; the shim's server is the command
+it was started for, so every `split-window` and `respawn-pane` carries the
+calling process's variables and the pane is spawned with them over ranma's
+own (ranma's `TERM` and `RANMA_*` still win, `TMUX_PANE` names the new pane,
+and what belongs to one shell, `PWD`, `SHLVL` and the like, is left out). It
+matters more than it looks: Claude Code starts a teammate with `env` and a
+short list of variables it forwards, and `CLAUDE_CONFIG_DIR` is not on it. So
+under `ai max2`, which selects its profile through that variable, teammates
+spawned with ranma's environment ran on the default `~/.claude`, another
+account or none. With the caller's, they run on the lead's profile, and a
+teammate's own `tmux` calls reach the shim too, since `PATH` and `TMUX` come
+along.
 
 ### ranma inside ranma
 

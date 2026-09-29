@@ -354,6 +354,7 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
                 background,
                 float,
                 return_focus: false,
+                env: Vec::new(),
             }))?;
             if print { id } else { String::new() }
         }

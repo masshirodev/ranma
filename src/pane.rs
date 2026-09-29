@@ -228,6 +228,10 @@ pub struct SpawnOptions<'a> {
     pub scrollback_lines: usize,
     /// Where the child starts; ranma's own directory when `None`.
     pub cwd: Option<std::path::PathBuf>,
+    /// Variables for the child on top of ranma's own environment (the tmux
+    /// shim passes its caller's). ranma's own (`TERM`, `RANMA_*`) still win,
+    /// and a `TMUX` given here gets this pane as its `TMUX_PANE`.
+    pub env: &'a [(String, String)],
 }
 
 impl Pane {
@@ -269,7 +273,10 @@ impl Pane {
             None => tty::Shell::new(shell, vec![]),
         };
 
-        let mut env = HashMap::new();
+        let mut env: HashMap<String, String> = opts.env.iter().cloned().collect();
+        if env.contains_key("TMUX") {
+            env.insert("TMUX_PANE".into(), format!("%{id}"));
+        }
         // ranma emulates what alacritty_terminal emulates, so its terminfo is the
         // accurate one when installed; xterm-256color is the safe fallback.
         let term_name = if terminfo_exists("alacritty") {
