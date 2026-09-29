@@ -217,6 +217,8 @@ pub struct App {
     ended: std::collections::VecDeque<(PaneId, Option<i32>)>,
     /// Popups: when the key pane closes, the value pane gets focus back.
     return_focus: HashMap<PaneId, PaneId>,
+    /// Panes marked for synchronized input (see `typed`).
+    synced: HashSet<PaneId>,
 }
 
 impl App {
@@ -282,6 +284,7 @@ impl App {
             exit_codes: HashMap::new(),
             ended: Default::default(),
             return_focus: HashMap::new(),
+            synced: HashSet::new(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -682,6 +685,7 @@ impl App {
             self.focus(back);
         }
         self.return_focus.retain(|_, to| *to != id);
+        self.synced.remove(&id);
         if self.panes.is_empty() {
             self.quit = true;
             return;
@@ -1067,12 +1071,7 @@ impl App {
         }
         match ev {
             Event::Key(key) => self.handle_key(key),
-            Event::Paste(text) => {
-                if let Some(p) = self.focused_pane() {
-                    p.scroll_to_bottom();
-                    p.write(input::encode_paste(&text, p.modes()));
-                }
-            }
+            Event::Paste(text) => self.typed(|modes| Some(input::encode_paste(&text, modes))),
             Event::FocusGained | Event::FocusLost => {
                 if let Some(p) = self.focused_pane()
                     && let Some(b) = input::encode_focus(ev == Event::FocusGained, p.modes())
@@ -1386,12 +1385,7 @@ impl App {
             if self.selection_pane.is_some() {
                 self.clear_selection();
             }
-            if let Some(p) = self.focused_pane()
-                && let Some(bytes) = input::encode_key(&key, p.modes())
-            {
-                p.scroll_to_bottom();
-                p.write(bytes);
-            }
+            self.typed(|modes| input::encode_key(&key, modes));
             return;
         }
 
@@ -1454,6 +1448,46 @@ impl App {
             },
         }
         exits
+    }
+
+    /// Input typed at the keyboard: to the focused pane, or, when it is marked
+    /// for synchronized input, to every marked pane in the workspace, each
+    /// encoded for the modes its own program asked for.
+    fn typed(&self, encode: impl Fn(input::PaneModes) -> Option<Vec<u8>>) {
+        for id in self.typing_targets() {
+            if let Some(p) = self.panes.get(&id)
+                && let Some(bytes) = encode(p.modes())
+            {
+                p.scroll_to_bottom();
+                p.write(bytes);
+            }
+        }
+    }
+
+    /// Where typing goes: the focused pane, and with it every marked pane of
+    /// the workspace when it is marked itself. Marks elsewhere stay out of it.
+    fn typing_targets(&self) -> Vec<PaneId> {
+        let Some(focused) = self.focused() else {
+            return Vec::new();
+        };
+        if !self.synced.contains(&focused) {
+            return vec![focused];
+        }
+        self.active()
+            .panes()
+            .into_iter()
+            .filter(|p| self.synced.contains(p))
+            .collect()
+    }
+
+    /// How many panes of the workspace shown are marked for synchronized input.
+    pub fn synced_here(&self) -> usize {
+        let ws = self.active();
+        self.synced.iter().filter(|p| ws.contains(**p)).count()
+    }
+
+    pub fn is_synced(&self, id: PaneId) -> bool {
+        self.synced.contains(&id)
     }
 
     fn set_mode(&mut self, mode: Mode) {
@@ -1558,6 +1592,18 @@ impl App {
                 {
                     self.relayout();
                 }
+            }
+            Action::SyncToggle => {
+                if let Some(id) = focused
+                    && !self.synced.remove(&id)
+                {
+                    self.synced.insert(id);
+                }
+                self.dirty = true;
+            }
+            Action::SyncClear => {
+                self.synced.clear();
+                self.dirty = true;
             }
             Action::Equalize => {
                 if self.active_mut().tree.equalize() {
@@ -2113,7 +2159,14 @@ impl App {
                 // Keys are going to a ranma inside the focused pane.
                 Mode::Normal if self.passes_through() => vec![Piece::new(" ⧉ ", Style::Dim)],
                 Mode::Normal => Vec::new(),
-            },
+            }
+            .into_iter()
+            // Typing into several panes at once is never something to forget.
+            .chain(
+                (self.synced_here() > 0)
+                    .then(|| Piece::new(format!(" ⇉ sync {} ", self.synced_here()), Style::Urgent)),
+            )
+            .collect(),
             // Only once there is more than one: a lone "main" says nothing.
             "session" if self.session_count() > 1 => {
                 vec![
@@ -2431,6 +2484,29 @@ mod tests {
                 assert!(l.outer.w <= w && l.outer.h <= h, "{w}x{h}: {:?}", l.outer);
             }
         }
+    }
+
+    #[test]
+    fn typing_goes_to_every_marked_pane_only_from_a_marked_one() {
+        let mut a = app(None);
+        for id in [1, 2, 3] {
+            with_pane(&mut a, id);
+        }
+        a.workspaces.get_mut(&1).unwrap().focused = Some(1);
+        assert_eq!(a.typing_targets(), vec![1]);
+        a.run_action(Action::SyncToggle);
+        a.workspaces.get_mut(&1).unwrap().focused = Some(3);
+        a.run_action(Action::SyncToggle);
+        // Focused on a marked pane: both marked ones, not the unmarked 2.
+        let mut t = a.typing_targets();
+        t.sort();
+        assert_eq!(t, vec![1, 3]);
+        assert_eq!(a.synced_here(), 2);
+        // Focused on the unmarked one: only it.
+        a.workspaces.get_mut(&1).unwrap().focused = Some(2);
+        assert_eq!(a.typing_targets(), vec![2]);
+        a.run_action(Action::SyncClear);
+        assert_eq!(a.synced_here(), 0);
     }
 
     fn names(app: &App) -> Vec<Option<String>> {

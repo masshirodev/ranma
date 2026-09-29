@@ -39,6 +39,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - a click on the bar reaches no program: a mouse-reporting probe in the focused
   pane logs nothing for the hover, press and release
 - typed input reaches the focused pane; tabs leave no stale cells
+- two panes marked for synchronized input both get a typed line, and the bar
+  says so; unmarked, the next line reaches only the focused one
 - workspace 2 shows in the bar while current and disappears once left empty
 - a broken config written while running is reported at once, and the old one kept
 - help opens and filters by action

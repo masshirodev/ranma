@@ -118,6 +118,8 @@ does not matter; it is ignored.
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
+| `sync_toggle` | Mark or unmark the focused pane for synchronized input (`leader a`). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show `⇉` on their border, and the `mode` module shows ` ⇉ sync N ` in the urgent style while any are marked, so it is never on by accident. |
+| `sync_clear` | Unmark every pane (`leader A`). |
 | `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |

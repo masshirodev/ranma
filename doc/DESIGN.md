@@ -144,6 +144,16 @@ so the defaults use it: `<digit>` goes to a workspace, `alt+<digit>` moves the p
 there and follows. The silent variant is left unbound, with the config showing how
 to put it on `ctrl+<digit>` for terminals that report that.
 
+**Synchronized input** (2026-09-29, from tuios's multifocus and tmux's
+synchronize-panes): `sync_toggle` marks panes, and typing into a marked pane
+types into every marked pane of the workspace. It is marks, not a mode: one
+unmarked pane in the same workspace stays a normal pane, so a scratch shell
+can sit beside the synced ones. Each pane gets the keys encoded for its own
+modes, as if typed at it; the mouse is not synchronized, since a click has a
+place and the place is in one pane. The bar says ` ⇉ sync N ` in the urgent
+style while any mark is on: input going somewhere you are not looking is the
+one thing about this feature that must never be forgotten.
+
 **Global binds.** A few keys are worth having without the leader — by default
 `alt+arrows` to move focus, as asked for. `{ global = true }` puts a bind in a
 second table looked up *outside* WM mode, before the program sees the key. The cost

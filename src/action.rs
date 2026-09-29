@@ -72,6 +72,10 @@ pub enum Action {
     /// Grow the focused pane's edge in that direction by this many cells.
     Resize(Dir, u16),
     ToggleSplit,
+    /// Mark or unmark the focused pane for synchronized input.
+    SyncToggle,
+    /// Unmark every pane.
+    SyncClear,
     /// Give every split in the workspace equal shares.
     Equalize,
     ToggleFloating,
@@ -202,6 +206,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
     ("equalize", ""),
+    ("sync_toggle", ""),
+    ("sync_clear", ""),
     ("toggle_floating", ""),
     ("float_size", "<width%> [height%]"),
     (
@@ -340,6 +346,8 @@ impl FromStr for Action {
             }
             "toggle_split" => no_arg(Action::ToggleSplit),
             "equalize" => no_arg(Action::Equalize),
+            "sync_toggle" => no_arg(Action::SyncToggle),
+            "sync_clear" => no_arg(Action::SyncClear),
             "toggle_floating" => no_arg(Action::ToggleFloating),
             "float_size" => {
                 let pct = |arg: Option<&str>| -> Result<Option<u8>, ActionError> {
@@ -520,6 +528,8 @@ impl fmt::Display for Action {
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::Equalize => f.write_str("equalize"),
+            Action::SyncToggle => f.write_str("sync_toggle"),
+            Action::SyncClear => f.write_str("sync_clear"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
             Action::FloatSize(w, h) => write!(f, "float_size {w} {h}"),
             Action::Snap(s) => {
@@ -673,6 +683,8 @@ mod tests {
             "exec htop",
             "help",
             "equalize",
+            "sync_toggle",
+            "sync_clear",
             "float_size 60 40",
             "snap top_right",
             "snap center",

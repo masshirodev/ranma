@@ -112,6 +112,18 @@ sleep 0.3
 T send-keys -t s 'printf "1234567890\n"; printf "ab\tZ\n"' Enter
 wait_for 'ab      Z' || fail "tab rendering or input passthrough"
 
+# Synchronized input: both panes marked, one line typed reaches both; then
+# unmarked, the next line reaches the focused pane only.
+T send-keys -t s C-b a Left a Escape; sleep 0.3
+bar | grep -q '⇉ sync 2' || fail "marking two panes did not show in the bar ($(bar))"
+T send-keys -t s 'echo sync''ed-both' Enter; sleep 0.5
+[ "$(screen | grep -o '│synced-both' | wc -l)" -eq 2 ] || fail "synchronized input did not reach both panes"
+T send-keys -t s C-b A Escape; sleep 0.3
+bar | grep -q 'sync' && fail "sync_clear left panes marked"
+T send-keys -t s 'echo only''-one' Enter; sleep 0.5
+[ "$(screen | grep -o '│only-one' | wc -l)" -eq 1 ] || fail "unmarked, typing still reached both panes"
+T send-keys -t s C-b Right Escape; sleep 0.3
+
 # Workspaces: 2 appears in the bar while current, and goes when left empty.
 T send-keys -t s C-b 2 Escape; sleep 0.3
 bar | grep -Eq ' 1(:[a-z]+)?  2(:[a-z]+)? ' || fail "workspace 2 not shown in the bar"

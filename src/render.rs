@@ -238,8 +238,9 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         .borders(Borders::ALL)
         .border_type(border_type)
         .border_style(Style::default().fg(color(border)));
-    if !title.is_empty() {
-        block = block.title(Line::from(format!(" {title} ")));
+    let mark = if app.is_synced(view.id) { "⇉ " } else { "" };
+    if !title.is_empty() || !mark.is_empty() {
+        block = block.title(Line::from(format!(" {mark}{title} ")));
     }
     f.render_widget(block, rrect(view.outer));
 }

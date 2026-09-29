@@ -92,6 +92,11 @@ ranma.bind("j", "toggle_split")
 -- Every split in the workspace back to equal shares, however it was resized.
 ranma.bind("=", "equalize")
 ranma.bind("alt+return", "fullscreen")
+-- Synchronized input: a marks the focused pane (⇉ on its border); typing in a
+-- marked pane types into every marked pane of the workspace, each as if at
+-- its own keyboard (several SSH shells at once, say). A (shift+a) unmarks all.
+ranma.bind("a", "sync_toggle")
+ranma.bind("shift+a", "sync_clear")
 
 -- Groups (tabbed containers)
 ranma.bind("g", "toggle_group")
@@ -149,7 +154,7 @@ ranma.bind("$", "rename_session")
 -- A colour per session, so projects look different at a glance: the focused
 -- border, the current workspace and the session name take it.
 --   ranma.session("kumiko", { accent = "#ff6a6a" })
--- At run time: ranma.bind("a", "session_accent #89b4fa"), or "session_accent none".
+-- At run time: ranma.bind("ctrl+a", "session_accent #89b4fa"), or "session_accent none".
 -- Send the current workspace, whole, to another session and follow it; m asks
 -- which (typing a new name makes one). By name: "move_workspace_to_session ai".
 ranma.bind("m", "move_workspace_to_session")
