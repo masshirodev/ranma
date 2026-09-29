@@ -20,7 +20,8 @@ Everything that can be pure is, and is tested without a terminal:
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
 | `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), long and unrelated sequences passed without keeping state |
-| `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
+| `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/done/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
+| `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -56,6 +57,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   pane, and its menu then offers Tile
 - a link printed in a pane gets a label from `leader o`, and typing it puts
   the link on the clipboard
+- ranma inside ranma: the outer bar shows the inner's workspaces in brackets,
+  the inner draws no bar of its own, and the inner's WM mode shows after `⧉`
 - a new session shows in the bar; when its only shell exits, it ends and main is
   shown again
 - `ranma open -P -d` opens a pane in the background and prints its id;

@@ -166,7 +166,7 @@ style while any mark is on: input going somewhere you are not looking is the
 one thing about this feature that must never be forgotten.
 
 **The which-key hint** (2026-09-29, card c64; designed from
-`doc/briefs/done/WHICH_KEY.md`, handoff in `doc/handoffs/`). A pause in WM mode
+`doc/briefs/done/WHICH_KEY.md`, handoff in `doc/handoffs/done/`). A pause in WM mode
 (`wm_mode.hint`, 0.5 s) opens a panel standing on the bar at its left end,
 next to ` WM `, listing what the keys do. It never takes a key: any key puts
 it away and does what it does, and the next pause brings it back after twice
@@ -637,6 +637,88 @@ undrawn until some other event (a nested ranma, whose frames arrive in pieces,
 showed every change one keypress late); and keys typed while ranma was starting
 were read along with the host's colour replies and lost. The flag is re-armed
 before drawing now, and early keys are handed to the first pane.
+
+
+**One bar for nested ranmas** (2026-09-29, card c74; designed from
+`doc/briefs/done/NESTED_BAR.md`, handoff in `doc/handoffs/done/`). Two ranmas
+used to draw everything twice: two bars, two clocks, the title four times, a
+border around a border. Now the outermost bar shows the workspaces of the
+ranmas inside it, in brackets after the workspace holding each, and an inner
+ranma it shows draws no bar.
+
+*The channel* is a private OSC (51377), which terminals and alacritty_terminal
+ignore and SSH carries as output. A ranma's client asks at attach, in the same
+batch as the colour queries and before DA1: `51377;?`. A ranma around it sees
+the question on its PTY scanner (see "What alacritty_terminal drops") and
+answers into the pane, `51377;ranma;1`; its answer is sent before the parser's
+reply to DA1, through the same ordered channel, so it arrives before the
+reading stops. A plain terminal answers nothing, and an outer ranma with no
+bar of its own (and none to pass the workspaces on to) does not answer. The
+client passes the answer in its hello (`outer`), per attach. A ranma told it
+has an outer ranma then sends reports, `51377;report;<json>`, only when they
+change: its session, accent, workspaces with their keys, mode, message, outer
+leader, and the report of the ranma in each workspace's focused pane, so a
+whole chain arrives at the top. **Every report carries the protocol
+version** (`nestbar::PROTOCOL`); one the outer does not know is ignored, and
+a report arrives only from a build that asked. So either side a build behind,
+or a plain terminal between them, gives exactly the bars of before.
+
+*Shown means focused.* By default only the workspace on your path expands:
+the current workspace's focused pane's ranma. So an inner ranma's workspaces
+are in the outer bar exactly while its pane has focus, which it already
+learns from focus events (ranma passes them to panes that ask). That is the
+"told back, per pane" the handoff asked for, with no message of its own. With
+`nested = "all"`, holders in other workspaces expand too, but those are not on
+screen. While the inner's pane is not focused (beside another in the outer), it
+draws its bar over its bottom row; it never takes the row back from its panes,
+since that would resize them on every change of focus in the outer.
+
+*Drawing* is the handoff's, held to it cell for cell by `nestbar`'s tests: the
+holder drops its program name and shows its number, inner items unpadded and
+one space apart, brackets dim, the inner session's name after the holder's
+number when it has several. The outer's current workspace is the only fill;
+the deepest current one on your path is bold in its session's accent (the
+theme's active colour without one); a current workspace between the two, or
+of a ranma not on your path, is bold occupied. A collapsed holder takes the
+urgent colour when anything inside is urgent, since no inner bar shows it.
+Out of room, the left steps down a ladder, one whole level at a time: other
+expanded holders collapse, then second-level names go, then inner names, then
+outer names, then names on your path; numbers never, since they are the keys
+and the click targets. The centre title gives way first, and below 12 cells
+is left out rather than cut to a stub. With nothing to expand the bar is
+`bar::fit` as always, exactly.
+
+*Borders:* a pane whose ranma reports has no title on its border, and when it
+fills its workspace (alone, or fullscreen) no border at all. Beside another
+pane it keeps the border, which marks the split and the outer's focus.
+
+*Clicks* on an inner workspace type what reaches it: the outer leader once per
+level down (each ranma in WM mode passes an unbound outer leader one level
+further), that level's key for the workspace, and Esc when its WM mode is
+sticky. The report carries each workspace's key and the outer leader, so a
+user's own binds work.
+
+Where it departs from the handoff, and why:
+
+- "Shown" is told back through focus events rather than a message of its
+  own: in the default the two are the same thing, and focus events already
+  reach every level.
+- An inner ranma whose pane is not focused draws its bar over its bottom row
+  instead of taking the row back, so focus moving in the outer never resizes
+  its panes.
+- The inner's mode shows after `⧉` (`⧉  WM `), and its messages in the outer
+  bar's centre: with no bar of its own they would otherwise not show at all.
+  `⧉` stays, as the brief asked, so a bare ` WM ` is always the outer's own.
+- The 12-cell floor applies to the title only; a message is never left out.
+- The ladder runs only when something expands, so a bar with nothing nested
+  is not affected by it.
+- Reports go out only to a ranma that answered: a plain terminal never
+  receives the private sequence at all.
+
+What it does not do yet: the title is still shown twice when the focused pane
+is a nested ranma (the outer's centre and the inner's own border); the handoff
+suggests a setting to leave the centre empty then. The host an inner ranma runs
+on is not reported (the session name covers it when there are several).
 
 ### Stack
 

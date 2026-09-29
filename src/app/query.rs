@@ -172,6 +172,7 @@ impl App {
             old.retire();
         }
         self.exit_codes.remove(&id);
+        self.reports.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
         if let Some(cmd) = command {
             self.apply_command_rules(id, cmd);

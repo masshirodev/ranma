@@ -262,7 +262,11 @@ ranma.bar {
 -- label = "program" names an unnamed workspace after the program in its focused
 -- pane (" 3:nvim ", the shell at its prompt); "number" shows only " 3 ". A name
 -- given with rename_workspace (leader .) always wins.
-ranma.module("workspaces", { show = "occupied", label = "program" })
+-- nested: a workspace whose focused pane runs a ranma (over SSH, say) shows
+-- that ranma's workspaces in brackets, " 2 [1:kumiko 2:notes] ", and the ranma
+-- inside draws no bar. "focused" expands only the one you are in; "all" every
+-- one holding a ranma; "off" none.
+ranma.module("workspaces", { show = "occupied", label = "program", nested = "focused" })
 
 -- cpu and mem take interval and format ("%s" is the reading):
 --   ranma.module("cpu", { interval = 1, format = "CPU %s" })

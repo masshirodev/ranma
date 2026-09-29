@@ -10,8 +10,8 @@
 
 use std::time::{Duration, Instant};
 
-/// Longer than any mark or notification worth keeping.
-const MAX: usize = 4096;
+/// Longer than any mark, notification or nested ranma's report worth keeping.
+const MAX: usize = 16 * 1024;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mark {
@@ -23,6 +23,11 @@ pub enum Mark {
     },
     /// A program asked for a desktop notification (OSC 9, or 777;notify).
     Notify { title: String, body: String },
+    /// A ranma starting in the pane asks whether a ranma draws around it
+    /// (`nestbar::HELLO`).
+    RanmaHello,
+    /// A ranma in the pane reports its workspaces (JSON; see `nestbar`).
+    RanmaReport(String),
 }
 
 #[derive(Debug, Default)]
@@ -134,6 +139,14 @@ impl Scanner {
                 title: String::new(),
                 body: rest.to_string(),
             }),
+            crate::nestbar::OSC => match rest {
+                "?" => out.push(Mark::RanmaHello),
+                r => {
+                    if let Some(json) = r.strip_prefix("report;") {
+                        out.push(Mark::RanmaReport(json.to_string()));
+                    }
+                }
+            },
             "777" => {
                 let mut f = rest.splitn(3, ';');
                 if f.next() == Some("notify") {
@@ -218,6 +231,18 @@ mod tests {
         );
         // ConEmu's progress bar is not a notification.
         assert!(s.feed(b"\x1b]9;4;1;50\x07", t).is_empty());
+    }
+
+    #[test]
+    fn a_nested_ranma_asks_and_reports() {
+        let t = Instant::now();
+        let mut s = Scanner::default();
+        let mut bytes = crate::nestbar::HELLO.as_bytes().to_vec();
+        bytes.extend(b"\x1b]51377;report;{\"v\":1}\x07\x1b]51377;ranma;1\x07");
+        assert_eq!(
+            s.feed(&bytes, t),
+            vec![Mark::RanmaHello, Mark::RanmaReport("{\"v\":1}".into())]
+        );
     }
 
     #[test]

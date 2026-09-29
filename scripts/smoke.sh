@@ -239,7 +239,11 @@ wait_for 'config reloaded' 8 || true
 # The inner one as if reached over SSH: its host reaches the outer terminal's
 # title, once, however many ranmas pass it out.
 T send-keys -t s "SSH_CONNECTION='10.0.0.1 1 10.0.0.2 22' $BIN" Enter
-wait_for '│ 1[: ]' 20 || fail "the inner ranma did not start"
+# One bar for both: the outer bar shows the inner's workspaces in brackets,
+# and the inner, shown there, draws no bar of its own (see nestbar).
+for _ in $(seq 1 40); do bar | grep -q ' \[1' && break; sleep 0.25; done
+bar | grep -q ' \[1' || fail "the outer bar does not show the inner's workspaces ($(bar))"
+screen | head -n -1 | grep -q '│ 1[: ]' && fail "the inner ranma still draws its own bar"
 HOST=$(uname -n | cut -d. -f1)
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma@$HOST · " && break; sleep 0.25; done
 OUTER=$(T display -p -t s '#{pane_title}')
@@ -247,8 +251,9 @@ case "$OUTER" in "⧉ ranma@$HOST · "*) ;; *) fail "the outer title does not ca
 [ "$(printf '%s' "$OUTER" | grep -o 'ranma@' | wc -l)" -eq 1 ] || fail "hosts nested in the title ($OUTER)"
 bar | grep -q ' ⧉ ' || fail "the outer ranma does not show the passthrough hint"
 T send-keys -t s C-b; sleep 0.4
-screen | grep -q '│ WM ' || fail "the leader did not reach the inner ranma"
-bar | grep -q ' WM ' && fail "the outer ranma took the leader"
+# The inner's mode shows after ⧉ in the outer bar; a bare WM would be the outer's.
+bar | grep -q '⧉  WM ' || fail "the leader did not reach the inner ranma ($(bar))"
+bar | grep -q '^ WM ' && fail "the outer ranma took the leader"
 T send-keys -t s Escape; sleep 0.3
 T send-keys -t s C-b; sleep 0.2; T send-keys -t s DC; sleep 0.3; T send-keys -t s y; sleep 1
 bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"

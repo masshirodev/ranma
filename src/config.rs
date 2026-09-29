@@ -51,6 +51,18 @@ pub enum NestedMode {
     Off,
 }
 
+/// Which workspaces the workspaces module expands into the workspaces of the
+/// ranma in their focused pane (see `nestbar`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NestedWorkspaces {
+    /// Only the one on your path: the current workspace's.
+    #[default]
+    Focused,
+    All,
+    /// None: every workspace as it always was.
+    Off,
+}
+
 /// When ranma's title names the host it runs on (`⧉ ranma@vps · nvim`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -382,6 +394,7 @@ struct Builder {
     modules: HashMap<String, ModuleDef>,
     workspaces_show_all: bool,
     workspaces_numbers_only: bool,
+    workspaces_nested: NestedWorkspaces,
     rules: Vec<Rule>,
     session_accents: HashMap<String, theme::Color>,
 }
@@ -400,6 +413,8 @@ pub struct Config {
     /// The workspaces module shows ` 3 ` for an unnamed workspace, not
     /// ` 3:nvim ` (the program in its focused pane).
     pub workspaces_numbers_only: bool,
+    /// Which workspaces show the workspaces of a ranma inside them.
+    pub workspaces_nested: NestedWorkspaces,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
@@ -687,7 +702,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
-                let allowed: &[&str] = if name == "workspaces" { &["show", "label"] } else { &[] };
+                let allowed: &[&str] = if name == "workspaces" { &["show", "label", "nested"] } else { &[] };
                 if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
                     return Err(rt_err(format!(
                         "ranma.module(\"{name}\"): `{name}` is built in and takes {}; `{k}` is not one",
@@ -725,6 +740,23 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                     lua.app_data_mut::<Builder>()
                         .expect("builder installed")
                         .workspaces_numbers_only = numbers_only;
+                }
+                if name == "workspaces"
+                    && let Some(nested) = opts.get::<Option<String>>("nested")?
+                {
+                    let n = match nested.as_str() {
+                        "focused" => NestedWorkspaces::Focused,
+                        "all" => NestedWorkspaces::All,
+                        "off" => NestedWorkspaces::Off,
+                        other => {
+                            return Err(rt_err(format!(
+                                "ranma.module(\"workspaces\"): nested = \"{other}\" (expected \"focused\", \"all\" or \"off\")"
+                            )));
+                        }
+                    };
+                    lua.app_data_mut::<Builder>()
+                        .expect("builder installed")
+                        .workspaces_nested = n;
                 }
                 return Ok(());
             }
@@ -1050,6 +1082,7 @@ pub fn load_from(
         modules: builder.modules,
         workspaces_show_all: builder.workspaces_show_all,
         workspaces_numbers_only: builder.workspaces_numbers_only,
+        workspaces_nested: builder.workspaces_nested,
         rules: builder.rules,
         session_accents: builder.session_accents,
         theme,
@@ -1258,6 +1291,10 @@ mod tests {
             !cfg.workspaces_numbers_only,
             "program names are the default"
         );
+        assert_eq!(cfg.workspaces_nested, NestedWorkspaces::Focused);
+        let all = with_user("ranma.module('workspaces', { nested = 'all' })").unwrap();
+        assert_eq!(all.workspaces_nested, NestedWorkspaces::All);
+        assert!(with_user("ranma.module('workspaces', { nested = 'yes' })").is_err());
         let numbers = with_user("ranma.module('workspaces', { label = 'number' })").unwrap();
         assert!(numbers.workspaces_numbers_only);
         let e = with_user("ranma.module('workspaces', { label = 'title' })").unwrap_err();

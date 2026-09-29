@@ -27,6 +27,11 @@ pub enum Style {
     WsOccupied,
     WsEmpty,
     WsUrgent,
+    /// A current workspace that is not the end of the path: bold, occupied.
+    WsHolder,
+    /// The deepest current workspace inside a nested ranma: bold text in that
+    /// ranma's session accent (the theme's active colour without one).
+    WsInner(Option<[u8; 3]>),
 }
 
 impl Style {
@@ -50,6 +55,14 @@ pub enum Click {
     SessionSwitcher,
     /// Run the update.
     Update,
+    /// A workspace inside the ranma in workspace `holder`'s focused pane,
+    /// `depth` levels down: `path` holds each level's workspace (0 for its
+    /// scratchpad).
+    Nested {
+        holder: u8,
+        depth: u8,
+        path: [u8; 4],
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +138,11 @@ fn truncate(pieces: Vec<Piece>, max: usize) -> Vec<Piece> {
     out
 }
 
+/// The width of a side once joined.
+pub fn joined_width(segments: &[Segment], sep: &str) -> usize {
+    width(&join(segments, sep))
+}
+
 /// Place the three sides in `cols` columns. Returns pieces with their column.
 ///
 /// Budgeting, in order: the right side is kept whole if it fits at all (it holds
@@ -138,6 +156,19 @@ pub fn fit(
     right: &[Segment],
     sep: &str,
     cols: u16,
+) -> Vec<(u16, Piece)> {
+    fit_floor(left, center, right, sep, cols, 0)
+}
+
+/// `fit`, except a centre that would be cut below `floor` cells is left out
+/// rather than shown as a stub (`✳Fea…`).
+pub fn fit_floor(
+    left: &[Segment],
+    center: &[Segment],
+    right: &[Segment],
+    sep: &str,
+    cols: u16,
+    floor: usize,
 ) -> Vec<(u16, Piece)> {
     let cols = cols as usize;
     let right = truncate(join(right, sep), cols);
@@ -159,7 +190,12 @@ pub fn fit(
     // One column of air on each side of the centre, when there is anything beside it.
     let gap_start = lw + usize::from(lw > 0);
     let gap_end = cols.saturating_sub(rw + usize::from(rw > 0));
-    let center = truncate(join(center, sep), gap_end.saturating_sub(gap_start));
+    let room = gap_end.saturating_sub(gap_start);
+    let mut center = join(center, sep);
+    if width(&center) > room && room < floor {
+        center.clear();
+    }
+    let center = truncate(center, room);
     let cw = width(&center);
     if cw > 0 {
         let ideal = cols.saturating_sub(cw) / 2;

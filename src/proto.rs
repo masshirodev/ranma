@@ -39,6 +39,10 @@ pub struct Hello {
     /// `title_host` setting). Defaulted like `inside`.
     #[serde(default)]
     pub remote: bool,
+    /// A ranma around this client answered its question, with this protocol
+    /// (see `nestbar`): it shows this ranma's workspaces. Defaulted like `inside`.
+    #[serde(default)]
+    pub outer: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +172,7 @@ mod tests {
             typed_early: b"ls\r".to_vec(),
             inside: Some("/run/user/1000/ranma/1.sock".into()),
             remote: true,
+            outer: Some(1),
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -220,12 +225,15 @@ mod tests {
             typed_early: Vec::new(),
             inside: None,
             remote: false,
+            outer: None,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("inside");
         old.as_object_mut().unwrap().remove("remote");
+        old.as_object_mut().unwrap().remove("outer");
         let h: Hello = serde_json::from_value(old).unwrap();
         assert_eq!(h.inside, None);
+        assert_eq!(h.outer, None);
     }
 
     #[test]

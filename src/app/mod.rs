@@ -29,6 +29,7 @@ use crate::workspace::Workspace;
 mod copy;
 mod drag;
 mod hints;
+mod nested;
 mod query;
 mod rules;
 mod run;
@@ -231,6 +232,17 @@ pub struct App {
     hint_on: bool,
     /// The chord that opened WM mode: the hint's title.
     wm_chord: Option<crate::keys::Chord>,
+    /// What the ranma in each pane reported (see `nested`).
+    reports: HashMap<PaneId, crate::nestbar::Report>,
+    /// A ranma around the attached client answered its question: it shows
+    /// this ranma's workspaces (see `nested`).
+    pub client_outer: bool,
+    /// The terminal showing this ranma has focus (the last focus event).
+    host_focused: bool,
+    /// The report last sent outward, so only a change is sent.
+    last_report: Option<crate::nestbar::Report>,
+    /// The pane drawn without a border last time (see `frameless`).
+    frameless_was: Option<PaneId>,
 }
 
 impl App {
@@ -302,6 +314,11 @@ impl App {
             hint_due: None,
             hint_on: false,
             wm_chord: None,
+            reports: HashMap::new(),
+            client_outer: false,
+            host_focused: true,
+            last_report: None,
+            frameless_was: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -398,7 +415,18 @@ impl App {
 
     // ---- geometry ----------------------------------------------------------
 
+    /// Where the bar is drawn now, if anywhere. A ranma whose workspaces an
+    /// outer ranma shows draws none while its terminal has focus, and draws it
+    /// over the bottom row when it has not (see `nested`).
     pub fn bar_rect(&self) -> Option<Rect> {
+        if self.bar_yielded() && !self.bar_overlaid() {
+            return None;
+        }
+        self.bar_row()
+    }
+
+    /// The bar's row as the theme places it.
+    fn bar_row(&self) -> Option<Rect> {
         let s = self.screen;
         match self.config.theme.bar.position {
             BarPosition::Hidden => None,
@@ -411,7 +439,14 @@ impl App {
     /// The area panes are laid out in: the screen minus the bar and outer gaps.
     fn workspace_area(&self) -> Rect {
         let s = self.screen;
-        let a = match self.bar_rect() {
+        // A yielded bar keeps no row: focus coming and going must not resize
+        // the panes, so the bar is drawn over them when it shows at all.
+        let row = if self.bar_yielded() {
+            None
+        } else {
+            self.bar_row()
+        };
+        let a = match row {
             None => s,
             Some(_) if self.config.theme.bar.position == BarPosition::Top => {
                 Rect::new(s.x, s.y + 1, s.w, s.h.saturating_sub(1))
@@ -439,12 +474,16 @@ impl App {
         let gap = self.config.theme.gaps.inner;
         let b = self.border();
         let focused = self.focused();
-        let view = |id, outer: Rect, floating| PaneView {
-            id,
-            outer,
-            inner: outer.inset(b, b),
-            focused: Some(id) == focused,
-            floating,
+        let frameless = self.frameless();
+        let view = |id, outer: Rect, floating| {
+            let b = if Some(id) == frameless { 0 } else { b };
+            PaneView {
+                id,
+                outer,
+                inner: outer.inset(b, b),
+                focused: Some(id) == focused,
+                floating,
+            }
         };
 
         if let Some(ws) = self.workspaces.get(&self.current) {
@@ -726,6 +765,7 @@ impl App {
         }
         self.return_focus.retain(|_, to| *to != id);
         self.synced.remove(&id);
+        self.reports.remove(&id);
         if self.panes.is_empty() {
             self.quit = true;
             return;
@@ -920,6 +960,13 @@ impl App {
 
     /// Fire hooks for whatever the event changed, and refresh state-driven modules.
     fn after_event(&mut self) {
+        // A nested ranma's report, focus or a pane closing can change which
+        // pane is drawn without a border, and so the size of that pane.
+        let frameless = self.frameless();
+        if frameless != self.frameless_was {
+            self.frameless_was = frameless;
+            self.relayout();
+        }
         // Copy mode belongs to one pane; it ends when that pane is no longer the
         // focused one (switched away by a click, a hook, a workspace change).
         if self
@@ -1094,6 +1141,9 @@ impl App {
             return;
         };
         match m {
+            m @ (crate::osc::Mark::RanmaHello | crate::osc::Mark::RanmaReport(_)) => {
+                self.nested_mark(id, m);
+            }
             crate::osc::Mark::CommandFinished { exit, duration } => {
                 let workspace = self
                     .locate(id)
@@ -1174,6 +1224,8 @@ impl App {
             Event::Key(key) => self.handle_key(key),
             Event::Paste(text) => self.typed(|modes| Some(input::encode_paste(&text, modes))),
             Event::FocusGained | Event::FocusLost => {
+                self.host_focused = ev == Event::FocusGained;
+                self.dirty = true;
                 if let Some(p) = self.focused_pane()
                     && let Some(b) = input::encode_focus(ev == Event::FocusGained, p.modes())
                 {
@@ -1219,6 +1271,11 @@ impl App {
                 }
                 Some(Click::SessionSwitcher) => self.open_session_switcher(),
                 Some(Click::Update) => self.run_action(Action::Update),
+                Some(Click::Nested {
+                    holder,
+                    depth,
+                    path,
+                }) => self.click_nested(holder, &path[..depth as usize]),
                 None => {}
             }
             return true;
@@ -2327,9 +2384,23 @@ impl App {
                     let label = if searching { " SEARCH " } else { " COPY " };
                     vec![Piece::new(label, Style::Mode)]
                 }
-                // Keys are going to a ranma inside the focused pane.
+                // Keys are going to a ranma inside the focused pane. One that
+                // draws no bar of its own says its mode here.
                 Mode::Normal if self.hints.is_some() => vec![Piece::new(" LINK ", Style::Mode)],
-                Mode::Normal if self.passes_through() => vec![Piece::new(" ⧉ ", Style::Dim)],
+                Mode::Normal if self.passes_through() => {
+                    // ⧉ stays (keys go inside); an inner mode follows it, so
+                    // a bare ` WM ` is always this ranma's own.
+                    let inner = self
+                        .nested_path()
+                        .iter()
+                        .rev()
+                        .map(|r| r.mode.as_str())
+                        .find(|m| *m != "normal" && !m.is_empty())
+                        .map(|m| Piece::new(format!(" {} ", m.to_uppercase()), Style::Mode));
+                    std::iter::once(Piece::new(" ⧉ ", Style::Dim))
+                        .chain(inner)
+                        .collect()
+                }
                 Mode::Normal => Vec::new(),
             }
             .into_iter()
@@ -2401,17 +2472,47 @@ impl App {
         let side =
             |names: &[String]| -> Vec<Segment> { names.iter().map(|n| self.segment(n)).collect() };
         let bar = &self.config.bar;
-        let center = match &self.status {
+        // A message of this ranma's, else one from a nested ranma that draws
+        // no bar of its own, the deepest first.
+        let status = self.status.clone().or_else(|| {
+            self.nested_path()
+                .iter()
+                .rev()
+                .find_map(|r| r.status.clone())
+        });
+        let center = match &status {
             Some(msg) => vec![vec![Piece::new(msg.clone(), Style::Accent)]],
             None => side(&bar.center),
         };
-        bar::fit(
-            &side(&bar.left),
-            &center,
-            &side(&bar.right),
-            &self.config.theme.bar.separator,
-            cols,
-        )
+        let right = side(&bar.right);
+        let sep = &self.config.theme.bar.separator;
+        // The workspaces module, with the workspaces of the ranmas inside
+        // them (see `nestbar`), when there are any to show.
+        if self.config.workspaces_nested != config::NestedWorkspaces::Off
+            && let Some(at) = bar.left.iter().position(|m| m == "workspaces")
+        {
+            let set = self.own_report();
+            let expand_all = self.config.workspaces_nested == config::NestedWorkspaces::All;
+            if crate::nestbar::expands(&set, expand_all) {
+                return crate::nestbar::fit_nested(
+                    &side(&bar.left[..at]),
+                    &set,
+                    &side(&bar.left[at + 1..]),
+                    &center,
+                    &right,
+                    sep,
+                    cols,
+                    expand_all,
+                    // A message is never left out; the title may be.
+                    if status.is_some() {
+                        0
+                    } else {
+                        crate::nestbar::TITLE_FLOOR
+                    },
+                );
+            }
+        }
+        bar::fit(&side(&bar.left), &center, &right, sep, cols)
     }
 
     /// Clear wakeup flags of the panes a frame just drew.

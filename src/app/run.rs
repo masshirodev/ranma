@@ -122,9 +122,11 @@ pub fn run(config: Config) -> Result<()> {
         term.backend_mut().write_all(b"\x1b[22;0t")?;
         // Before the input thread exists: the replies are read straight off the
         // terminal here, and none may be left for crossterm to take for keys.
-        let (host_colors, typed_early) = crate::hostcolors::query(Duration::from_millis(300));
+        let (host_colors, typed_early, outer) =
+            crate::hostcolors::query_all(Duration::from_millis(300));
         let mut app = App::new(config, tx.clone(), cols, rows);
         app.host_colors = host_colors;
+        app.set_outer(outer);
         app.client_remote = crate::pane::over_ssh();
         let _ipc = listen(&mut app, &tx, None);
         app.open_pane(None).context("starting the first pane")?;
@@ -276,6 +278,7 @@ fn event_loop(
         }
         app.run_timers(Instant::now());
         app.after_event();
+        app.report_outward();
         if !app.host_out.is_empty() {
             let out = term.backend_mut();
             for bytes in app.host_out.drain(..) {
@@ -398,6 +401,7 @@ fn attached(app: &mut App, hello: &proto::Hello) -> Result<()> {
     app.host_colors = hello.colors.clone();
     app.client_inside = hello.inside.clone();
     app.client_remote = hello.remote;
+    app.set_outer(hello.outer);
     app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
     // The first client of a new server: its first pane opens now, at the size
     // the client's terminal gives it.

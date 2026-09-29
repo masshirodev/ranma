@@ -673,7 +673,7 @@ mod tests {
 
     /// One panel from the handoff's fixture.
     fn mock(name: &str) -> Vec<String> {
-        let src = include_str!("../doc/handoffs/WHICH_KEY_MOCK.txt");
+        let src = include_str!("../doc/handoffs/done/WHICH_KEY_MOCK.txt");
         src.split("## ")
             .find(|b| b.starts_with(name))
             .unwrap_or_else(|| panic!("no mock {name}"))

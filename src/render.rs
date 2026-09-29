@@ -62,7 +62,16 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         let Some(pane) = app.panes.get(&view.id) else {
             continue;
         };
-        draw_border(f, app, view, pane.label());
+        // A pane whose ranma reports draws its own titles (and, filling the
+        // workspace, its own frame: then there is no border here at all).
+        if view.inner != view.outer {
+            let title = if app.reports_from(view.id) {
+                ""
+            } else {
+                pane.label()
+            };
+            draw_border(f, app, view, title);
+        }
         if let Some(c) = draw_pane(f, app, view, pane) {
             cursor = Some(c);
         }
@@ -327,6 +336,9 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
 fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
     let c = &app.colors();
     let base = Style::default().fg(color(c.bar_fg)).bg(color(c.bar_bg));
+    // The bar owns its row: drawn over a pane (a nested ranma's bar, while an
+    // outer one shows its workspaces elsewhere), nothing underneath shows.
+    f.render_widget(Clear, rrect(area));
     let buf = f.buffer_mut();
     buf.set_style(rrect(area), base);
     for (x, piece) in app.bar_pieces(area.w) {
@@ -569,6 +581,12 @@ fn piece_style(c: &Colors, s: bar::Style) -> Style {
         bar::Style::WsOccupied => fg(c.ws_occupied),
         bar::Style::WsEmpty => fg(c.ws_empty),
         bar::Style::WsUrgent => fg(c.ws_urgent).add_modifier(Modifier::BOLD),
+        bar::Style::WsHolder => fg(c.ws_occupied).add_modifier(Modifier::BOLD),
+        bar::Style::WsInner(accent) => match accent {
+            Some([r, g, b]) => Style::default().fg(Color::Rgb(r, g, b)),
+            None => fg(c.ws_active_bg),
+        }
+        .add_modifier(Modifier::BOLD),
     }
 }
 

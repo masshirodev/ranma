@@ -109,14 +109,14 @@ title and the clock. Instead: the inner ranma reports its workspaces outward,
 the outermost bar shows them nested, and the inner draws no bar when it knows
 an outer shows it.
 
-- [ ] Design: `doc/briefs/NESTED_BAR.md` (waiting on the handoff)
-- [ ] The report: a private OSC with a protocol version, sent on change, read
+- [x] Design: `doc/briefs/done/NESTED_BAR.md`, handoff in `doc/handoffs/done/`
+- [x] The report: a private OSC with a protocol version, sent on change, read
   off the PTY by the outer's scanner; an unknown or missing version looks as
   today
-- [ ] The outer answers the client's startup query, so the inner knows it is
-  shown and hides its bar (per attach)
-- [ ] The outer bar nests the focused pane's ranma; a setting expands all
-- [ ] A nested pane's border: no title, and none at all when it fills the
+- [x] The outer answers the client's startup query, so the inner knows an
+  outer is there (per attach); focus says when it is shown
+- [x] The outer bar nests the focused pane's ranma; a setting expands all
+- [x] A nested pane's border: no title, and none at all when it fills the
   workspace
 
 ## Later, maybe

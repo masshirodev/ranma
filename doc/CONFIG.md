@@ -259,9 +259,28 @@ Over SSH, three levels deep, each machine starting ranma: with
 - `outer_leader` (`ctrl+alt+b`) reaches the outermost ranma instead; pressed
   again, the next one down: once for the outermost, twice for the second, and so
   on.
-- The mouse works through every layer: each ranma keeps its own borders and bar,
-  and passes the rest to the ranma inside, whose own borders, drags, selection and
+- The mouse works through every layer: each ranma keeps its own borders, and
+  passes the rest to the ranma inside, whose own borders, drags, selection and
   clipboard then work as usual.
+- **One bar for all of them.** The outer bar shows the inner ranma's
+  workspaces in brackets after the workspace that holds it: ` 1:zsh  2 [1:kumiko
+  2:notebooks 3:ranma S]  3:ai `, the holder's own number first. Your screen's
+  workspace is filled as always; the one the inner ranma shows is in bold, in
+  its session's accent. The inner ranma draws no bar of its own while its pane
+  has focus (that is when the outer shows it), and draws it over its bottom row
+  when it has not, so moving focus never resizes it. Its mode shows after `⧉`
+  (`⧉  WM `), and its messages in the outer bar's centre. A pane whose ranma
+  does this has no title on its border, and no border at all when it fills
+  the workspace: the ranma inside draws its own. Clicking an inner workspace
+  goes there (ranma types the outer leader and that workspace's key for you).
+  An urgent inner workspace behind a collapsed holder marks the holder urgent.
+  When the bar runs out of room, other expanded holders collapse first, then
+  names give way one level at a time, deepest first, numbers last; the title
+  in the centre gives way before any of it, and is left out rather than cut
+  below 12 cells. Both ranmas need a build that knows this; with an older one
+  on either side, the bars look as they always did. `ranma.module("workspaces",
+  { nested = "all" })` expands every workspace holding a ranma, not only the
+  one you are in; `"off"` never expands any.
 - A program could set a title starting with the mark and get the leader passed to
   it; `outer_leader` still reaches ranma. `nested = "off"` turns all of it off.
 - `title_host` puts the machine's name in the mark, so the terminal's tab says
@@ -341,7 +360,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | --- | --- | --- |
 | `mode` | ` WM `, ` COPY `, ` SEARCH ` or ` LINK `, nothing otherwise; ` ⇉ sync N ` while N panes here are marked for synchronized input | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
-| `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named) |
+| `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named); `nested = "focused"` (default), `"all"` or `"off"`: which workspaces show the workspaces of a ranma inside them (see [ranma inside ranma](#ranma-inside-ranma)) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
 | `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`) |

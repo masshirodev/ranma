@@ -158,10 +158,19 @@ pub fn parse_replies(input: &[u8]) -> HostColors {
 /// Returns the colours, and any other input that arrived meanwhile (see
 /// `leftover_input`).
 pub fn query(timeout: Duration) -> (HostColors, Vec<u8>) {
+    let (colors, early, _) = query_all(timeout);
+    (colors, early)
+}
+
+/// `query`, also asking whether a ranma draws around this one (see
+/// `nestbar`): its protocol, if one answered. The question goes before DA1,
+/// so an outer ranma's answer comes before the DA1 reply that ends reading.
+pub fn query_all(timeout: Duration) -> (HostColors, Vec<u8>, Option<u32>) {
     let mut q = String::from("\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\");
     for i in 0..16 {
         q.push_str(&format!("\x1b]4;{i};?\x1b\\"));
     }
+    q.push_str(crate::nestbar::HELLO);
     q.push_str("\x1b[c");
     let mut stdout = std::io::stdout();
     if stdout
@@ -169,7 +178,7 @@ pub fn query(timeout: Duration) -> (HostColors, Vec<u8>) {
         .and_then(|_| stdout.flush())
         .is_err()
     {
-        return (HostColors::default(), Vec::new());
+        return (HostColors::default(), Vec::new(), None);
     }
 
     let fd = std::io::stdin().as_raw_fd();
@@ -198,7 +207,11 @@ pub fn query(timeout: Duration) -> (HostColors, Vec<u8>) {
             break;
         }
     }
-    (parse_replies(&buf), leftover_input(&buf))
+    (
+        parse_replies(&buf),
+        leftover_input(&buf),
+        crate::nestbar::outer_in(&buf),
+    )
 }
 
 /// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.

@@ -1,5 +1,5 @@
 # The which-key hint's panels, cell for cell, as the design handoff draws them
-# (doc/handoffs/Which-key hint grid alignment.zip, rendered with its own script).
+# (doc/handoffs/done/Which-key hint grid alignment.zip, rendered with its own script).
 # src/whichkey.rs tests its layout against these. Regenerate only from a new handoff.
 ## 80x24 rounded
 ╭ ctrl+b ────────────────────────────────────────────────────────────────────╮

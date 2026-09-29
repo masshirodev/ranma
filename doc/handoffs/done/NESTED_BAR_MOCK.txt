@@ -1,0 +1,77 @@
+# The nested bar, cell for cell (Nested Bar.dc.html, from nested-bar.js).
+# Default theme; colour roles are in the design, not here.
+## today 80x14
+╭ ✳Features to yank from tuios ────────────────────────────────────────────────╮
+│╭ ranma ──────────────────────────────╮╭ ✳Features to yank from tuios ───────╮│
+││ ~/src/ranma $                       ││ ~/src/ranma $ claude                ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+││                                     ││                                     ││
+│╰─────────────────────────────────────╯╰─────────────────────────────────────╯│
+│ 1:kumiko  2:notebooks  3:ranma  4:ranobe  5:zsh  S  ✳Featu… Tue 29 Sep  14:42│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ⧉    1:zsh  2:ssh  3:ai  ✳Features to yank from tuios         Tue 29 Sep  14:42
+## one level, default, 80
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## one level, default, 200
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh S]  3:ai                  ✳Features to yank from tuios                                                                     Tue 29 Sep  14:42
+## one level, expand all, 80
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## one level, expand all, 200
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh S]  3 [1:claude 2:zsh]    ✳Features to yank from tuios                                                                     Tue 29 Sep  14:42
+## two levels, default (inner on 5), 80
+ ⧉    1:zsh  2 [1 2 3 4 5 [1 2:logs] S]  3:ai  ✳Features to y… Tue 29 Sep  14:42
+## two levels, default (inner on 5), 200
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5 [1:htop 2:logs] S]  3:ai      ✳Features to yank from tuios                                                                     Tue 29 Sep  14:42
+## two levels, expand all, 80
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## two levels, expand all, 200
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5 [1:htop 2:logs] S]  3 [1:claude 2:zsh]  ✳Features to yank from tuios                                                           Tue 29 Sep  14:42
+## overflow step 0: Everything, the title cut to what is left (113 cols)
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5 [1:ht… Tue 29 Sep  14:42
+## overflow step 1: Other expanded groups collapse to their holder (87 cols)
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh S… Tue 29 Sep  14:42
+## overflow step 2: Second-level names go, numbers stay (87 cols)
+ ⧉    1:zsh  2 [1:kumiko 2:notebooks 3:ranma 4:ranobe 5:zsh S… Tue 29 Sep  14:42
+## overflow step 3: Inner names go, numbers stay (59 cols)
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## overflow step 4: Outer names go, numbers stay (52 cols)
+ ⧉    1  2 [1 2 3:ranma 4 5 S]  3  ✳Features to yank from tui… Tue 29 Sep  14:42
+## overflow step 5: Names on your path go (46 cols)
+ ⧉    1  2 [1 2 3 4 5 S]  3  ✳Features to yank from tuios      Tue 29 Sep  14:42
+## borders, alone, 80x14
+╭ ✳Features to yank from tuios ────────────────╮╭ zsh ─────────────────────────╮
+│ ~/src/ranma $ claude                         ││ ~ $                          │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+╰──────────────────────────────────────────────╯╰──────────────────────────────╯
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## borders, beside, 80x14
+╭ zsh ───────────────────╮╭────────────────────────────────────────────────────╮
+│ ~ $                    ││╭ ✳Features to yank from tui ╮╭ zsh ───────────────╮│
+│                        │││ ~/src/ranma $ claude       ││ ~ $                ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        │││                            ││                    ││
+│                        ││╰────────────────────────────╯╰────────────────────╯│
+╰────────────────────────╯╰────────────────────────────────────────────────────╯
+ ⧉    1:zsh  2 [1 2 3:ranma 4 5 S]  3:ai  ✳Features to yank f… Tue 29 Sep  14:42
+## older inner, 80
+ ⧉    1:zsh  2:ssh  3:ai  ✳Features to yank from tuios         Tue 29 Sep  14:42

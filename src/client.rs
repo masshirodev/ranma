@@ -182,7 +182,7 @@ fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
     // Before any input thread: the host's replies are read off the terminal
     // here, with any keys typed meanwhile kept for the shell. The colours are
     // asked once; a switch to another server reuses them.
-    let (colors, typed_early) = crate::hostcolors::query(Duration::from_millis(300));
+    let (colors, typed_early, outer) = crate::hostcolors::query_all(Duration::from_millis(300));
     let inside = std::env::var(ipc::ENV).ok();
     let greet = |stream: &mut UnixStream, typed_early: Vec<u8>| -> Result<()> {
         let (cols, rows) = crossterm::terminal::size()?;
@@ -197,6 +197,7 @@ fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
                 typed_early,
                 inside: inside.clone(),
                 remote: crate::pane::over_ssh(),
+                outer,
             }),
         )?;
         Ok(())
