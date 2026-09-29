@@ -167,6 +167,15 @@ pub struct Theme {
     pub border: Border,
     pub gaps: Gaps,
     pub bar: Bar,
+    pub panes: Panes,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Panes {
+    /// How far the text of unfocused panes fades toward its background, 0
+    /// (not at all) to 1 (gone).
+    pub dim_unfocused: f32,
 }
 
 /// Where themes are looked up, in order, before falling back to the built-ins.
@@ -247,6 +256,10 @@ pub fn load(name: &str, dirs: &[PathBuf]) -> Result<Theme> {
         .try_into()
         .with_context(|| format!("theme `{name}`"))?;
     theme.name = name.to_string();
+    let dim = theme.panes.dim_unfocused;
+    if !(0.0..=1.0).contains(&dim) {
+        bail!("theme `{name}`: panes.dim_unfocused must be 0-1, not {dim}");
+    }
     Ok(theme)
 }
 
@@ -295,6 +308,23 @@ mod tests {
         assert!(err.contains("border_actve"), "{err}");
         let err = format!("{:#}", load("colour", &[dir]).unwrap_err());
         assert!(err.contains("#12345"), "{err}");
+    }
+
+    #[test]
+    fn dimming_is_off_by_default_and_a_fraction() {
+        assert_eq!(load("default", &[]).unwrap().panes.dim_unfocused, 0.0);
+        let dir = tmp_dir("dim");
+        std::fs::write(dir.join("soft.toml"), "[panes]\ndim_unfocused = 0.3\n").unwrap();
+        std::fs::write(dir.join("over.toml"), "[panes]\ndim_unfocused = 1.5\n").unwrap();
+        assert_eq!(
+            load("soft", std::slice::from_ref(&dir))
+                .unwrap()
+                .panes
+                .dim_unfocused,
+            0.3
+        );
+        let err = format!("{:#}", load("over", &[dir]).unwrap_err());
+        assert!(err.contains("dim_unfocused"), "{err}");
     }
 
     #[test]

@@ -544,9 +544,11 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
 | `bar.position` | `top`, `bottom`, `hidden` |
 | `bar.separator` | text drawn between two modules on the same side |
+| `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
 
 A cell is about twice as tall as it is wide, so outer gaps look even at
 `outer_horizontal = 2 * outer_vertical`.
 
-That is the whole theming surface: colours, a border style, gaps and a separator.
+That is the whole theming surface: colours, a border style, gaps, a separator
+and how much unfocused panes fade.
 There is no stylesheet on purpose — see `DESIGN.md`, "The bar".

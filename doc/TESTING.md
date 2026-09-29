@@ -11,10 +11,10 @@ Everything that can be pure is, and is tested without a terminal:
 | `keys` | chord parsing, strictness, round trips |
 | `action` | dispatcher parsing, argument errors |
 | `config` | defaults, user overrides, global binds, the bar and modules, the run-time API refusing at load, error messages carrying file and line |
-| `theme` | inheritance, strict keys, colour forms, cycles |
+| `theme` | inheritance, strict keys, colour forms, cycles, `dim_unfocused` range |
 | `layout` | dwindle and manual placement, removal, geometry-based neighbours, Hyprland-style resize, swap, toggle split, groups (tab bars, new tabs, cycling, closing), exact tiling |
 | `input` | host key → chord, key/paste/focus/mouse encoding per pane mode |
-| `render` | cell characters as drawn |
+| `render` | cell characters as drawn; colours resolved to RGB for dimming (the program's palette, then the host's, else unknown) |
 | `bar` | fitting three sides into a row (budget order, truncation, wide chars), exec modules (first line, timeout killing the whole process group), wall-clock alignment |
 | `tmux` | the shim's global flags, tmux-style flag parsing (grouped, stuck values, unknown ones refused), `;` separators, targets resolved inside the caller's session, formats (`#{}`, aliases, conditionals, comparisons, unknown variables), key names |
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |

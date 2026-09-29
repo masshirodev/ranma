@@ -57,3 +57,9 @@ outer_vertical = 0
 position = "bottom"
 # Drawn between two modules on the same side.
 separator = "  "
+
+[panes]
+# Fade the text of unfocused panes toward their background: 0 is off, 0.3 is
+# a gentle hint of where focus is, 1 hides them. Uses the colours your
+# terminal reports; one that reports none gets its faint attribute instead.
+dim_unfocused = 0.0

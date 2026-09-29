@@ -576,6 +576,14 @@ Rust, for predictable latency without a GC, and for the emulator:
 - **Control characters are drawn as blanks.** alacritty_terminal keeps a literal
   `\t` in the cell a tab starts from; sent to the host, it moves the cursor instead
   of drawing, and stale cells show through. Found by `scripts/smoke.sh`.
+- **Unfocused panes can fade** (`panes.dim_unfocused`, 2026-09-29, from tuios):
+  each cell's foreground is mixed toward its background in real RGB, resolved
+  through the program's own palette changes and then the host's colours (asked
+  once at startup), so it works with any palette instead of guessing one; a
+  host that reports none gets the faint attribute. It costs a colour mix per
+  cell of an unfocused pane *when that pane is drawn*, and drawing still
+  happens only on change: two million lines flooding an unfocused pane took
+  71-83 ticks of server CPU with it on or off, which is noise. Off by default.
 - Borders and gaps are cells; they are cheap and stay. Animations are not planned:
   a cell grid cannot animate smoothly, and they would spend the speed this project
   exists for.

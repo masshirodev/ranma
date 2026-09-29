@@ -113,6 +113,12 @@ fn draw_pane(
         .fg(color(colors.search_current_fg))
         .bg(color(colors.search_current_bg));
     let selection = content.selection;
+    let dim = Some(app.config.theme.panes.dim_unfocused)
+        .filter(|d| *d > 0.0 && !view.focused)
+        .map(|amount| Dim {
+            amount,
+            host: &app.host_colors,
+        });
     let buf = f.buffer_mut();
 
     for indexed in content.display_iter {
@@ -149,6 +155,9 @@ fn draw_pane(
             add_modifier: modifiers(cell.flags),
             ..Style::default()
         };
+        if let Some(d) = &dim {
+            style = d.apply(style, cell, content.colors);
+        }
         let point = indexed.point;
         if let Some(c) = copy {
             if c.current.as_ref().is_some_and(|m| m.contains(&point)) {
@@ -481,6 +490,80 @@ fn modifiers(flags: Flags) -> Modifier {
     m
 }
 
+/// Fading an unfocused pane's text toward its background (`panes.dim_unfocused`).
+struct Dim<'a> {
+    amount: f32,
+    host: &'a crate::hostcolors::HostColors,
+}
+
+impl Dim<'_> {
+    /// The cell's foreground mixed toward its background. Both are resolved to
+    /// RGB through the pane's own palette changes and then the host's; when
+    /// either is unknown (a host that did not report its colours), the
+    /// terminal's faint attribute stands in.
+    fn apply(
+        &self,
+        style: Style,
+        cell: &alacritty_terminal::term::cell::Cell,
+        overrides: &alacritty_terminal::term::color::Colors,
+    ) -> Style {
+        let (fg, bg) = if cell.flags.contains(Flags::INVERSE) {
+            (cell.bg, cell.fg)
+        } else {
+            (cell.fg, cell.bg)
+        };
+        match (
+            rgb_of(fg, overrides, self.host),
+            rgb_of(bg, overrides, self.host),
+        ) {
+            (Some(f), Some(b)) => {
+                let mix =
+                    |f: u8, b: u8| (f as f32 + (b as f32 - f as f32) * self.amount).round() as u8;
+                let c = Color::Rgb(mix(f.r, b.r), mix(f.g, b.g), mix(f.b, b.b));
+                if cell.flags.contains(Flags::INVERSE) {
+                    style.bg(c)
+                } else {
+                    style.fg(c)
+                }
+            }
+            _ => style.add_modifier(Modifier::DIM),
+        }
+    }
+}
+
+/// A cell colour as RGB, if it can be known: a program's own palette change
+/// first, then the host's colours as asked at startup.
+fn rgb_of(
+    c: AColor,
+    overrides: &alacritty_terminal::term::color::Colors,
+    host: &crate::hostcolors::HostColors,
+) -> Option<crate::hostcolors::Rgb> {
+    let from = |v: alacritty_terminal::vte::ansi::Rgb| crate::hostcolors::Rgb {
+        r: v.r,
+        g: v.g,
+        b: v.b,
+    };
+    let index = match c {
+        AColor::Spec(rgb) => return Some(from(rgb)),
+        AColor::Indexed(i) => i as usize,
+        AColor::Named(n) => match n {
+            NamedColor::DimBlack
+            | NamedColor::DimRed
+            | NamedColor::DimGreen
+            | NamedColor::DimYellow
+            | NamedColor::DimBlue
+            | NamedColor::DimMagenta
+            | NamedColor::DimCyan
+            | NamedColor::DimWhite => n as usize - NamedColor::DimBlack as usize,
+            NamedColor::BrightForeground | NamedColor::DimForeground => {
+                NamedColor::Foreground as usize
+            }
+            _ => n as usize,
+        },
+    };
+    overrides[index].map(from).or_else(|| host.get(index))
+}
+
 /// A cell colour in host terms. Palette entries a program redefined (OSC 4/10/11)
 /// are honoured; everything else is left to the host's palette, so panes look
 /// like the rest of the user's terminal.
@@ -519,6 +602,49 @@ fn term_color(c: AColor, overrides: &alacritty_terminal::term::color::Colors) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn colours_resolve_through_the_programs_palette_then_the_hosts() {
+        use crate::hostcolors::{HostColors, Rgb};
+        let host = HostColors {
+            fg: Some(Rgb {
+                r: 200,
+                g: 200,
+                b: 200,
+            }),
+            bg: Some(Rgb { r: 0, g: 0, b: 0 }),
+            palette: [Some(Rgb {
+                r: 10,
+                g: 20,
+                b: 30,
+            }); 16],
+            ..Default::default()
+        };
+        let none = alacritty_terminal::term::color::Colors::default();
+        let rgb = |c| rgb_of(c, &none, &host).map(|v| (v.r, v.g, v.b));
+        assert_eq!(
+            rgb(AColor::Named(NamedColor::Foreground)),
+            Some((200, 200, 200))
+        );
+        assert_eq!(rgb(AColor::Named(NamedColor::Background)), Some((0, 0, 0)));
+        assert_eq!(rgb(AColor::Named(NamedColor::DimRed)), Some((10, 20, 30)));
+        assert_eq!(rgb(AColor::Indexed(196)), Some((255, 0, 0)));
+        let mut own = alacritty_terminal::term::color::Colors::default();
+        own[NamedColor::Foreground] = Some(alacritty_terminal::vte::ansi::Rgb { r: 1, g: 2, b: 3 });
+        assert_eq!(
+            rgb_of(AColor::Named(NamedColor::Foreground), &own, &host).map(|v| (v.r, v.g, v.b)),
+            Some((1, 2, 3))
+        );
+        // A host that said nothing: unknown, so the faint attribute is used.
+        assert!(
+            rgb_of(
+                AColor::Named(NamedColor::Foreground),
+                &none,
+                &HostColors::default()
+            )
+            .is_none()
+        );
+    }
 
     #[test]
     fn control_characters_draw_as_blanks() {

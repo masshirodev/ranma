@@ -96,7 +96,7 @@ and SSH servers, animation).
 - [x] A tmux shim: a stated subset of tmux, for programs that drive it
 - [x] Synchronized input to marked panes
 - [x] A master-stack placement policy
-- [ ] Dim unfocused panes
+- [x] Dim unfocused panes
 - [ ] URL hints
 - [ ] A right-click pane menu
 - [ ] A `command_finished` hook from OSC 133
