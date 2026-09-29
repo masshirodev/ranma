@@ -364,7 +364,11 @@ Capturing the mouse also takes the host's selection away, so ranma selects
 itself: a drag in a pane's text selects there (and only there, unlike the host's
 selection across the whole screen), double and triple clicks take a word and a
 line, and release copies to the clipboard over OSC 52. A program that uses the
-mouse keeps its clicks; Shift still reaches the host's own selection.
+mouse keeps its clicks; Shift still reaches the host's own selection. The
+mouse reports cells, not which half of a cell the pointer is on, so a drag
+always includes both the pressed cell and the one under the pointer, whichever
+way it goes; sides fixed for a forward drag made a backward one drop the cell it
+ended on, and with it a pane's first column.
 
 ### Toasts, and a socket per ranma
 

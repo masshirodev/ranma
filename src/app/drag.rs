@@ -186,14 +186,14 @@ impl App {
                     }
                 }
             }
-            Some(Drag::Select { id }) => {
+            Some(Drag::Select { id, anchor }) => {
                 if let Some(v) = self.frame().views.into_iter().find(|v| v.id == id)
                     && let Some(p) = self.panes.get(&id)
                 {
                     let mut term = p.term.lock();
                     let point = grid_point(&term, v.inner, x, y);
-                    if let Some(sel) = term.selection.as_mut() {
-                        sel.update(point, Side::Right);
+                    if let Some(ty) = term.selection.as_ref().map(|s| s.ty) {
+                        term.selection = Some(drag_selection(ty, anchor, point));
                     }
                 }
                 self.dirty = true;
@@ -211,7 +211,7 @@ impl App {
     }
 
     pub(super) fn finish_drag(&mut self) {
-        if let Some(Drag::Select { id }) = self.drag {
+        if let Some(Drag::Select { id, .. }) = self.drag {
             self.drag = None;
             self.finish_selection(id);
             return;
@@ -277,7 +277,10 @@ impl App {
         term.selection = Some(sel);
         drop(term);
         self.selection_pane = Some(v.id);
-        self.drag = Some(Drag::Select { id: v.id });
+        self.drag = Some(Drag::Select {
+            id: v.id,
+            anchor: point,
+        });
         self.dirty = true;
     }
 
@@ -315,6 +318,22 @@ impl App {
             self.dirty = true;
         }
     }
+}
+
+/// The selection from the pressed cell `anchor` to the cell under the pointer,
+/// both included whichever way the drag goes. The mouse only reports cells, not
+/// which half of one the pointer is on, so the sides are chosen by direction: a
+/// backward drag that kept the forward sides would leave out the cell under the
+/// pointer, which is how the first column of a pane could never be selected.
+fn drag_selection(ty: SelectionType, anchor: Point, point: Point) -> Selection {
+    let (from, to) = if point < anchor {
+        (Side::Right, Side::Left)
+    } else {
+        (Side::Left, Side::Right)
+    };
+    let mut sel = Selection::new(ty, anchor, from);
+    sel.update(point, to);
+    sel
 }
 
 /// The grid point under screen cell (`x`, `y`) of a pane drawn in `inner`,
@@ -364,5 +383,29 @@ mod tests {
         assert_eq!(drop_side(r, 30, 28), Dir::Down);
         assert_eq!(drop_half(r, Dir::Down), Rect::new(10, 20, 40, 10));
         assert_eq!(drop_half(r, Dir::Right), Rect::new(30, 10, 20, 20));
+    }
+
+    fn selected(anchor: (i32, usize), point: (i32, usize)) -> String {
+        use alacritty_terminal::event::VoidListener;
+        use alacritty_terminal::term::{Config, Term, test::TermSize};
+        let mut term = Term::new(Config::default(), &TermSize::new(10, 2), VoidListener);
+        for (line, text) in ["https://a", "b c d e f"].into_iter().enumerate() {
+            for (col, c) in text.chars().enumerate() {
+                term.grid_mut()[Line(line as i32)][Column(col)].c = c;
+            }
+        }
+        let p = |(l, c): (i32, usize)| Point::new(Line(l), Column(c));
+        term.selection = Some(drag_selection(SelectionType::Simple, p(anchor), p(point)));
+        term.selection_to_string().unwrap_or_default()
+    }
+
+    #[test]
+    fn a_drag_keeps_both_ends_either_way() {
+        assert_eq!(selected((0, 0), (0, 4)), "https");
+        // Backward to the pane's first column: the `h` used to be left out.
+        assert_eq!(selected((0, 8), (0, 0)), "https://a");
+        assert_eq!(selected((0, 4), (0, 0)), "https");
+        assert_eq!(selected((1, 2), (0, 8)), "a\nb c");
+        assert_eq!(selected((0, 3), (0, 3)), "p");
     }
 }

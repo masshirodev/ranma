@@ -113,6 +113,8 @@ enum Drag {
     /// Selecting text in a pane with the mouse (see `drag`, "Selecting").
     Select {
         id: PaneId,
+        /// The grid cell the press landed on, always part of the selection.
+        anchor: alacritty_terminal::index::Point,
     },
 }
 
