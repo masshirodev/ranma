@@ -2430,7 +2430,7 @@ impl App {
                 let mut seg: Segment = self
                     .workspace_list()
                     .into_iter()
-                    .map(|(n, current, occupied, urgent, name)| {
+                    .flat_map(|(n, current, occupied, urgent, name)| {
                         let style = if current && !self.scratch_shown {
                             Style::WsActive
                         } else if urgent {
@@ -2441,11 +2441,21 @@ impl App {
                             Style::WsEmpty
                         };
                         // The number always shows: it is the key that gets you there.
-                        let label = match name {
+                        let label = match &name {
                             Some(name) => format!(" {n}:{name} "),
                             None => format!(" {n} "),
                         };
-                        Piece::new(label, style).on_click(Click::Workspace(n))
+                        // A holder drawn here is collapsed (nestbar draws the
+                        // bar while one expands), so it gets its count too.
+                        match name.and(self.holder_in_use(n)) {
+                            Some(k) => vec![
+                                Piece::new(label.trim_end().to_string(), style)
+                                    .on_click(Click::Workspace(n)),
+                                Piece::new(format!("[{k}] "), Style::Dim)
+                                    .on_click(Click::Workspace(n)),
+                            ],
+                            None => vec![Piece::new(label, style).on_click(Click::Workspace(n))],
+                        }
                     })
                     .collect();
                 let (has, shown) = self.scratch_state();

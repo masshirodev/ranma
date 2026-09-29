@@ -817,7 +817,12 @@ ranma is not the one you are in. Once it is on your path it expands, and its
 workspaces say it themselves, so an expanded holder has no count. The count
 is dim, clicks like its holder, and counts only workspaces in use: an inner
 ranma's current empty workspace, or its `show_all` list, would otherwise
-inflate it. The count goes with the name when the ladder drops names. This
+inflate it. The count goes with the name when the ladder drops names.
+Both renderers draw it from `nestbar::in_use`: nestbar while something
+expands, and the plain workspaces module otherwise. The first version put it
+in nestbar alone, so with the outer moved off the holder, which is exactly when
+a holder is collapsed and nothing else expands, no count showed. smoke.sh now
+drives that case. This
 departs from the handoff, whose mock
 (`doc/handoffs/done/NESTED_BAR_MOCK.txt`) is left as it was drawn: the
 lines that changed are pinned beside it in `nestbar`'s tests

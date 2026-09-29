@@ -295,13 +295,10 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
             (Some(name), true) => format!("{}:{name}", w.n),
             _ => w.n.to_string(),
         };
-        // A collapsed holder says how many workspaces the ranma inside has in
-        // use, so `1:vps[2]` reads as "two in there" without expanding it. The
-        // count goes with the name when the ladder drops names.
+        // The count goes with the name when the ladder drops names.
         let inside = nest
             .filter(|_| keep_name && w.name.is_some())
-            .map(|n| n.ws.iter().filter(|w| w.occ).count())
-            .filter(|k| *k > 0);
+            .and_then(in_use);
         let style = if cur && level == 0 {
             Style::WsActive
         } else if here {
@@ -377,6 +374,14 @@ fn click_for(path: &[u8]) -> Option<Click> {
         }
         _ => None,
     }
+}
+
+/// How many workspaces a ranma has in use, for a collapsed holder to say:
+/// `1:vps[2]` reads as "two in there" without expanding it. Only workspaces
+/// in use: its current empty one, or a `show = "all"` list, would inflate it.
+/// `None` when there are none, so an idle ranma adds nothing.
+pub fn in_use(r: &Report) -> Option<usize> {
+    Some(r.ws.iter().filter(|w| w.occ).count()).filter(|k| *k > 0)
 }
 
 /// Whether any workspace would expand at the first step: only then does the

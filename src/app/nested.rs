@@ -30,6 +30,17 @@ impl App {
         self.reports.get(&id)
     }
 
+    /// How many workspaces the ranma in workspace `n`'s focused pane has in
+    /// use, for the workspaces module to put after a collapsed holder. None
+    /// with `nested = "off"`, where the bar says nothing of inner ranmas.
+    pub(super) fn holder_in_use(&self, n: u8) -> Option<usize> {
+        if self.config.workspaces_nested == crate::config::NestedWorkspaces::Off {
+            return None;
+        }
+        let focused = self.workspaces.get(&n)?.focused?;
+        nestbar::in_use(self.report_of(focused)?)
+    }
+
     /// Whether the ranma in this pane reports: its border then carries no
     /// title, since the ranma inside draws its own.
     pub fn reports_from(&self, id: PaneId) -> bool {

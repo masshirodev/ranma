@@ -251,6 +251,14 @@ T send-keys -t s -l $'\e[O'; sleep 0.6
 screen | head -n -1 | grep -q '│ 1[: ]' && fail "the window losing focus made the inner ranma draw a second bar"
 bar | grep -q ' \[1' || fail "the outer bar stopped showing the inner's workspaces when the window lost focus ($(bar))"
 T send-keys -t s -l $'\e[I'; sleep 0.4
+# The outer moved away (its own leader, then 2): the holder collapses to
+# its name and says how many workspaces the inner has in use. The plain
+# workspaces module draws this bar, not nestbar: nothing is expanded.
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s 2; sleep 0.3; T send-keys -t s Escape
+for _ in $(seq 1 20); do bar | grep -Eq ' 1:[a-z]+\[1\] ' && break; sleep 0.25; done
+bar | grep -Eq ' 1:[a-z]+\[1\] ' || fail "a collapsed holder does not count the inner's workspaces ($(bar))"
+T send-keys -t s M-1; sleep 0.6
+bar | grep -q ' \[1' || fail "going back did not expand the holder again ($(bar))"
 HOST=$(uname -n | cut -d. -f1)
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma@$HOST · " && break; sleep 0.25; done
 OUTER=$(T display -p -t s '#{pane_title}')
