@@ -44,6 +44,8 @@ pub enum Action {
     /// Grow the focused pane's edge in that direction by this many cells.
     Resize(Dir, u16),
     ToggleSplit,
+    /// Give every split in the workspace equal shares.
+    Equalize,
     ToggleFloating,
     /// Raise the next floating pane, cycling through the pile.
     CycleFloats,
@@ -162,6 +164,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("move", "<left|right|up|down>"),
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
+    ("equalize", ""),
     ("toggle_floating", ""),
     ("cycle_floats", ""),
     ("toggle_group", ""),
@@ -293,6 +296,7 @@ impl FromStr for Action {
                 Ok(Action::Resize(dir, amount))
             }
             "toggle_split" => no_arg(Action::ToggleSplit),
+            "equalize" => no_arg(Action::Equalize),
             "toggle_floating" => no_arg(Action::ToggleFloating),
             "cycle_floats" => no_arg(Action::CycleFloats),
             "update" => no_arg(Action::Update),
@@ -413,6 +417,7 @@ impl fmt::Display for Action {
             Action::Move(d) => write!(f, "move {d}"),
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
+            Action::Equalize => f.write_str("equalize"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
             Action::CycleFloats => f.write_str("cycle_floats"),
             Action::Update => f.write_str("update"),
@@ -537,6 +542,7 @@ mod tests {
             "move_to_workspace 10",
             "exec htop",
             "help",
+            "equalize",
             "command_palette",
             "copy_mode",
             "search",

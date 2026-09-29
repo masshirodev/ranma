@@ -117,7 +117,8 @@ does not matter; it is ignored.
 | `focus <dir>` | Focus the pane in that direction (`left right up down`). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
-| `toggle_split` | Flip the focused container between horizontal and vertical. |
+| `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
+| `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `cycle_floats` | Raise the bottom-most floating pane and focus it (`leader f`); repeated, it walks through the pile. |
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |

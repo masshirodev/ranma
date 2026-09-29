@@ -81,6 +81,27 @@ client that holds nothing").
 - [x] Server switcher (`leader S`) and `attach NAME` from inside: the client is
   passed to another server without leaving the terminal; `Ctrl+X` kills one
 
+## 5. What tuios had that fits
+
+Mapped from tuios on 2026-09-29: what it does that ranma's design has room for,
+leaving out what DESIGN.md's non-goals refuse (remote hosts, agent tooling, web
+and SSH servers, animation).
+
+- [x] `equalize` (`leader =`); tuios's rotate is `toggle_split`, which already existed
+- [ ] Floats sized by percentage and snapped to corners and halves
+- [ ] Built-in `cpu` and `mem` bar modules
+- [ ] A per-session accent colour
+- [ ] Socket commands for scripts: `ranma panes`, `send`, `capture`, `wait`
+- [ ] `ranma popup`: a command in a float, its output returned
+- [ ] A tmux shim: a stated subset of tmux, for programs that drive it
+- [ ] Synchronized input to marked panes
+- [ ] A master-stack placement policy
+- [ ] Dim unfocused panes
+- [ ] URL hints
+- [ ] A right-click pane menu
+- [ ] A `command_finished` hook from OSC 133
+- [ ] A which-key hint after the leader (waiting on a design)
+
 ## Later, maybe
 
 - Saving layouts to respawn them after a reboot (processes cannot survive one).

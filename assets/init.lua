@@ -83,6 +83,8 @@ ranma.bind("w", "toggle_floating")
 -- the next one, cycling through the pile.
 ranma.bind("f", "cycle_floats")
 ranma.bind("j", "toggle_split")
+-- Every split in the workspace back to equal shares, however it was resized.
+ranma.bind("=", "equalize")
 ranma.bind("alt+return", "fullscreen")
 
 -- Groups (tabbed containers)

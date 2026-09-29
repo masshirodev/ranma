@@ -248,6 +248,24 @@ impl Tree {
         }
     }
 
+    /// Give every child of every container an equal share (tuios's `=`), at every
+    /// depth. Returns false when nothing changed.
+    pub fn equalize(&mut self) -> bool {
+        fn walk(n: &mut Node) -> bool {
+            let Node::Container { children, .. } = n else {
+                return false;
+            };
+            let mut changed = false;
+            for (c, w) in children.iter_mut() {
+                changed |= *w != 1.0;
+                *w = 1.0;
+                changed |= walk(c);
+            }
+            changed
+        }
+        self.root.as_mut().is_some_and(walk)
+    }
+
     /// Tab or untab the container holding `id` (i3's `layout tabbed`). A pane with
     /// no container around it gets a tabbed container of its own, so the next pane
     /// opened joins it as a tab.
@@ -953,6 +971,24 @@ mod tests {
         assert_eq!(rect_of(&t, 5).x, 0);
         assert!(rect_of(&t, 1).x > 0);
         assert!(!t.insert_beside(6, 99, Dir::Left));
+    }
+
+    #[test]
+    fn equalize_evens_out_every_level() {
+        // [1 | [2 / 3]], then resized unevenly on both axes.
+        let mut t = Tree::default();
+        t.insert(1, None, None, Placement::Manual(Split::Horizontal));
+        t.insert(2, Some(1), None, Placement::Manual(Split::Horizontal));
+        t.insert(3, Some(2), None, Placement::Manual(Split::Vertical));
+        assert!(t.resize(1, Dir::Right, 30, AREA, 0));
+        assert!(t.resize(2, Dir::Down, 10, AREA, 0));
+        assert!(t.equalize());
+        assert_eq!(rect_of(&t, 1).w, 100);
+        assert_eq!(rect_of(&t, 2).h, 25);
+        assert_eq!(rect_of(&t, 3).h, 25);
+        // Already even: nothing to do, so no relayout.
+        assert!(!t.equalize());
+        assert!(!dwindle(1).equalize());
     }
 
     #[test]

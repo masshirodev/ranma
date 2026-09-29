@@ -1512,6 +1512,11 @@ impl App {
                     self.relayout();
                 }
             }
+            Action::Equalize => {
+                if self.active_mut().tree.equalize() {
+                    self.relayout();
+                }
+            }
             Action::ToggleFloating => self.toggle_floating(),
             Action::Detach => self.detach_requested = true,
             Action::ServerSwitcher => self.list_servers(),
