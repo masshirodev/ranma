@@ -83,6 +83,58 @@ ratatui terminal of the known size (and clears with the escape sequence) instead
 and a client attaching a server to itself (from inside one of its own panes) is
 refused, as tmux refuses it.
 
+### Upgrading a server in place
+
+**Decided 2026-09-29** (card c76). A server kept the binary it started with,
+so taking a new version meant ending it, and every shell with it. Now a
+server **re-executes itself**: `execve` of the new binary into its own
+process. Linux keeps the process id and every descriptor not marked
+close-on-exec, and that is the whole trick:
+
+- **The shells never notice.** The PTY masters are kept open across the exec,
+  so no pane is hung up; and the process id is the same, so the shells are
+  still its children and their exit statuses still come to it.
+- **The terminal never notices.** The listening socket and the attached
+  client's connection are kept too, so the client sees a redraw, not a
+  disconnect. That works with clients of an older build, since the frames
+  between them do not change.
+- **State goes over in a handover file** (`$XDG_RUNTIME_DIR/ranma/`, 0600,
+  versioned): sessions, workspaces, trees, floats, names, pane ids and
+  children, and each pane's screen **as text**: its history and screen written
+  out with their colours (wrapped rows kept wrapped), then its cursor, modes
+  and palette, which the new process feeds to a fresh emulator. Not the
+  emulator's own structures: those are large, and belong to a crate that may
+  change between the two builds. The main screen behind a full-screen program
+  is saved (alacritty's `swap_alt`); the program's own screen is not, and it
+  gets a SIGWINCH to draw itself again, as nvim and htop do. Shells come back
+  with their scrollback as it was.
+- **Output is held, not lost.** Before the state is written, every pane's
+  reader stops reading (the scanner's reader reports "nothing yet"), so what
+  a program prints meanwhile waits in the kernel's PTY buffer for the new
+  process.
+- **An adopted pane needs a PTY type of ranma's own**: alacritty's can only
+  start a child, not take over a running one. It is a descriptor, a pid (a
+  pidfd for its exit), resize and hangup, polled under the same two keys
+  alacritty's event loop uses.
+
+**It must not be able to lose anything**, since the alternative it replaces
+is at worst a restart. So:
+
+1. The new binary checks the handover first, in a process of its own
+   (`--check-handover`): it reads and builds everything and adopts nothing. If
+   it cannot, there is no exec, and a toast says why.
+2. The old binary is copied aside (from `/proc/self/exe`, which still reads
+   after `install.sh` replaced the file) before the exec. A new process that
+   fails to restore anyway exec's that copy with the same handover.
+3. Only a server does this. A `--standalone` ranma owns its terminal
+   directly, and is simply restarted.
+
+What an upgrade resets: the Lua state (the config runs again, as on a reload),
+open pickers, pending toasts, WM mode. `ranma upgrade [NAME]` upgrades one
+server, `--all` every one; `install.sh` runs `ranma upgrade --all` after a
+good install, so installing a new build is enough. A server from before this
+existed does not know the request, and says so: it needs one last restart.
+
 ### The model: sessions, workspaces, a tree, a float layer
 
 | Hyprland / i3 | ranma |

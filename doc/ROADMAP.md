@@ -119,6 +119,18 @@ an outer shows it.
 - [x] A nested pane's border: no title, and none at all when it fills the
   workspace
 
+## 7. Upgrading without closing anything
+
+A server takes a new build by re-executing itself, keeping every PTY and its
+client (DESIGN.md, "Upgrading a server in place").
+
+- [ ] A PTY type that adopts a running child (fd, pid, pidfd)
+- [ ] Panes to and from text: history, screen, cursor, modes, palette
+- [ ] The handover: state out, readers held, descriptors kept, exec
+- [ ] Restoring: adopt panes, the listener and the client; SIGWINCH the programs
+- [ ] Safety: `--check-handover` before exec, the old binary kept to fall back to
+- [ ] `ranma upgrade [NAME|--all]`; `install.sh` upgrades every server
+
 ## Later, maybe
 
 - Saving layouts to respawn them after a reboot (processes cannot survive one).
