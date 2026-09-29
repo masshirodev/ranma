@@ -895,6 +895,7 @@ mod tests {
             Some(Action::Workspace(WorkspaceTarget::Index(10)))
         );
         assert_eq!(builtin(&cfg, "backspace"), Some(Action::SessionSwitcher));
+        assert_eq!(builtin(&cfg, "shift+s"), Some(Action::ServerSwitcher));
         assert_eq!(builtin(&cfg, "?"), Some(Action::Help));
         assert_eq!(builtin(&cfg, ":"), Some(Action::CommandPalette));
         // Alt+S: the scratchpad outside WM mode, sending the pane there inside it.

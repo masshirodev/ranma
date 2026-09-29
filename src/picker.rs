@@ -19,6 +19,8 @@ pub enum Target {
     Session(usize),
     /// Create a session named by the query.
     NewSession,
+    /// A ranma server, by name (the server switcher).
+    Server(String),
     /// Run this bind: from the global table if the flag is set.
     Bind(Chord, bool),
     /// An action from the catalogue. One that needs an argument is completed
@@ -66,6 +68,10 @@ pub enum Kind {
     ConfirmQuit,
     /// "Update ranma?", answered the same way.
     ConfirmUpdate,
+    /// The ranma servers: Enter moves this terminal to one, Ctrl+X kills one.
+    Servers,
+    /// "Kill server NAME?", answered as ConfirmQuit.
+    ConfirmKill(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +84,8 @@ pub enum Outcome {
     Submit(String),
     /// Ctrl+R on a session: rename it.
     Rename(usize),
+    /// Ctrl+X on a server: kill it (after asking).
+    Kill(String),
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +178,7 @@ impl Picker {
                 | Kind::RenamePane(_)
                 | Kind::ConfirmQuit
                 | Kind::ConfirmUpdate
+                | Kind::ConfirmKill(_)
         )
     }
 
@@ -273,7 +282,10 @@ impl Picker {
     pub fn key(&mut self, key: &KeyEvent) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         // A yes/no question: one key answers it, and only yes is yes.
-        if matches!(self.kind, Kind::ConfirmQuit | Kind::ConfirmUpdate) {
+        if matches!(
+            self.kind,
+            Kind::ConfirmQuit | Kind::ConfirmUpdate | Kind::ConfirmKill(_)
+        ) {
             return match key.code {
                 KeyCode::Enter | KeyCode::Char('y' | 'Y') if !ctrl => Outcome::Submit("y".into()),
                 _ => Outcome::Cancel,
@@ -319,6 +331,15 @@ impl Picker {
                 }) = self.visible().get(self.selected)
                 {
                     return Outcome::Rename(*i);
+                }
+            }
+            KeyCode::Char('x') if ctrl && self.kind == Kind::Servers => {
+                if let Some(Item {
+                    target: Target::Server(name),
+                    ..
+                }) = self.visible().get(self.selected)
+                {
+                    return Outcome::Kill(name.clone());
                 }
             }
             KeyCode::Up => self.selected = self.selected.saturating_sub(1),

@@ -30,6 +30,11 @@ pub struct Hello {
     pub colors: HostColors,
     /// Keys typed while the client was starting; they belong to the focused pane.
     pub typed_early: Vec<u8>,
+    /// The socket of the ranma the client itself runs inside (its `RANMA_SOCKET`),
+    /// if any: switching this client there would feed that server into itself.
+    /// Defaulted, so a server and a client a build apart still understand a hello.
+    #[serde(default)]
+    pub inside: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +51,8 @@ pub enum ToClient {
     Detached(String),
     /// The server is gone (quit, or its last pane closed).
     Exited(String),
+    /// Attach to the server with this name instead; this one lets the client go.
+    Switch(String),
 }
 
 /// What `status` answers: enough for a client to pick a server to attach to.
@@ -65,6 +72,7 @@ const K_EVENT: u8 = 2;
 const K_OUTPUT: u8 = 10;
 const K_DETACHED: u8 = 11;
 const K_EXITED: u8 = 12;
+const K_SWITCH: u8 = 13;
 
 fn write_frame(w: &mut impl Write, kind: u8, payload: &[u8]) -> io::Result<()> {
     let len = u32::try_from(payload.len())
@@ -124,6 +132,7 @@ pub fn send_to_client(w: &mut impl Write, m: &ToClient) -> io::Result<()> {
         ToClient::Output(b) => write_frame(w, K_OUTPUT, b),
         ToClient::Detached(s) => write_frame(w, K_DETACHED, s.as_bytes()),
         ToClient::Exited(s) => write_frame(w, K_EXITED, s.as_bytes()),
+        ToClient::Switch(s) => write_frame(w, K_SWITCH, s.as_bytes()),
     }
 }
 
@@ -135,6 +144,7 @@ pub fn read_to_client(r: &mut impl Read) -> io::Result<Option<ToClient>> {
         K_OUTPUT => ToClient::Output(p),
         K_DETACHED => ToClient::Detached(String::from_utf8_lossy(&p).into_owned()),
         K_EXITED => ToClient::Exited(String::from_utf8_lossy(&p).into_owned()),
+        K_SWITCH => ToClient::Switch(String::from_utf8_lossy(&p).into_owned()),
         k => return Err(bad(format!("unknown frame kind {k} from the server"))),
     }))
 }
@@ -152,6 +162,7 @@ mod tests {
             rows: 40,
             colors: HostColors::default(),
             typed_early: b"ls\r".to_vec(),
+            inside: Some("/run/user/1000/ranma/1.sock".into()),
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -175,6 +186,7 @@ mod tests {
         send_to_client(&mut buf, &out).unwrap();
         send_to_client(&mut buf, &ToClient::Detached("bye".into())).unwrap();
         send_to_client(&mut buf, &ToClient::Exited("gone".into())).unwrap();
+        send_to_client(&mut buf, &ToClient::Switch("2".into())).unwrap();
         let mut r = &buf[..];
         assert_eq!(read_to_client(&mut r).unwrap(), Some(out));
         assert_eq!(
@@ -185,7 +197,28 @@ mod tests {
             read_to_client(&mut r).unwrap(),
             Some(ToClient::Exited("gone".into()))
         );
+        assert_eq!(
+            read_to_client(&mut r).unwrap(),
+            Some(ToClient::Switch("2".into()))
+        );
         assert_eq!(read_to_client(&mut r).unwrap(), None);
+    }
+
+    #[test]
+    fn a_hello_from_an_older_build_still_reads() {
+        // Before `inside` existed: a server must still take this client.
+        let mut old = serde_json::to_value(Hello {
+            build: "x".into(),
+            cols: 80,
+            rows: 24,
+            colors: HostColors::default(),
+            typed_early: Vec::new(),
+            inside: None,
+        })
+        .unwrap();
+        old.as_object_mut().unwrap().remove("inside");
+        let h: Hello = serde_json::from_value(old).unwrap();
+        assert_eq!(h.inside, None);
     }
 
     #[test]

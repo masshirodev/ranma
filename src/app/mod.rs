@@ -184,6 +184,11 @@ pub struct App {
     host_title: String,
     /// The detach action ran; the event loop sends the client away.
     detach_requested: bool,
+    /// `attach NAME` ran; the event loop passes the client on to that server.
+    switch_requested: Option<String>,
+    /// The socket of the ranma the attached client runs inside (see
+    /// `proto::Hello::inside`): the one server it cannot switch to.
+    client_inside: Option<String>,
 }
 
 impl App {
@@ -236,6 +241,8 @@ impl App {
             last_click: None,
             host_title: String::new(),
             detach_requested: false,
+            switch_requested: None,
+            client_inside: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -780,6 +787,7 @@ impl App {
             AppEvent::Action(a) => self.run_action(a),
             AppEvent::Open(spec) => self.open_spec(spec),
             AppEvent::UpdateAvailable(b) => self.update_found(b),
+            AppEvent::Servers(list) => self.open_server_switcher(list),
             // The event loop (run.rs) deals with clients itself.
             AppEvent::Attach { .. }
             | AppEvent::ClientInput(..)
@@ -1449,6 +1457,8 @@ impl App {
             }
             Action::ToggleFloating => self.toggle_floating(),
             Action::Detach => self.detach_requested = true,
+            Action::ServerSwitcher => self.list_servers(),
+            Action::Attach(name) => self.switch_requested = Some(name),
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.

@@ -196,6 +196,11 @@ ranma.bind("delete", "quit")
 -- next `ranma` (in any terminal) attaches to it again. Closing the terminal
 -- does the same.
 ranma.bind("d", "detach")
+-- The servers (what `ranma ls` lists): Enter moves this terminal to the chosen
+-- one, the way `ranma attach NAME` would, and the server you leave keeps
+-- running, detached. Ctrl+X kills the selected server, after asking. By name:
+-- ranma.bind("2", "attach 2")
+ranma.bind("shift+s", "server_switcher")
 -- Pull ranma's source and install it, in a floating pane you can watch.
 ranma.bind("shift+u", "update")
 

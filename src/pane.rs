@@ -60,6 +60,8 @@ pub enum AppEvent {
     ClientGone(u64),
     /// Someone asks how this server is (`ranma ls`, a client choosing a server).
     Status(Sender<crate::proto::Status>),
+    /// Every server's status, gathered off the UI thread for the server switcher.
+    Servers(Vec<crate::proto::Status>),
 }
 
 /// Forwards a pane's terminal events to the UI thread.

@@ -5,13 +5,15 @@
 //! pipe: keys, mouse and resizes to the server, the server's bytes to the
 //! terminal. It keeps no state of its own, so there is nothing to fall out of step
 //! (see DESIGN.md, "A daemon, and a client that holds nothing"). Closing the
-//! terminal ends the client, never the server.
+//! terminal ends the client, never the server. A server can pass the client on
+//! to another (the server switcher): it reconnects there, keeping the terminal.
 
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
@@ -135,7 +137,7 @@ pub fn run(name: Option<&str>) -> Result<ExitCode> {
     if new {
         start_server(&name)?;
     }
-    let mut stream =
+    let stream =
         UnixStream::connect(&sock).with_context(|| format!("connecting to {}", sock.display()))?;
 
     // The terminal is ours from here: raw mode, the alternate screen, and a
@@ -143,7 +145,7 @@ pub fn run(name: Option<&str>) -> Result<ExitCode> {
     drop(ratatui::try_init().context("setting up the terminal")?);
     let mut out = std::io::stdout();
     let _ = out.write_all(b"\x1b[22;0t");
-    let result = attach(&mut stream, &name);
+    let result = attach(stream, &name);
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(
         out,
@@ -155,12 +157,12 @@ pub fn run(name: Option<&str>) -> Result<ExitCode> {
     let _ = out.flush();
     ratatui::restore();
     match result {
-        Ok(End::Detached(why)) => {
+        Ok((End::Detached(why), name)) => {
             println!("[ranma {name}: {why}]");
             Ok(ExitCode::SUCCESS)
         }
-        Ok(End::Exited) => Ok(ExitCode::SUCCESS),
-        Ok(End::Lost) => {
+        Ok((End::Exited, _)) => Ok(ExitCode::SUCCESS),
+        Ok((End::Lost, name)) => {
             let log = log_path(&name)
                 .map(|p| format!("; its log: {}", p.display()))
                 .unwrap_or_default();
@@ -176,48 +178,89 @@ enum End {
     Lost,
 }
 
-fn attach(stream: &mut UnixStream, name: &str) -> Result<End> {
+fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
     // Before any input thread: the host's replies are read off the terminal
-    // here, with any keys typed meanwhile kept for the shell.
+    // here, with any keys typed meanwhile kept for the shell. The colours are
+    // asked once; a switch to another server reuses them.
     let (colors, typed_early) = crate::hostcolors::query(Duration::from_millis(300));
-    let (cols, rows) = crossterm::terminal::size()?;
-    stream.write_all(b"attach\n")?;
-    proto::send_to_server(
-        stream,
-        &ToServer::Hello(Hello {
-            build: crate::update::BUILD_SHA.to_string(),
-            cols,
-            rows,
-            colors,
-            typed_early,
-        }),
-    )?;
+    let inside = std::env::var(ipc::ENV).ok();
+    let greet = |stream: &mut UnixStream, typed_early: Vec<u8>| -> Result<()> {
+        let (cols, rows) = crossterm::terminal::size()?;
+        stream.write_all(b"attach\n")?;
+        proto::send_to_server(
+            stream,
+            &ToServer::Hello(Hello {
+                build: crate::update::BUILD_SHA.to_string(),
+                cols,
+                rows,
+                colors: colors.clone(),
+                typed_early,
+                inside: inside.clone(),
+            }),
+        )?;
+        Ok(())
+    };
+    greet(&mut stream, typed_early)?;
 
-    let mut writer = stream.try_clone()?;
+    // The input thread writes to whichever server the client is on now: a
+    // switch swaps the stream under it, so keys follow the terminal.
+    let writer = Arc::new(Mutex::new(stream.try_clone()?));
+    let input = writer.clone();
     std::thread::Builder::new()
         .name("client-input".into())
         .spawn(move || {
             while let Ok(ev) = crossterm::event::read() {
-                if proto::send_to_server(&mut writer, &ToServer::Event(ev)).is_err() {
-                    return;
-                }
+                // A server that has gone is noticed by the reading side, which
+                // ends the client; a key lost mid-switch is not worth more.
+                let mut w = input.lock().expect("writer lock");
+                let _ = proto::send_to_server(&mut *w, &ToServer::Event(ev));
             }
         })?;
 
+    let mut name = name.to_string();
     let mut out = std::io::stdout();
     loop {
-        match proto::read_to_client(stream) {
+        match proto::read_to_client(&mut stream) {
             Ok(Some(ToClient::Output(bytes))) => {
                 out.write_all(&bytes)?;
                 out.flush()?;
             }
-            Ok(Some(ToClient::Detached(why))) => return Ok(End::Detached(why)),
-            Ok(Some(ToClient::Exited(_))) => return Ok(End::Exited),
-            Ok(None) | Err(_) => {
-                let _ = name;
-                return Ok(End::Lost);
+            Ok(Some(ToClient::Detached(why))) => return Ok((End::Detached(why), name)),
+            Ok(Some(ToClient::Exited(_))) => return Ok((End::Exited, name)),
+            Ok(Some(ToClient::Switch(next))) => {
+                let sock = ipc::server_socket(&next);
+                // The server checks this too, from the hello; this is the
+                // client refusing to be fed into itself whatever a server says.
+                if inside.as_deref() == sock.to_str() {
+                    let why = format!("server {next} is the one this terminal runs inside");
+                    return Ok((End::Detached(why), name));
+                }
+                let mut next_stream = match UnixStream::connect(&sock) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        let why = format!("left for server {next}, which did not answer ({e})");
+                        return Ok((End::Detached(why), name));
+                    }
+                };
+                greet(&mut next_stream, Vec::new())?;
+                *writer.lock().expect("writer lock") = next_stream.try_clone()?;
+                // Dropping the old stream is what tells the old server we left.
+                stream = next_stream;
+                name = next;
             }
+            Ok(None) | Err(_) => return Ok((End::Lost, name)),
         }
+    }
+}
+
+/// `46m ago`: how long since a server last had input, as `ls` and the server
+/// switcher say it.
+pub fn ago(secs: u64) -> String {
+    match secs {
+        0..=59 => format!("{secs}s ago"),
+        60..=3599 => format!("{}m ago", secs / 60),
+        3600..=86399 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86400),
     }
 }
 
@@ -232,13 +275,7 @@ pub fn list() -> ExitCode {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     for s in all {
-        let ago = now.saturating_sub(s.last_active);
-        let ago = match ago {
-            0..=59 => format!("{ago}s ago"),
-            60..=3599 => format!("{}m ago", ago / 60),
-            3600..=86399 => format!("{}h ago", ago / 3600),
-            _ => format!("{}d ago", ago / 86400),
-        };
+        let ago = ago(now.saturating_sub(s.last_active));
         let mine = std::env::var_os(ipc::ENV)
             .is_some_and(|p| p == ipc::server_socket(&s.name).as_os_str());
         println!(

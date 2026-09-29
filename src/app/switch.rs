@@ -1,5 +1,6 @@
-//! The pickers ranma opens: the pane switcher, the session switcher, the rename
-//! prompt, and the palette (help, every bind runnable, and every action).
+//! The pickers ranma opens: the pane switcher, the session switcher, the server
+//! switcher, the rename prompt, and the palette (help, every bind runnable, and
+//! every action).
 
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
 use unicode_width::UnicodeWidthStr;
@@ -187,6 +188,87 @@ impl App {
             &current,
         ));
         self.dirty = true;
+    }
+
+    /// Ask every server how it is, off the UI thread: one of them may be slow
+    /// to answer, and this server's own answer comes from this very loop. The
+    /// switcher opens when the list arrives (`AppEvent::Servers`).
+    pub(super) fn list_servers(&mut self) {
+        let tx = self.tx.clone();
+        let _ = std::thread::Builder::new()
+            .name("servers".into())
+            .spawn(move || {
+                let _ = tx.send(crate::pane::AppEvent::Servers(crate::client::servers()));
+            });
+    }
+
+    pub(super) fn open_server_switcher(&mut self, list: Vec<crate::proto::Status>) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let items = server_items(
+            &list,
+            crate::ipc::socket_path(),
+            self.client_inside.as_deref(),
+            now,
+        );
+        let mut p = Picker::new(
+            Kind::Servers,
+            "servers  (Enter moves this terminal there · ctrl+x kills)",
+            items,
+        );
+        p.select_current();
+        self.picker = Some(p);
+        self.dirty = true;
+    }
+
+    /// Enter on a server: this one is a no-op, the one this terminal runs
+    /// inside is refused, any other is where the client goes.
+    fn pick_server(&mut self, name: String) {
+        let sock = crate::ipc::server_socket(&name);
+        if crate::ipc::socket_path() == Some(sock.as_path()) {
+            return;
+        }
+        self.switch_requested = Some(name);
+    }
+
+    fn confirm_kill(&mut self, name: String) {
+        if crate::ipc::socket_path() == Some(crate::ipc::server_socket(&name).as_path()) {
+            self.status = Some(format!(
+                "server {name} is this one: quit (leader Delete) ends it"
+            ));
+            return;
+        }
+        self.picker = Some(Picker::question(
+            Kind::ConfirmKill(name.clone()),
+            "kill server",
+            format!(
+                "Kill server {name}, closing every shell in it?   y or Enter kills · any other key cancels"
+            ),
+        ));
+        self.dirty = true;
+    }
+
+    /// `ranma kill NAME`, from inside: the other server quits on its own loop,
+    /// so this one only sends the word.
+    fn kill_server(&mut self, name: String) {
+        let tx = self.tx.clone();
+        let _ = std::thread::Builder::new()
+            .name("kill-server".into())
+            .spawn(move || {
+                let (text, level) = match crate::client::kill(&name) {
+                    Ok(()) => (format!("server {name} quit"), crate::toast::Level::Normal),
+                    Err(e) => (
+                        format!("could not kill server {name}: {e}"),
+                        crate::toast::Level::Urgent,
+                    ),
+                };
+                let _ = tx.send(crate::pane::AppEvent::Toast {
+                    text,
+                    level,
+                    timeout: None,
+                });
+            });
     }
 
     pub(super) fn confirm_quit(&mut self) {
@@ -381,6 +463,7 @@ impl App {
             Outcome::Open => {}
             Outcome::Cancel => self.picker = None,
             Outcome::Rename(i) => self.open_rename_prompt(i),
+            Outcome::Kill(name) => self.confirm_kill(name),
             Outcome::Submit(text) => {
                 self.picker = None;
                 match kind {
@@ -389,6 +472,7 @@ impl App {
                     Some(Kind::RenamePane(id)) => self.rename_pane(id, &text),
                     Some(Kind::ConfirmQuit) => self.quit = true,
                     Some(Kind::ConfirmUpdate) => self.run_action(crate::action::Action::Update),
+                    Some(Kind::ConfirmKill(name)) => self.kill_server(name),
                     _ => {}
                 }
             }
@@ -408,6 +492,7 @@ impl App {
                     (_, Target::Session(i)) => self.switch_session(i),
                     (_, Target::NewSession) => self.new_session(Some(&query)),
                     (_, Target::Pane(id)) => self.reveal_pane(id),
+                    (_, Target::Server(name)) => self.pick_server(name),
                     (_, Target::Bind(chord, global)) => self.run_help_bind(chord, global),
                     (_, Target::Action { name: line, .. } | Target::Run(line)) => {
                         self.run_command(&line)
@@ -454,5 +539,130 @@ impl App {
         if self.mode == super::Mode::Wm {
             self.set_mode(super::Mode::Normal);
         }
+    }
+}
+
+/// The server switcher's rows, from what `status` answered. `own` is this
+/// server's socket and `inside` the socket of the ranma the client runs inside;
+/// `now` is seconds since the epoch.
+pub(super) fn server_items(
+    list: &[crate::proto::Status],
+    own: Option<&std::path::Path>,
+    inside: Option<&str>,
+    now: u64,
+) -> Vec<Item> {
+    list.iter()
+        .map(|s| {
+            let sock = crate::ipc::server_socket(&s.name);
+            let current = own == Some(sock.as_path());
+            let mut detail = vec![
+                if current {
+                    "this one".to_string()
+                } else if inside == sock.to_str() {
+                    "this terminal runs inside it".to_string()
+                } else if s.attached {
+                    "attached elsewhere".to_string()
+                } else {
+                    "detached".to_string()
+                },
+                format!("{} pane{}", s.panes, if s.panes == 1 { "" } else { "s" }),
+                s.sessions.join(", "),
+                crate::client::ago(now.saturating_sub(s.last_active)),
+            ];
+            if s.build != crate::update::BUILD_SHA {
+                detail.push("other build".into());
+            }
+            Item {
+                label: s.name.clone(),
+                detail: detail.join(" · "),
+                target: Target::Server(s.name.clone()),
+                current,
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::Status;
+
+    fn status(name: &str, attached: bool, build: &str) -> Status {
+        Status {
+            name: name.into(),
+            attached,
+            panes: if name == "1" { 1 } else { 6 },
+            sessions: vec!["main".into(), "ai".into()],
+            last_active: 1000,
+            build: build.into(),
+        }
+    }
+
+    #[test]
+    fn server_rows_say_where_you_are_and_what_each_holds() {
+        let here = crate::update::BUILD_SHA;
+        let list = [
+            status("1", true, here),
+            status("2", true, "older"),
+            status("3", false, here),
+            status("4", false, here),
+        ];
+        let own = crate::ipc::server_socket("1");
+        let inside = crate::ipc::server_socket("4");
+        let items = server_items(&list, Some(&own), inside.to_str(), 1000 + 46 * 60);
+        let details: Vec<&str> = items.iter().map(|i| i.detail.as_str()).collect();
+        assert_eq!(
+            details,
+            [
+                "this one · 1 pane · main, ai · 46m ago",
+                "attached elsewhere · 6 panes · main, ai · 46m ago · other build",
+                "detached · 6 panes · main, ai · 46m ago",
+                "this terminal runs inside it · 6 panes · main, ai · 46m ago",
+            ]
+        );
+        assert!(items[0].current && !items[1].current);
+        assert_eq!(items[2].target, Target::Server("3".into()));
+    }
+
+    #[test]
+    fn ctrl_x_asks_before_killing_and_only_a_yes_kills() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let items = server_items(&[status("2", false, "x")], None, None, 1000);
+        let mut p = Picker::new(Kind::Servers, "servers", items);
+        let ctrl_x = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert_eq!(p.key(&ctrl_x), Outcome::Kill("2".into()));
+        // Elsewhere, Ctrl+X is not a kill.
+        let mut sessions = Picker::new(Kind::Sessions, "sessions", Vec::new());
+        assert_eq!(sessions.key(&ctrl_x), Outcome::Open);
+
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut app = App::new(config, tx, 80, 24);
+        app.confirm_kill("2".into());
+        assert_eq!(
+            app.picker().map(|p| p.kind.clone()),
+            Some(Kind::ConfirmKill("2".into()))
+        );
+        app.picker_key(&KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(app.picker().is_none(), "anything but yes cancels");
+    }
+
+    #[test]
+    fn enter_on_a_server_asks_the_event_loop_to_move_there() {
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut app = App::new(config, tx, 80, 24);
+        app.open_server_switcher(vec![status("2", true, "x"), status("3", false, "x")]);
+        app.picker_key(&KeyEvent::new(
+            crossterm::event::KeyCode::Down,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        app.picker_key(&KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ));
+        assert_eq!(app.switch_requested.as_deref(), Some("3"));
+        app.run_action("attach 7".parse().unwrap());
+        assert_eq!(app.switch_requested.as_deref(), Some("7"));
     }
 }

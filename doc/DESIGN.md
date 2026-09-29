@@ -61,6 +61,21 @@ client owns nothing**:
   `ranma notify`/`action`/`open`.
 - A server keeps the binary it started with; an upgraded client attaching to an
   older server says so. `--standalone` runs the old way, in one terminal only.
+- **Moving between servers from inside** (`leader S`, the server switcher, or
+  `attach NAME`): the server sends its client `Switch(NAME)` and lets it go; the
+  client connects to NAME's socket and says hello again, keeping the terminal,
+  its raw mode and the colours it asked at start. Dropping the old stream is
+  what detaches it, so the server left behind is exactly as after `leader d`,
+  and the server reached takes the client from any terminal that had it, as
+  `ranma attach` does. The server refuses the move, with the reason in the bar,
+  for a client of an older build (it would not know the frame), for itself, and
+  for the server the client runs inside, which the hello now names (`inside`,
+  the client's `RANMA_SOCKET`) because only the client knows it. The client
+  refuses that last one too, whatever a server says. `Ctrl+X` in the switcher
+  kills a server after a question, as `quit` asks; this server is not killed
+  from there, since `quit` already says what ending it closes. The server list
+  is gathered on a thread: this server answers its own `status` from the very
+  loop that asked.
 
 Two things it forced: ratatui's resize and clear ask the backend for the
 terminal's size, which a server does not have, so the server starts a fresh
@@ -279,9 +294,8 @@ a typo is visible before Enter instead of failing silently after. An action
 that needs an argument completes into the query on Enter (and any one on Tab)
 rather than running bare into an error. The actions listed come from
 `action::CATALOGUE`, which a test holds against the parser and the default
-binds. Servers (`ranma ls`, attach, kill) are not a palette mode: attaching
-from inside needs the server to move its client, which is protocol work of its
-own.
+binds. Servers are not a palette mode but a switcher of their own (below):
+a palette prefix lists things to run, and a server is a place to go.
 
 A switcher
 **opens on where you are**, marked `●` and bold: the session switcher selects the

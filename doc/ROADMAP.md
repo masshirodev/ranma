@@ -75,6 +75,8 @@ client that holds nothing").
   hangs up every shell and waits for them
 - [x] Servers outlive their terminal (setsid), log to `~/.cache/ranma/`, refuse
   attaching to themselves
+- [x] Server switcher (`leader S`) and `attach NAME` from inside: the client is
+  passed to another server without leaving the terminal; `Ctrl+X` kills one
 
 ## Later, maybe
 

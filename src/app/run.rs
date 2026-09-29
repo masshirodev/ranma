@@ -98,6 +98,8 @@ fn now_secs() -> u64 {
 struct Client {
     id: u64,
     writer: UnixStream,
+    /// Its build: only a client that knows `ToClient::Switch` is sent one.
+    build: String,
 }
 
 impl Client {
@@ -233,7 +235,11 @@ fn event_loop(
                     if let Some(mut old) = client.take() {
                         old.send(&ToClient::Detached("taken over by another terminal".into()));
                     }
-                    client = Some(Client { id, writer });
+                    client = Some(Client {
+                        id,
+                        writer,
+                        build: hello.build.clone(),
+                    });
                     last_active = now_secs();
                     restart(term, buffer, hello.cols, hello.rows)?;
                     attached(app, &hello)?;
@@ -286,6 +292,16 @@ fn event_loop(
                 }
                 None => {
                     app.status = Some("nothing to detach from (ranma --standalone)".into());
+                }
+            }
+        }
+        if let Some(to) = app.switch_requested.take() {
+            match refuse_switch(&to, client.as_ref(), server, app.client_inside.as_deref()) {
+                Some(why) => app.status = Some(why),
+                None => {
+                    if let Some(mut c) = client.take() {
+                        c.send(&ToClient::Switch(to));
+                    }
                 }
             }
         }
@@ -343,10 +359,43 @@ fn close_all(app: &mut App) {
     let _ = done_rx.recv_timeout(Duration::from_secs(3));
 }
 
+/// Why this terminal cannot move to server `to`, or `None` when it can.
+fn refuse_switch(
+    to: &str,
+    client: Option<&Client>,
+    server: Option<&str>,
+    inside: Option<&str>,
+) -> Option<String> {
+    let Some(me) = server else {
+        return Some("ranma --standalone has no other servers to move to".into());
+    };
+    let Some(c) = client else {
+        return Some("no terminal is attached to move".into());
+    };
+    let sock = crate::ipc::server_socket(to);
+    if to == me {
+        return Some(format!("this terminal is on server {to} already"));
+    }
+    if c.build != crate::update::BUILD_SHA {
+        return Some(format!(
+            "this terminal runs an older ranma that cannot switch: detach (leader d) \
+             and run `ranma attach {to}`"
+        ));
+    }
+    if inside == sock.to_str() {
+        return Some(format!("this terminal runs inside server {to}"));
+    }
+    if UnixStream::connect(&sock).is_err() {
+        return Some(format!("no ranma server named {to} (ranma ls lists them)"));
+    }
+    None
+}
+
 /// A client attached (the terminal was already restarted at its size): take its
 /// colours and early keys, and draw everything again.
 fn attached(app: &mut App, hello: &proto::Hello) -> Result<()> {
     app.host_colors = hello.colors.clone();
+    app.client_inside = hello.inside.clone();
     app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
     // The first client of a new server: its first pane opens now, at the size
     // the client's terminal gives it.
@@ -384,4 +433,36 @@ fn input(
     }
     app.handle(AppEvent::Input(ev));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn client(build: &str) -> Client {
+        let (writer, _) = UnixStream::pair().unwrap();
+        Client {
+            id: 1,
+            writer,
+            build: build.into(),
+        }
+    }
+
+    #[test]
+    fn a_switch_is_refused_with_the_reason() {
+        let here = client(crate::update::BUILD_SHA);
+        let why = |to, c: Option<&Client>, server, inside| {
+            refuse_switch(to, c, server, inside).unwrap_or_default()
+        };
+        assert!(why("2", Some(&here), None, None).contains("standalone"));
+        assert!(why("2", None, Some("1"), None).contains("no terminal"));
+        assert!(why("1", Some(&here), Some("1"), None).contains("already"));
+        assert!(why("2", Some(&client("older")), Some("1"), None).contains("ranma attach 2"));
+        let inside = crate::ipc::server_socket("2");
+        assert!(why("2", Some(&here), Some("1"), inside.to_str()).contains("inside"));
+        // Nobody listens on a name no server has.
+        assert!(
+            why("no-such-server-here", Some(&here), Some("1"), None).contains("no ranma server")
+        );
+    }
 }

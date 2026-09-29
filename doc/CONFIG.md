@@ -43,12 +43,20 @@ shells as you left them.
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
 | `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
 | `leader d` (`detach`) | Leave this terminal; the server keeps running. |
+| `leader S` (`server_switcher`) | The servers, from inside ranma: `Enter` moves this terminal to one, `Ctrl+X` kills one. |
 | `leader Delete` (`quit`) | End this server and every shell in it. |
 
 Servers are named 1, 2, 3...; their sockets are in `$XDG_RUNTIME_DIR/ranma/` and
 their logs in `~/.cache/ranma/`. A server keeps running the binary it started
 with, so after an upgrade quit it (or `ranma kill`) to switch; a newer `ranma`
 attaching to an older server says so.
+
+**Every terminal gets its own server**, so the session switcher of one does not
+show the sessions of another: sessions live in a server. Opening a second
+terminal (or SSHing in) while the desktop's terminal shows server 2 starts
+server 1 rather than taking 2 away. To reach server 2's sessions from there,
+`leader S` and pick it: the terminal moves to server 2, the desktop's terminal is
+told it was taken over, and the server you left keeps running, detached.
 
 ## Settings — `ranma.set { ... }`
 
@@ -137,6 +145,8 @@ does not matter; it is ignored.
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. |
 | `detach` | Leave this terminal; the server and everything in it keep running (`leader d`). |
+| `server_switcher` | The servers `ranma ls` lists, opened on this one (`leader S`). `Enter` moves this terminal to the selected server, taking it from a terminal that shows it; the one you leave keeps running, detached. `Ctrl+X` kills the selected server after asking (`y` or `Enter` kills); this one is ended with `quit` instead. A server the terminal itself runs inside (ranma in ranma) cannot be picked. |
+| `attach <server>` | Move this terminal to that server, as picking it in `server_switcher` does: `ranma action "attach 2"`. The terminal's ranma must be this build (an older one is told to detach and `ranma attach` instead). |
 | `quit` / `quit now` | Quit ranma, closing every pane in every session (`leader Delete`). `quit` asks first (`y` or `Enter` quits, any other key cancels); `quit now` does not, for scripts: `ranma action "quit now"`. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave

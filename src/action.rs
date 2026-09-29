@@ -51,6 +51,10 @@ pub enum Action {
     Update,
     /// Leave this terminal; the server and everything in it keep running.
     Detach,
+    /// List the ranma servers; Enter moves this terminal to one.
+    ServerSwitcher,
+    /// Move this terminal to the server with this name (`ranma ls` lists them).
+    Attach(String),
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -123,6 +127,8 @@ impl Action {
                 | Action::Quit { .. }
                 | Action::Update
                 | Action::Detach
+                | Action::ServerSwitcher
+                | Action::Attach(_)
         )
     }
 }
@@ -185,6 +191,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("reload_config", ""),
     ("update", ""),
     ("detach", ""),
+    ("server_switcher", ""),
+    ("attach", "<server>"),
     ("quit", "[now]"),
 ];
 
@@ -289,6 +297,19 @@ impl FromStr for Action {
             "cycle_floats" => no_arg(Action::CycleFloats),
             "update" => no_arg(Action::Update),
             "detach" => no_arg(Action::Detach),
+            "server_switcher" => no_arg(Action::ServerSwitcher),
+            "attach" => match (first, second) {
+                (Some(n), None) => Ok(Action::Attach(n.to_string())),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a server name (as `ranma ls` shows)",
+                }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one server name",
+                }),
+            },
             "toggle_group" => no_arg(Action::ToggleGroup),
             "group_next" => no_arg(Action::GroupNext),
             "group_prev" => no_arg(Action::GroupPrev),
@@ -396,6 +417,8 @@ impl fmt::Display for Action {
             Action::CycleFloats => f.write_str("cycle_floats"),
             Action::Update => f.write_str("update"),
             Action::Detach => f.write_str("detach"),
+            Action::ServerSwitcher => f.write_str("server_switcher"),
+            Action::Attach(n) => write!(f, "attach {n}"),
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),
@@ -493,6 +516,14 @@ mod tests {
             "exec".parse::<Action>(),
             Err(ActionError::MissingArg { .. })
         ));
+        assert!(matches!(
+            "attach".parse::<Action>(),
+            Err(ActionError::MissingArg { .. })
+        ));
+        assert!(matches!(
+            "attach 1 2".parse::<Action>(),
+            Err(ActionError::BadArg { .. })
+        ));
     }
 
     #[test]
@@ -521,6 +552,8 @@ mod tests {
             "rename_pane",
             "quit",
             "quit now",
+            "server_switcher",
+            "attach 2",
         ] {
             assert_eq!(a(&a(s).to_string()), a(s), "{s}");
         }

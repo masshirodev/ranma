@@ -171,6 +171,22 @@ T send-keys -t d C-b d; sleep 0.8
 dscreen | grep -q '\[ranma 2: detached\]' || fail "leader d did not detach server 2 ($(dscreen | tail -3))"
 T send-keys -t d "clear; $ENV $BIN" Enter; sleep 1.5
 dscreen | grep -q 'daemon-marker' || fail "reattaching did not bring back server 2's screen"
+# The server switcher: from a new server 3, leader S and pick 2 moves this
+# terminal there without leaving it; detaching then names the server reached.
+T send-keys -t d C-b d; sleep 0.8
+T send-keys -t d "clear; $ENV $BIN attach 3" Enter
+for _ in $(seq 1 40); do dscreen | grep -q '╭' && break; sleep 0.25; done
+dscreen | grep -q 'daemon-marker' && fail "server 3 started with server 2's screen"
+T send-keys -t d C-b S; sleep 0.8
+dscreen | grep -q 'servers  (Enter' || fail "leader S did not open the server switcher ($(dscreen | tail -3))"
+T send-keys -t d 2; sleep 0.3; T send-keys -t d Enter; sleep 1.5
+dscreen | grep -q 'daemon-marker' || fail "picking server 2 did not bring its screen"
+T send-keys -t d 'echo switched-marker' Enter; sleep 0.4
+dscreen | grep -q 'switched-marker' || fail "keys did not follow the terminal to server 2"
+T send-keys -t d C-b d; sleep 0.8
+dscreen | grep -q '\[ranma 2: detached\]' || fail "after the switch, detaching did not name server 2 ($(dscreen | tail -3))"
+$ENV $BIN ls | grep -q '^3 *detached' || fail "the server left behind did not stay, detached ($($ENV $BIN ls))"
+$ENV $BIN kill 3; sleep 0.5
 T kill-session -t d; sleep 0.8
 $ENV $BIN ls | grep -q '^2 *detached' || fail "server 2 did not survive its terminal closing ($($ENV $BIN ls))"
 $ENV $BIN kill 2; sleep 0.8
