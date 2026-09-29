@@ -1404,6 +1404,7 @@ dependencies = [
  "libc",
  "mlua",
  "notify",
+ "polling",
  "ratatui",
  "serde",
  "serde_json",

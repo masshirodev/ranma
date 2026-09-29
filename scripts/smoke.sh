@@ -206,6 +206,22 @@ wait_for 'respawned-ok' 12 || fail "respawn-pane did not replace the pane's proc
 wait_for 'tmux 3.4' 20 || fail "the shim's pane was not killed, or tmux -V failed"
 screen | grep -q '╭ shimmed' && fail "kill-pane left the shim's pane open"
 
+# What a program says past the emulator: an OSC 9 notification is a toast, and
+# a command timed by OSC 133 marks reaches the command_finished hook. The
+# config is written for this and removed after, so later steps see defaults.
+T send-keys -t s "printf '\\033]9;osc-toast-ok\\007'" Enter
+wait_for '│ .*osc-toast-ok' 12 || fail "an OSC 9 notification did not show a toast"
+cat > "$CFG/init.lua" <<'LUA'
+ranma.on("command_finished", function(ev)
+  ranma.toast("finished exit=" .. tostring(ev.exit) .. " long=" .. tostring(ev.duration >= 1))
+end)
+LUA
+wait_for 'config reloaded' 8 || fail "the hook config did not load"
+T send-keys -t s "printf '\\033]133;C\\007'; sleep 1.2; printf '\\033]133;D;3\\007'" Enter
+wait_for 'finished exit=3 long=true' 16 || fail "command_finished did not fire with the status and duration"
+rm "$CFG/init.lua"
+wait_for 'config reloaded' 8 || true
+
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
 # The inner one as if reached over SSH: its host reaches the outer terminal's

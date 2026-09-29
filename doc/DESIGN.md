@@ -482,9 +482,26 @@ things for it, both on `open`: `float` (a centred size) and `return_focus`
 neighbour by geometry). It is for scripts in panes; a bind that waited on it
 would deadlock the thread that has to open it.
 
-Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
-alacritty_terminal drops those sequences before ranma sees them, and catching
-them would mean parsing the PTY stream a second time.
+**What alacritty_terminal drops, ranma now catches** (changed 2026-09-29).
+This said programs' own notifications (OSC 9 and 777) could not be toasts,
+because catching them meant parsing the PTY stream a second time. The shell's
+command marks (OSC 133) wanted the same thing, for a `command_finished` hook,
+so the cost was measured against a cheaper way of doing it: the event loop is
+generic over its PTY, and ranma hands it a wrapper whose reader looks at each
+chunk as it is read. The look is one search for an ESC byte, and a read with
+none (almost all of a flood) is done after it. Only after `ESC ]` are bytes
+looked at one by one, up to 4 KiB, and only 133, 9 and 777 are kept, for
+their meaning, not their text. The bytes are never changed and still reach the
+emulator whole. Two million lines flooding a pane took the same server CPU
+with the reader as without it.
+
+So a program's OSC 9 (`printf '\e]9;done\a'`) or OSC 777 notification is a
+toast, named after its pane when it gives no title (a ConEmu `9;N;...` progress
+report is not one), and a shell that marks its commands (133;C when one
+starts, 133;D;status when it ends) fires `command_finished` with the status
+and how long it ran. A 133;D with no 133;C before it is the prompt after
+nothing ran, and fires nothing. The same reader is where images (the kitty
+graphics protocol) would have to be caught, when that comes.
 
 ### The tmux shim: a stated subset, grown only from its log
 

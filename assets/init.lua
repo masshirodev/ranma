@@ -310,7 +310,9 @@ ranma.module("datetime", {
 --   ranma.on("workspace_change", function(ev) ranma.notify("now on " .. ev.workspace) end)
 --
 -- Events: pane_open, pane_close, focus_change, workspace_change,
--- session_switch, mode_change, config_reload. doc/CONFIG.md lists their fields.
+-- session_switch, mode_change, config_reload, command_finished (needs a
+-- shell that sends OSC 133 marks; doc/CONFIG.md has the zsh lines).
+-- doc/CONFIG.md lists their fields.
 --
 -- Window rules: float, size or place a pane when its command (for exec panes)
 -- or its title matches a glob. Title rules apply once per pane, the first time

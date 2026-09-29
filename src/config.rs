@@ -169,6 +169,8 @@ pub enum Event {
     SessionSwitch,
     ModeChange,
     ConfigReload,
+    /// A shell said a command finished (OSC 133; see `osc`).
+    CommandFinished,
 }
 
 impl FromStr for Event {
@@ -182,6 +184,7 @@ impl FromStr for Event {
             "session_switch" => Event::SessionSwitch,
             "mode_change" => Event::ModeChange,
             "config_reload" => Event::ConfigReload,
+            "command_finished" => Event::CommandFinished,
             _ => return Err(format!("unknown event `{s}`")),
         })
     }

@@ -14,6 +14,7 @@ pub mod input;
 pub mod ipc;
 pub mod keys;
 pub mod layout;
+pub mod osc;
 pub mod pane;
 pub mod picker;
 pub mod proto;

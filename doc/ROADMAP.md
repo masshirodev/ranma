@@ -99,7 +99,7 @@ and SSH servers, animation).
 - [x] Dim unfocused panes
 - [x] URL hints
 - [x] A right-click pane menu
-- [ ] A `command_finished` hook from OSC 133
+- [x] A `command_finished` hook from OSC 133; OSC 9 and 777 as toasts
 - [ ] A which-key hint after the leader (waiting on a design)
 
 ## Later, maybe

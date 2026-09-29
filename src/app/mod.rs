@@ -884,6 +884,7 @@ impl App {
             } => self.toast(text, level, timeout),
             AppEvent::Action(a) => self.run_action(a),
             AppEvent::Query(q, reply) => self.answer(q, reply),
+            AppEvent::Mark(id, m) => self.pane_mark(id, m),
             AppEvent::UpdateAvailable(b) => self.update_found(b),
             AppEvent::Servers(list) => self.open_server_switcher(list),
             // The event loop (run.rs) deals with clients itself.
@@ -1061,6 +1062,47 @@ impl App {
             TermEvent::Exit => self.close_pane(id),
             // Clipboard (OSC 52) and colour queries: milestone 3.
             _ => {}
+        }
+    }
+
+    /// What a pane's program said past the emulator: a command finished (for
+    /// the `command_finished` hook), or a notification (a toast, named after
+    /// the pane when it gives no title).
+    fn pane_mark(&mut self, id: PaneId, m: crate::osc::Mark) {
+        let Some(pane) = self.panes.get(&id) else {
+            return;
+        };
+        match m {
+            crate::osc::Mark::CommandFinished { exit, duration } => {
+                let workspace = self
+                    .locate(id)
+                    .or_else(|| self.locate_hidden(id).map(|(_, n)| n));
+                let visible = self.visible.contains(&id);
+                let title = pane.label().to_string();
+                self.emit(HookEvent::CommandFinished, |t| {
+                    t.set("pane", id)?;
+                    t.set("exit", exit)?;
+                    t.set("duration", duration.as_secs_f64())?;
+                    t.set("workspace", workspace)?;
+                    t.set("visible", visible)?;
+                    t.set("title", title)
+                });
+            }
+            crate::osc::Mark::Notify { title, body } => {
+                let title = if title.is_empty() {
+                    pane.label().to_string()
+                } else {
+                    title
+                };
+                let text = match (title.is_empty(), body.is_empty()) {
+                    (true, _) => body,
+                    (false, true) => title,
+                    (false, false) => format!("{title}: {body}"),
+                };
+                if !text.trim().is_empty() {
+                    self.toast(text, crate::toast::Level::Normal, None);
+                }
+            }
         }
     }
 

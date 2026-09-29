@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
-use alacritty_terminal::event::{Event as TermEvent, EventListener, WindowSize};
+use alacritty_terminal::event::{Event as TermEvent, EventListener, OnResize, WindowSize};
 use alacritty_terminal::event_loop::{EventLoop, EventLoopSender, Msg};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::sync::FairMutex;
@@ -66,6 +66,8 @@ pub enum AppEvent {
     Status(Sender<crate::proto::Status>),
     /// Every server's status, gathered off the UI thread for the server switcher.
     Servers(Vec<crate::proto::Status>),
+    /// A shell mark or a notification a pane's program sent (see `osc`).
+    Mark(PaneId, crate::osc::Mark),
 }
 
 /// Forwards a pane's terminal events to the UI thread.
@@ -79,6 +81,84 @@ pub struct Proxy {
     /// Cleared when the pane's process is replaced (`respawn`): the old event
     /// loop's last events, its exit above all, must not reach the new one.
     live: Arc<AtomicBool>,
+}
+
+impl Proxy {
+    /// A mark from the PTY reader, unless the pane's process was replaced.
+    fn mark(&self, m: crate::osc::Mark) {
+        if self.live.load(Ordering::Acquire) {
+            let _ = self.tx.send(AppEvent::Mark(self.id, m));
+        }
+    }
+}
+
+/// The PTY as alacritty_terminal's event loop drives it, with a look at what
+/// it reads on the way: the OSC sequences the emulator drops (see `osc`).
+struct ScanPty {
+    inner: tty::Pty,
+    reader: ScanReader,
+}
+
+struct ScanReader {
+    /// The PTY's own descriptor, duplicated: the event loop polls the
+    /// original and reads through this one, which is the same open file.
+    file: std::fs::File,
+    scanner: crate::osc::Scanner,
+    proxy: Proxy,
+}
+
+impl std::io::Read for ScanReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.file.read(buf)?;
+        for m in self.scanner.feed(&buf[..n], std::time::Instant::now()) {
+            self.proxy.mark(m);
+        }
+        Ok(n)
+    }
+}
+
+impl tty::EventedReadWrite for ScanPty {
+    type Reader = ScanReader;
+    type Writer = std::fs::File;
+
+    unsafe fn register(
+        &mut self,
+        poll: &Arc<polling::Poller>,
+        interest: polling::Event,
+        mode: polling::PollMode,
+    ) -> std::io::Result<()> {
+        // SAFETY: the caller's promise, passed on; the PTY lives in `self`.
+        unsafe { self.inner.register(poll, interest, mode) }
+    }
+    fn reregister(
+        &mut self,
+        poll: &Arc<polling::Poller>,
+        interest: polling::Event,
+        mode: polling::PollMode,
+    ) -> std::io::Result<()> {
+        self.inner.reregister(poll, interest, mode)
+    }
+    fn deregister(&mut self, poll: &Arc<polling::Poller>) -> std::io::Result<()> {
+        self.inner.deregister(poll)
+    }
+    fn reader(&mut self) -> &mut ScanReader {
+        &mut self.reader
+    }
+    fn writer(&mut self) -> &mut std::fs::File {
+        self.inner.writer()
+    }
+}
+
+impl OnResize for ScanPty {
+    fn on_resize(&mut self, size: WindowSize) {
+        self.inner.on_resize(size)
+    }
+}
+
+impl tty::EventedPty for ScanPty {
+    fn next_child_event(&mut self) -> Option<tty::ChildEvent> {
+        self.inner.next_child_event()
+    }
 }
 
 impl EventListener for Proxy {
@@ -214,6 +294,14 @@ impl Pane {
         };
         let pty = tty::new(&pty_opts, size.window(), id).context("opening a PTY")?;
         let pid = pty.child().id();
+        let pty = ScanPty {
+            reader: ScanReader {
+                file: pty.file().try_clone().context("duplicating the PTY")?,
+                scanner: Default::default(),
+                proxy: proxy.clone(),
+            },
+            inner: pty,
+        };
         let event_loop = EventLoop::new(term.clone(), proxy, pty, false, false)
             .context("starting the PTY event loop")?;
         let sender = event_loop.channel();

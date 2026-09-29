@@ -516,6 +516,32 @@ end)
 | `mode_change` | `mode`: `"wm"` or `"normal"` |
 | `config_reload` | nothing; runs in the newly loaded config |
 | `session_switch` | `session`, `previous` (names) |
+| `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
+
+`command_finished` needs the shell to say where commands start and end, with
+the OSC 133 marks most terminals understand. For zsh, in `.zshrc`:
+
+```zsh
+_ranma_mark_end()   { local s=$?; print -n "\e]133;D;$s\a\e]133;A\a"; }
+_ranma_mark_start() { print -n "\e]133;C\a"; }
+precmd_functions+=(_ranma_mark_end)
+preexec_functions+=(_ranma_mark_start)
+```
+
+Then, for example, a toast when something slow finishes where you are not
+looking:
+
+```lua
+ranma.on("command_finished", function(ev)
+  if ev.duration > 10 and not ev.visible then
+    ranma.toast(ev.title .. ": exit " .. tostring(ev.exit), { urgent = ev.exit ~= 0 })
+  end
+end)
+```
+
+Programs' own desktop notifications, OSC 9 (`printf '\e]9;done\a'`) and OSC
+777 (`\e]777;notify;title;body\a`), show as toasts, named after their pane
+when they give no title.
 
 ## Globals
 

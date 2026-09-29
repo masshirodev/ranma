@@ -19,6 +19,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `tmux` | the shim's global flags, tmux-style flag parsing (grouped, stuck values, unknown ones refused), `;` separators, targets resolved inside the caller's session, formats (`#{}`, aliases, conditionals, comparisons, unknown variables), key names |
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
+| `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), long and unrelated sequences passed without keeping state |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
@@ -62,6 +63,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - `ranma tmux-shim` runs a script that drives tmux the way Claude Code's agent
   teams do: a placeholder pane split off in the background, named with
   `select-pane -T`, its process replaced with `respawn-pane -k`, then killed
+- an OSC 9 from a pane shows a toast, and a command marked with OSC 133
+  fires `command_finished` with its exit status and duration
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize
