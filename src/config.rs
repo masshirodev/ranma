@@ -897,6 +897,12 @@ mod tests {
         assert_eq!(builtin(&cfg, "backspace"), Some(Action::SessionSwitcher));
         assert_eq!(builtin(&cfg, "?"), Some(Action::Help));
         assert_eq!(builtin(&cfg, ":"), Some(Action::CommandPalette));
+        // Alt+S: the scratchpad outside WM mode, sending the pane there inside it.
+        assert_eq!(builtin(&cfg, "alt+s"), Some(Action::MoveToScratchpad));
+        match &cfg.global_binds[&"alt+s".parse().unwrap()].action {
+            BindAction::Builtin(a) => assert_eq!(*a, Action::ScratchpadToggle),
+            BindAction::Lua(_) => panic!("alt+s is a builtin"),
+        }
         assert_eq!(
             builtin(&cfg, "m"),
             Some(Action::MoveWorkspaceToSession(None))

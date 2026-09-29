@@ -228,6 +228,11 @@ for — a place to throw a shell or two and move them wherever — and it went o
 an empty one opens a shell, because the point of the key is a quick terminal.
 Summoning it ends WM mode for the same reason `new_pane` does: the next thing
 you do is type.
+**`alt+s` summons it without the leader** (2026-09-29): a quick shell is the
+thing reached for most, and a leader first makes it two chords. It is a global
+bind, so outside WM mode it toggles and inside WM mode `alt+s` keeps sending the
+focused pane there — the same split `alt+<digit>` has between going to a
+workspace and sending a pane to one.
 
 ### Sessions swap in and out
 

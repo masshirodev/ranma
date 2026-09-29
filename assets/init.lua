@@ -109,9 +109,13 @@ ranma.bind("ctrl+right", "workspace next")
 ranma.bind("ctrl+left", "workspace prev")
 ranma.bind("ctrl+down", "workspace empty")
 
--- Scratchpad (Hyprland's special workspace)
+-- Scratchpad (Hyprland's special workspace). Alt+S also shows and hides it
+-- without the leader (a global bind, below); in WM mode Alt+S sends the focused
+-- pane there instead, the way Alt+digit goes to a workspace outside WM mode and
+-- sends the pane there inside it.
 ranma.bind("s", "scratchpad_toggle")
 ranma.bind("alt+s", "move_to_scratchpad")
+ranma.bind("alt+s", "scratchpad_toggle", { global = true })
 
 -- Switchers and sessions ---------------------------------------------------------
 -- Sessions are separate sets of workspaces (a project each, say). The session
