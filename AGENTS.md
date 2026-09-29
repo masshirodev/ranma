@@ -15,6 +15,11 @@ To install what you built: `./install.sh` (it checks the new binary against the
 user's config and restores the previous one if it is rejected). `./install.sh
 --check` runs the gate above first. Prefer it to a bare `cargo install`.
 
+The git hooks in `.githooks/` enforce this: fmt and clippy on commit, the tests
+and the smoke on push, and `commit-msg` refuses `Co-Authored-By` trailers,
+`Claude-Session` references and the robot emoji. A fresh clone runs none of them
+until `scripts/hooks.sh` has armed it once. Make them pass; do not set skip flags.
+
 `doc/TESTING.md` says what each check covers.
 
 ## Conventions

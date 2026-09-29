@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+
+# The rest of the gate in AGENTS.md: the unit tests and the smoke test. The
+# tests are seconds; the smoke is about fifteen, which is why it waits for a push
+# rather than riding on every commit. See doc/TESTING.md, "Git hooks".
+#
+# The smoke runs on every push, not only when a change touches app, pane, render
+# or input, because a hook cannot judge that and a skipped smoke is how a
+# terminal that drops to a plain shell gets installed. On the VPS, where CPU is
+# budgeted, SKIP_SMOKE is the flag to reach for.
+#
+# Skip flags (set to any non-empty value):
+#   SKIP_TESTS SKIP_SMOKE SKIP_ALL
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+step() { printf "\n${CYAN}${BOLD}> %s${RESET}\n" "$1"; }
+ok() { printf "${GREEN}[ok] %s${RESET}\n" "$1"; }
+skip() { printf "${YELLOW}[skip] %s${RESET}\n" "$1"; }
+fail() { printf "${RED}[fail] %s${RESET}\n" "$1"; }
+
+if [ -n "$SKIP_ALL" ]; then
+	printf "${YELLOW}${BOLD}pre-push: SKIP_ALL set - skipping every check${RESET}\n"
+	exit 0
+fi
+
+printf "${BOLD}pre-push: running repository checks${RESET}\n"
+printf "${DIM}  skip flags: SKIP_TESTS SKIP_SMOKE SKIP_ALL${RESET}\n"
+
+if [ -n "$SKIP_TESTS" ]; then
+	skip "unit tests"
+else
+	step "unit tests"
+	if ! cargo test --quiet; then
+		fail "unit tests failed"
+		exit 1
+	fi
+	ok "unit tests passed"
+fi
+
+if [ -n "$SKIP_SMOKE" ]; then
+	skip "smoke"
+else
+	step "smoke"
+	if ! scripts/smoke.sh; then
+		fail "smoke test failed"
+		exit 1
+	fi
+	ok "smoke passed"
+fi
+
+printf "\n${GREEN}${BOLD}[ok] pre-push checks passed${RESET}\n"

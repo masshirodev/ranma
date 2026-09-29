@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+
+# Reject commits containing Co-Authored-By trailers, Claude-Session references,
+# or robot emoji (🤖).
+#
+# Skip flags (set to any non-empty value):
+#   SKIP_COAUTHOR SKIP_ALL
+
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+fail() { printf "${RED}${BOLD}[fail] %s${RESET}\n" "$1" >&2; }
+hint() { printf "${RED}       %s${RESET}\n" "$1" >&2; }
+
+if [ -n "$SKIP_ALL" ]; then
+	exit 0
+fi
+
+if [ -z "$1" ] || [ ! -f "$1" ]; then
+	exit 0
+fi
+
+FAILED=0
+
+if [ -z "$SKIP_COAUTHOR" ] && grep -v '^[[:space:]]*#' "$1" | grep -qEi '^[[:space:]]*co-?author(ed)?(-by)?:'; then
+	printf "\n" >&2
+	fail "Co-authored commits are not allowed in this repository."
+	hint "Please remove any Co-Authored-By / Co-author trailers and try again."
+	FAILED=1
+fi
+
+if grep -v '^[[:space:]]*#' "$1" | grep -qi 'claude-session'; then
+	[ "$FAILED" -eq 0 ] && printf "\n" >&2
+	fail "Claude-Session is not allowed in commit messages."
+	hint "Please remove any Claude-Session references and try again."
+	FAILED=1
+fi
+
+if grep -v '^[[:space:]]*#' "$1" | grep -q '🤖'; then
+	[ "$FAILED" -eq 0 ] && printf "\n" >&2
+	fail "Robot emoji (🤖) is not allowed in commit messages."
+	hint "Please remove any 🤖 emoji and try again."
+	FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+	printf "\n" >&2
+	exit 1
+fi

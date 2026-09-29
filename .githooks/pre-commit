@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+
+# Format and lint, the first half of the gate in AGENTS.md. Both are seconds on
+# a warm target/, so they run on every commit; the tests and the smoke run once
+# per push in pre-push. Ported from Kumiko's husky hooks, without husky: this is
+# a Cargo repo, and git's core.hooksPath does the same job with no package.json
+# (scripts/hooks.sh arms it). See doc/TESTING.md, "Git hooks".
+#
+# Skip flags (set to any non-empty value):
+#   SKIP_LINT SKIP_FORMAT SKIP_ALL
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+step() { printf "\n${CYAN}${BOLD}> %s${RESET}\n" "$1"; }
+ok() { printf "${GREEN}[ok] %s${RESET}\n" "$1"; }
+skip() { printf "${YELLOW}[skip] %s${RESET}\n" "$1"; }
+fail() { printf "${RED}[fail] %s${RESET}\n" "$1"; }
+
+if [ -n "$SKIP_ALL" ]; then
+	printf "${YELLOW}${BOLD}pre-commit: SKIP_ALL set - skipping every check${RESET}\n"
+	exit 0
+fi
+
+printf "${BOLD}pre-commit: running checks${RESET}\n"
+printf "${DIM}  skip flags: SKIP_LINT SKIP_FORMAT SKIP_ALL${RESET}\n"
+
+# The working tree, not the index: rustfmt and clippy work on the crate, and a
+# crate is not something the index alone can build. Commit what you checked.
+if [ -n "$SKIP_FORMAT" ]; then
+	skip "format"
+else
+	step "format"
+	if ! cargo fmt --check; then
+		fail "format failed: run cargo fmt"
+		exit 1
+	fi
+	ok "format passed"
+fi
+
+if [ -n "$SKIP_LINT" ]; then
+	skip "lint"
+else
+	step "lint"
+	if ! cargo clippy --all-targets --quiet -- -D warnings; then
+		fail "lint failed"
+		exit 1
+	fi
+	ok "lint passed"
+fi
+
+printf "\n${GREEN}${BOLD}[ok] pre-commit checks passed${RESET}\n"
