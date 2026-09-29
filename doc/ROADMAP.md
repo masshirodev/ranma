@@ -61,6 +61,9 @@ scrollback otherwise. That last part was milestone 3's.
   on and mark where you are
 - [x] Command palette (`leader :`): help and every action in one picker, the
   mode by prefix (`?`, `:`/`>`), typed command lines parsed before they run
+- [x] Unnamed workspaces named after the program in their focused pane
+  (` 3:nvim `); the title names the host you are on over SSH (`⧉ ranma@vps`),
+  one host however deep the nesting
 
 ## 4. A server — done
 

@@ -246,10 +246,26 @@ impl Pane {
         self.title.starts_with(NESTED_MARKER)
     }
 
+    /// The host a ranma in this pane says it runs on (it or one inside it).
+    pub fn inner_host(&self) -> Option<&str> {
+        marker_host(&self.title)
+    }
+
+    /// The host the `ssh` in this pane's foreground connects to, if one runs
+    /// there: what the title names when no ranma on the other side does.
+    pub fn ssh_host(&self) -> Option<String> {
+        foreground_ssh_host(self.pid)
+    }
+
     /// The ranma in this pane is engaged: in WM mode, or with an engaged ranma
     /// of its own. The outer leader goes on down to it instead of stopping here.
     pub fn inner_engaged(&self) -> bool {
         self.title.starts_with(NESTED_MARKER_ENGAGED)
+    }
+
+    /// The program in the pane's foreground (see [`foreground_program`]).
+    pub fn program(&self) -> Option<String> {
+        foreground_program(self.pid)
     }
 
     /// The directory the pane's child is in now: where `cd` last took the shell.
@@ -341,15 +357,186 @@ pub const NESTED_MARKER: &str = "⧉ ranma";
 /// The same, for a ranma that is engaged (see `Pane::inner_engaged`).
 pub const NESTED_MARKER_ENGAGED: &str = "⧉ ranma+";
 
-/// A title without the nested-ranma marker: `⧉ ranma · nvim` is `nvim`.
-pub fn strip_nested_marker(title: &str) -> &str {
-    match title
+/// A marked title in parts: the host it names, if any, and the title after the
+/// mark. `⧉ ranma@vps · nvim` is `(Some("vps"), "nvim")`; an unmarked title is
+/// `None`.
+fn split_marker(title: &str) -> Option<(Option<&str>, &str)> {
+    let rest = title
         .strip_prefix(NESTED_MARKER_ENGAGED)
-        .or_else(|| title.strip_prefix(NESTED_MARKER))
-    {
-        Some(rest) => rest.strip_prefix(" · ").unwrap_or(rest.trim_start()),
-        None => title,
+        .or_else(|| title.strip_prefix(NESTED_MARKER))?;
+    let (host, rest) = match rest.strip_prefix('@') {
+        Some(r) => match r.split_once(' ') {
+            Some((h, r)) => (Some(h), r),
+            None => (Some(r), ""),
+        },
+        None => (None, rest),
+    };
+    let label = rest.strip_prefix(" · ").unwrap_or(rest.trim_start());
+    let label = label.strip_prefix("· ").unwrap_or(label);
+    Some((host.filter(|h| !h.is_empty()), label))
+}
+
+/// A title without the nested-ranma marker: `⧉ ranma · nvim` is `nvim`, and so
+/// is `⧉ ranma@vps · nvim`.
+pub fn strip_nested_marker(title: &str) -> &str {
+    split_marker(title).map_or(title, |(_, label)| label)
+}
+
+/// The host a marked title names: the ranma in a pane runs there (or a ranma
+/// inside it does), which is the host this ranma's own title should carry.
+pub fn marker_host(title: &str) -> Option<&str> {
+    // One host, never a chain: a mark only ever carries the innermost. Should a
+    // title arrive as `@a@b` anyway, the last one is the innermost, and taking
+    // it alone keeps every ranma further out from growing the chain.
+    split_marker(title)
+        .and_then(|(host, _)| host)
+        .and_then(|h| h.rsplit('@').next())
+        .filter(|h| !h.is_empty())
+}
+
+/// The title a ranma gives its terminal: its mark, carrying one host (the one a
+/// ranma in the focused pane names, else `own`), then the focused title.
+pub fn own_title(engaged: bool, inner: Option<&str>, own: Option<&str>, label: &str) -> String {
+    let m = marker(engaged, inner.or(own));
+    if label.is_empty() {
+        m
+    } else {
+        format!("{m} · {label}")
     }
+}
+
+/// The mark for this ranma's own title, with the host when there is one.
+pub fn marker(engaged: bool, host: Option<&str>) -> String {
+    let m = if engaged {
+        NESTED_MARKER_ENGAGED
+    } else {
+        NESTED_MARKER
+    };
+    match host {
+        Some(h) => format!("{m}@{h}"),
+        None => m.to_string(),
+    }
+}
+
+/// This machine's name, short (`vps`, not `vps.example.com`), asked once.
+pub fn hostname() -> &'static str {
+    static HOST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    HOST.get_or_init(|| {
+        let mut buf = [0u8; 256];
+        // SAFETY: the buffer and its length are ours; gethostname NUL-terminates
+        // within it, or we take up to the first NUL anyway.
+        let ok = unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len()) } == 0;
+        let end = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+        let name = if ok {
+            String::from_utf8_lossy(&buf[..end]).into_owned()
+        } else {
+            String::new()
+        };
+        let short = name.split('.').next().unwrap_or("");
+        // Titles and the mark are split on spaces: a host never has one, but a
+        // mark must not be broken by a strange one either.
+        let short: String = short
+            .chars()
+            .filter(|c| !c.is_whitespace() && !c.is_control())
+            .collect();
+        if short.is_empty() {
+            "localhost".into()
+        } else {
+            short
+        }
+    })
+}
+
+/// Whether this process was reached over SSH (as sshd tells its sessions).
+pub fn over_ssh() -> bool {
+    ["SSH_CONNECTION", "SSH_TTY", "SSH_CLIENT"]
+        .iter()
+        .any(|v| std::env::var_os(v).is_some_and(|s| !s.is_empty()))
+}
+
+/// The leader of the foreground process group of the terminal whose session
+/// leader is `pid` (field 8 of its /proc `stat`), or `pid` itself.
+fn foreground_pid(pid: u32) -> u32 {
+    let tpgid = std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            // The command name is in parentheses and may hold spaces or
+            // parentheses of its own: the fields start after the last `)`.
+            let after = &stat[stat.rfind(')')? + 1..];
+            after.split_whitespace().nth(5)?.parse::<i32>().ok()
+        });
+    match tpgid {
+        Some(t) if t > 0 && std::path::Path::new(&format!("/proc/{t}")).exists() => t as u32,
+        _ => pid,
+    }
+}
+
+/// The program in the foreground of a terminal whose session leader is `pid`:
+/// `nvim` while the shell runs it, the shell itself at its prompt.
+pub fn foreground_program(pid: u32) -> Option<String> {
+    let comm = std::fs::read_to_string(format!("/proc/{}/comm", foreground_pid(pid))).ok()?;
+    Some(comm.trim().to_string()).filter(|c| !c.is_empty())
+}
+
+/// Where the `ssh` in the foreground of that terminal went, if one is there:
+/// `vps` for `ssh -p 22 masshiro@vps htop`.
+pub fn foreground_ssh_host(pid: u32) -> Option<String> {
+    let fg = foreground_pid(pid);
+    if std::fs::read_to_string(format!("/proc/{fg}/comm"))
+        .ok()?
+        .trim()
+        != "ssh"
+    {
+        return None;
+    }
+    let raw = std::fs::read(format!("/proc/{fg}/cmdline")).ok()?;
+    let args: Vec<String> = raw
+        .split(|b| *b == 0)
+        .filter(|a| !a.is_empty())
+        .map(|a| String::from_utf8_lossy(a).into_owned())
+        .collect();
+    ssh_destination(args.iter().skip(1).map(String::as_str))
+}
+
+/// The host an ssh command line connects to: its first argument that is not
+/// an option (nor an option's value), without `ssh://`, the user or the port.
+pub fn ssh_destination<'a>(args: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    // ssh's options that take a value (ssh(1), SYNOPSIS).
+    const WITH_VALUE: &str = "BbcDEeFIiJLlmOoPpQRSWw";
+    let mut args = args.into_iter();
+    while let Some(a) = args.next() {
+        if a == "--" {
+            return args.next().and_then(host_of);
+        }
+        let Some(flags) = a.strip_prefix('-').filter(|f| !f.is_empty()) else {
+            return host_of(a);
+        };
+        for (i, c) in flags.char_indices() {
+            if WITH_VALUE.contains(c) {
+                // `-p22` carries it; `-p 22` takes the next argument.
+                if i + c.len_utf8() == flags.len() {
+                    args.next();
+                }
+                break;
+            }
+        }
+    }
+    None
+}
+
+fn host_of(dest: &str) -> Option<String> {
+    let d = dest.strip_prefix("ssh://").unwrap_or(dest);
+    let d = d.rsplit_once('@').map_or(d, |(_, h)| h);
+    // A port (ssh://host:22) or an IPv6 address in brackets.
+    let d = match d.strip_prefix('[') {
+        Some(r) => r.split(']').next().unwrap_or(r),
+        None => d.split(':').next().unwrap_or(d),
+    };
+    let d: String = d
+        .chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control() && *c != '@')
+        .collect();
+    Some(d).filter(|d| !d.is_empty())
 }
 
 fn terminfo_exists(name: &str) -> bool {
@@ -380,7 +567,7 @@ fn terminfo_exists(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_nested_marker;
+    use super::*;
 
     #[test]
     fn the_marker_is_not_part_of_the_title() {
@@ -388,5 +575,77 @@ mod tests {
         assert_eq!(strip_nested_marker("⧉ ranma+ · nvim"), "nvim");
         assert_eq!(strip_nested_marker("⧉ ranma"), "");
         assert_eq!(strip_nested_marker("plain title"), "plain title");
+        assert_eq!(strip_nested_marker("⧉ ranma@vps · nvim"), "nvim");
+        assert_eq!(strip_nested_marker("⧉ ranma+@vps · a · b"), "a · b");
+        assert_eq!(strip_nested_marker("⧉ ranma@vps"), "");
+    }
+
+    #[test]
+    fn the_mark_carries_a_host_through() {
+        assert_eq!(marker_host("⧉ ranma@vps · nvim"), Some("vps"));
+        assert_eq!(marker_host("⧉ ranma+@vps"), Some("vps"));
+        assert_eq!(marker_host("⧉ ranma · nvim"), None);
+        assert_eq!(marker_host("user@vps: ~"), None);
+        assert_eq!(marker(false, Some("vps")), "⧉ ranma@vps");
+        assert_eq!(marker(true, None), NESTED_MARKER_ENGAGED);
+        // A marked title with a host still reads as a ranma, engaged or not.
+        let engaged = format!("{} · x", marker(true, Some("vps")));
+        assert!(engaged.starts_with(NESTED_MARKER_ENGAGED));
+        assert!(!marker(false, Some("vps")).starts_with(NESTED_MARKER_ENGAGED));
+    }
+
+    /// What a ranma running at `own` (reached over SSH, so naming itself) says,
+    /// given what the ranma in its focused pane says.
+    fn level(own: &str, inner_title: &str) -> String {
+        own_title(
+            false,
+            marker_host(inner_title),
+            Some(own),
+            strip_nested_marker(inner_title),
+        )
+    }
+
+    #[test]
+    fn layered_ssh_names_only_the_innermost_host() {
+        // desk -> ssh a -> ranma -> ssh b -> ranma -> ssh c -> ranma running nvim.
+        let c = own_title(false, None, Some("c"), "nvim");
+        assert_eq!(c, "⧉ ranma@c · nvim");
+        let b = level("b", &c);
+        assert_eq!(b, "⧉ ranma@c · nvim");
+        let a = level("a", &b);
+        assert_eq!(a, "⧉ ranma@c · nvim");
+        // The desk names no host of its own; it still passes c out, once.
+        let desk = own_title(false, marker_host(&a), None, strip_nested_marker(&a));
+        assert_eq!(desk, "⧉ ranma@c · nvim");
+        // A malformed chain does not grow further out.
+        assert_eq!(marker_host("⧉ ranma@a@b · x"), Some("b"));
+        assert_eq!(level("z", "⧉ ranma@a@b · x"), "⧉ ranma@b · x");
+    }
+
+    #[test]
+    fn the_destination_of_an_ssh_command_line() {
+        let d = |line: &str| ssh_destination(line.split_whitespace());
+        assert_eq!(d("vps").as_deref(), Some("vps"));
+        assert_eq!(d("masshiro@vps htop").as_deref(), Some("vps"));
+        assert_eq!(d("-p 2222 -A vps").as_deref(), Some("vps"));
+        assert_eq!(d("-p2222 -tt vps").as_deref(), Some("vps"));
+        assert_eq!(
+            d("-J jump -l me box.example.com").as_deref(),
+            Some("box.example.com")
+        );
+        assert_eq!(
+            d("-o ProxyJump=j -vX ssh://me@vps:22").as_deref(),
+            Some("vps")
+        );
+        assert_eq!(d("-4 -- vps ls").as_deref(), Some("vps"));
+        assert_eq!(d("me@[::1]").as_deref(), Some("::1"));
+        assert_eq!(d("-V"), None);
+    }
+
+    #[test]
+    fn the_foreground_program_of_this_process() {
+        let me = foreground_program(std::process::id()).unwrap();
+        assert!(!me.is_empty());
+        assert!(!hostname().is_empty() && !hostname().contains('.'));
     }
 }

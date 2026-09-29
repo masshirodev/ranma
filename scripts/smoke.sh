@@ -25,7 +25,8 @@ CFG=$(mktemp -d)
 # sockets and logs, and can never be found by (or attach to) the user's.
 RT=$(mktemp -d)
 CACHE=$(mktemp -d)
-ENV="env XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+# No SSH variables: the title names the host only where a step asks for it.
+ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
 # The server process of this test (the client is a separate, thinner process).
 server_pid() {
   for p in $(pgrep -x ranma); do
@@ -55,7 +56,12 @@ bar() { screen | tail -1; }
 # Let OSC 52 from ranma land in tmux's buffer, so a copy can be read back.
 T set -g set-clipboard on
 wait_for '╭' || fail "no pane border drawn"
-bar | grep -q '^ 1 ' || fail "no workspaces module in the bar"
+bar | grep -Eq '^ 1[: ]' || fail "no workspaces module in the bar"
+# An unnamed workspace is named after the program in its focused pane.
+for _ in $(seq 1 20); do bar | grep -q '^ 1:bash ' && break; sleep 0.25; done
+bar | grep -q '^ 1:bash ' || fail "workspace 1 is not named after its program ($(bar))"
+T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma' || fail "no mark in the title"
+T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@' && fail "the host is in the title of a local terminal"
 bar | grep -Eq '[0-9]{2}:[0-9]{2} *$' || fail "no clock module in the bar"
 
 # Split: leader, then t.
@@ -108,7 +114,7 @@ wait_for 'ab      Z' || fail "tab rendering or input passthrough"
 
 # Workspaces: 2 appears in the bar while current, and goes when left empty.
 T send-keys -t s C-b 2 Escape; sleep 0.3
-bar | grep -q ' 1  2 ' || fail "workspace 2 not shown in the bar"
+bar | grep -Eq ' 1(:[a-z]+)?  2(:[a-z]+)? ' || fail "workspace 2 not shown in the bar"
 T send-keys -t s C-b 1 Escape; sleep 0.3
 bar | grep -q ' 2 ' && fail "empty workspace 2 still in the bar"
 
@@ -148,8 +154,15 @@ wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
-T send-keys -t s "$BIN" Enter
-wait_for '│ 1 ' 20 || fail "the inner ranma did not start"
+# The inner one as if reached over SSH: its host reaches the outer terminal's
+# title, once, however many ranmas pass it out.
+T send-keys -t s "SSH_CONNECTION='10.0.0.1 1 10.0.0.2 22' $BIN" Enter
+wait_for '│ 1[: ]' 20 || fail "the inner ranma did not start"
+HOST=$(uname -n | cut -d. -f1)
+for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma@$HOST · " && break; sleep 0.25; done
+OUTER=$(T display -p -t s '#{pane_title}')
+case "$OUTER" in "⧉ ranma@$HOST · "*) ;; *) fail "the outer title does not carry the inner host ($OUTER)" ;; esac
+[ "$(printf '%s' "$OUTER" | grep -o 'ranma@' | wc -l)" -eq 1 ] || fail "hosts nested in the title ($OUTER)"
 bar | grep -q ' ⧉ ' || fail "the outer ranma does not show the passthrough hint"
 T send-keys -t s C-b; sleep 0.4
 screen | grep -q '│ WM ' || fail "the leader did not reach the inner ranma"
@@ -163,9 +176,12 @@ bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"
 # `ranma` finds it again with its shell as it was.
 T new-session -d -s d -x 100 -y 20 "bash --norc"
 sleep 0.3
-T send-keys -t d "$ENV $BIN" Enter
+# As if over SSH: the title names this host.
+T send-keys -t d "$ENV SSH_CONNECTION='10.0.0.1 1 10.0.0.2 22' $BIN" Enter
 dscreen() { T capture-pane -p -t d; }
 for _ in $(seq 1 40); do dscreen | grep -q '╭' && break; sleep 0.25; done
+T display -p -t d '#{pane_title}' | grep -q "^⧉ ranma@$HOST" ||
+  fail "the title of an SSH client does not name the host ($(T display -p -t d '#{pane_title}'))"
 T send-keys -t d 'echo daemon-marker' Enter; sleep 0.4
 T send-keys -t d C-b d; sleep 0.8
 dscreen | grep -q '\[ranma 2: detached\]' || fail "leader d did not detach server 2 ($(dscreen | tail -3))"
@@ -192,6 +208,18 @@ $ENV $BIN ls | grep -q '^2 *detached' || fail "server 2 did not survive its term
 $ENV $BIN kill 2; sleep 0.8
 $ENV $BIN ls | grep -q '^2 ' && fail "ranma kill 2 left it running"
 
+# A plain ssh in the focused pane (no ranma on the other side) names where it
+# went. A symlink called ssh to python: its comm is ssh, its argv a real ssh's.
+FAKE=$(mktemp -d); ln -s "$(command -v python3)" "$FAKE/ssh"
+T send-keys -t s "$FAKE/ssh -c 'import time; time.sleep(60)' me@fakehost" Enter
+for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' && break; sleep 0.25; done
+T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' ||
+  fail "a running ssh does not name its host ($(T display -p -t s '#{pane_title}'))"
+T send-keys -t s C-c; sleep 1.2
+T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@' &&
+  fail "the host stayed in the title after ssh ended ($(T display -p -t s '#{pane_title}'))"
+rm -r "$FAKE"
+
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3
 wait_for 'keys  (type to filter' || fail "help did not open"
@@ -212,7 +240,7 @@ T send-keys -t s C-b N; sleep 0.8
 bar | grep -q '^2 ' || fail "new session not shown in the bar"
 T send-keys -t s 'exit' Enter
 wait_for 'session 2 ended' || fail "an emptied session did not end"
-bar | grep -q '^ 1 ' || fail "not back on main after the session ended"
+bar | grep -Eq '^ 1[: ]' || fail "not back on main after the session ended"
 
 # Resize the host: both panes follow.
 T resize-window -t s -x 90 -y 24

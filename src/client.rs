@@ -196,6 +196,7 @@ fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
                 colors: colors.clone(),
                 typed_early,
                 inside: inside.clone(),
+                remote: crate::pane::over_ssh(),
             }),
         )?;
         Ok(())

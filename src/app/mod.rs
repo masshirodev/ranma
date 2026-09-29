@@ -44,6 +44,8 @@ pub use switch::PickerLayout;
 const FRAME: Duration = Duration::from_micros(8_333);
 /// Editors save in several steps (write, rename, chmod); one reload for all of them.
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(150);
+/// How often, at most, the workspaces module reads which program each pane runs.
+const PROGRAMS_EVERY: Duration = Duration::from_millis(500);
 /// Hooks that run actions that fire hooks: stop before it becomes a loop.
 const MAX_LUA_DEPTH: u8 = 4;
 /// The workspace number the scratchpad reports in hook payloads and state.
@@ -124,6 +126,8 @@ struct Observed {
     workspace: u8,
     mode_wm: bool,
     title: String,
+    /// The host a ranma in the focused pane names: it goes into our own title.
+    inner_host: Option<String>,
     panes: usize,
 }
 
@@ -189,6 +193,14 @@ pub struct App {
     /// The socket of the ranma the attached client runs inside (see
     /// `proto::Hello::inside`): the one server it cannot switch to.
     client_inside: Option<String>,
+    /// The terminal showing this ranma reached it over SSH (see `title_host`).
+    client_remote: bool,
+    /// The program in the foreground of each workspace's focused pane, for the
+    /// workspaces module (` 3:nvim `). Read from /proc at most every
+    /// `PROGRAMS_EVERY`, and only after something happened, so idle stays idle.
+    programs: HashMap<PaneId, String>,
+    programs_read: Option<Instant>,
+    programs_due: Option<Instant>,
 }
 
 impl App {
@@ -243,6 +255,10 @@ impl App {
             detach_requested: false,
             switch_requested: None,
             client_inside: None,
+            client_remote: false,
+            programs: HashMap::new(),
+            programs_read: None,
+            programs_due: None,
         };
         app.schedule_modules(Instant::now());
         app
@@ -302,8 +318,9 @@ impl App {
         (!self.scratch.is_empty(), self.scratch_shown)
     }
 
-    /// Workspaces to list in the bar: (number, is current, has panes, urgent).
     /// (number, is current, has panes, urgent, name) for each listed workspace.
+    /// The name is the one given (rename_workspace), else the program in the
+    /// workspace's focused pane, unless the module says `label = "number"`.
     pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool, Option<String>)> {
         let mut nums: Vec<u8> = self
             .workspaces
@@ -324,7 +341,13 @@ impl App {
                     n == self.current,
                     ws.is_some_and(|w| !w.is_empty()),
                     ws.is_some_and(|w| w.urgent),
-                    ws.and_then(|w| w.name.clone()),
+                    ws.and_then(|w| w.name.clone()).or_else(|| {
+                        if self.config.workspaces_numbers_only {
+                            return None;
+                        }
+                        let id = ws?.focused?;
+                        self.programs.get(&id).cloned()
+                    }),
                 )
             })
             .collect()
@@ -753,6 +776,11 @@ impl App {
 
     pub fn handle(&mut self, ev: AppEvent) {
         match ev {
+            AppEvent::Pane(..) => self.note_programs(Instant::now(), false),
+            AppEvent::Input(_) => self.note_programs(Instant::now(), true),
+            _ => {}
+        }
+        match ev {
             AppEvent::Input(ev) => self.handle_input(ev),
             AppEvent::InputClosed => self.quit = true,
             AppEvent::Pane(id, ev) => self.handle_pane_event(id, ev),
@@ -816,6 +844,11 @@ impl App {
             workspace: self.current,
             mode_wm: self.mode == Mode::Wm,
             title: self.focused_title().unwrap_or("").to_string(),
+            inner_host: self
+                .focused()
+                .and_then(|f| self.panes.get(&f))
+                .and_then(|p| p.inner_host())
+                .map(str::to_string),
             panes: self.panes.len(),
         };
         if now == self.observed {
@@ -1735,6 +1768,7 @@ impl App {
             .values()
             .copied()
             .chain(self.reload_at)
+            .chain(self.programs_due)
             .chain(self.toasts.next_expiry())
             .min()
     }
@@ -1770,7 +1804,45 @@ impl App {
     /// Tell the terminal ranma runs in that it is ranma, through its title,
     /// followed by the focused pane's: a ranma around this one finds the marker
     /// and passes keys down; a plain terminal shows a useful window title.
-    fn announce(&mut self) {
+    /// Something happened that may have changed what runs in a pane: read the
+    /// programs now, or once `PROGRAMS_EVERY` has passed since the last read. A
+    /// key (`follow_up`) also gets a read after that: the Enter that starts
+    /// `ssh vps` arrives before ssh does. Only events call this, never the timer
+    /// it sets, so it cannot keep itself awake.
+    fn note_programs(&mut self, now: Instant, follow_up: bool) {
+        if self.config.workspaces_numbers_only || self.programs_due.is_some() {
+            return;
+        }
+        match self.programs_read {
+            Some(t) if now < t + PROGRAMS_EVERY => self.programs_due = Some(t + PROGRAMS_EVERY),
+            _ => {
+                self.read_programs(now);
+                if follow_up {
+                    self.programs_due = Some(now + PROGRAMS_EVERY);
+                }
+            }
+        }
+    }
+
+    fn read_programs(&mut self, now: Instant) {
+        self.programs_due = None;
+        self.programs_read = Some(now);
+        let programs: HashMap<PaneId, String> = self
+            .workspaces
+            .values()
+            .filter_map(|ws| ws.focused)
+            .filter_map(|id| Some((id, self.panes.get(&id)?.program()?)))
+            .collect();
+        if programs != self.programs {
+            self.programs = programs;
+            self.dirty = true;
+            // An `ssh` starting or ending in the focused pane changes the host
+            // the title names, whether or not its title changed.
+            self.announce();
+        }
+    }
+
+    pub(super) fn announce(&mut self) {
         if self.config.settings.nested == config::NestedMode::Off {
             return;
         }
@@ -1780,16 +1852,18 @@ impl App {
             .chars()
             .filter(|c| !c.is_control())
             .collect();
-        let marker = if self.engaged() {
-            crate::pane::NESTED_MARKER_ENGAGED
-        } else {
-            crate::pane::NESTED_MARKER
+        // The innermost host wins: a ranma in the focused pane (over SSH, say)
+        // names where you are, so a terminal tab three levels out still says it.
+        // Without one, an `ssh` running in the focused pane names where it went.
+        let focused = self.focused().and_then(|f| self.panes.get(&f));
+        let inner =
+            focused.and_then(|p| p.inner_host().map(str::to_string).or_else(|| p.ssh_host()));
+        let own = match self.config.settings.title_host {
+            config::TitleHost::Always => Some(crate::pane::hostname()),
+            config::TitleHost::Ssh if self.client_remote => Some(crate::pane::hostname()),
+            _ => None,
         };
-        let title = if label.is_empty() {
-            marker.to_string()
-        } else {
-            format!("{marker} · {label}")
-        };
+        let title = crate::pane::own_title(self.engaged(), inner.as_deref(), own, &label);
         if title != self.host_title {
             self.host_out
                 .push(format!("\x1b]2;{title}\x07").into_bytes());
@@ -1834,6 +1908,9 @@ impl App {
     }
 
     fn run_timers(&mut self, now: Instant) {
+        if self.programs_due.is_some_and(|t| t <= now) {
+            self.read_programs(now);
+        }
         if self.toasts.expire(now) {
             self.dirty = true;
         }
@@ -2177,5 +2254,90 @@ pub(super) fn cursor_style(c: CursorState) -> SetCursorStyle {
         (CursorShape::Underline, false) => SetCursorStyle::SteadyUnderScore,
         (_, true) => SetCursorStyle::BlinkingBlock,
         (_, false) => SetCursorStyle::SteadyBlock,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app(user: Option<&str>) -> App {
+        let config = crate::config::load_from(None, None, user).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        App::new(config, tx, 80, 24)
+    }
+
+    fn with_pane(app: &mut App, id: PaneId) {
+        let ws = app.workspaces.get_mut(&1).unwrap();
+        ws.tree
+            .insert(id, None, None, crate::layout::Placement::Dwindle);
+        ws.focused = Some(id);
+    }
+
+    fn names(app: &App) -> Vec<Option<String>> {
+        app.workspace_list().into_iter().map(|w| w.4).collect()
+    }
+
+    #[test]
+    fn a_workspace_is_named_after_its_program_until_given_a_name() {
+        let mut a = app(None);
+        with_pane(&mut a, 5);
+        assert_eq!(names(&a), [None], "nothing read yet");
+        a.programs.insert(5, "nvim".into());
+        assert_eq!(names(&a), [Some("nvim".into())]);
+        a.rename_workspace(1, "web");
+        assert_eq!(names(&a), [Some("web".into())]);
+
+        let mut a = app(Some("ranma.module('workspaces', { label = 'number' })"));
+        with_pane(&mut a, 5);
+        a.programs.insert(5, "nvim".into());
+        assert_eq!(names(&a), [None]);
+    }
+
+    #[test]
+    fn programs_are_read_after_events_at_most_every_interval() {
+        let mut a = app(None);
+        let t = Instant::now();
+        a.note_programs(t, false);
+        assert_eq!(a.programs_read, Some(t));
+        assert_eq!(a.programs_due, None, "a read now needs no timer");
+        // Soon after: not read again, but once the interval is up.
+        a.note_programs(t + Duration::from_millis(100), false);
+        assert_eq!(a.programs_read, Some(t));
+        assert_eq!(a.programs_due, Some(t + PROGRAMS_EVERY));
+        a.run_timers(t + PROGRAMS_EVERY);
+        assert_eq!(a.programs_read, Some(t + PROGRAMS_EVERY));
+        // The timer's read sets no new timer: idle stays idle.
+        assert_eq!(a.programs_due, None);
+        // A key reads now and once more after the interval, and no more.
+        let k = t + PROGRAMS_EVERY * 4;
+        a.note_programs(k, true);
+        assert_eq!(a.programs_read, Some(k));
+        assert_eq!(a.programs_due, Some(k + PROGRAMS_EVERY));
+        a.run_timers(k + PROGRAMS_EVERY);
+        assert_eq!(a.programs_due, None);
+    }
+
+    fn title(a: &mut App) -> String {
+        a.host_title.clear();
+        a.host_out.clear();
+        a.announce();
+        a.host_title.clone()
+    }
+
+    #[test]
+    fn the_title_names_this_host_when_the_client_came_over_ssh() {
+        let host = crate::pane::hostname();
+        let mut a = app(None);
+        assert_eq!(title(&mut a), crate::pane::NESTED_MARKER);
+        a.client_remote = true;
+        assert_eq!(title(&mut a), format!("⧉ ranma@{host}"));
+        assert!(String::from_utf8_lossy(&a.host_out.concat()).contains(&format!("ranma@{host}")));
+
+        let mut a = app(Some("ranma.set { title_host = 'always' }"));
+        assert_eq!(title(&mut a), format!("⧉ ranma@{host}"));
+        let mut a = app(Some("ranma.set { title_host = 'never' }"));
+        a.client_remote = true;
+        assert_eq!(title(&mut a), crate::pane::NESTED_MARKER);
     }
 }

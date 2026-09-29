@@ -223,6 +223,17 @@ Over SSH, three levels deep, each machine starting ranma: with
   clipboard then work as usual.
 - A program could set a title starting with the mark and get the leader passed to
   it; `outer_leader` still reaches ranma. `nested = "off"` turns all of it off.
+- `title_host` puts the machine's name in the mark, so the terminal's tab says
+  where you are: `⧉ ranma@vps · nvim`. `"ssh"` (the default) names it when the
+  terminal reached this ranma over SSH (the client tells the server, so a server
+  started at the desk and attached from afar says so while you are away);
+  `"always"` and `"never"` do what they say. The innermost host wins, and it is
+  the only one shown, however deep the nesting: a ranma whose focused pane runs a
+  ranma naming a host announces that host, and one whose focused pane runs a
+  plain `ssh box` (nothing on the other side) announces `box`, the destination
+  from ssh's command line. So a local ranma with a pane SSH'd into the VPS gives
+  kitty `⧉ ranma@vps · nvim`, never `@desk@vps`. Borders, tabs and the bar still
+  show the title without the mark.
 
 ## Mouse
 
@@ -280,7 +291,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | --- | --- | --- |
 | `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
-| `workspaces` | The workspaces as ` 3 ` or ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. | `show = "occupied"` (default) or `"all"` (1-10) |
+| `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
 

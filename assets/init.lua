@@ -59,6 +59,15 @@ ranma.set {
   -- down. "off": no marking, no passing.
   nested = "auto",
   outer_leader = "ctrl+alt+b",
+
+  -- Name this machine in the terminal's title, so its tab says where you are:
+  -- "⧉ ranma@vps · nvim". "ssh": only when the terminal reached this ranma over
+  -- SSH; "always"; "never". Whatever runs in the focused pane can name a host
+  -- instead: a ranma inside it passes its host out, and a plain `ssh box` names
+  -- box, so the tab of a local ranma SSH'd into the VPS says @vps. Only the
+  -- innermost host is shown, never a chain. (Needs nested = "auto": with "off"
+  -- ranma sets no title at all.)
+  title_host = "ssh",
 }
 
 -- Panes -------------------------------------------------------------------------
@@ -216,7 +225,10 @@ ranma.bar {
 }
 
 -- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.
-ranma.module("workspaces", { show = "occupied" })
+-- label = "program" names an unnamed workspace after the program in its focused
+-- pane (" 3:nvim ", the shell at its prompt); "number" shows only " 3 ". A name
+-- given with rename_workspace (leader .) always wins.
+ranma.module("workspaces", { show = "occupied", label = "program" })
 
 -- A module is a Lua function or a shell command. Timed modules tick on the wall
 -- clock: interval = 60 fires on the minute, not 60 s after ranma started.

@@ -49,6 +49,16 @@ pub enum NestedMode {
     Off,
 }
 
+/// When ranma's title names the host it runs on (`⧉ ranma@vps · nvim`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TitleHost {
+    /// When the terminal showing this ranma reached it over SSH.
+    Ssh,
+    Always,
+    Never,
+}
+
 /// What ranma does when its source has moved on (see `update`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -77,6 +87,7 @@ pub struct Settings {
     /// Reaches this ranma even while it passes keys to one inside it; pressed
     /// again in WM mode, it goes one level down.
     pub outer_leader: Chord,
+    pub title_host: TitleHost,
 }
 
 impl Default for Settings {
@@ -96,6 +107,7 @@ impl Default for Settings {
             update_check_hours: 24.0,
             nested: NestedMode::Auto,
             outer_leader: "ctrl+alt+b".parse().unwrap(),
+            title_host: TitleHost::Ssh,
         }
     }
 }
@@ -117,6 +129,7 @@ struct SettingsPatch {
     update_check_hours: Option<f64>,
     nested: Option<NestedMode>,
     outer_leader: Option<String>,
+    title_host: Option<TitleHost>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -314,6 +327,7 @@ struct Builder {
     bar: BarLayout,
     modules: HashMap<String, ModuleDef>,
     workspaces_show_all: bool,
+    workspaces_numbers_only: bool,
     rules: Vec<Rule>,
 }
 
@@ -328,6 +342,9 @@ pub struct Config {
     pub modules: HashMap<String, ModuleDef>,
     /// The workspaces module shows 1-10 even when empty.
     pub workspaces_show_all: bool,
+    /// The workspaces module shows ` 3 ` for an unnamed workspace, not
+    /// ` 3:nvim ` (the program in its focused pane).
+    pub workspaces_numbers_only: bool,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
     pub theme: Theme,
@@ -406,6 +423,9 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             }
             if let Some(n) = patch.nested {
                 s.nested = n;
+            }
+            if let Some(h) = patch.title_host {
+                s.title_host = h;
             }
             if let Some(k) = patch.outer_leader {
                 s.outer_leader = k
@@ -575,7 +595,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
-                let allowed: &[&str] = if name == "workspaces" { &["show"] } else { &[] };
+                let allowed: &[&str] = if name == "workspaces" { &["show", "label"] } else { &[] };
                 if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
                     return Err(rt_err(format!(
                         "ranma.module(\"{name}\"): `{name}` is built in and takes {}; `{k}` is not one",
@@ -597,6 +617,22 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                     lua.app_data_mut::<Builder>()
                         .expect("builder installed")
                         .workspaces_show_all = all;
+                }
+                if name == "workspaces"
+                    && let Some(label) = opts.get::<Option<String>>("label")?
+                {
+                    let numbers_only = match label.as_str() {
+                        "program" => false,
+                        "number" => true,
+                        other => {
+                            return Err(rt_err(format!(
+                                "ranma.module(\"workspaces\"): label = \"{other}\" (expected \"program\" or \"number\")"
+                            )));
+                        }
+                    };
+                    lua.app_data_mut::<Builder>()
+                        .expect("builder installed")
+                        .workspaces_numbers_only = numbers_only;
                 }
                 return Ok(());
             }
@@ -859,6 +895,7 @@ pub fn load_from(
         bar: builder.bar,
         modules: builder.modules,
         workspaces_show_all: builder.workspaces_show_all,
+        workspaces_numbers_only: builder.workspaces_numbers_only,
         rules: builder.rules,
         theme,
         source: user_file,
@@ -1062,6 +1099,14 @@ mod tests {
         // Only the side given changes.
         assert_eq!(cfg.bar.left, vec!["mode", "session", "workspaces"]);
         assert!(cfg.workspaces_show_all);
+        assert!(
+            !cfg.workspaces_numbers_only,
+            "program names are the default"
+        );
+        let numbers = with_user("ranma.module('workspaces', { label = 'number' })").unwrap();
+        assert!(numbers.workspaces_numbers_only);
+        let e = with_user("ranma.module('workspaces', { label = 'title' })").unwrap_err();
+        assert!(e.to_string().contains("label = \"title\""), "{e}");
         match &cfg.modules["load"].kind {
             ModuleKind::Exec { command, format } => {
                 assert_eq!(command, "cat /proc/loadavg");
@@ -1150,6 +1195,10 @@ mod tests {
         let cfg = load_from(None, None, None).unwrap();
         assert_eq!(cfg.settings.nested, NestedMode::Auto);
         assert_eq!(cfg.settings.outer_leader, "ctrl+alt+b".parse().unwrap());
+        assert_eq!(cfg.settings.title_host, TitleHost::Ssh);
+        let cfg = with_user("ranma.set { title_host = 'always' }").unwrap();
+        assert_eq!(cfg.settings.title_host, TitleHost::Always);
+        assert!(with_user("ranma.set { title_host = 'sometimes' }").is_err());
         let cfg = with_user("ranma.set { nested = 'off', outer_leader = 'ctrl+alt+a' }").unwrap();
         assert_eq!(cfg.settings.nested, NestedMode::Off);
         let err = format!(

@@ -35,6 +35,10 @@ pub struct Hello {
     /// Defaulted, so a server and a client a build apart still understand a hello.
     #[serde(default)]
     pub inside: Option<String>,
+    /// The client was reached over SSH: the title names this host (see the
+    /// `title_host` setting). Defaulted like `inside`.
+    #[serde(default)]
+    pub remote: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -163,6 +167,7 @@ mod tests {
             colors: HostColors::default(),
             typed_early: b"ls\r".to_vec(),
             inside: Some("/run/user/1000/ranma/1.sock".into()),
+            remote: true,
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -214,9 +219,11 @@ mod tests {
             colors: HostColors::default(),
             typed_early: Vec::new(),
             inside: None,
+            remote: false,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("inside");
+        old.as_object_mut().unwrap().remove("remote");
         let h: Hello = serde_json::from_value(old).unwrap();
         assert_eq!(h.inside, None);
     }

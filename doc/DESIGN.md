@@ -217,6 +217,17 @@ the two kept in sync by hand. So:
   State-driven Lua modules (no interval) re-run when focus, workspace, mode, title
   or the pane count change — not per frame. A result that did not change does not
   cost a frame.
+- **A workspace without a name is named after its program**: ` 3:nvim `, the
+  foreground program of its focused pane (the terminal's foreground process
+  group, from `/proc`), so the bar says what is where without naming anything by
+  hand. A given name wins; `label = "number"` turns it off. The read is not free
+  and a frame must not pay for it, so it happens off the draw: after a pane's
+  output or a key, at most every 500 ms, into a cache the frame reads. A key also
+  earns one read 500 ms later (the Enter that starts `nvim` arrives before nvim
+  does). Only events schedule reads, never a read, so an idle ranma stays at zero
+  wakeups. The foreground program, not the title: titles are whatever the shell
+  last set (`user@host: ~/dir`), and the program is what you would name the
+  workspace yourself.
 - **Exec modules cannot hang ranma.** They run on their own thread, in their own
   process group, one run at a time per module, and a 5-second timeout kills the
   whole group, so a grandchild holding the output pipe open cannot wedge the read
@@ -390,6 +401,18 @@ to walk several levels, a ranma that is in WM mode (or has such a ranma inside)
 marks itself engaged (`⧉ ranma+`), and an outer ranma passes the outer leader on
 to an engaged one instead of stopping. Marks travel through pane output, so a key
 pressed in the same instant as the one before can arrive ahead of the mark.
+
+The mark also says **where**: `⧉ ranma@vps · nvim`, so the tab of the terminal
+on the desk names the machine you are on. Only the innermost host is carried,
+never a chain (`@a@b@c` would be noise, and would grow with every level): a
+ranma announces the host a ranma in its focused pane names, else the
+destination of an `ssh` running there (read from `/proc` like the workspace
+programs, so a plain `ssh box` with no ranma on the far side counts), else its
+own name when its client came over SSH (`title_host = "ssh"`, the default;
+`"always"` and `"never"` too). The client says whether it came over SSH in its
+hello, since a server started at the desk may be attached from afar, and the
+reverse. A mark read with a chain in it anyway keeps only its last host, so no
+level can make one longer.
 
 Building this found two bugs that were there all along: a pane's wakeup flag was
 re-armed *after* a frame was drawn, so output arriving during the draw was left
