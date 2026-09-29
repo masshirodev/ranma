@@ -264,6 +264,11 @@ pub struct OpenSpec {
     pub beside: Option<(PaneId, Dir)>,
     /// Leave focus where it is (tmux's `split-window -d`).
     pub background: bool,
+    /// Float it, centred, this many percent of the workspace wide and high.
+    pub float: Option<(u8, u8)>,
+    /// When it closes, focus goes back to the pane that had it before
+    /// (`ranma popup`), instead of to a neighbour.
+    pub return_focus: bool,
 }
 
 /// A request answered with data (see the module docs).
@@ -420,6 +425,12 @@ pub fn open_request(spec: &OpenSpec) -> String {
     if spec.background {
         kv("background", "yes");
     }
+    if let Some((w, h)) = spec.float {
+        kv("float", &format!("{w} {h}"));
+    }
+    if spec.return_focus {
+        kv("return_focus", "yes");
+    }
     s.push_str("--\n");
     if let Some(c) = &spec.command {
         s.push_str(c);
@@ -465,6 +476,17 @@ fn parse_open<'a>(mut lines: impl Iterator<Item = &'a str>) -> Result<OpenSpec> 
                 spec.beside = Some((p, d));
             }
             "background" => spec.background = v == "yes",
+            "return_focus" => spec.return_focus = v == "yes",
+            "float" => {
+                let pct = |n: &str| n.parse::<u8>().ok().filter(|n| (10..=100).contains(n));
+                spec.float = match v.split_once(' ') {
+                    Some((w, h)) => pct(w).zip(pct(h)),
+                    None => None,
+                };
+                if spec.float.is_none() {
+                    bail!("float `{v}` is not a width and a height, 10-100 percent each");
+                }
+            }
             "accent" => {
                 spec.accent = Some(
                     v.parse()
@@ -692,6 +714,12 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(open(&open_request(&beside)), beside);
+        let popup = OpenSpec {
+            float: Some((60, 40)),
+            return_focus: true,
+            ..Default::default()
+        };
+        assert_eq!(open(&open_request(&popup)), popup);
         for (req, needle) in [
             ("open\ncolour=red\n--\n", "colour"),
             ("open\ncwd=/definitely/not/here\n--\n", "not a directory"),
@@ -700,6 +728,8 @@ mod tests {
             ("open\naccent=pink\n--\n", "accent"),
             ("open\nbeside=7 sideways\n--\n", "sideways"),
             ("open\nbeside=x down\n--\n", "pane id"),
+            ("open\nfloat=5 50\n--\n", "float"),
+            ("open\nfloat=50\n--\n", "float"),
         ] {
             let err = format!("{:#}", parse_request(req).err().unwrap());
             assert!(err.contains(needle), "{req:?}: {err}");

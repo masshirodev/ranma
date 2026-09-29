@@ -388,6 +388,7 @@ ranma open --session ai --workspace empty --cwd ~/projects/kumiko \
 | `--side DIR` | with `--beside`: `left`, `right` (the default), `up` or `down` |
 | `-d`, `--background` | leave focus, the shown session and the shown workspace as they were |
 | `-P`, `--print` | print the new pane's id |
+| `--float W H` | float it, centred, `W`% by `H`% of the workspace |
 | `-- COMMAND` | what to run; the shell when left out. One argument is a command line for the shell (`'ai; exec zsh'`); several are a command and its arguments, quoted for you. |
 
 It is how scripts lay things out: one project per workspace, say, each started
@@ -408,7 +409,29 @@ ranma wait -p "$id"; echo $?             # until it ends; its exit status
 | `ranma send [-p PANE] [-e] TEXT...` | Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and `-e` presses Enter after it. `--paste` sends it as a paste instead, bracketed if the program asked for bracketed paste. |
 | `ranma send [-p PANE] --keys KEY...` | Press keys, each spelled as in a bind (`ctrl+c`, `return`, `alt+x`, `up`), encoded for the modes the program asked for. |
 | `ranma capture [-p PANE] [-H N]` | Print the pane's screen, with `N` lines of history above it. Each line is trimmed on the right; blank lines at the end are left out. |
-| `ranma wait [-p PANE]` | Wait until the pane ends and exit with its program's status (1 when there is none, as for a pane closed by ranma). |
+| `ranma wait [-p PANE]` | Wait until the pane ends and exit with its program's status (1 when there is none, as for a pane closed by ranma). A pane that ended before `wait` asked answers at once, with its status if it was among the last 64 to end. |
+
+### Popups: `ranma popup`
+
+```sh
+cd "$(ranma popup -- 'fd -td . ~/projects | fzf')"
+branch=$(ranma popup -W 40 -H 50 -t branch -- 'git branch --format="%(refname:short)" | fzf')
+```
+
+`ranma popup [-W %] [-H %] [-t TITLE] -- COMMAND` runs the command in a float
+centred over the workspace (60% by 60% unless `-W`/`-H` say otherwise), in the
+directory `ranma popup` was run from, and waits for it. What the command
+writes to stdout is what `ranma popup` prints, and its exit status is
+`ranma popup`'s, so a picker's answer comes back to the script that asked.
+Focus returns to the pane it was opened from when it closes.
+
+The command's stdout goes to that answer, not to the float, so it must draw
+on the terminal itself: fzf, `gum`, `read x </dev/tty` do; a program that
+draws on stdout (an editor, `less`) shows nothing. For those, `ranma open
+--float 60 60` opens the same float without capturing anything.
+
+It is a command for scripts and shell functions in panes. A bind cannot run
+it through `os.execute`: that would wait on the very ranma it asks.
 
 `-p` takes a pane id from `ranma panes`; without it, each means the pane it
 runs in (`RANMA_PANE`, which every pane has). A pane id is fixed for the pane's

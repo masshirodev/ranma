@@ -180,6 +180,11 @@ T send-keys -t s "P=\$($BIN open -P -d -- 'echo smoke-captured; read x; exit \$x
 wait_for 'CAPTURE-OK' 20 || fail "ranma capture did not read a background pane"
 wait_for 'WAIT=7' 20 || fail "ranma send/wait did not return the pane's exit status"
 wait_for 'ID *WHERE *PROGRAM' 8 || fail "ranma panes printed no table"
+# A popup: a float whose stdout comes back to the caller, with its status.
+T send-keys -t s "r=\$($BIN popup -- 'read x </dev/tty; echo popped-\$x; exit 4'); echo \"POPUP=\$r/\$?\"" Enter
+wait_for '╭ read x' 20 || wait_for '╭ ' 4 || fail "the popup did not open"
+sleep 0.5; T send-keys -t s 'ok' Enter
+wait_for 'POPUP=popped-ok/4' 20 || fail "ranma popup did not return the output and status"
 
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.

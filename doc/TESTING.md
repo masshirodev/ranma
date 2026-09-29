@@ -48,6 +48,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - `ranma open -P -d` opens a pane in the background and prints its id;
   `ranma capture` reads it, `ranma send` types into it, and `ranma wait` returns
   its exit status; `ranma panes` prints its table
+- `ranma popup` opens a float, reads what is typed in it, and returns the
+  command's output and exit status to the shell that asked
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize

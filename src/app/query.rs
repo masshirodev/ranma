@@ -16,6 +16,9 @@ use crate::workspace::Workspace;
 
 pub type Reply = Sender<Result<String, String>>;
 
+/// How many ended panes' exit statuses `wait` remembers.
+const ENDED_KEPT: usize = 64;
+
 impl App {
     pub(super) fn answer(&mut self, q: Query, reply: Reply) {
         let result = match q {
@@ -30,18 +33,41 @@ impl App {
                     self.waiters.entry(pane).or_default().push(reply);
                     return;
                 }
-                Err(no_pane(pane))
+                // Ids are never reused: one below the next is a pane that has
+                // already ended, which a script racing its own pane will ask about.
+                if pane > 0 && pane < self.next_id {
+                    Ok(self.ended_status(pane))
+                } else {
+                    Err(no_pane(pane))
+                }
             }
         };
         let _ = reply.send(result);
     }
 
-    /// A pane is gone: whoever waits on it gets its exit status.
+    /// A pane is gone: whoever waits on it gets its exit status, and it is
+    /// kept a while for whoever asks too late.
     pub(super) fn pane_ended(&mut self, id: PaneId) {
         let code = self.exit_codes.remove(&id);
-        for w in self.waiters.remove(&id).unwrap_or_default() {
-            let _ = w.send(Ok(code.map(|c| format!("{c}\n")).unwrap_or_default()));
+        self.ended.push_back((id, code));
+        if self.ended.len() > ENDED_KEPT {
+            self.ended.pop_front();
         }
+        let status = self.ended_status(id);
+        for w in self.waiters.remove(&id).unwrap_or_default() {
+            let _ = w.send(Ok(status.clone()));
+        }
+    }
+
+    /// What `wait` answers for a pane that has ended: its exit status, or
+    /// nothing when it had none or ended too long ago to remember.
+    fn ended_status(&self, id: PaneId) -> String {
+        self.ended
+            .iter()
+            .find(|(p, _)| *p == id)
+            .and_then(|(_, c)| *c)
+            .map(|c| format!("{c}\n"))
+            .unwrap_or_default()
     }
 
     /// The session and workspace holding a pane, shown or not.
@@ -143,4 +169,45 @@ impl App {
 
 fn no_pane(id: PaneId) -> String {
     format!("no pane {id} (see `ranma panes`)")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app() -> App {
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        App::new(config, tx, 80, 24)
+    }
+
+    fn ask(a: &mut App, q: Query) -> Result<String, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        a.answer(q, tx);
+        rx.try_recv().expect("answered at once")
+    }
+
+    #[test]
+    fn wait_on_a_pane_that_already_ended_answers_its_status() {
+        let mut a = app();
+        a.next_id = 5;
+        a.exit_codes.insert(3, 7);
+        a.pane_ended(3);
+        assert_eq!(ask(&mut a, Query::Wait { pane: 3 }), Ok("7\n".into()));
+        // Ended, status unknown (closed by ranma, or long forgotten).
+        assert_eq!(ask(&mut a, Query::Wait { pane: 2 }), Ok(String::new()));
+        // Never existed.
+        assert!(ask(&mut a, Query::Wait { pane: 9 }).is_err());
+        assert!(ask(&mut a, Query::Wait { pane: 0 }).is_err());
+    }
+
+    #[test]
+    fn waiters_hear_when_their_pane_ends() {
+        let mut a = app();
+        let (tx, rx) = std::sync::mpsc::channel();
+        a.waiters.entry(4).or_default().push(tx);
+        a.exit_codes.insert(4, 0);
+        a.pane_ended(4);
+        assert_eq!(rx.try_recv(), Ok(Ok("0\n".into())));
+    }
 }

@@ -213,6 +213,10 @@ pub struct App {
     waiters: HashMap<PaneId, Vec<query::Reply>>,
     /// Exit statuses of children that ended, until their pane is closed.
     exit_codes: HashMap<PaneId, i32>,
+    /// The last panes to end and their exit statuses, for a late `wait`.
+    ended: std::collections::VecDeque<(PaneId, Option<i32>)>,
+    /// Popups: when the key pane closes, the value pane gets focus back.
+    return_focus: HashMap<PaneId, PaneId>,
 }
 
 impl App {
@@ -276,6 +280,8 @@ impl App {
             cpu_prev: None,
             waiters: HashMap::new(),
             exit_codes: HashMap::new(),
+            ended: Default::default(),
+            return_focus: HashMap::new(),
         };
         app.schedule_modules(Instant::now());
         app
@@ -668,6 +674,14 @@ impl App {
         self.panes.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
         self.pane_ended(id);
+        // A popup gives focus back to the pane it was opened from, if that is
+        // still in the workspace shown, rather than to whichever neighbour.
+        if let Some(back) = self.return_focus.remove(&id)
+            && self.active().contains(back)
+        {
+            self.focus(back);
+        }
+        self.return_focus.retain(|_, to| *to != id);
         if self.panes.is_empty() {
             self.quit = true;
             return;

@@ -73,6 +73,24 @@ enum Command {
         #[arg(required = true)]
         action: Vec<String>,
     },
+    /// Run a command in a float over this pane and print what it prints:
+    /// `cd "$(ranma popup -- 'ls ~/projects | fzf')"`. Waits for it, exits with
+    /// its status, and gives focus back when it closes.
+    Popup {
+        /// Width in percent of the workspace.
+        #[arg(long, short = 'W', default_value_t = 60)]
+        width: u8,
+        /// Height in percent of the workspace.
+        #[arg(long, short = 'H', default_value_t = 60)]
+        height: u8,
+        /// Name shown on its border.
+        #[arg(long, short)]
+        title: Option<String>,
+        /// The command. Its stdout is what `ranma popup` prints, so the program
+        /// must draw on the terminal itself (as fzf does), not on stdout.
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
     /// List every pane in every session: id, where it is, what runs in it.
     Panes {
         /// As JSON, one object per pane, for scripts.
@@ -142,6 +160,9 @@ enum Command {
         /// Leave focus, the session and the workspace as they are.
         #[arg(long, short = 'd')]
         background: bool,
+        /// Float it, centred: width and height in percent of the workspace.
+        #[arg(long, num_args = 2, value_names = ["WIDTH", "HEIGHT"])]
+        float: Option<Vec<u8>>,
         /// Print the new pane's id.
         #[arg(long, short = 'P')]
         print: bool,
@@ -296,9 +317,15 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             beside,
             side,
             background,
+            float,
             print,
             command,
         } => {
+            let float = match float.as_deref() {
+                None => None,
+                Some([w, h]) if [w, h].iter().all(|n| (10..=100).contains(*n)) => Some((*w, *h)),
+                Some(_) => anyhow::bail!("--float: width and height are 10-100 percent"),
+            };
             let workspace = workspace
                 .map(|w| ranma::action::parse_workspace(&w))
                 .transpose()
@@ -329,9 +356,17 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
                 accent,
                 beside,
                 background,
+                float,
+                return_focus: false,
             }))?;
             if print { id } else { String::new() }
         }
+        Command::Popup {
+            width,
+            height,
+            title,
+            command,
+        } => return popup(width, height, title, &command),
         Command::Update { .. }
         | Command::Ls
         | Command::Kill { .. }
@@ -340,6 +375,58 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
     };
     print!("{out}");
     Ok(ExitCode::SUCCESS)
+}
+
+/// `ranma popup`: the command runs in a float with its stdout sent to a file
+/// only this user can read; once its pane ends, the file is what we print.
+/// The float draws on its own PTY, so fzf and the like show up there while
+/// their answer comes back here.
+fn popup(
+    width: u8,
+    height: u8,
+    title: Option<String>,
+    command: &[String],
+) -> anyhow::Result<ExitCode> {
+    use std::os::unix::fs::OpenOptionsExt;
+    if !(10..=100).contains(&width) || !(10..=100).contains(&height) {
+        anyhow::bail!("--width and --height are 10-100 percent");
+    }
+    let dir = ipc::server_dir();
+    std::fs::create_dir_all(&dir)?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let out = dir.join(format!("popup-{}-{nanos}.out", std::process::id()));
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&out)?;
+    let quoted = out.display().to_string().replace('\'', "'\\''");
+    let cmd = format!(
+        "( {} ) > '{quoted}'",
+        command_line(command).unwrap_or_default()
+    );
+    let result = (|| {
+        let id = ipc::send(&ipc::open_request(&ipc::OpenSpec {
+            name: title,
+            cwd: std::env::current_dir().ok(),
+            command: Some(cmd),
+            float: Some((width, height)),
+            return_focus: true,
+            ..Default::default()
+        }))?;
+        let id = id.trim();
+        let status = ipc::send(&format!("wait\n{id}\n"))?;
+        let text = std::fs::read_to_string(&out)?;
+        anyhow::Ok((status, text))
+    })();
+    let _ = std::fs::remove_file(&out);
+    let (status, text) = result?;
+    print!("{text}");
+    let code = status.trim().parse::<i32>().unwrap_or(1);
+    Ok(ExitCode::from(code.clamp(0, 255) as u8))
 }
 
 /// `ranma panes` for people: one row per pane, `*` on the focused one of each

@@ -196,6 +196,20 @@ impl App {
                 if spec.accent.is_some() {
                     self.sessions[self.active_session].accent = spec.accent;
                 }
+                if let Some((w, h)) = spec.float {
+                    let area = self.workspace_area();
+                    if !self.active().is_floating(id) {
+                        self.toggle_floating_pane(id);
+                    }
+                    if let Some(r) = self.active_mut().float_rect_mut(id) {
+                        *r = area.centered(w as u16, h as u16);
+                    }
+                }
+                if spec.return_focus
+                    && let Some(p) = prior
+                {
+                    self.return_focus.insert(id, p);
+                }
                 if spec.background {
                     if let Some(p) = prior {
                         self.focus(p);

@@ -426,6 +426,17 @@ means; `--paste` is there for text that should arrive as a paste. Pane ids are
 the ones every pane already had in `RANMA_PANE`. This is plain IPC, the same
 in kind as `ranma action`; nothing in it knows about agents (a non-goal).
 
+**`ranma popup` is `open` plus `wait`** (2026-09-29, from tuios's popups and
+tmux's `display-popup -E`): the CLI opens a centred float running the command
+with its stdout sent to a file only the user can read, waits for the pane,
+and prints the file. Capturing through a file, not the PTY, is what lets a
+picker work: fzf draws on the float's terminal and prints its answer to
+stdout, and the two never mix. The window manager only learned two generic
+things for it, both on `open`: `float` (a centred size) and `return_focus`
+(when the pane closes, focus goes back to where it came from instead of to a
+neighbour by geometry). It is for scripts in panes; a bind that waited on it
+would deadlock the thread that has to open it.
+
 Programs' own desktop notifications (OSC 9 and 777) are not turned into toasts:
 alacritty_terminal drops those sequences before ranma sees them, and catching
 them would mean parsing the PTY stream a second time.

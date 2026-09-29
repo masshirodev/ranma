@@ -272,6 +272,8 @@ ranma.module("datetime", {
 -- Scripts drive panes the same way: `ranma panes` lists them, `ranma open -P`
 -- opens one and prints its id, `ranma send -p ID -e "make"` types into it,
 -- `ranma capture -p ID` prints its screen, `ranma wait -p ID` waits for it.
+-- `ranma popup -- 'ls | fzf'` runs a picker in a float and prints its answer:
+--   cd "$(ranma popup -- 'fd -td . ~/projects | fzf')"
 
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind
