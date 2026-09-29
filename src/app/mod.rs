@@ -186,6 +186,9 @@ pub struct App {
     selection_pane: Option<PaneId>,
     /// The last left click, for double and triple clicks: when, where, how many.
     last_click: Option<(Instant, u16, u16, u8)>,
+    /// The pane a mouse press went to: its drags and its release follow it there,
+    /// and nowhere else gets them (see `handle_mouse_normal`).
+    mouse_capture: Option<PaneId>,
     /// The title last given to the host terminal (see `announce`).
     host_title: String,
     /// The detach action ran; the event loop sends the client away.
@@ -253,6 +256,7 @@ impl App {
             update_available: None,
             selection_pane: None,
             last_click: None,
+            mouse_capture: None,
             host_title: String::new(),
             detach_requested: false,
             switch_requested: None,
@@ -1178,14 +1182,32 @@ impl App {
             MouseEventKind::ScrollDown => Some(-3),
             _ => None,
         };
-        // The wheel goes to the pane under the pointer; everything else to the
-        // focused pane, which is where a drag that started in it belongs even when
-        // the pointer leaves it.
-        let target = if scroll.is_some() {
-            under
-        } else {
+        // The wheel goes to the pane under the pointer. A press goes to the
+        // focused pane when it lands in its text, and captures the mouse: the
+        // drags and the release that follow go to that pane even once the pointer
+        // leaves it, and to no other. Motion with no button held goes to the
+        // focused pane only while the pointer is over it. A press ranma kept (a
+        // click in the bar) captures nothing, so its release reaches no program:
+        // it used to land on the focused pane, clamped to its edge, and click
+        // whatever was drawn on the row nearest the bar.
+        let focused = || {
             let f = self.focused();
             frame.views.iter().find(|v| Some(v.id) == f).copied()
+        };
+        let view = |id| frame.views.iter().find(|v| v.id == id).copied();
+        let target = match m.kind {
+            MouseEventKind::ScrollUp
+            | MouseEventKind::ScrollDown
+            | MouseEventKind::ScrollLeft
+            | MouseEventKind::ScrollRight => under,
+            MouseEventKind::Down(_) => {
+                let v = focused().filter(|v| v.inner.contains(x, y));
+                self.mouse_capture = v.map(|v| v.id);
+                v
+            }
+            MouseEventKind::Drag(_) => self.mouse_capture.and_then(view),
+            MouseEventKind::Up(_) => self.mouse_capture.take().and_then(view),
+            MouseEventKind::Moved => focused().filter(|v| v.inner.contains(x, y)),
         };
         let Some(v) = target else {
             return;

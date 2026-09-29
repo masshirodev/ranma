@@ -118,6 +118,28 @@ bar | grep -Eq ' 1(:[a-z]+)?  2(:[a-z]+)? ' || fail "workspace 2 not shown in th
 T send-keys -t s C-b 1 Escape; sleep 0.3
 bar | grep -q ' 2 ' && fail "empty workspace 2 still in the bar"
 
+# A click in the bar reaches no program. Its press was always ranma's, but the
+# release and the motion over the bar went to the focused pane, clamped to its
+# nearest row, so a mouse-driven program was clicked on its bottom line.
+cat > "$CFG/mouse.py" <<'PY'
+import os, sys, tty
+tty.setraw(0)
+os.write(1, b"\x1b[?1003h\x1b[?1006hmouse-ready\r\n")
+with open(sys.argv[1], "wb", buffering=0) as log:
+    while (b := os.read(0, 256)) and b != b"q":
+        log.write(b)
+os.write(1, b"\x1b[?1003l\x1b[?1006l")
+PY
+T send-keys -t s "clear; python3 $CFG/mouse.py $CFG/mouse.log" Enter
+wait_for 'mouse-ready' || fail "mouse probe did not start"
+bx=$(( $(bar | sed 's/ 1\(:[a-z0-9]*\)\? .*//' | wc -m) + 1 ))
+by=$(screen | wc -l)
+for e in "35;$bx;${by}M" "0;$bx;${by}M" "0;$bx;${by}m"; do
+  T send-keys -t s -l $'\e[<'"$e"; sleep 0.1
+done
+sleep 0.3; T send-keys -t s q; sleep 0.3
+[ -s "$CFG/mouse.log" ] && fail "a click in the bar reached the pane: $(cat -v "$CFG/mouse.log")"
+
 # Hot reload: a broken config is reported at once and the old one kept.
 echo 'ranma.bind("x", "fly")' > "$CFG/init.lua"
 wait_for 'config error, kept the old one' 8 || fail "reload error not shown"

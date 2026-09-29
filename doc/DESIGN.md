@@ -155,10 +155,17 @@ panes. So capturing the mouse commits ranma to passing it on properly: clicks,
 drags and motion to programs that enabled mouse reporting (encoded in the mode and
 format they asked for, SGR or X10); the wheel as arrow keys to full-screen programs
 without mouse support (xterm's alternate scroll); and the wheel through scrollback
-everywhere else. Text selection stays one modifier away, since every common
-terminal lets Shift override a program's mouse capture. `mouse = "off"` restores
-the milestone 1 behaviour for anyone who prefers the host's own selection: the
-mouse is captured only while in WM mode.
+everywhere else. A program gets only what a terminal of its own would: a press
+in its text, the drags and the release that follow that press (even once the
+pointer leaves it, as a real window keeps a drag), and motion while the pointer is
+over it. A press ranma keeps, on the bar, a tab or a border, reaches no program at
+all, release included; the release used to follow focus, clamped to the pane's
+edge, and clicked whatever the program drew on the row nearest the bar.
+
+Text selection stays one modifier away, since every common terminal lets Shift
+override a program's mouse capture. `mouse = "off"` restores the milestone 1
+behaviour for anyone who prefers the host's own selection: the mouse is captured
+only while in WM mode.
 
 ### Configuration: Lua for behaviour, TOML for looks — from day one
 
