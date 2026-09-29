@@ -310,7 +310,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 
 | Module | Shows | Options |
 | --- | --- | --- |
-| `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise | — |
+| `mode` | ` WM `, ` COPY ` or ` SEARCH `, nothing otherwise; ` ⇉ sync N ` while N panes here are marked for synchronized input | — |
 | `session` | The shown session's name, once there is more than one. Click for the session switcher. | — |
 | `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named) |
 | `title` | The focused pane's title | — |
