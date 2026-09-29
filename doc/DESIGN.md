@@ -664,6 +664,8 @@ unknown variable is empty, as in tmux. Every other command and every flag not
 listed is an error naming it, **and every call not answered in full is logged**
 to `~/.cache/ranma/tmux-shim.log` (command and flags only, never text). The
 list grows from that log, when a real program needs more, and not otherwise.
+(`#{client_control_mode}`, always `0`, came that way: Claude Code asks for it
+on every start.)
 
 **Respawning is ranma's, not a holder's.** tuios cannot swap a window's process
 from outside, so every shim pane there runs a holder process that does it.

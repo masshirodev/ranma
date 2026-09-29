@@ -549,6 +549,8 @@ fn pane_vars(view: &View, p: &PaneInfo) -> impl Fn(&str) -> Option<String> {
             "pane_width" => p.cols.to_string(),
             "pane_height" => p.rows.to_string(),
             "pane_dead" | "pane_in_mode" | "pane_marked" | "pane_synchronized" => "0".into(),
+            // Claude Code asks on every start; a shim client is never in control mode.
+            "client_control_mode" => "0".into(),
             "window_width" | "client_width" => p.cols.to_string(),
             "window_height" | "client_height" => p.rows.to_string(),
             "host" => host.clone(),
@@ -1097,6 +1099,7 @@ mod tests {
         assert_eq!(f("#{?window_active,#{pane_id},x}", &mut u), "%4");
         assert_eq!(f("#{==:#{pane_index},1}#{!=:a,a}", &mut u), "10");
         assert_eq!(f("## #{window_panes}", &mut u), "# 2");
+        assert_eq!(f("#{client_control_mode}", &mut u), "0");
         assert!(u.is_empty(), "{u:?}");
         assert_eq!(f("[#{pane_nonsense}]", &mut u), "[]");
         assert_eq!(u, vec!["pane_nonsense".to_string()]);
