@@ -748,6 +748,15 @@ learns from focus events (ranma passes them to panes that ask). That is the
 screen. While the inner's pane is not focused (beside another in the outer), it
 draws its bar over its bottom row; it never takes the row back from its panes,
 since that would resize them on every change of focus in the outer.
+**The window losing focus is not the inner losing it** (2026-09-29): the
+outer forwards the terminal's own focus-in and focus-out to its focused pane,
+except a pane whose ranma reports. There they meant "not shown" to the inner,
+which drew its bar over its bottom row while the outer bar still showed its
+workspaces, so switching desktop windows left two bars stacked. For a
+reporting ranma, focus is only the outer's path. The cost: programs inside a
+nested ranma no longer hear that the desktop window lost focus (an editor that
+saves on focus-out, say). Passing that on would need its own message in the
+report protocol, so the inner could tell the two apart.
 
 *Drawing* is the handoff's, held to it cell for cell by `nestbar`'s tests: the
 holder drops its program name and shows its number, inner items unpadded and

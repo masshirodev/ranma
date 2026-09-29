@@ -1229,7 +1229,13 @@ impl App {
             Event::FocusGained | Event::FocusLost => {
                 self.host_focused = ev == Event::FocusGained;
                 self.dirty = true;
-                if let Some(p) = self.focused_pane()
+                // Not to a ranma that reports here: to it, focus means "this
+                // bar shows your workspaces", which the window losing focus
+                // does not change. Told it anyway, it drew its own bar over
+                // its bottom row, under this one's still showing it.
+                if let Some(id) = self.focused()
+                    && !self.reports_from(id)
+                    && let Some(p) = self.panes.get(&id)
                     && let Some(b) = input::encode_focus(ev == Event::FocusGained, p.modes())
                 {
                     p.write(b);

@@ -244,6 +244,13 @@ T send-keys -t s "SSH_CONNECTION='10.0.0.1 1 10.0.0.2 22' $BIN" Enter
 for _ in $(seq 1 40); do bar | grep -q ' \[1' && break; sleep 0.25; done
 bar | grep -q ' \[1' || fail "the outer bar does not show the inner's workspaces ($(bar))"
 screen | head -n -1 | grep -q '│ 1[: ]' && fail "the inner ranma still draws its own bar"
+# The terminal window losing focus is not the inner losing the outer's focus:
+# the outer still shows its workspaces, so the inner must not draw its bar
+# over its bottom row too (two bars, one above the other).
+T send-keys -t s -l $'\e[O'; sleep 0.6
+screen | head -n -1 | grep -q '│ 1[: ]' && fail "the window losing focus made the inner ranma draw a second bar"
+bar | grep -q ' \[1' || fail "the outer bar stopped showing the inner's workspaces when the window lost focus ($(bar))"
+T send-keys -t s -l $'\e[I'; sleep 0.4
 HOST=$(uname -n | cut -d. -f1)
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma@$HOST · " && break; sleep 0.25; done
 OUTER=$(T display -p -t s '#{pane_title}')
