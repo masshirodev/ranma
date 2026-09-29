@@ -778,6 +778,21 @@ impl App {
         }
     }
 
+    /// Give the focused pane a new float rect, computed from its current one.
+    /// A tile is floated first: asking to snap a pane is asking for it to float.
+    fn place_float(&mut self, place: impl FnOnce(Rect) -> Rect) {
+        let Some(id) = self.focused() else {
+            return;
+        };
+        if !self.active().is_floating(id) {
+            self.toggle_floating_pane(id);
+        }
+        if let Some(r) = self.active_mut().float_rect_mut(id) {
+            *r = place(*r);
+        }
+        self.relayout();
+    }
+
     // ---- events --------------------------------------------------------------
 
     pub fn handle(&mut self, ev: AppEvent) {
@@ -1518,6 +1533,8 @@ impl App {
                 }
             }
             Action::ToggleFloating => self.toggle_floating(),
+            Action::FloatSize(pw, ph) => self.place_float(|r| r.resized_in(area, pw, ph)),
+            Action::Snap(to) => self.place_float(|r| r.snapped(area, to)),
             Action::Detach => self.detach_requested = true,
             Action::ServerSwitcher => self.list_servers(),
             Action::Attach(name) => self.switch_requested = Some(name),

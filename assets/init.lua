@@ -82,6 +82,12 @@ ranma.bind("w", "toggle_floating")
 -- Floats are free: they overlap, and new ones cascade from the last. f raises
 -- the next one, cycling through the pile.
 ranma.bind("f", "cycle_floats")
+-- Floats can be sized in percent and snapped to halves, quarters or the middle
+-- (a tile is floated first). Not bound by default; the palette (leader :) has
+-- them, or bind a few:
+--   ranma.bind("c", "snap center")
+--   ranma.bind("alt+shift+left", "snap left")
+--   ranma.bind("alt+shift+f", "float_size 80 80")
 ranma.bind("j", "toggle_split")
 -- Every split in the workspace back to equal shares, however it was resized.
 ranma.bind("=", "equalize")

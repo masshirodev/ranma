@@ -15,6 +15,34 @@ pub enum Dir {
     Down,
 }
 
+/// Where `snap` puts a float: a half, a quarter, or the middle at its own size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Snap {
+    Left,
+    Right,
+    Top,
+    Bottom,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Center,
+}
+
+impl Snap {
+    const NAMES: [(&'static str, Snap); 9] = [
+        ("left", Snap::Left),
+        ("right", Snap::Right),
+        ("top", Snap::Top),
+        ("bottom", Snap::Bottom),
+        ("top_left", Snap::TopLeft),
+        ("top_right", Snap::TopRight),
+        ("bottom_left", Snap::BottomLeft),
+        ("bottom_right", Snap::BottomRight),
+        ("center", Snap::Center),
+    ];
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceTarget {
     /// 1-based, as the user counts them: `workspace 1` is the first.
@@ -47,6 +75,12 @@ pub enum Action {
     /// Give every split in the workspace equal shares.
     Equalize,
     ToggleFloating,
+    /// Size the focused pane as a float, in percent of the workspace (width,
+    /// height), keeping its centre. A tile is floated first.
+    FloatSize(u8, u8),
+    /// Put the focused pane, floated first if it tiles, on a half, a quarter, or
+    /// in the middle.
+    Snap(Snap),
     /// Raise the next floating pane, cycling through the pile.
     CycleFloats,
     /// Pull ranma's source and install it, in a floating pane.
@@ -166,6 +200,11 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("toggle_split", ""),
     ("equalize", ""),
     ("toggle_floating", ""),
+    ("float_size", "<width%> [height%]"),
+    (
+        "snap",
+        "<left|right|top|bottom|top_left|top_right|bottom_left|bottom_right|center>",
+    ),
     ("cycle_floats", ""),
     ("toggle_group", ""),
     ("group_next", ""),
@@ -298,6 +337,50 @@ impl FromStr for Action {
             "toggle_split" => no_arg(Action::ToggleSplit),
             "equalize" => no_arg(Action::Equalize),
             "toggle_floating" => no_arg(Action::ToggleFloating),
+            "float_size" => {
+                let pct = |arg: Option<&str>| -> Result<Option<u8>, ActionError> {
+                    let Some(a) = arg else { return Ok(None) };
+                    a.trim_end_matches('%')
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|n| (10..=100).contains(n))
+                        .map(Some)
+                        .ok_or(ActionError::BadArg {
+                            action: name.into(),
+                            arg: a.into(),
+                            expected: "a percentage from 10 to 100",
+                        })
+                };
+                let w = pct(first)?.ok_or(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a width in percent (and optionally a height)",
+                })?;
+                let h = pct(second)?.unwrap_or(w);
+                if words.next().is_some() {
+                    return Err(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: "a width and a height, nothing more",
+                    });
+                }
+                Ok(Action::FloatSize(w, h))
+            }
+            "snap" => {
+                const WHERE: &str = "left, right, top, bottom, top_left, top_right, bottom_left, bottom_right or center";
+                let arg = first.ok_or(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: WHERE,
+                })?;
+                Snap::NAMES
+                    .iter()
+                    .find(|(n, _)| *n == arg && second.is_none())
+                    .map(|(_, s)| Action::Snap(*s))
+                    .ok_or(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: WHERE,
+                    })
+            }
             "cycle_floats" => no_arg(Action::CycleFloats),
             "update" => no_arg(Action::Update),
             "detach" => no_arg(Action::Detach),
@@ -419,6 +502,11 @@ impl fmt::Display for Action {
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::Equalize => f.write_str("equalize"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
+            Action::FloatSize(w, h) => write!(f, "float_size {w} {h}"),
+            Action::Snap(s) => {
+                let name = Snap::NAMES.iter().find(|(_, v)| v == s).map(|(n, _)| *n);
+                write!(f, "snap {}", name.unwrap_or("center"))
+            }
             Action::CycleFloats => f.write_str("cycle_floats"),
             Action::Update => f.write_str("update"),
             Action::Detach => f.write_str("detach"),
@@ -521,6 +609,23 @@ mod tests {
             "exec".parse::<Action>(),
             Err(ActionError::MissingArg { .. })
         ));
+        assert_eq!(
+            a("float_size 60%"),
+            Action::FloatSize(60, 60),
+            "one number is both sides"
+        );
+        for bad in [
+            "float_size 5",
+            "float_size 60 101",
+            "float_size 50 50 50",
+            "snap middle",
+            "snap left right",
+        ] {
+            assert!(
+                matches!(bad.parse::<Action>(), Err(ActionError::BadArg { .. })),
+                "{bad}"
+            );
+        }
         assert!(matches!(
             "attach".parse::<Action>(),
             Err(ActionError::MissingArg { .. })
@@ -543,6 +648,9 @@ mod tests {
             "exec htop",
             "help",
             "equalize",
+            "float_size 60 40",
+            "snap top_right",
+            "snap center",
             "command_palette",
             "copy_mode",
             "search",

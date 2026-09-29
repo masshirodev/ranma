@@ -13,7 +13,7 @@
 //! work on the computed rectangles, not on tree order, which is what makes focus
 //! go where the eye expects.
 
-use crate::action::Dir;
+use crate::action::{Dir, Snap};
 
 pub type PaneId = u64;
 
@@ -54,6 +54,43 @@ impl Rect {
         let w = (self.w as u32 * pw as u32 / 100) as u16;
         let h = (self.h as u32 * ph as u32 / 100) as u16;
         Rect::new(self.x + (self.w - w) / 2, self.y + (self.h - h) / 2, w, h)
+    }
+    /// This rect resized to `pw`% by `ph`% of `area`, around the same centre,
+    /// then kept inside `area`.
+    pub fn resized_in(&self, area: Rect, pw: u8, ph: u8) -> Rect {
+        let w = (area.w as u32 * pw as u32 / 100) as u16;
+        let h = (area.h as u32 * ph as u32 / 100) as u16;
+        let cx = self.x + self.w / 2;
+        let cy = self.y + self.h / 2;
+        Rect::new(cx.saturating_sub(w / 2), cy.saturating_sub(h / 2), w, h).clamp_into(area)
+    }
+    /// Where `snap` puts this rect in `area`. Halves and quarters take the odd
+    /// cell on the right and bottom, so two opposite snaps tile `area` exactly;
+    /// `Center` keeps this rect's size.
+    pub fn snapped(&self, area: Rect, to: Snap) -> Rect {
+        let (lw, lh) = (area.w / 2, area.h / 2);
+        let (rw, rh) = (area.w - lw, area.h - lh);
+        let (x0, x1) = (area.x, area.x + lw);
+        let (y0, y1) = (area.y, area.y + lh);
+        match to {
+            Snap::Left => Rect::new(x0, y0, lw, area.h),
+            Snap::Right => Rect::new(x1, y0, rw, area.h),
+            Snap::Top => Rect::new(x0, y0, area.w, lh),
+            Snap::Bottom => Rect::new(x0, y1, area.w, rh),
+            Snap::TopLeft => Rect::new(x0, y0, lw, lh),
+            Snap::TopRight => Rect::new(x1, y0, rw, lh),
+            Snap::BottomLeft => Rect::new(x0, y1, lw, rh),
+            Snap::BottomRight => Rect::new(x1, y1, rw, rh),
+            Snap::Center => {
+                let r = self.clamp_into(area);
+                Rect::new(
+                    area.x + (area.w - r.w) / 2,
+                    area.y + (area.h - r.h) / 2,
+                    r.w,
+                    r.h,
+                )
+            }
+        }
     }
     /// Move and clip this rect so it lies inside `area`, keeping its size if it fits.
     pub fn clamp_into(&self, area: Rect) -> Rect {
@@ -1067,5 +1104,26 @@ mod tests {
             Rect::new(80, 30, 20, 10)
         );
         assert!(a.contains(99, 39) && !a.contains(100, 0));
+    }
+
+    #[test]
+    fn snapping_and_sizing_floats() {
+        let area = Rect::new(0, 1, 101, 41);
+        let r = Rect::new(10, 10, 20, 10);
+        // Opposite halves tile the area exactly, odd cells included.
+        let (l, rt) = (r.snapped(area, Snap::Left), r.snapped(area, Snap::Right));
+        assert_eq!(l, Rect::new(0, 1, 50, 41));
+        assert_eq!(rt, Rect::new(50, 1, 51, 41));
+        assert_eq!(
+            r.snapped(area, Snap::BottomRight),
+            Rect::new(50, 21, 51, 21)
+        );
+        assert_eq!(r.snapped(area, Snap::Top), Rect::new(0, 1, 101, 20));
+        assert_eq!(r.snapped(area, Snap::Center), Rect::new(40, 16, 20, 10));
+        // Resizing keeps the centre, and stays inside the area near an edge.
+        assert_eq!(r.resized_in(area, 20, 50), Rect::new(10, 5, 20, 20));
+        let edge = Rect::new(90, 30, 10, 10).resized_in(area, 50, 50);
+        assert!(edge.right() <= area.right() && edge.bottom() <= area.bottom());
+        assert_eq!((edge.w, edge.h), (50, 20));
     }
 }

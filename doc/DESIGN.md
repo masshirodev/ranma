@@ -253,6 +253,13 @@ or bottom one (anywhere, in WM mode), with the PTY resized once on release. A
 float tiled again goes next to the tile it was over, and floated again returns
 where it last floated.
 
+Keyboard placement goes by the workspace, not by cells: `float_size 60 40`
+sizes a float in percent around its centre, and `snap` puts it on a half, a
+quarter or the middle (tuios's snap layout, 2026-09-29). Both float a tile
+first rather than refusing it, since asking where a pane goes is asking for it
+to float. Halves split an odd width with the extra cell on the right, so
+`snap left` and `snap right` tile the workspace exactly.
+
 The scratchpad is Hyprland's special workspace: one per ranma, shown over the
 current workspace, and it is **all floats**. (It first tiled its panes inside a
 centred box, a small tiled screen of its own; that was not what a scratchpad is

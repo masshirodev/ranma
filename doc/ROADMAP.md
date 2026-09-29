@@ -88,7 +88,7 @@ leaving out what DESIGN.md's non-goals refuse (remote hosts, agent tooling, web
 and SSH servers, animation).
 
 - [x] `equalize` (`leader =`); tuios's rotate is `toggle_split`, which already existed
-- [ ] Floats sized by percentage and snapped to corners and halves
+- [x] Floats sized by percentage and snapped to corners and halves
 - [ ] Built-in `cpu` and `mem` bar modules
 - [ ] A per-session accent colour
 - [ ] Socket commands for scripts: `ranma panes`, `send`, `capture`, `wait`
