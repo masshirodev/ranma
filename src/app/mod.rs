@@ -2414,6 +2414,25 @@ mod tests {
         assert_eq!(app(None).colors().border_active, base.border_active);
     }
 
+    #[test]
+    fn pickers_fit_any_screen_however_small() {
+        // A nested ranma in a narrow pane asked to quit panicked here: the
+        // question's minimum width was larger than the screen.
+        for w in 0..40u16 {
+            for h in 0..8u16 {
+                let mut a = app(None);
+                a.screen = Rect::new(0, 0, w, h);
+                a.confirm_quit();
+                let l = a.picker_layout().unwrap();
+                assert!(l.outer.w <= w && l.outer.h <= h, "{w}x{h}: {:?}", l.outer);
+                a.picker = None;
+                a.open_palette(crate::picker::PaletteMode::Help);
+                let l = a.picker_layout().unwrap();
+                assert!(l.outer.w <= w && l.outer.h <= h, "{w}x{h}: {:?}", l.outer);
+            }
+        }
+    }
+
     fn names(app: &App) -> Vec<Option<String>> {
         app.workspace_list().into_iter().map(|w| w.4).collect()
     }
