@@ -102,6 +102,23 @@ and SSH servers, animation).
 - [x] A `command_finished` hook from OSC 133; OSC 9 and 777 as toasts
 - [x] A which-key hint after a pause in WM mode (designed from `doc/briefs/done/WHICH_KEY.md`)
 
+## 6. One bar for nested ranmas
+
+A ranma inside ranma (over SSH, say) draws its own bar, and both show the
+title and the clock. Instead: the inner ranma reports its workspaces outward,
+the outermost bar shows them nested, and the inner draws no bar when it knows
+an outer shows it.
+
+- [ ] Design: `doc/briefs/NESTED_BAR.md` (waiting on the handoff)
+- [ ] The report: a private OSC with a protocol version, sent on change, read
+  off the PTY by the outer's scanner; an unknown or missing version looks as
+  today
+- [ ] The outer answers the client's startup query, so the inner knows it is
+  shown and hides its bar (per attach)
+- [ ] The outer bar nests the focused pane's ranma; a setting expands all
+- [ ] A nested pane's border: no title, and none at all when it fills the
+  workspace
+
 ## Later, maybe
 
 - Saving layouts to respawn them after a reboot (processes cannot survive one).
