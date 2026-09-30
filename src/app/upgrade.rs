@@ -31,14 +31,20 @@ pub struct Handover {
     pub name: String,
     /// The listening socket, kept open across the exec.
     pub listener_fd: RawFd,
+    /// The client whose size the screen has (see DESIGN.md, "Several terminals
+    /// on one server").
     pub client: Option<ClientHandover>,
+    /// The other clients, most recently active first. Defaulted, so a handover
+    /// from a build with one client still reads.
+    #[serde(default)]
+    pub others: Vec<ClientHandover>,
     pub cols: u16,
     pub rows: u16,
     pub state: State,
 }
 
-/// The attached client: its connection, kept open, and what it said when it
-/// attached.
+/// An attached client: its connection, kept open, and what it said when it
+/// attached (its size as it is now).
 #[derive(Serialize, Deserialize)]
 pub struct ClientHandover {
     pub fd: RawFd,

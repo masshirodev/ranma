@@ -695,6 +695,7 @@ mod tests {
         Status {
             name: name.into(),
             attached,
+            clients: usize::from(attached),
             panes: if name == "1" { 1 } else { 6 },
             sessions: vec!["main".into(), "ai".into()],
             last_active: 1000,

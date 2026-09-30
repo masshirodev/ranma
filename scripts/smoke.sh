@@ -307,6 +307,33 @@ $ENV $BIN ls | grep -q '^3 *detached' || fail "the server left behind did not st
 $ENV $BIN kill 3; sleep 0.5
 T kill-session -t d; sleep 0.8
 $ENV $BIN ls | grep -q '^2 *detached' || fail "server 2 did not survive its terminal closing ($($ENV $BIN ls))"
+
+# Two terminals on one server: attaching by name shares it. Both are sent the
+# screen, either one types into it, the screen takes the size of the one last
+# typed in, and one detaching leaves the other; --steal sends the other away.
+T new-session -d -s e1 -x 100 -y 20 "bash --norc"
+T new-session -d -s e2 -x 80 -y 16 "bash --norc"
+sleep 0.3
+e1() { T capture-pane -p -t e1; }
+e2() { T capture-pane -p -t e2; }
+T send-keys -t e1 "$ENV $BIN attach 2" Enter
+for _ in $(seq 1 40); do e1 | grep -q '╭' && break; sleep 0.25; done
+T send-keys -t e2 "$ENV $BIN attach 2" Enter
+for _ in $(seq 1 40); do e2 | grep -q 'daemon-marker' && break; sleep 0.25; done
+e2 | grep -q 'daemon-marker' || fail "a second terminal attaching did not get the screen ($(e2 | tail -3))"
+e1 | grep -q 'taken over' && fail "attaching by name took the server from the first terminal"
+$ENV $BIN ls | grep -q '^2 *attached×2' || fail "ls does not count both terminals ($($ENV $BIN ls))"
+T send-keys -t e2 'clear; echo W$(tput cols)W' Enter; sleep 0.8
+e1 | grep -Eq 'W7[0-9]W' || fail "the first terminal did not see the second one's typing at its size ($(e1 | grep W))"
+T send-keys -t e1 'clear; echo W$(tput cols)W' Enter; sleep 0.8
+e1 | grep -Eq 'W9[0-9]W' || fail "typing in the first terminal did not take the screen back to its size ($(e1 | grep W))"
+T send-keys -t e2 C-b d; sleep 0.8
+e2 | grep -q '\[ranma 2: detached\]' || fail "leader d in the second terminal did not detach it ($(e2 | tail -3))"
+e1 | grep -q '╭' || fail "the second terminal detaching took the first one with it"
+$ENV $BIN ls | grep -q '^2 *attached ' || fail "one terminal left, ls does not say attached ($($ENV $BIN ls))"
+T send-keys -t e2 "clear; $ENV $BIN attach --steal 2" Enter; sleep 1.5
+e1 | grep -q '\[ranma 2: taken over by another terminal\]' || fail "--steal did not send the first terminal away ($(e1 | tail -3))"
+T kill-session -t e1; T kill-session -t e2; sleep 0.8
 $ENV $BIN kill 2; sleep 0.8
 $ENV $BIN ls | grep -q '^2 ' && fail "ranma kill 2 left it running"
 
@@ -381,6 +408,13 @@ wait_for 'after-kept-across' 10 || fail "the shell did not survive the upgrade"
 T resize-window -t s -x 90 -y 24
 sleep 0.5
 [ "$(screen | head -1 | wc -m)" -le 91 ] || fail "layout did not follow the host resize"
+# An upgrade after a resize comes back at the size the terminal has now, not
+# the one it attached with: drawn at the old size, borders doubled and text
+# went missing at the edges.
+$ENV $BIN upgrade 1 >/dev/null || fail "ranma upgrade after a resize failed"
+sleep 1.5
+[ "$(screen | head -1 | wc -m)" -le 91 ] || fail "the upgrade drew at the size before the resize"
+bar | grep -Eq '^ 1[: ]' || fail "the bar is not on the last row after the upgrade ($(bar))"
 
 # Closing both shells ends ranma cleanly.
 T send-keys -t s 'exit' Enter

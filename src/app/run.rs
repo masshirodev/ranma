@@ -1,8 +1,8 @@
 //! The event loop, in its two forms.
 //!
 //! **Server** (`ranma server`, what `ranma` starts): the window manager draws
-//! into a buffer that goes to whichever client is attached, and keeps running
-//! with none. Closing the terminal, or losing the SSH connection, only detaches.
+//! into a buffer that goes to every client attached, and keeps running with
+//! none. Closing the terminal, or losing the SSH connection, only detaches.
 //! **Standalone** (`ranma --standalone`): the same loop drawing to its own
 //! terminal, ending with it; for tests and for when a server is not wanted.
 //!
@@ -94,20 +94,96 @@ fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// The attached client of a server.
+/// How long a write to a client may block before that client is dropped. A
+/// terminal that stopped reading (a tablet asleep behind an SSH connection)
+/// must not freeze the screen of every other terminal on the server.
+const CLIENT_WRITE_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// A client attached to a server.
 struct Client {
     id: u64,
     writer: UnixStream,
     /// Its build: only a client that knows `ToClient::Switch` is sent one.
     build: String,
-    /// What it said when it attached: handed over with it on an upgrade.
+    /// What it said when it attached, its size kept current: handed over with
+    /// it on an upgrade.
     hello: proto::Hello,
 }
 
 impl Client {
+    fn new(id: u64, writer: UnixStream, hello: proto::Hello) -> Client {
+        let _ = writer.set_write_timeout(Some(CLIENT_WRITE_TIMEOUT));
+        Client {
+            id,
+            writer,
+            build: hello.build.clone(),
+            hello,
+        }
+    }
+
     fn send(&mut self, m: &ToClient) -> bool {
         proto::send_to_client(&mut self.writer, m).is_ok()
     }
+
+    /// Close its connection outright, since its reader thread holds a clone of
+    /// it: after a write that timed out, the stream is mid-frame and useless.
+    fn hang_up(&self) {
+        let _ = self.writer.shutdown(std::net::Shutdown::Both);
+    }
+}
+
+/// The clients of a server, most recently active first (DESIGN.md, "Several
+/// terminals on one server"). The front one **drives**: the screen has its
+/// size, its colours and its title. Every client is sent the same bytes.
+#[derive(Default)]
+struct Clients {
+    list: Vec<Client>,
+    /// The client the screen was last set up for.
+    driving: Option<u64>,
+}
+
+impl Clients {
+    fn position(&self, id: u64) -> Option<usize> {
+        self.list.iter().position(|c| c.id == id)
+    }
+
+    fn get(&self, id: u64) -> Option<&Client> {
+        self.list.iter().find(|c| c.id == id)
+    }
+
+    fn remove(&mut self, id: u64) -> Option<Client> {
+        let at = self.position(id)?;
+        Some(self.list.remove(at))
+    }
+
+    /// Input from the client at `at`: it is the most recently active now.
+    fn touch(&mut self, at: usize) {
+        let c = self.list.remove(at);
+        self.list.insert(0, c);
+    }
+
+    /// The front client's hello when the screen is not set up for it yet:
+    /// after it typed, or after the one driving left.
+    fn new_driver(&mut self) -> Option<proto::Hello> {
+        let front = self.list.first().map(|c| c.id);
+        if front == self.driving {
+            return None;
+        }
+        self.driving = front;
+        self.list.first().map(|c| c.hello.clone())
+    }
+
+    /// Where the screen is drawn, and so the size every client is sent.
+    fn size(&self) -> Option<(u16, u16)> {
+        self.list.first().map(|c| (c.hello.cols, c.hello.rows))
+    }
+}
+
+/// Input that means someone is at that terminal, and so moves the screen to
+/// it. Not a resize, and not a focus report: every terminal answers the
+/// focus-reporting mode with one as it is (re)enabled on each attach.
+fn is_presence(ev: &Event) -> bool {
+    matches!(ev, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
 }
 
 /// Standalone: ranma in this terminal, ending with it.
@@ -141,7 +217,7 @@ pub fn run(config: Config) -> Result<()> {
         spawn_input_thread(tx.clone());
         start_background(&app, &tx);
         let _watcher = watch_config(tx);
-        event_loop(&mut app, &rx, &mut term, None, None, None)
+        event_loop(&mut app, &rx, &mut term, None, None, Vec::new())
     })();
     let out = term.backend_mut();
     let _ = out.write_all(b"\x1b[23;0t");
@@ -172,7 +248,14 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
     }
     start_background(&app, &tx);
     let _watcher = watch_config(tx);
-    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), None)
+    event_loop(
+        &mut app,
+        &rx,
+        &mut term,
+        Some(name),
+        Some(&buffer),
+        Vec::new(),
+    )
 }
 
 /// The binary a server was started from. After `install.sh` replaces it, this
@@ -234,7 +317,12 @@ pub fn run_server_resume(
         .collect();
     // Kept aside in case: the descriptors must stay open for a fallback.
     let listener_fd = h.listener_fd;
-    let client_h = h.client.as_ref().map(|c| (c.fd, c.hello.clone()));
+    let clients_h: Vec<_> = h
+        .client
+        .iter()
+        .chain(&h.others)
+        .map(|c| (c.fd, c.hello.clone()))
+        .collect();
     let (cols, rows) = (h.cols, h.rows);
     // SAFETY: the descriptors in the handover are the ones the old server
     // kept open across its exec for exactly this.
@@ -255,25 +343,23 @@ pub fn run_server_resume(
             None
         }
     };
-    let mut client = None;
-    if let Some((fd, hello)) = client_h {
+    // The one that drove first: the event loop sets the screen up for it.
+    let mut clients = Vec::new();
+    for (fd, hello) in clients_h {
         use std::os::fd::FromRawFd;
         let _ = crate::pty::set_cloexec(fd, true);
         // SAFETY: as above.
         let stream = unsafe { UnixStream::from_raw_fd(fd) };
         if let Some((id, writer)) = crate::ipc::resume_client(stream, &tx) {
-            restart(&mut term, Some(&buffer), hello.cols, hello.rows)?;
-            app.host_colors = hello.colors.clone();
-            app.client_inside = hello.inside.clone();
-            app.client_remote = hello.remote;
-            app.set_outer(hello.outer);
-            client = Some(Client {
-                id,
-                writer,
-                build: hello.build.clone(),
-                hello,
-            });
+            clients.push(Client::new(id, writer, hello));
         }
+    }
+    // The screen's size is the frame the handover was taken at. The hello of the
+    // one driving says the size it attached with, which an older build never
+    // kept current: drawn at that, a resize since left every border doubled.
+    if let Some(c) = clients.first_mut() {
+        c.hello.cols = cols;
+        c.hello.rows = rows;
     }
     // What a full-screen program had drawn was not handed over: it draws again.
     for fd in alt {
@@ -291,17 +377,17 @@ pub fn run_server_resume(
     app.after_event();
     start_background(&app, &tx);
     let _watcher = watch_config(tx);
-    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), client)
+    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), clients)
 }
 
 /// Clear close-on-exec on everything a new build takes over: the PTY masters,
-/// the listening socket, the client's connection.
+/// the listening socket, every client's connection.
 fn keep_across_exec(h: &super::upgrade::Handover) {
     for p in &h.state.panes {
         let _ = crate::pty::set_cloexec(p.fd, false);
     }
     let _ = crate::pty::set_cloexec(h.listener_fd, false);
-    if let Some(c) = &h.client {
+    for c in h.client.iter().chain(&h.others) {
         let _ = crate::pty::set_cloexec(c.fd, false);
     }
 }
@@ -311,7 +397,7 @@ fn keep_across_exec(h: &super::upgrade::Handover) {
 /// before, only full-screen programs asked to draw again.
 fn upgrade(
     app: &mut App,
-    client: Option<&Client>,
+    clients: &[Client],
     name: &str,
     cols: u16,
     rows: u16,
@@ -351,10 +437,18 @@ fn upgrade(
         version: super::upgrade::VERSION,
         name: name.to_string(),
         listener_fd,
-        client: client.map(|c| super::upgrade::ClientHandover {
+        client: clients.first().map(|c| super::upgrade::ClientHandover {
             fd: c.writer.as_raw_fd(),
             hello: c.hello.clone(),
         }),
+        others: clients
+            .iter()
+            .skip(1)
+            .map(|c| super::upgrade::ClientHandover {
+                fd: c.writer.as_raw_fd(),
+                hello: c.hello.clone(),
+            })
+            .collect(),
         cols,
         rows,
         state,
@@ -394,7 +488,7 @@ fn upgrade(
         let _ = crate::pty::set_cloexec(p.fd, true);
     }
     let _ = crate::pty::set_cloexec(listener_fd, true);
-    if let Some(c) = &h.client {
+    for c in h.client.iter().chain(&h.others) {
         let _ = crate::pty::set_cloexec(c.fd, true);
     }
     let _ = std::fs::remove_file(&prev);
@@ -434,9 +528,15 @@ fn event_loop(
     term: &mut Term,
     server: Option<&str>,
     buffer: Option<&Arc<Mutex<Vec<u8>>>>,
-    resumed: Option<Client>,
+    resumed: Vec<Client>,
 ) -> Result<()> {
-    let mut client: Option<Client> = resumed;
+    let mut clients = Clients {
+        list: resumed,
+        driving: None,
+    };
+    if let Some(hello) = clients.new_driver() {
+        drive(app, term, buffer, &hello)?;
+    }
     let mut last_active = now_secs();
     let mut last_draw = Instant::now() - FRAME;
     let mut last_cursor: Option<CursorState> = None;
@@ -445,7 +545,7 @@ fn event_loop(
     loop {
         // Idle means blocked here: no timeout unless a frame is owed or a timer
         // (a bar module, a pending reload) is due. Zero frames, zero wakeups.
-        let can_draw = server.is_none() || client.is_some();
+        let can_draw = server.is_none() || !clients.list.is_empty();
         let frame_due = (app.dirty && can_draw).then(|| last_draw + FRAME);
         let deadline = [frame_due, app.next_deadline()].into_iter().flatten().min();
         let first = match deadline {
@@ -465,17 +565,29 @@ fn event_loop(
         for ev in events.collect::<Vec<_>>() {
             match ev {
                 AppEvent::Attach { id, writer, hello } => {
-                    if let Some(mut old) = client.take() {
-                        old.send(&ToClient::Detached("taken over by another terminal".into()));
+                    if hello.steal {
+                        for mut old in clients.list.drain(..) {
+                            old.send(&ToClient::Detached("taken over by another terminal".into()));
+                        }
                     }
-                    client = Some(Client {
-                        id,
-                        writer,
-                        build: hello.build.clone(),
-                        hello: (*hello).clone(),
-                    });
+                    let joining = !clients.list.is_empty();
+                    clients.list.push(Client::new(id, writer, (*hello).clone()));
                     last_active = now_secs();
-                    restart(term, buffer, hello.cols, hello.rows)?;
+                    if joining {
+                        // A peek moves nothing: the screen keeps the size of the
+                        // terminal that drives it, drawn whole again for everyone.
+                        repaint(app, term, buffer, &clients)?;
+                        let n = clients.list.len();
+                        app.toast(
+                            format!(
+                                "{n} terminals show this server; it takes the size of the one last typed in"
+                            ),
+                            crate::toast::Level::Normal,
+                            Some(Duration::from_secs(6)),
+                        );
+                    } else if let Some(hello) = clients.new_driver() {
+                        drive(app, term, buffer, &hello)?;
+                    }
                     attached(app, &hello)?;
                     // Modes and cursor are re-sent to the new terminal below.
                     mouse = !app.wants_mouse();
@@ -483,20 +595,45 @@ fn event_loop(
                     execute!(term.backend_mut(), EnableBracketedPaste, EnableFocusChange)?;
                 }
                 AppEvent::ClientInput(id, ev) => {
-                    if client.as_ref().is_some_and(|c| c.id == id) {
-                        last_active = now_secs();
-                        input(app, term, buffer, ev)?;
+                    let Some(at) = clients.position(id) else {
+                        continue;
+                    };
+                    last_active = now_secs();
+                    match ev {
+                        Event::Resize(w, h) => {
+                            clients.list[at].hello.cols = w;
+                            clients.list[at].hello.rows = h;
+                            if at == 0 {
+                                input(app, term, buffer, ev)?;
+                            } else {
+                                // Its terminal redrew what it had: send it the
+                                // screen again, at the size it already had.
+                                repaint(app, term, buffer, &clients)?;
+                            }
+                        }
+                        // Only the terminal the screen follows is focused, as far
+                        // as the programs in it can tell.
+                        Event::FocusGained | Event::FocusLost if at != 0 => {}
+                        _ => {
+                            if at != 0 && is_presence(&ev) {
+                                clients.touch(at);
+                                if let Some(hello) = clients.new_driver() {
+                                    drive(app, term, buffer, &hello)?;
+                                }
+                            }
+                            input(app, term, buffer, ev)?;
+                        }
                     }
+                    requests(app, &mut clients, Some(id), server);
                 }
                 AppEvent::ClientGone(id) => {
-                    if client.as_ref().is_some_and(|c| c.id == id) {
-                        client = None;
-                    }
+                    clients.remove(id);
                 }
                 AppEvent::Status(reply) => {
                     let _ = reply.send(proto::Status {
                         name: server.unwrap_or("standalone").to_string(),
-                        attached: client.is_some(),
+                        attached: !clients.list.is_empty(),
+                        clients: clients.list.len(),
                         panes: app.panes.len(),
                         sessions: app.session_list().into_iter().map(|s| s.1).collect(),
                         last_active,
@@ -510,7 +647,7 @@ fn event_loop(
                             let size = term.get_frame().area();
                             upgrade(
                                 app,
-                                client.as_ref(),
+                                &clients.list,
                                 name,
                                 size.width,
                                 size.height,
@@ -541,25 +678,13 @@ fn event_loop(
         if app.quit {
             break;
         }
-        if std::mem::take(&mut app.detach_requested) {
-            match client.take() {
-                Some(mut c) => {
-                    c.send(&ToClient::Detached("detached".into()));
-                }
-                None => {
-                    app.status = Some("nothing to detach from (ranma --standalone)".into());
-                }
-            }
-        }
-        if let Some(to) = app.switch_requested.take() {
-            match refuse_switch(&to, client.as_ref(), server, app.client_inside.as_deref()) {
-                Some(why) => app.status = Some(why),
-                None => {
-                    if let Some(mut c) = client.take() {
-                        c.send(&ToClient::Switch(to));
-                    }
-                }
-            }
+        // Asked for by something other than a terminal (`ranma action`, a Lua
+        // hook): it is the terminal the screen follows that goes.
+        let front = clients.list.first().map(|c| c.id);
+        requests(app, &mut clients, front, server);
+        // The one driving left: the screen moves to the next most recent.
+        if let Some(hello) = clients.new_driver() {
+            drive(app, term, buffer, &hello)?;
         }
         if app.wants_mouse() != mouse {
             mouse = app.wants_mouse();
@@ -569,7 +694,7 @@ fn event_loop(
                 execute!(term.backend_mut(), DisableMouseCapture)?;
             }
         }
-        let can_draw = server.is_none() || client.is_some();
+        let can_draw = server.is_none() || !clients.list.is_empty();
         if app.dirty && can_draw && last_draw.elapsed() >= FRAME {
             app.begin_frame();
             let mut cursor = None;
@@ -582,21 +707,91 @@ fn event_loop(
             }
             last_draw = Instant::now();
         }
-        // A server sends what the round wrote; with no client it goes nowhere.
+        // A server sends what the round wrote, the same bytes to every client;
+        // with none it goes nowhere.
         if let Some(buf) = buffer {
             let bytes = std::mem::take(&mut *buf.lock().expect("buffer lock"));
-            if !bytes.is_empty()
-                && let Some(c) = client.as_mut()
-                && !c.send(&ToClient::Output(bytes))
-            {
-                client = None;
+            if !bytes.is_empty() {
+                let out = ToClient::Output(bytes);
+                clients.list.retain_mut(|c| {
+                    let ok = c.send(&out);
+                    if !ok {
+                        c.hang_up();
+                    }
+                    ok
+                });
             }
         }
     }
-    if let Some(mut c) = client.take() {
+    for mut c in clients.list.drain(..) {
         c.send(&ToClient::Exited("ranma exited".into()));
     }
     close_all(app);
+    Ok(())
+}
+
+/// What the input of client `id` asked for (`detach`, `attach NAME`), done to
+/// that client only, not to every terminal showing the server.
+fn requests(app: &mut App, clients: &mut Clients, id: Option<u64>, server: Option<&str>) {
+    if std::mem::take(&mut app.detach_requested) {
+        match id.and_then(|id| clients.remove(id)) {
+            Some(mut c) => {
+                c.send(&ToClient::Detached("detached".into()));
+            }
+            None => {
+                app.status = Some("nothing to detach from (ranma --standalone)".into());
+            }
+        }
+    }
+    if let Some(to) = app.switch_requested.take() {
+        let c = id.and_then(|id| clients.get(id));
+        let inside = c.and_then(|c| c.hello.inside.clone());
+        match refuse_switch(&to, c, server, inside.as_deref()) {
+            Some(why) => app.status = Some(why),
+            None => {
+                if let Some(mut c) = id.and_then(|id| clients.remove(id)) {
+                    c.send(&ToClient::Switch(to));
+                }
+            }
+        }
+    }
+}
+
+/// The screen follows this client now: its size, colours and title.
+fn drive(
+    app: &mut App,
+    term: &mut Term,
+    buffer: Option<&Arc<Mutex<Vec<u8>>>>,
+    hello: &proto::Hello,
+) -> Result<()> {
+    restart(term, buffer, hello.cols, hello.rows)?;
+    app.host_colors = hello.colors.clone();
+    app.client_inside = hello.inside.clone();
+    app.client_remote = hello.remote;
+    app.set_outer(hello.outer);
+    app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
+    // The title is this terminal's now: say who we are again (and where, if it
+    // came over SSH), even with nothing else changed.
+    app.host_title.clear();
+    app.announce();
+    app.dirty = true;
+    Ok(())
+}
+
+/// Draw everything again, at the size the screen already has: every client
+/// is sent the whole screen.
+fn repaint(
+    app: &mut App,
+    term: &mut Term,
+    buffer: Option<&Arc<Mutex<Vec<u8>>>>,
+    clients: &Clients,
+) -> Result<()> {
+    if let Some((cols, rows)) = clients.size() {
+        restart(term, buffer, cols, rows)?;
+    }
+    app.host_title.clear();
+    app.announce();
+    app.dirty = true;
     Ok(())
 }
 
@@ -647,14 +842,9 @@ fn refuse_switch(
     None
 }
 
-/// A client attached (the terminal was already restarted at its size): take its
-/// colours and early keys, and draw everything again.
+/// A client attached (the screen already set up, for it or for the one
+/// driving): its early keys, and the first pane of a new server.
 fn attached(app: &mut App, hello: &proto::Hello) -> Result<()> {
-    app.host_colors = hello.colors.clone();
-    app.client_inside = hello.inside.clone();
-    app.client_remote = hello.remote;
-    app.set_outer(hello.outer);
-    app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
     // The first client of a new server: its first pane opens now, at the size
     // the client's terminal gives it.
     if app.panes.is_empty() {
@@ -673,10 +863,6 @@ fn attached(app: &mut App, hello: &proto::Hello) -> Result<()> {
             Some(Duration::from_secs(15)),
         );
     }
-    // The terminal's title is the new client's now: say who we are again (and
-    // where, if this client came over SSH), even with nothing else changed.
-    app.host_title.clear();
-    app.announce();
     app.dirty = true;
     app.after_event();
     Ok(())
@@ -701,11 +887,10 @@ mod tests {
 
     fn client(build: &str) -> Client {
         let (writer, _) = UnixStream::pair().unwrap();
-        Client {
-            id: 1,
+        Client::new(
+            1,
             writer,
-            build: build.into(),
-            hello: proto::Hello {
+            proto::Hello {
                 build: build.into(),
                 cols: 80,
                 rows: 24,
@@ -714,8 +899,53 @@ mod tests {
                 inside: None,
                 remote: false,
                 outer: None,
+                steal: false,
             },
-        }
+        )
+    }
+
+    fn sized(id: u64, cols: u16) -> Client {
+        let mut c = client(crate::update::BUILD_SHA);
+        c.id = id;
+        c.hello.cols = cols;
+        c
+    }
+
+    #[test]
+    fn the_screen_follows_the_terminal_last_typed_in() {
+        let mut cs = Clients::default();
+        cs.list.push(sized(1, 200));
+        assert_eq!(
+            cs.new_driver().map(|h| h.cols),
+            Some(200),
+            "the first one drives"
+        );
+        assert_eq!(cs.new_driver(), None, "and is set up once");
+        // A second terminal joins: a peek changes nothing.
+        cs.list.push(sized(2, 90));
+        assert_eq!(cs.new_driver(), None);
+        assert_eq!(cs.size(), Some((200, 24)));
+        // It types: the screen is its size now.
+        cs.touch(cs.position(2).unwrap());
+        assert_eq!(cs.new_driver().map(|h| h.cols), Some(90));
+        // It leaves: back to the one before.
+        cs.remove(2);
+        assert_eq!(cs.new_driver().map(|h| h.cols), Some(200));
+        cs.remove(1);
+        assert_eq!(cs.new_driver(), None, "nobody left to drive");
+        assert_eq!(cs.size(), None);
+    }
+
+    #[test]
+    fn only_someone_at_the_terminal_takes_the_screen() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(is_presence(&key));
+        assert!(is_presence(&Event::Paste("x".into())));
+        // Answered by the terminal itself on every attach, or by the window
+        // manager around it: not a person.
+        assert!(!is_presence(&Event::FocusGained));
+        assert!(!is_presence(&Event::Resize(80, 24)));
     }
 
     #[test]

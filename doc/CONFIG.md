@@ -38,8 +38,9 @@ shells as you left them.
 | Command | Does |
 | --- | --- |
 | `ranma` | Attach to the most recently used server no terminal is showing; start a new one when every server is on screen (so a second terminal gets its own). |
-| `ranma ls` | List the servers: attached or detached, panes, sessions, when last used. |
-| `ranma attach NAME` | Attach to server NAME, taking it from a terminal that shows it (that terminal is told). |
+| `ranma ls` | List the servers: attached (`attached×2` when two terminals show it) or detached, panes, sessions, when last used. |
+| `ranma attach NAME` | Attach to server NAME, sharing it with any terminal that already shows it (or start one by that name). |
+| `ranma attach --steal NAME` | The same, but every other terminal showing it is sent away (and told). |
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
 | `ranma upgrade [NAME]` / `--all` | Move a server (the one this runs in, when no name is given) or all of them to the installed build **without closing anything**: shells, panes, scrollback and the terminal attached all stay. `install.sh` does `--all` after every good install. |
 | `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
@@ -63,6 +64,15 @@ A server from before this existed does not know how: `ranma upgrade` names it,
 and it takes one last restart (`leader Delete`, or `ranma kill`). A standalone
 ranma is simply restarted. A newer `ranma` attaching to an older server still
 says so.
+
+**Two terminals can show one server.** `ranma attach 1` from a tablet while the
+PC shows server 1 shares it: both show the same screen, and either can type.
+The screen takes the size of the terminal **last typed in**, so a look from the
+tablet leaves the PC's layout alone until you type there, and typing on the PC
+takes it back. A terminal that is not driving shows the screen at the other's
+size, cut off if it is smaller. `leader d` detaches only the terminal you
+pressed it in. A terminal that stops reading for a second (a tablet asleep
+behind SSH) is dropped, so it cannot freeze the other.
 
 **Every terminal gets its own server**, so the session switcher of one does not
 show the sessions of another: sessions live in a server. Opening a second

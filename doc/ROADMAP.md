@@ -80,6 +80,8 @@ client that holds nothing").
   attaching to themselves
 - [x] Server switcher (`leader S`) and `attach NAME` from inside: the client is
   passed to another server without leaving the terminal; `Ctrl+X` kills one
+- [x] Several terminals on one server: `attach NAME` shares, `--steal` takes;
+  the screen follows the terminal last typed in; a stalled client is dropped
 
 ## 5. What tuios had that fits
 
@@ -129,7 +131,8 @@ client (DESIGN.md, "Upgrading a server in place").
 - [x] A PTY type that adopts a running child (fd, pid, pidfd)
 - [x] Panes to and from text: history, screen, cursor, modes, palette
 - [x] The handover: state out, readers held, descriptors kept, exec
-- [x] Restoring: adopt panes, the listener and the client; SIGWINCH the programs
+- [x] Restoring: adopt panes, the listener and the clients; SIGWINCH the programs
+- [x] Restored at the size the terminal has now, not the one it attached with
 - [x] Safety: `--check-handover` before exec, the old binary kept to fall back to
 - [x] `ranma upgrade [NAME|--all]`; `install.sh` upgrades every server
 

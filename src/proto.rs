@@ -43,6 +43,10 @@ pub struct Hello {
     /// (see `nestbar`): it shows this ranma's workspaces. Defaulted like `inside`.
     #[serde(default)]
     pub outer: Option<u32>,
+    /// `ranma attach --steal`: every other terminal showing the server is sent
+    /// away, instead of sharing it. Defaulted like `inside`: an older client shares.
+    #[serde(default)]
+    pub steal: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +72,9 @@ pub enum ToClient {
 pub struct Status {
     pub name: String,
     pub attached: bool,
+    /// How many terminals show it. Defaulted: an older server says only `attached`.
+    #[serde(default)]
+    pub clients: usize,
     pub panes: usize,
     pub sessions: Vec<String>,
     /// Seconds since the Unix epoch of the last input from a client.
@@ -173,6 +180,7 @@ mod tests {
             inside: Some("/run/user/1000/ranma/1.sock".into()),
             remote: true,
             outer: Some(1),
+            steal: true,
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -226,14 +234,17 @@ mod tests {
             inside: None,
             remote: false,
             outer: None,
+            steal: false,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("inside");
         old.as_object_mut().unwrap().remove("remote");
         old.as_object_mut().unwrap().remove("outer");
+        old.as_object_mut().unwrap().remove("steal");
         let h: Hello = serde_json::from_value(old).unwrap();
         assert_eq!(h.inside, None);
         assert_eq!(h.outer, None);
+        assert!(!h.steal, "an older client shares");
     }
 
     #[test]

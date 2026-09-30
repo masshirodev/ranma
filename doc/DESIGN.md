@@ -50,8 +50,9 @@ client owns nothing**:
   on screen. One shared server would have made a second terminal (a second
   monitor) take the first one's screen; this is the rule tuios was set up with on
   the PC. On a server reached over SSH, it is exactly "resume what the dropped
-  connection left". `ranma attach NAME` takes a server explicitly, telling the
-  terminal that had it.
+  connection left". `ranma attach NAME` names a server explicitly, and shares
+  it with any terminal already showing it (see "Several terminals on one
+  server"); `--steal` sends those away instead.
 - **Detaching** is closing the terminal, losing the connection, or `detach`
   (`leader d`). **Quitting** (`leader Delete`, `ranma kill NAME`) ends the server
   and hangs up every shell in it, waiting for them, so their jobs go too.
@@ -66,7 +67,7 @@ client owns nothing**:
   client connects to NAME's socket and says hello again, keeping the terminal,
   its raw mode and the colours it asked at start. Dropping the old stream is
   what detaches it, so the server left behind is exactly as after `leader d`,
-  and the server reached takes the client from any terminal that had it, as
+  and the server reached shares its screen with any terminal that had it, as
   `ranma attach` does. The server refuses the move, with the reason in the bar,
   for a client of an older build (it would not know the frame), for itself, and
   for the server the client runs inside, which the hello now names (`inside`,
@@ -82,6 +83,44 @@ terminal's size, which a server does not have, so the server starts a fresh
 ratatui terminal of the known size (and clears with the escape sequence) instead;
 and a client attaching a server to itself (from inside one of its own panes) is
 refused, as tmux refuses it.
+
+### Several terminals on one server
+
+**Decided 2026-09-29.** A server had one client: `ranma attach` from a second
+place took it, and the first terminal was sent away. Checking on the PC's
+server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
+
+- **Every client is sent the same bytes.** The server still draws one screen,
+  at one size, into one buffer; it only sends that buffer to each client. The
+  clients still hold nothing, so this is not the "multi-client tree sync" the
+  non-goals refuse (clients keeping copies of the layout in step): there is no
+  copy to keep in step.
+- **The screen takes the size of the terminal last typed in** (tmux's
+  `window-size latest`). The clients are kept most recently active first, and
+  the front one *drives*: its size, its colours, its title, whether it came
+  over SSH, whether a ranma is around it. Only a key, a click or a paste moves
+  the screen to a terminal. Not a resize, and not a focus report: every
+  terminal answers the focus mode with one as it is re-enabled on each attach,
+  which would hand the screen to whichever answered last. A terminal that
+  joins does not drive, so a peek from a tablet leaves the PC's layout as it
+  was. When the driver leaves, the next most recent one drives.
+- A terminal that is not driving shows the screen at the driver's size: cut
+  off if it is smaller, with room to spare if it is larger. It gets the whole
+  screen again when it joins or resizes. Focus reports from it are dropped, so
+  the programs inside see only the driver's focus.
+- **`detach` and `attach NAME` act on the terminal whose keys asked for them**,
+  not on every terminal showing the server. Asked for from elsewhere
+  (`ranma action`, a hook), they act on the driver.
+- **A terminal that stops reading is dropped.** Each client's socket has a
+  one-second write timeout. Before, a stalled client only stalled its own view.
+  Now it would freeze every other terminal on the server, for example a tablet
+  asleep behind an SSH connection that is still open. The connection is shut
+  down, not just forgotten, since its reader thread holds a clone.
+- `ranma attach --steal NAME` keeps the old behaviour. Plain `ranma` is
+  unchanged: it attaches only to a server no terminal shows, so a second
+  monitor still gets its own.
+- Upgrading hands over every client: the driver as before (`client`), the rest
+  in `others`, defaulted so a handover from a one-client build still reads.
 
 ### Upgrading a server in place
 
@@ -874,7 +913,9 @@ Rust, for predictable latency without a GC, and for the emulator:
 
 - Keeping sessions across a reboot. Processes cannot survive one; saving
   layouts to respawn is a separate, later idea (see ROADMAP).
-- Remote hosts, SSH or web servers, multi-client sync.
+- Remote hosts, SSH or web servers, multi-client tree sync (clients keeping
+  copies of the layout in step). Several terminals showing one server's screen is
+  not that; see "Several terminals on one server".
 - An agent inbox or any AI integration in the core. A Lua hook can do that for
   someone who wants it.
 - Matching tmux feature for feature. The tmux shim is a stated subset for

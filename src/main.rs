@@ -44,9 +44,14 @@ struct Cli {
 enum Command {
     /// List the ranma servers, and which ones a terminal is showing.
     Ls,
-    /// Attach this terminal to the server NAME (taking it from another
-    /// terminal showing it), or start one by that name.
-    Attach { name: String },
+    /// Attach this terminal to the server NAME, sharing it with any terminal
+    /// already showing it, or start one by that name.
+    Attach {
+        /// Send every other terminal showing it away instead of sharing.
+        #[arg(long)]
+        steal: bool,
+        name: String,
+    },
     /// Quit the server NAME and everything in it, without asking.
     Kill { name: String },
     /// Run a server (what `ranma` starts; not for use by hand).
@@ -652,10 +657,12 @@ fn main() -> ExitCode {
             _,
         ) => ranma::app::run_server_resume(cfg, name, file, fallback.as_deref()),
         (Some(Command::Server { name, .. }), _) => ranma::app::run_server(cfg, name),
-        (Some(Command::Attach { name }), _) => ranma::client::run(Some(name)).map(|_| ()),
+        (Some(Command::Attach { name, steal }), _) => {
+            ranma::client::run(Some(name), *steal).map(|_| ())
+        }
         (_, true) => ranma::app::run(cfg),
         (_, false) => {
-            return match ranma::client::run(None) {
+            return match ranma::client::run(None, false) {
                 Ok(code) => code,
                 Err(e) => {
                     eprintln!("ranma: {e:#}");

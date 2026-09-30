@@ -124,8 +124,10 @@ fn start_server(name: &str) -> Result<()> {
     bail!("the ranma server did not start listening within 5 s")
 }
 
-/// `ranma` / `ranma attach NAME`: attach this terminal to a server.
-pub fn run(name: Option<&str>) -> Result<ExitCode> {
+/// `ranma` / `ranma attach [--steal] NAME`: attach this terminal to a server.
+/// Attached by name, it shares the server with any terminal already showing
+/// it, unless `steal` sends those away.
+pub fn run(name: Option<&str>, steal: bool) -> Result<ExitCode> {
     let all = servers();
     let (name, new) = choose(&all, name);
     let sock = ipc::server_socket(&name);
@@ -145,7 +147,7 @@ pub fn run(name: Option<&str>) -> Result<ExitCode> {
     drop(ratatui::try_init().context("setting up the terminal")?);
     let mut out = std::io::stdout();
     let _ = out.write_all(b"\x1b[22;0t");
-    let result = attach(stream, &name);
+    let result = attach(stream, &name, steal);
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(
         out,
@@ -178,13 +180,14 @@ enum End {
     Lost,
 }
 
-fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
+fn attach(mut stream: UnixStream, name: &str, steal: bool) -> Result<(End, String)> {
     // Before any input thread: the host's replies are read off the terminal
     // here, with any keys typed meanwhile kept for the shell. The colours are
     // asked once; a switch to another server reuses them.
     let (colors, typed_early, outer) = crate::hostcolors::query_all(Duration::from_millis(300));
     let inside = std::env::var(ipc::ENV).ok();
-    let greet = |stream: &mut UnixStream, typed_early: Vec<u8>| -> Result<()> {
+    // Only the first server is stolen: a switch later joins whoever is there.
+    let greet = |stream: &mut UnixStream, typed_early: Vec<u8>, steal: bool| -> Result<()> {
         let (cols, rows) = crossterm::terminal::size()?;
         stream.write_all(b"attach\n")?;
         proto::send_to_server(
@@ -198,11 +201,12 @@ fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
                 inside: inside.clone(),
                 remote: crate::pane::over_ssh(),
                 outer,
+                steal,
             }),
         )?;
         Ok(())
     };
-    greet(&mut stream, typed_early)?;
+    greet(&mut stream, typed_early, steal)?;
 
     // The input thread writes to whichever server the client is on now: a
     // switch swaps the stream under it, so keys follow the terminal.
@@ -244,7 +248,7 @@ fn attach(mut stream: UnixStream, name: &str) -> Result<(End, String)> {
                         return Ok((End::Detached(why), name));
                     }
                 };
-                greet(&mut next_stream, Vec::new())?;
+                greet(&mut next_stream, Vec::new(), false)?;
                 *writer.lock().expect("writer lock") = next_stream.try_clone()?;
                 // Dropping the old stream is what tells the old server we left.
                 stream = next_stream;
@@ -283,7 +287,11 @@ pub fn list() -> ExitCode {
         println!(
             "{:<4} {:<9} {:>3} pane{} · sessions: {} · active {ago}{}{}",
             s.name,
-            if s.attached { "attached" } else { "detached" },
+            match s.clients {
+                0 | 1 if s.attached => "attached".to_string(),
+                0 | 1 => "detached".to_string(),
+                n => format!("attached×{n}"),
+            },
             s.panes,
             if s.panes == 1 { " " } else { "s" },
             s.sessions.join(", "),
@@ -312,6 +320,7 @@ mod tests {
         Status {
             name: name.into(),
             attached,
+            clients: usize::from(attached),
             panes: 1,
             sessions: vec!["main".into()],
             last_active,
