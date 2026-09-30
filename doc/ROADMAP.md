@@ -136,6 +136,24 @@ client (DESIGN.md, "Upgrading a server in place").
 - [x] Safety: `--check-handover` before exec, the old binary kept to fall back to
 - [x] `ranma upgrade [NAME|--all]`; `install.sh` upgrades every server
 
+## 8. A mobile view, from scriptable pieces
+
+A phone or tablet in Termux attaches over SSH and gets a touch-sized screen,
+built in `init.lua` from pieces that work on the desktop too (DESIGN.md, "A
+mobile view"; card c78).
+
+- [x] Design: `doc/briefs/done/MOBILE_VIEW.md`, handoff in `doc/handoffs/done/`
+- [x] The click that takes a shared screen does nothing else
+- [x] Client facts: `RANMA_MOBILE` / `attach --mobile`, `ranma.client()`,
+  `driver_change`
+- [x] Profiles: overrides used over the base, switched from Lua or an action
+- [x] `monocle`, `focus next|prev`, the `pane_strip` module
+- [x] Toolbars, button states, `send`, `latch`, seven theme roles
+- [x] A large bar, and chrome that folds away as the screen gets shorter
+- [x] Sheets, `pane_menu`, `workspace_switcher`
+- [x] The touch toolbar and `mobile` profile in the defaults, unused until
+  switched to
+
 ## Later, maybe
 
 - Saving layouts to respawn them after a reboot (processes cannot survive one).

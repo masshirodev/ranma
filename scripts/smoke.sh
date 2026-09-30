@@ -337,6 +337,32 @@ T kill-session -t e1; T kill-session -t e2; sleep 0.8
 $ENV $BIN kill 2; sleep 0.8
 $ENV $BIN ls | grep -q '^2 ' && fail "ranma kill 2 left it running"
 
+# The mobile view follows the terminal driving the screen: a phone
+# (RANMA_MOBILE=1) joining changes nothing, typing on it brings the touch
+# toolbar, typing at the desk takes it away. The hook is the one
+# assets/init.lua suggests; the click that takes the screen is unit-tested
+# (tmux cannot send a tap).
+MCFG=$(mktemp -d)
+echo 'ranma.on("driver_change", function(c) ranma.use_profile(c.mobile and "mobile" or nil) end)' > "$MCFG/init.lua"
+MENV="${ENV/RANMA_CONFIG_DIR=$CFG/RANMA_CONFIG_DIR=$MCFG}"
+T new-session -d -s m1 -x 100 -y 20 "bash --norc"
+T new-session -d -s m2 -x 52 -y 34 "bash --norc"
+sleep 0.3
+m1() { T capture-pane -p -t m1; }
+m2() { T capture-pane -p -t m2; }
+T send-keys -t m1 "$MENV $BIN attach 4" Enter
+for _ in $(seq 1 40); do m1 | grep -q '╭' && break; sleep 0.25; done
+T send-keys -t m2 "$MENV RANMA_MOBILE=1 $BIN attach 4" Enter
+sleep 1.5
+m2 | grep -q '✕' && fail "a phone joining took the screen ($(m2 | tail -3))"
+T send-keys -t m2 'echo phone' Enter; sleep 1
+m2 | grep -q '≡.*✕' || fail "typing on the phone did not bring the touch toolbar ($(m2 | tail -4))"
+T send-keys -t m1 'echo desk' Enter; sleep 1
+m1 | grep -q '✕' && fail "typing at the desk did not take the touch toolbar away ($(m1 | tail -3))"
+T kill-session -t m1; T kill-session -t m2; sleep 0.8
+$ENV $BIN kill 4; sleep 0.5
+rm -rf "$MCFG"
+
 # A plain ssh in the focused pane (no ranma on the other side) names where it
 # went. A symlink called ssh to python: its comm is ssh, its argv a real ssh's.
 FAKE=$(mktemp -d); ln -s "$(command -v python3)" "$FAKE/ssh"

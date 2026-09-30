@@ -1,7 +1,7 @@
 //! Toolbars: named rows of buttons, each a label and an action (DESIGN.md, "A
 //! mobile view"). This is the pure part: where each face goes in a row, which
 //! label it shows, and which face a cell belongs to. The handoff
-//! (`doc/handoffs/MOBILE_VIEW_MOCK.txt`, sections 01-02) is the spec.
+//! (`doc/handoffs/done/MOBILE_VIEW_MOCK.txt`, sections 01-02) is the spec.
 
 use unicode_width::UnicodeWidthStr;
 

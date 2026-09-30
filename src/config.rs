@@ -1532,6 +1532,22 @@ mod tests {
         assert_eq!(cfg.settings, settings, "a failed switch changes nothing");
     }
 
+    /// The defaults ship the mobile view defined and unused (assets/init.lua).
+    #[test]
+    fn the_defaults_define_the_mobile_view_without_using_it() {
+        let mut cfg = with_user("").unwrap();
+        assert!(cfg.toolbars_shown.is_empty());
+        assert_eq!(cfg.profile, None);
+        assert_eq!(cfg.bar.size, crate::toolbar::Size::Normal);
+        let t = cfg.toolbar("touch").unwrap();
+        assert_eq!(t.buttons.len(), 8);
+        assert_eq!(t.size, crate::toolbar::Size::Large);
+        cfg.use_profile(Some("mobile")).unwrap();
+        assert_eq!(cfg.settings.layout, Layout::Monocle);
+        assert_eq!(cfg.toolbars_shown, vec!["touch".to_string()]);
+        assert_eq!(cfg.bar.size, crate::toolbar::Size::Large);
+    }
+
     #[test]
     fn a_toolbar_is_parsed_strictly() {
         let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());

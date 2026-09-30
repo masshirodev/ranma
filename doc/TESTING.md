@@ -87,6 +87,13 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - two terminals `ranma attach 2`: both show the screen, typing in either
   reaches it, the size follows the one last typed in, `leader d` in one
   leaves the other, and `attach --steal` sends the other away
+- the mobile view on a shared server: a phone (`RANMA_MOBILE=1`, 52×34)
+  joining changes nothing, typing on it brings the touch toolbar, typing at
+  the desk takes it away (its own config dir, with the `driver_change` hook
+  the defaults suggest). The click that takes the screen, which tmux cannot
+  send, and the phone's screens against the handoff, row for row, are unit
+  tests (`app::tests`: `the_phone_*`, `*_sheet_on_a_phone`, `landscape_*`;
+  `chrome` and `toolbar` for the layout alone)
 - an upgrade after a host resize comes back at the new size, bar on the last
   row
 

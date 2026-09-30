@@ -880,7 +880,7 @@ on is not reported (the session name covers it when there are several).
 ### A mobile view, from scriptable pieces
 
 **Decided 2026-09-29** (card c78, brief `doc/briefs/done/MOBILE_VIEW.md`,
-handoff `doc/handoffs/MOBILE_VIEW_MOCK.txt`). A phone or a tablet in Termux
+handoff `doc/handoffs/done/MOBILE_VIEW_MOCK.txt`). A phone or a tablet in Termux
 attaches over SSH to the ranma already running on the PC or the VPS. It runs no
 ranma of its own: a native Android build would fight Android's killer of
 background processes for the one thing the server is for.

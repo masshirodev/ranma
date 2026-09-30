@@ -305,6 +305,42 @@ ranma.module("datetime", {
 -- `ranma tmux-shim -- claude` gives a program that drives tmux (Claude Code's
 -- agent teams) a tmux that opens ranma panes instead.
 
+-- Touch -------------------------------------------------------------------------
+-- A phone or tablet in Termux, over SSH (doc/CONFIG.md, "A mobile view"). The
+-- toolbar and profile are defined, not used: nothing changes until something
+-- switches to the profile. To have a phone switch to it by itself, set
+-- RANMA_MOBILE=1 on the phone (SetEnv in Termux's ~/.ssh/config, AcceptEnv
+-- RANMA_* in the far sshd) and add to your init.lua:
+--
+--   ranma.on("driver_change", function(c)
+--     ranma.use_profile(c.mobile and "mobile" or nil)
+--   end)
+--
+-- A button is { label, action }, text = "..." showing beside the label where
+-- there is room. Large buttons are three rows, a thumb's height; past what
+-- fits, the last becomes ⋯ for the rest.
+ranma.toolbar("touch", {
+  position = "bottom",
+  size = "large",
+  buttons = {
+    { "≡", "pane_menu", text = "menu" },
+    { "+", "new_pane", text = "new" },
+    { "◀", "focus prev", text = "prev" },
+    { "▶", "focus next", text = "next" },
+    { "⌃", "latch ctrl", text = "ctrl" },
+    { "⎋", "send esc", text = "esc" },
+    { "⊞", "workspace_switcher", text = "spaces" },
+    { "✕", "close_pane", text = "close" },
+  },
+})
+-- One pane at a time with the others as tabs, a three-row bar without the
+-- title (the tabs carry it) or the clock (the phone shows one), the toolbar.
+ranma.profile("mobile", {
+  set = { layout = "monocle" },
+  bar = { size = "large", center = {}, right = { "update" } },
+  toolbars = { "touch" },
+})
+
 -- Profiles ----------------------------------------------------------------------
 -- Settings and bar sides used over everything above while the profile is in
 -- use; anything it does not name stays as set here. Switch with
