@@ -70,7 +70,9 @@ PC shows server 1 shares it: both show the same screen, and either can type.
 The screen takes the size of the terminal **last typed in**, so a look from the
 tablet leaves the PC's layout alone until you type there, and typing on the PC
 takes it back. A terminal that is not driving shows the screen at the other's
-size, cut off if it is smaller. `leader d` detaches only the terminal you
+size, cut off if it is smaller. A click in it only takes the screen: it was aimed at
+what that terminal showed before the screen moved to its size, so it does
+nothing else, and the next click works as usual. `leader d` detaches only the terminal you
 pressed it in. A terminal that stops reading for a second (a tablet asleep
 behind SSH) is dropped, so it cannot freeze the other.
 

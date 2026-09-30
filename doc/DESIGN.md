@@ -108,6 +108,11 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
   off if it is smaller, with room to spare if it is larger. It gets the whole
   screen again when it joins or resizes. Focus reports from it are dropped, so
   the programs inside see only the driver's focus.
+- **The click that takes the drive does nothing else** (2026-09-29, found
+  planning the mobile view): its position was read off the screen at the old
+  driver's size, and it arrived after the resize, landing on whatever was there
+  then. The press is swallowed with its drag and release; keys and pastes have
+  no position and go through (`Clients::arrive`).
 - **`detach` and `attach NAME` act on the terminal whose keys asked for them**,
   not on every terminal showing the server. Asked for from elsewhere
   (`ranma action`, a hook), they act on the driver.

@@ -19,7 +19,7 @@ use anyhow::{Context, Result};
 use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{
     DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-    EnableFocusChange, EnableMouseCapture, Event,
+    EnableFocusChange, EnableMouseCapture, Event, MouseEventKind,
 };
 use crossterm::execute;
 use ratatui::backend::CrosstermBackend;
@@ -108,6 +108,9 @@ struct Client {
     /// What it said when it attached, its size kept current: handed over with
     /// it on an upgrade.
     hello: proto::Hello,
+    /// The press that made it drive is being swallowed, with the drag and
+    /// release that follow it (see [`Clients::arrive`]).
+    swallowing: bool,
 }
 
 impl Client {
@@ -118,6 +121,7 @@ impl Client {
             writer,
             build: hello.build.clone(),
             hello,
+            swallowing: false,
         }
     }
 
@@ -160,6 +164,34 @@ impl Clients {
     fn touch(&mut self, at: usize) {
         let c = self.list.remove(at);
         self.list.insert(0, c);
+    }
+
+    /// Input from the client at `at`: someone at a terminal that is not driving
+    /// makes it drive. Returns whether the event goes on to the app. A click
+    /// that takes the drive does not: its position was read off the screen as
+    /// it was before the resize, so it would land on whatever is there after
+    /// it. The drag and release that follow it are swallowed with it. A key or
+    /// a paste has no position and goes through.
+    fn arrive(&mut self, at: usize, ev: &Event) -> bool {
+        if let Event::Mouse(m) = ev
+            && self.list[at].swallowing
+        {
+            if matches!(m.kind, MouseEventKind::Up(_)) {
+                self.list[at].swallowing = false;
+            }
+            return false;
+        }
+        if at == 0 || !is_presence(ev) {
+            return true;
+        }
+        self.touch(at);
+        match ev {
+            Event::Mouse(m) => {
+                self.list[0].swallowing = matches!(m.kind, MouseEventKind::Down(_));
+                false
+            }
+            _ => true,
+        }
     }
 
     /// The front client's hello when the screen is not set up for it yet:
@@ -615,13 +647,13 @@ fn event_loop(
                         // as the programs in it can tell.
                         Event::FocusGained | Event::FocusLost if at != 0 => {}
                         _ => {
-                            if at != 0 && is_presence(&ev) {
-                                clients.touch(at);
-                                if let Some(hello) = clients.new_driver() {
-                                    drive(app, term, buffer, &hello)?;
-                                }
+                            let pass = clients.arrive(at, &ev);
+                            if let Some(hello) = clients.new_driver() {
+                                drive(app, term, buffer, &hello)?;
                             }
-                            input(app, term, buffer, ev)?;
+                            if pass {
+                                input(app, term, buffer, ev)?;
+                            }
                         }
                     }
                     requests(app, &mut clients, Some(id), server);
@@ -946,6 +978,48 @@ mod tests {
         // manager around it: not a person.
         assert!(!is_presence(&Event::FocusGained));
         assert!(!is_presence(&Event::Resize(80, 24)));
+    }
+
+    #[test]
+    fn the_click_that_takes_the_screen_does_nothing_else() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
+        let mouse = |kind| {
+            Event::Mouse(MouseEvent {
+                kind,
+                column: 10,
+                row: 5,
+                modifiers: KeyModifiers::NONE,
+            })
+        };
+        let down = mouse(MouseEventKind::Down(MouseButton::Left));
+        let drag = mouse(MouseEventKind::Drag(MouseButton::Left));
+        let up = mouse(MouseEventKind::Up(MouseButton::Left));
+        let mut cs = Clients::default();
+        cs.list.push(sized(1, 200));
+        cs.list.push(sized(2, 52));
+        cs.new_driver();
+        // The driver's clicks go through.
+        assert!(cs.arrive(0, &down));
+        assert!(cs.arrive(0, &up));
+        // The phone taps: it drives now, and the tap, read off the desk's
+        // screen, lands nowhere, drag and release included.
+        assert!(!cs.arrive(1, &down));
+        assert_eq!(cs.new_driver().map(|h| h.cols), Some(52));
+        assert!(!cs.arrive(0, &drag));
+        assert!(!cs.arrive(0, &up));
+        // The next tap is an ordinary one.
+        assert!(cs.arrive(0, &down));
+        assert!(cs.arrive(0, &up));
+        // A key that takes the screen back is typed: it has no position.
+        let key = Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(cs.arrive(1, &key));
+        assert_eq!(cs.new_driver().map(|h| h.cols), Some(200));
+        // A wheel from the one not driving takes it, and scrolls nothing.
+        assert!(!cs.arrive(1, &mouse(MouseEventKind::ScrollUp)));
+        assert!(
+            cs.arrive(0, &mouse(MouseEventKind::ScrollUp)),
+            "no release to wait for"
+        );
     }
 
     #[test]
