@@ -327,6 +327,10 @@ T send-keys -t e2 'clear; echo W$(tput cols)W' Enter; sleep 0.8
 e1 | grep -Eq 'W7[0-9]W' || fail "the first terminal did not see the second one's typing at its size ($(e1 | grep W))"
 T send-keys -t e1 'clear; echo W$(tput cols)W' Enter; sleep 0.8
 e1 | grep -Eq 'W9[0-9]W' || fail "typing in the first terminal did not take the screen back to its size ($(e1 | grep W))"
+# The smaller terminal, not driving, sees the screen cut off at its edge. With
+# autowrap on, every row too long for it ran onto the next and scrolled the
+# top border away.
+e2 | head -1 | grep -q '^╭' || fail "a smaller terminal wraps the driver's rows instead of cutting them ($(e2 | head -2))"
 T send-keys -t e2 C-b d; sleep 0.8
 e2 | grep -q '\[ranma 2: detached\]' || fail "leader d in the second terminal did not detach it ($(e2 | tail -3))"
 e1 | grep -q '╭' || fail "the second terminal detaching took the first one with it"

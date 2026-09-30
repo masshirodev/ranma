@@ -20,6 +20,7 @@ use anyhow::{Context, Result, bail};
 use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{DisableBracketedPaste, DisableFocusChange, DisableMouseCapture};
 use crossterm::execute;
+use crossterm::terminal::{DisableLineWrap, EnableLineWrap};
 
 use crate::ipc;
 use crate::proto::{self, Hello, Status, ToClient, ToServer};
@@ -148,10 +149,15 @@ pub fn run(name: Option<&str>, steal: bool, mobile: bool) -> Result<ExitCode> {
     drop(ratatui::try_init().context("setting up the terminal")?);
     let mut out = std::io::stdout();
     let _ = out.write_all(b"\x1b[22;0t");
+    // No autowrap: a terminal smaller than the one driving is sent frames at
+    // the driver's size, and with wrapping on, every row too long for it ran
+    // onto the next and scrolled the screen. Off, they are cut at its edge.
+    let _ = execute!(out, DisableLineWrap);
     let result = attach(stream, &name, steal, mobile);
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(
         out,
+        EnableLineWrap,
         DisableMouseCapture,
         DisableBracketedPaste,
         DisableFocusChange,

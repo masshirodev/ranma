@@ -108,6 +108,15 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
   off if it is smaller, with room to spare if it is larger. It gets the whole
   screen again when it joins or resizes. Focus reports from it are dropped, so
   the programs inside see only the driver's focus.
+- **Cut off takes autowrap off** (2026-09-30). The client turns it off while
+  attached (`DECAWM`, `ESC [ ? 7 l`) and back on as it leaves. Until then,
+  the smaller terminal wrapped every row too long for it onto the next and
+  scrolled, leaving bars and borders stacked in the middle of the screen
+  until something redrew it whole. A pane holding an SSH to a shared server
+  showed this as soon as a split made it narrower than the terminal driving
+  there. Off, a long row is cut at the edge; its last cell shows whatever the
+  row ended with, and rows below the terminal's height land on its last row,
+  which is where the bar is drawn last.
 - **The click that takes the drive does nothing else** (2026-09-29, found
   planning the mobile view): its position was read off the screen at the old
   driver's size, and it arrived after the resize, landing on whatever was there
