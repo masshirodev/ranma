@@ -50,6 +50,9 @@ enum Command {
         /// Send every other terminal showing it away instead of sharing.
         #[arg(long)]
         steal: bool,
+        /// This terminal is a phone or a tablet, as `RANMA_MOBILE=1` says.
+        #[arg(long)]
+        mobile: bool,
         name: String,
     },
     /// Quit the server NAME and everything in it, without asking.
@@ -657,12 +660,17 @@ fn main() -> ExitCode {
             _,
         ) => ranma::app::run_server_resume(cfg, name, file, fallback.as_deref()),
         (Some(Command::Server { name, .. }), _) => ranma::app::run_server(cfg, name),
-        (Some(Command::Attach { name, steal }), _) => {
-            ranma::client::run(Some(name), *steal).map(|_| ())
-        }
+        (
+            Some(Command::Attach {
+                name,
+                steal,
+                mobile,
+            }),
+            _,
+        ) => ranma::client::run(Some(name), *steal, *mobile).map(|_| ()),
         (_, true) => ranma::app::run(cfg),
         (_, false) => {
-            return match ranma::client::run(None, false) {
+            return match ranma::client::run(None, false, false) {
                 Ok(code) => code,
                 Err(e) => {
                     eprintln!("ranma: {e:#}");

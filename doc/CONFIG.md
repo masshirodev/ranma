@@ -41,6 +41,7 @@ shells as you left them.
 | `ranma ls` | List the servers: attached (`attached×2` when two terminals show it) or detached, panes, sessions, when last used. |
 | `ranma attach NAME` | Attach to server NAME, sharing it with any terminal that already shows it (or start one by that name). |
 | `ranma attach --steal NAME` | The same, but every other terminal showing it is sent away (and told). |
+| `ranma attach --mobile NAME` | Say this terminal is a phone or a tablet, as `RANMA_MOBILE=1` does for plain `ranma` and `attach`. `init.lua` reads it in `ranma.client()` and `driver_change`, to switch to a touch layout; ranma itself changes nothing for it. |
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
 | `ranma upgrade [NAME]` / `--all` | Move a server (the one this runs in, when no name is given) or all of them to the installed build **without closing anything**: shells, panes, scrollback and the terminal attached all stay. `install.sh` does `--all` after every good install. |
 | `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
@@ -570,6 +571,7 @@ Inside a bind function, a hook, or a module's `render`:
 | `ranma.notify("text")` | Show a message in the bar until the next key in WM mode. |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
+| `ranma.client()` | `{ cols, rows, mobile, remote }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), and whether it came over SSH. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
@@ -593,6 +595,7 @@ end)
 | `config_reload` | nothing; runs in the newly loaded config |
 | `session_switch` | `session`, `previous` (names) |
 | `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
+| `driver_change` | `cols`, `rows`, `mobile`, `remote` (as `ranma.client()`), `previous_mobile` — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize. |
 
 `command_finished` needs the shell to say where commands start and end, with
 the OSC 133 marks most terminals understand. For zsh, in `.zshrc`:

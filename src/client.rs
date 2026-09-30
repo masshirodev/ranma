@@ -127,7 +127,8 @@ fn start_server(name: &str) -> Result<()> {
 /// `ranma` / `ranma attach [--steal] NAME`: attach this terminal to a server.
 /// Attached by name, it shares the server with any terminal already showing
 /// it, unless `steal` sends those away.
-pub fn run(name: Option<&str>, steal: bool) -> Result<ExitCode> {
+pub fn run(name: Option<&str>, steal: bool, mobile: bool) -> Result<ExitCode> {
+    let mobile = mobile || mobile_env();
     let all = servers();
     let (name, new) = choose(&all, name);
     let sock = ipc::server_socket(&name);
@@ -147,7 +148,7 @@ pub fn run(name: Option<&str>, steal: bool) -> Result<ExitCode> {
     drop(ratatui::try_init().context("setting up the terminal")?);
     let mut out = std::io::stdout();
     let _ = out.write_all(b"\x1b[22;0t");
-    let result = attach(stream, &name, steal);
+    let result = attach(stream, &name, steal, mobile);
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(
         out,
@@ -174,13 +175,19 @@ pub fn run(name: Option<&str>, steal: bool) -> Result<ExitCode> {
     }
 }
 
+/// `RANMA_MOBILE` set to anything but empty or `0`: this terminal is a phone or
+/// a tablet (DESIGN.md, "A mobile view").
+pub fn mobile_env() -> bool {
+    std::env::var("RANMA_MOBILE").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 enum End {
     Detached(String),
     Exited,
     Lost,
 }
 
-fn attach(mut stream: UnixStream, name: &str, steal: bool) -> Result<(End, String)> {
+fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Result<(End, String)> {
     // Before any input thread: the host's replies are read off the terminal
     // here, with any keys typed meanwhile kept for the shell. The colours are
     // asked once; a switch to another server reuses them.
@@ -202,6 +209,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool) -> Result<(End, Strin
                 remote: crate::pane::over_ssh(),
                 outer,
                 steal,
+                mobile,
             }),
         )?;
         Ok(())

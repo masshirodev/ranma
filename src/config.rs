@@ -198,6 +198,9 @@ pub enum Event {
     ConfigReload,
     /// A shell said a command finished (OSC 133; see `osc`).
     CommandFinished,
+    /// A terminal started driving the screen (DESIGN.md, "Several terminals on
+    /// one server"): its size, and whether it is a phone.
+    DriverChange,
 }
 
 impl FromStr for Event {
@@ -212,6 +215,7 @@ impl FromStr for Event {
             "mode_change" => Event::ModeChange,
             "config_reload" => Event::ConfigReload,
             "command_finished" => Event::CommandFinished,
+            "driver_change" => Event::DriverChange,
             _ => return Err(format!("unknown event `{s}`")),
         })
     }
@@ -370,6 +374,25 @@ pub struct StateSnapshot {
     pub title: String,
     pub mode: &'static str,
     pub panes: usize,
+    pub client: ClientFacts,
+}
+
+/// What `ranma.client()` answers with: the terminal driving the screen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ClientFacts {
+    pub cols: u16,
+    pub rows: u16,
+    pub mobile: bool,
+    pub remote: bool,
+}
+
+impl ClientFacts {
+    pub fn fill(&self, t: &Table) -> mlua::Result<()> {
+        t.set("cols", self.cols)?;
+        t.set("rows", self.rows)?;
+        t.set("mobile", self.mobile)?;
+        t.set("remote", self.remote)
+    }
 }
 
 /// Present in the Lua state only while ranma is calling a bind, hook or module:
@@ -988,6 +1011,22 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             t.set("title", st.title)?;
             t.set("mode", st.mode)?;
             t.set("panes", st.panes)?;
+            Ok(t)
+        })?,
+    )?;
+
+    ranma.set(
+        "client",
+        lua.create_function(|lua, ()| {
+            let c = lua
+                .app_data_ref::<Runtime>()
+                .ok_or_else(|| {
+                    rt_err("ranma.client only works inside binds, hooks and modules, not at config load")
+                })?
+                .state
+                .client;
+            let t = lua.create_table()?;
+            c.fill(&t)?;
             Ok(t)
         })?,
     )?;

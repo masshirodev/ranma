@@ -206,6 +206,9 @@ pub struct App {
     client_inside: Option<String>,
     /// The terminal showing this ranma reached it over SSH (see `title_host`).
     client_remote: bool,
+    /// The terminal driving the screen is a phone or a tablet (see
+    /// `proto::Hello::mobile`).
+    client_mobile: bool,
     /// The program in the foreground of each workspace's focused pane, for the
     /// workspaces module (` 3:nvim `). Read from /proc at most every
     /// `PROGRAMS_EVERY`, and only after something happened, so idle stays idle.
@@ -302,6 +305,7 @@ impl App {
             switch_requested: None,
             client_inside: None,
             client_remote: false,
+            client_mobile: false,
             programs: HashMap::new(),
             programs_read: None,
             programs_due: None,
@@ -2034,7 +2038,31 @@ impl App {
                 Mode::Copy => "copy",
             },
             panes: self.panes.len(),
+            client: self.client_facts(),
         }
+    }
+
+    fn client_facts(&self) -> config::ClientFacts {
+        config::ClientFacts {
+            cols: self.screen.w,
+            rows: self.screen.h,
+            mobile: self.client_mobile,
+            remote: self.client_remote,
+        }
+    }
+
+    /// A terminal drives the screen now, at the size it already set: tell
+    /// `init.lua`, which may switch profiles for it (DESIGN.md, "A mobile view").
+    pub fn driven_by(&mut self, mobile: bool, remote: bool) {
+        let previous = self.client_mobile;
+        self.client_mobile = mobile;
+        self.client_remote = remote;
+        let facts = self.client_facts();
+        self.emit(HookEvent::DriverChange, |t| {
+            facts.fill(t)?;
+            t.set("previous_mobile", previous)
+        });
+        self.dirty = true;
     }
 
     /// Run Lua with the runtime API live, then apply what it asked for.
@@ -2740,6 +2768,36 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn init_lua_hears_which_terminal_drives() {
+        let mut a = app(Some(
+            r#"
+            ranma.on("driver_change", function(ev)
+              ranma.notify(string.format("%dx%d mobile=%s was=%s remote=%s",
+                ev.cols, ev.rows, ev.mobile, ev.previous_mobile, ev.remote))
+            end)
+            ranma.bind("z", function()
+              local c = ranma.client()
+              ranma.notify(string.format("%dx%d %s", c.cols, c.rows, c.mobile))
+            end)
+            "#,
+        ));
+        a.handle(AppEvent::Input(Event::Resize(52, 34)));
+        a.driven_by(true, true);
+        assert_eq!(
+            a.status.as_deref(),
+            Some("52x34 mobile=true was=false remote=true")
+        );
+        a.handle(AppEvent::Input(Event::Resize(200, 50)));
+        a.driven_by(false, false);
+        assert_eq!(
+            a.status.as_deref(),
+            Some("200x50 mobile=false was=true remote=false")
+        );
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(a.status.as_deref(), Some("200x50 false"));
     }
 
     #[test]

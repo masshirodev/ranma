@@ -47,6 +47,11 @@ pub struct Hello {
     /// away, instead of sharing it. Defaulted like `inside`: an older client shares.
     #[serde(default)]
     pub steal: bool,
+    /// A phone or tablet (`RANMA_MOBILE=1`, `ranma attach --mobile`): `init.lua`
+    /// reads it in `ranma.client()` and `driver_change` to switch to a touch
+    /// profile. Defaulted like `inside`.
+    #[serde(default)]
+    pub mobile: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,6 +186,7 @@ mod tests {
             remote: true,
             outer: Some(1),
             steal: true,
+            mobile: true,
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -235,13 +241,16 @@ mod tests {
             remote: false,
             outer: None,
             steal: false,
+            mobile: false,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("inside");
         old.as_object_mut().unwrap().remove("remote");
         old.as_object_mut().unwrap().remove("outer");
         old.as_object_mut().unwrap().remove("steal");
+        old.as_object_mut().unwrap().remove("mobile");
         let h: Hello = serde_json::from_value(old).unwrap();
+        assert!(!h.mobile, "an older client is no phone");
         assert_eq!(h.inside, None);
         assert_eq!(h.outer, None);
         assert!(!h.steal, "an older client shares");

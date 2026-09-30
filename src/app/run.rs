@@ -237,8 +237,8 @@ pub fn run(config: Config) -> Result<()> {
         let mut app = App::new(config, tx.clone(), cols, rows);
         app.host_colors = host_colors;
         app.set_outer(outer);
-        app.client_remote = crate::pane::over_ssh();
         let _ipc = listen(&mut app, &tx, None);
+        app.driven_by(crate::client::mobile_env(), crate::pane::over_ssh());
         app.open_pane(None).context("starting the first pane")?;
         if !typed_early.is_empty()
             && let Some(p) = app.focused_pane()
@@ -799,9 +799,9 @@ fn drive(
     restart(term, buffer, hello.cols, hello.rows)?;
     app.host_colors = hello.colors.clone();
     app.client_inside = hello.inside.clone();
-    app.client_remote = hello.remote;
     app.set_outer(hello.outer);
     app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
+    app.driven_by(hello.mobile, hello.remote);
     // The title is this terminal's now: say who we are again (and where, if it
     // came over SSH), even with nothing else changed.
     app.host_title.clear();
@@ -932,6 +932,7 @@ mod tests {
                 remote: false,
                 outer: None,
                 steal: false,
+                mobile: false,
             },
         )
     }
