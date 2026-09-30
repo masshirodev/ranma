@@ -1850,6 +1850,7 @@ impl App {
             Action::Detach => self.detach_requested = true,
             Action::ServerSwitcher => self.list_servers(),
             Action::Attach(name) => self.switch_requested = Some(name),
+            Action::Profile(name) => self.use_profile(name.as_deref()),
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
@@ -1985,13 +1986,40 @@ impl App {
         }
     }
 
+    /// Switch profiles (DESIGN.md, "A mobile view"): what the bar, layout and
+    /// modules read changes, so the screen is laid out and drawn again.
+    fn use_profile(&mut self, name: Option<&str>) {
+        if self.config.profile.as_deref() == name {
+            return;
+        }
+        if let Err(e) = self.config.use_profile(name) {
+            self.status = Some(e);
+            return;
+        }
+        self.schedule_modules(Instant::now());
+        self.relayout();
+        self.render_state_modules();
+        self.dirty = true;
+    }
+
     fn reload_config(&mut self) {
         self.reload_at = None;
         // A reload can come from a timer, with no input event to trigger a frame;
         // either outcome puts a message in the bar that must be drawn now.
         self.dirty = true;
         match config::load(config::config_dir().as_deref()) {
-            Ok(cfg) => {
+            Ok(mut cfg) => {
+                // The profile in use stays in use, if the new config still has it.
+                let kept = self.config.profile.take();
+                if let Some(name) = kept.as_deref()
+                    && cfg.use_profile(Some(name)).is_err()
+                {
+                    self.toast(
+                        format!("profile `{name}` is gone from the config; using none"),
+                        crate::toast::Level::Normal,
+                        None,
+                    );
+                }
                 self.config = cfg;
                 self.module_generation += 1;
                 self.module_values.clear();
@@ -2798,6 +2826,31 @@ mod tests {
         );
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.status.as_deref(), Some("200x50 false"));
+    }
+
+    #[test]
+    fn a_hook_switches_profiles_for_the_terminal_driving() {
+        let mut a = app(Some(
+            r#"
+            ranma.profile("mobile", { set = { layout = "master" } })
+            ranma.on("driver_change", function(c)
+              ranma.use_profile(c.mobile and "mobile" or nil)
+            end)
+            "#,
+        ));
+        a.driven_by(true, false);
+        assert_eq!(a.config.settings.layout, Layout::Master);
+        assert_eq!(a.config.profile.as_deref(), Some("mobile"));
+        a.driven_by(false, false);
+        assert_eq!(a.config.settings.layout, Layout::Dwindle);
+        assert_eq!(a.config.profile, None);
+        a.run_action("profile nope".parse().unwrap());
+        assert!(
+            a.status
+                .as_deref()
+                .unwrap_or("")
+                .contains("no profile `nope`")
+        );
     }
 
     #[test]

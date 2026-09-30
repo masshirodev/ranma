@@ -301,6 +301,17 @@ ranma.module("datetime", {
 -- `ranma tmux-shim -- claude` gives a program that drives tmux (Claude Code's
 -- agent teams) a tmux that opens ranma panes instead.
 
+-- Profiles ----------------------------------------------------------------------
+-- Settings and bar sides used over everything above while the profile is in
+-- use; anything it does not name stays as set here. Switch with
+-- ranma.use_profile(name) in a bind or hook, or the `profile name` action;
+-- nil / `profile none` goes back. For example, per terminal:
+--
+--   ranma.profile("small", { set = { layout = "master" }, bar = { center = {} } })
+--   ranma.on("driver_change", function(c)
+--     ranma.use_profile(c.cols < 100 and "small" or nil)
+--   end)
+
 -- Extending ---------------------------------------------------------------------
 -- An action can be a Lua function instead of a string. It runs when the bind
 -- fires, and does not end WM mode unless the bind says { exit = true }:

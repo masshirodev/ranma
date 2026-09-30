@@ -135,7 +135,7 @@ impl Default for Settings {
 
 /// One `ranma.set { ... }` call. Every field is optional because each call only
 /// changes what it names; unknown fields are errors so typos surface at load.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SettingsPatch {
     leader: Option<String>,
@@ -154,7 +154,7 @@ struct SettingsPatch {
     title_host: Option<TitleHost>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WmModePatch {
     sticky: Option<bool>,
@@ -162,7 +162,7 @@ struct WmModePatch {
     hint: Option<HintSetting>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum HintSetting {
     On(bool),
@@ -289,12 +289,33 @@ pub struct ModuleDef {
     pub kind: ModuleKind,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BarPatch {
     left: Option<Vec<String>>,
     center: Option<Vec<String>>,
     right: Option<Vec<String>>,
+}
+
+/// `ranma.profile(name, def)`: overrides applied over the base configuration
+/// while the profile is in use (DESIGN.md, "A mobile view"). An overlay, never
+/// an edit of the base, so going back is exact.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Profile {
+    #[serde(default)]
+    set: SettingsPatch,
+    #[serde(default)]
+    bar: BarPatch,
+}
+
+impl Profile {
+    fn modules(&self) -> impl Iterator<Item = &String> {
+        [&self.bar.left, &self.bar.center, &self.bar.right]
+            .into_iter()
+            .flatten()
+            .flatten()
+    }
 }
 
 /// A window rule: what to do with a pane whose command or title matches.
@@ -420,6 +441,7 @@ struct Builder {
     workspaces_nested: NestedWorkspaces,
     rules: Vec<Rule>,
     session_accents: HashMap<String, theme::Color>,
+    profiles: HashMap<String, Profile>,
 }
 
 pub struct Config {
@@ -443,6 +465,12 @@ pub struct Config {
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
     pub session_accents: HashMap<String, theme::Color>,
     pub theme: Theme,
+    /// `ranma.profile` definitions, by name.
+    pub profiles: HashMap<String, Profile>,
+    /// The profile in use, applied over `base`.
+    pub profile: Option<String>,
+    /// The settings and bar as `init.lua` left them, before any profile.
+    base: (Settings, BarLayout),
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
     /// Owns every Lua function referenced by `binds` and `hooks`.
@@ -460,6 +488,35 @@ impl std::fmt::Debug for Config {
     }
 }
 
+impl Config {
+    /// Use the profile `name` over the base configuration, or none: the
+    /// settings and bar are rebuilt from the base each time, so nothing a
+    /// profile changed outlives it.
+    pub fn use_profile(&mut self, name: Option<&str>) -> Result<(), String> {
+        let (mut settings, mut bar) = self.base.clone();
+        if let Some(name) = name {
+            let Some(p) = self.profiles.get(name) else {
+                let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
+                known.sort_unstable();
+                return Err(format!(
+                    "no profile `{name}` (defined: {})",
+                    if known.is_empty() {
+                        "none".into()
+                    } else {
+                        known.join(", ")
+                    }
+                ));
+            };
+            apply_settings(&mut settings, p.set.clone(), &format!("profile `{name}`"))?;
+            apply_bar(&mut bar, p.bar.clone());
+        }
+        self.settings = settings;
+        self.bar = bar;
+        self.profile = name.map(str::to_string);
+        Ok(())
+    }
+}
+
 /// `$RANMA_CONFIG_DIR`, else `$XDG_CONFIG_HOME/ranma` (`~/.config/ranma`).
 pub fn config_dir() -> Option<PathBuf> {
     std::env::var_os("RANMA_CONFIG_DIR")
@@ -470,6 +527,102 @@ pub fn config_dir() -> Option<PathBuf> {
 
 fn rt_err(msg: impl Into<String>) -> mlua::Error {
     mlua::Error::RuntimeError(msg.into())
+}
+
+/// Apply what `ranma.set` (or a profile's `set`, as `who`) names to `s`.
+fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(), String> {
+    if let Some(leader) = patch.leader {
+        s.leader = leader
+            .parse()
+            .map_err(|e| format!("{who}: leader `{leader}`: {e}"))?;
+    }
+    if let Some(t) = patch.theme {
+        s.theme = t;
+    }
+    if let Some(l) = patch.layout {
+        s.layout = l;
+    }
+    if let Some(r) = patch.master_ratio {
+        if !(0.1..=0.9).contains(&r) {
+            return Err(format!(
+                "{who}: master_ratio must be between 0.1 and 0.9, not {r}"
+            ));
+        }
+        s.master_ratio = r;
+    }
+    if let Some(p) = patch.preserve_split {
+        s.preserve_split = p;
+    }
+    if patch.shell.is_some() {
+        s.shell = patch.shell;
+    }
+    if let Some(n) = patch.scrollback_lines {
+        s.scrollback_lines = n;
+    }
+    if let Some(w) = patch.wm_mode {
+        if let Some(sticky) = w.sticky {
+            s.wm_mode_sticky = sticky;
+        }
+        match w.hint {
+            None => {}
+            Some(HintSetting::On(false)) => s.wm_mode_hint = None,
+            Some(HintSetting::On(true)) => {
+                s.wm_mode_hint = Some(std::time::Duration::from_millis(500))
+            }
+            Some(HintSetting::After(secs)) if (0.0..=10.0).contains(&secs) => {
+                s.wm_mode_hint = Some(std::time::Duration::from_secs_f64(secs))
+            }
+            Some(HintSetting::After(secs)) => {
+                return Err(format!(
+                    "{who}: wm_mode.hint must be false or seconds from 0 to 10, not {secs}"
+                ));
+            }
+        }
+    }
+    if let Some(m) = patch.mouse {
+        s.mouse = m;
+    }
+    if let Some(u) = patch.updates {
+        s.updates = u;
+    }
+    if let Some(n) = patch.nested {
+        s.nested = n;
+    }
+    if let Some(h) = patch.title_host {
+        s.title_host = h;
+    }
+    if let Some(k) = patch.outer_leader {
+        s.outer_leader = k
+            .parse()
+            .map_err(|e| format!("{who}: outer_leader `{k}`: {e}"))?;
+    }
+    if s.outer_leader == s.leader {
+        return Err(format!(
+            "{who}: outer_leader must differ from leader (it reaches past a nested ranma)"
+        ));
+    }
+    if let Some(h) = patch.update_check_hours {
+        if h.is_nan() || h <= 0.0 {
+            return Err(format!(
+                "{who}: update_check_hours must be positive, not {h}"
+            ));
+        }
+        s.update_check_hours = h;
+    }
+    Ok(())
+}
+
+/// Apply what `ranma.bar` (or a profile's `bar`) names to `bar`.
+fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
+    if let Some(v) = patch.left {
+        bar.left = v;
+    }
+    if let Some(v) = patch.center {
+        bar.center = v;
+    }
+    if let Some(v) = patch.right {
+        bar.right = v;
+    }
 }
 
 fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
@@ -486,86 +639,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.set: {e}")))?;
             let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
-            let s = &mut b.settings;
-            if let Some(leader) = patch.leader {
-                s.leader = leader
-                    .parse()
-                    .map_err(|e| rt_err(format!("ranma.set: leader `{leader}`: {e}")))?;
-            }
-            if let Some(t) = patch.theme {
-                s.theme = t;
-            }
-            if let Some(l) = patch.layout {
-                s.layout = l;
-            }
-            if let Some(r) = patch.master_ratio {
-                if !(0.1..=0.9).contains(&r) {
-                    return Err(rt_err(format!(
-                        "ranma.set: master_ratio must be between 0.1 and 0.9, not {r}"
-                    )));
-                }
-                s.master_ratio = r;
-            }
-            if let Some(p) = patch.preserve_split {
-                s.preserve_split = p;
-            }
-            if patch.shell.is_some() {
-                s.shell = patch.shell;
-            }
-            if let Some(n) = patch.scrollback_lines {
-                s.scrollback_lines = n;
-            }
-            if let Some(w) = patch.wm_mode {
-                if let Some(sticky) = w.sticky {
-                    s.wm_mode_sticky = sticky;
-                }
-                match w.hint {
-                    None => {}
-                    Some(HintSetting::On(false)) => s.wm_mode_hint = None,
-                    Some(HintSetting::On(true)) => {
-                        s.wm_mode_hint = Some(std::time::Duration::from_millis(500))
-                    }
-                    Some(HintSetting::After(secs)) if (0.0..=10.0).contains(&secs) => {
-                        s.wm_mode_hint = Some(std::time::Duration::from_secs_f64(secs))
-                    }
-                    Some(HintSetting::After(secs)) => {
-                        return Err(rt_err(format!(
-                            "ranma.set: wm_mode.hint must be false or seconds from 0 to 10, not {secs}"
-                        )));
-                    }
-                }
-            }
-            if let Some(m) = patch.mouse {
-                s.mouse = m;
-            }
-            if let Some(u) = patch.updates {
-                s.updates = u;
-            }
-            if let Some(n) = patch.nested {
-                s.nested = n;
-            }
-            if let Some(h) = patch.title_host {
-                s.title_host = h;
-            }
-            if let Some(k) = patch.outer_leader {
-                s.outer_leader = k
-                    .parse()
-                    .map_err(|e| rt_err(format!("ranma.set: outer_leader `{k}`: {e}")))?;
-            }
-            if s.outer_leader == s.leader {
-                return Err(rt_err(
-                    "ranma.set: outer_leader must differ from leader (it reaches past a nested ranma)",
-                ));
-            }
-            if let Some(h) = patch.update_check_hours {
-                if h.is_nan() || h <= 0.0 {
-                    return Err(rt_err(format!(
-                        "ranma.set: update_check_hours must be positive, not {h}"
-                    )));
-                }
-                s.update_check_hours = h;
-            }
-            Ok(())
+            apply_settings(&mut b.settings, patch, "ranma.set").map_err(rt_err)
         })?,
     )?;
 
@@ -702,15 +776,40 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
             let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
-            if let Some(v) = patch.left {
-                b.bar.left = v;
+            apply_bar(&mut b.bar, patch);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "profile",
+        lua.create_function(|lua, (name, value): (String, Value)| {
+            let who = format!("ranma.profile(\"{name}\")");
+            let def: Profile = lua
+                .from_value(value)
+                .map_err(|e| rt_err(format!("{who}: {e} (a profile takes set and bar)")))?;
+            if def.set.theme.is_some() {
+                return Err(rt_err(format!(
+                    "{who}: a profile cannot change the theme; the theme is read once at load"
+                )));
             }
-            if let Some(v) = patch.center {
-                b.bar.center = v;
-            }
-            if let Some(v) = patch.right {
-                b.bar.right = v;
-            }
+            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            // Checked now, against what init.lua has set so far, so a bad value
+            // is an error at load and not when the profile is first used.
+            let mut probe = b.settings.clone();
+            apply_settings(&mut probe, def.set.clone(), &format!("{who} set")).map_err(rt_err)?;
+            b.profiles.insert(name, def);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "use_profile",
+        lua.create_function(|lua, name: Option<String>| {
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.use_profile only works inside binds and hooks, not at config load")
+            })?;
+            rt.actions.push(Action::Profile(name));
             Ok(())
         })?,
     )?;
@@ -1098,6 +1197,7 @@ pub fn load_from(
     if let Some(unknown) = builder
         .bar
         .all()
+        .chain(builder.profiles.values().flat_map(Profile::modules))
         .find(|m| !BUILTIN_MODULES.contains(&m.as_str()) && !builder.modules.contains_key(*m))
     {
         let builtins: Vec<&str> = BUILTIN_MODULES
@@ -1113,6 +1213,9 @@ pub fn load_from(
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
 
     Ok(Config {
+        base: (builder.settings.clone(), builder.bar.clone()),
+        profiles: builder.profiles,
+        profile: None,
         settings: builder.settings,
         binds: builder.binds,
         global_binds: builder.global_binds,
@@ -1137,6 +1240,61 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn a_profile_overlays_the_base_and_goes_back_exactly() {
+        let mut cfg = with_user(
+            r#"
+            ranma.set { layout = "master", mouse = "hover" }
+            ranma.profile("mobile", {
+              set = { layout = "dwindle", wm_mode = { hint = false } },
+              bar = { center = {}, right = { "mode" } },
+            })
+            "#,
+        )
+        .unwrap();
+        let (settings, bar) = (cfg.settings.clone(), cfg.bar.clone());
+        assert_eq!(cfg.profile, None);
+        cfg.use_profile(Some("mobile")).unwrap();
+        assert_eq!(cfg.settings.layout, Layout::Dwindle);
+        assert_eq!(cfg.settings.wm_mode_hint, None);
+        assert_eq!(
+            cfg.settings.mouse,
+            MouseMode::Hover,
+            "what it does not name stays"
+        );
+        assert!(cfg.bar.center.is_empty());
+        assert_eq!(cfg.bar.right, vec!["mode".to_string()]);
+        assert_eq!(cfg.bar.left, bar.left, "a side it does not name stays");
+        assert_eq!(cfg.profile.as_deref(), Some("mobile"));
+        cfg.use_profile(None).unwrap();
+        assert_eq!(cfg.settings, settings);
+        assert_eq!(cfg.bar, bar);
+        assert_eq!(cfg.profile, None);
+        let e = cfg.use_profile(Some("tablet")).unwrap_err();
+        assert!(
+            e.contains("no profile `tablet`") && e.contains("mobile"),
+            "{e}"
+        );
+        assert_eq!(cfg.settings, settings, "a failed switch changes nothing");
+    }
+
+    #[test]
+    fn a_profile_is_parsed_as_strictly_as_the_base() {
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(err(r#"ranma.profile("m", { toolbar = {} })"#).contains("toolbar"));
+        assert!(err(r#"ranma.profile("m", { set = { layuot = "dwindle" } })"#).contains("layuot"));
+        assert!(
+            err(r#"ranma.profile("m", { set = { master_ratio = 2 } })"#)
+                .contains(r#"ranma.profile("m") set: master_ratio"#)
+        );
+        assert!(err(r#"ranma.profile("m", { set = { theme = "x" } })"#).contains("theme"));
+        assert!(err(r#"ranma.profile("m", { bar = { left = { "nope" } } })"#).contains("`nope`"));
+        assert!(
+            err(r#"ranma.use_profile("m")"#).contains("only works inside"),
+            "switching is for run time"
+        );
     }
 
     fn builtin(cfg: &Config, keys: &str) -> Option<Action> {

@@ -98,6 +98,8 @@ pub enum Action {
     ServerSwitcher,
     /// Move this terminal to the server with this name (`ranma ls` lists them).
     Attach(String),
+    /// Use a `ranma.profile` over the base configuration; `None` goes back to it.
+    Profile(Option<String>),
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -254,6 +256,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("detach", ""),
     ("server_switcher", ""),
     ("attach", "<server>"),
+    ("profile", "<name|none>"),
     ("quit", "[now]"),
 ];
 
@@ -407,6 +410,19 @@ impl FromStr for Action {
             "update" => no_arg(Action::Update),
             "detach" => no_arg(Action::Detach),
             "server_switcher" => no_arg(Action::ServerSwitcher),
+            "profile" => match (first, second) {
+                (Some("none"), None) => Ok(Action::Profile(None)),
+                (Some(n), None) => Ok(Action::Profile(Some(n.to_string()))),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a profile name (from ranma.profile) or none",
+                }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one profile name, or none",
+                }),
+            },
             "attach" => match (first, second) {
                 (Some(n), None) => Ok(Action::Attach(n.to_string())),
                 (None, _) => Err(ActionError::MissingArg {
@@ -553,6 +569,8 @@ impl fmt::Display for Action {
             Action::Detach => f.write_str("detach"),
             Action::ServerSwitcher => f.write_str("server_switcher"),
             Action::Attach(n) => write!(f, "attach {n}"),
+            Action::Profile(None) => f.write_str("profile none"),
+            Action::Profile(Some(n)) => write!(f, "profile {n}"),
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),

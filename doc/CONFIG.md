@@ -180,7 +180,8 @@ does not matter; it is ignored.
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
-| `reload_config` | Reload `init.lua` and the theme. |
+| `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
+| `profile <name>` / `profile none` | Use a profile (see [Profiles](#profiles--ranmaprofilename-def)) over the configuration `init.lua` set, or go back to it. |
 | `detach` | Leave this terminal; the server and everything in it keep running (`leader d`). |
 | `server_switcher` | The servers `ranma ls` lists, opened on this one (`leader S`). `Enter` moves this terminal to the selected server, taking it from a terminal that shows it; the one you leave keeps running, detached. `Ctrl+X` kills the selected server after asking (`y` or `Enter` kills); this one is ended with `quit` instead. A server the terminal itself runs inside (ranma in ranma) cannot be picked. |
 | `attach <server>` | Move this terminal to that server, as picking it in `server_switcher` does: `ranma action "attach 2"`. The terminal's ranma must be this build (an older one is told to detach and `ranma attach` instead). |
@@ -571,11 +572,42 @@ Inside a bind function, a hook, or a module's `render`:
 | `ranma.notify("text")` | Show a message in the bar until the next key in WM mode. |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
+| `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), and whether it came over SSH. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
 Actions that fire hooks that run actions stop after four levels.
+
+## Profiles — `ranma.profile(name, def)`
+
+A profile is a set of settings and bar sides used **over** the configuration
+the rest of `init.lua` sets, while it is in use. It is how the mobile view is
+built (DESIGN.md, "A mobile view"), and nothing about it is mobile: a profile
+for presenting, or for a small window, works the same way.
+
+```lua
+ranma.profile("mobile", {
+  set = { layout = "master", wm_mode = { hint = false } },
+  bar = { center = {}, right = { "mode" } },
+})
+
+-- Use it while a phone drives the screen, and go back when the desk does.
+ranma.on("driver_change", function(c)
+  ranma.use_profile(c.mobile and "mobile" or nil)
+end)
+```
+
+- `set` takes what `ranma.set` takes, except `theme` (read once, at load);
+  `bar` what `ranma.bar` takes. Both are checked when `init.lua` loads, as
+  strictly as the calls they mirror: a typo in a profile is a config error,
+  not a surprise the first time a phone attaches.
+- Anything the profile does not name is the base's. Switching rebuilds the
+  settings and bar from the base each time, so `ranma.use_profile(nil)` (or the
+  `profile none` action) gives back exactly what `init.lua` set, and switching
+  from one profile to another leaves nothing of the first.
+- `ranma.use_profile(name)` works in binds and hooks. From a key or a script,
+  use the action: `ranma.bind("p", "profile mobile")`, `ranma action "profile none"`.
 
 ## Hooks — `ranma.on(event, fn)`
 
