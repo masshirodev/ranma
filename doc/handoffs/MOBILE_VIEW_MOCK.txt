@@ -1,0 +1,448 @@
+# The mobile view, cell for cell (Mobile View.dc.html, rendered by its own script).
+# Default theme, labels auto; colour roles are in the design (section 12), not here.
+# Sections: buttons/tbspec = 01-02, p34/p18/p34ctrl = 03, p34top = 05, barspec/p34scratch = 06,
+# menu*/ws* = 07, land = 09, tablet = 10, desk = 11.
+## buttons
+            normal     pressed    latched    locked     active     disabled
+
+normal
+  symbol     ≡          ≡          ⌃          ⌃          ⇉          ✕
+  text       menu       menu       ctrl       ctrl       sync       close
+  both       ≡ menu     ≡ menu     ⌃ ctrl     ⌃ ctrl     ⇉ sync     ✕ close
+
+large
+
+  symbol      ≡          ≡          ⌃          ⌃          ⇉          ✕
+                                             lock
+
+
+  text       menu       menu       ctrl       ctrl       sync       close
+                                              lock
+
+
+  both       ≡ menu     ≡ menu     ⌃ ctrl     ⌃ ctrl     ⇉ sync     ✕ close
+                                               lock
+
+width       +  one cell           ＋  two cells
+
+  large       +    + new           ＋    ＋ new
+
+## tbspec
+8 actions: faces of 5-6, stretched
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+
+10 actions: 7, then ⋯ for the rest
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ⋯
+
+
+normal size, packed
+ ≡   +   ◀   ▶   ⌃   ⎋   ⊞   ✕
+
+## p34
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                      │
+│  2   position = "bottom",                        │
+│  3   size = "large",                             │
+│  4   buttons = {                                 │
+│  5     { "≡", "pane_menu" },                     │
+│  6     { "+", "new_pane" },                      │
+│  7     { "◀", "focus prev" },                    │
+│  8     { "▶", "focus next" },                    │
+│  9     { "⌃", "latch ctrl" },                    │
+│ 10     { "⎋", "send esc" },                      │
+│ 11     { "⊞", "workspace_switcher" },            │
+│ 12     { "✕", "close_pane" },                    │
+│ 13   },                                          │
+│ 14 })                                            │
+│ 15                                               │
+│ 16 ranma.on("client_attach", function(c)         │
+│ 17   if c.mobile then                            │
+│ 18     ranma.profile("mobile")                   │
+│ 19   else                                        │
+│ 20     ranma.profile(nil)                        │
+│ 21   end                                         │
+│ 22 end)                                          │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ⧉    1:zsh   2:vps   3:ai    S
+
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## p18
+  1 ranma.toolbar("touch", {
+  2   position = "bottom",
+  3   size = "large",
+  4   buttons = {
+  5     { "≡", "pane_menu" },
+  6     { "+", "new_pane" },
+  7     { "◀", "focus prev" },
+  8     { "▶", "focus next" },
+  9     { "⌃", "latch ctrl" },
+ 10     { "⎋", "send esc" },
+ 11     { "⊞", "workspace_switcher" },
+ 12     { "✕", "close_pane" },
+ 13   },
+ 14 })
+ ⧉    1  2:vps  3  S    zsh   nvim   btop   logs
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## p34ctrl
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                      │
+│  2   position = "bottom",                        │
+│  3   size = "large",                             │
+│  4   buttons = {                                 │
+│  5     { "≡", "pane_menu" },                     │
+│  6     { "+", "new_pane" },                      │
+│  7     { "◀", "focus prev" },                    │
+│  8     { "▶", "focus next" },                    │
+│  9     { "⌃", "latch ctrl" },                    │
+│ 10     { "⎋", "send esc" },                      │
+│ 11     { "⊞", "workspace_switcher" },            │
+│ 12     { "✕", "close_pane" },                    │
+│ 13   },                                          │
+│ 14 })                                            │
+│ 15                                               │
+│ 16 ranma.on("client_attach", function(c)         │
+│ 17   if c.mobile then                            │
+│ 18     ranma.profile("mobile")                   │
+│ 19   else                                        │
+│ 20     ranma.profile(nil)                        │
+│ 21   end                                         │
+│ 22 end)                                          │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+ CTRL   1:zsh   2:vps   3:ai    S
+
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## p34top
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                      │
+│  2   position = "bottom",                        │
+│  3   size = "large",                             │
+│  4   buttons = {                                 │
+│  5     { "≡", "pane_menu" },                     │
+│  6     { "+", "new_pane" },                      │
+│  7     { "◀", "focus prev" },                    │
+│  8     { "▶", "focus next" },                    │
+│  9     { "⌃", "latch ctrl" },                    │
+│ 10     { "⎋", "send esc" },                      │
+│ 11     { "⊞", "workspace_switcher" },            │
+│ 12     { "✕", "close_pane" },                    │
+│ 13   },                                          │
+│ 14 })                                            │
+│ 15                                               │
+│ 16 ranma.on("client_attach", function(c)         │
+│ 17   if c.mobile then                            │
+│ 18     ranma.profile("mobile")                   │
+│ 19   else                                        │
+│ 20     ranma.profile(nil)                        │
+│ 21   end                                         │
+│ 22 end)                                          │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ⧉    1:zsh   2:vps   3:ai    S
+
+## barspec
+today's bar at 52 columns
+ ⧉    1:zsh  2:vps  3:ai  S  ~/pr… Tue 29 Sep  14:42
+
+large, 30 rows and up
+
+  ⧉    1:zsh   2:vps   3:ai    S
+
+
+large, strip folded in (24-29 rows)
+
+  ⧉    1:zsh   2:vps   3:ai    S           2/4 nvim
+
+
+normal, strip folded in (under 24)
+ ⧉    1  2:vps  3  S    zsh   nvim   btop   logs
+
+Ctrl latched · locked · Ctrl then Alt
+ CTRL    1  2:vps  3  S    zsh   nvim   btop   logs
+
+ CTRL LOCK    1  2:vps  3  S
+
+ CTRL ALT    1  2:vps  3  S
+## p34scratch
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                      │
+│  2   position = "bottom",                        │
+│  3   size = "large",                             │
+│  4   buttons = {                                 │
+│  5     { "≡", "pane_menu" },                     │
+│  6  ╭ notes ───────────────────────────────╮     │
+│  7  │# mobile view                         │     │
+│  8  │                                      │     │
+│  9  │- toolbar roles default to tab_*      │     │
+│ 10  │- ⋯ past 8 buttons                    │     │
+│ 11  │- strip folds under 30 rows           │     │
+│ 12  │- sheets close on a tap outside       │     │
+│ 13  │                                      │     │
+│ 14 }│~ $                                   │     │
+│ 15  │                                      │     │
+│ 16 r│                                      │     │
+│ 17  ╰──────────────────────────────────────╯     │
+│ 18     ranma.profile("mobile")                   │
+│ 19   else                                        │
+│ 20     ranma.profile(nil)                        │
+│ 21   end                                         │
+│ 22 end)                                          │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ⧉    1:zsh   2:vps   3:ai    S
+
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## menu34
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+╭ nvim ────────────────────────────────────────────╮
+│                                                  │
+│                                                  │
+│  Float                   Fullscreen              │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Group                   Swap with master        │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Synced input            Links on screen         │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Copy mode               Rename                  │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Move to an empty wor…   Move to the scratchpad  │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Close                                           │
+│                                                  │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## menu18
+  1 ranma.toolbar("touch", {
+╭ nvim ────────────────────────────────────────────╮
+│                                                  │
+│                                                  │
+│  Float                   Fullscreen              │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Group                   Swap with master        │
+│                                                  │
+│                                                  │
+│                                                  │
+│  Synced input            Links on screen         │
+│                                                  │
+╰─────────────────────────────────────── ▾ 5 more ─╯
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## ws34
+
+ zsh          nvim         btop         logs
+
+╭ nvim ────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                      │
+│  2   position = "bottom",                        │
+│  3   size = "large",                             │
+│  4   buttons = {                                 │
+│  5     { "≡", "pane_menu" },                     │
+│  6     { "+", "new_pane" },                      │
+│  7     { "◀", "focus prev" },                    │
+│  8     { "▶", "focus next" },                    │
+│  9     { "⌃", "latch ctrl" },                    │
+│ 10     { "⎋", "send esc" },                      │
+│ 11     { "⊞", "workspace_switcher" },            │
+╭ workspaces ──────────────────────────────────────╮
+│>  type to filter                                 │
+│                                                  │
+│                                                  │
+│    1:zsh        1 pane   ● 2:vps        4 panes  │
+│                                                  │
+│                                                  │
+│                                                  │
+│    3:ai        2 panes     S scratchpad  1 pane  │
+│                                                  │
+│                                                  │
+│                                                  │
+│    + new workspace                               │
+│                                                  │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## ws18
+  1 ranma.toolbar("touch", {
+  2   position = "bottom",
+  3   size = "large",
+  4   buttons = {
+  5     { "≡", "pane_menu" },
+  6     { "+", "new_pane" },
+  7     { "◀", "focus prev" },
+╭ workspaces ──────────────────────────────────────╮
+│> ai                                              │
+│                                                  │
+│                                                  │
+│  3:ai          2 panes   new workspace: ai       │
+│                                                  │
+│                                                  │
+╰──────────────────────────────────────────────────╯
+
+  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕
+
+## land
+╭ nvim ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                                                                                │
+│  2   position = "bottom",                                                                                  │
+│  3   size = "large",                                                                                       │
+│  4   buttons = {                                                                                           │
+│  5     { "≡", "pane_menu" },                                                                               │
+│  6     { "+", "new_pane" },                                                                                │
+│  7     { "◀", "focus prev" },                                                                              │
+│  8     { "▶", "focus next" },                                                                              │
+│  9     { "⌃", "latch ctrl" },                                                                              │
+│ 10     { "⎋", "send esc" },                                                                                │
+│ 11     { "⊞", "workspace_switcher" },                                                                      │
+│ 12     { "✕", "close_pane" },                                                                              │
+│ 13   },                                                                                                    │
+│ 14 })                                                                                                      │
+│ 15                                                                                                         │
+│ 16 ranma.on("client_attach", function(c)                                                                   │
+│ 17   if c.mobile then                                                                                      │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⧉    1:zsh   2:vps   3:ai    S    zsh    nvim   btop   logs    ≡     +     ◀     ▶     ⌃     ⎋     ⊞     ✕
+
+## tablet
+╭ zsh ─────────────────────────────────────────────────────╮╭ nvim ────────────────────────────────────────────────────╮
+│~/projects/ranma $ cargo test --release                   ││  1 ranma.toolbar("touch", {                              │
+│   Compiling ranma v0.9.0 (~/projects/ranma)              ││  2   position = "bottom",                                │
+│    Finished `release` profile [optimized] in 41.2s       ││  3   size = "large",                                     │
+│     Running unittests src/lib.rs                         ││  4   buttons = {                                         │
+│                                                          ││  5     { "≡", "pane_menu" },                             │
+│running 214 tests                                         ││  6     { "+", "new_pane" },                              │
+│test bar::tests::sides_land_where_they_belong ... ok      ││  7     { "◀", "focus prev" },                            │
+│test bar::tests::wide_characters_count_as_two ... ok      ││  8     { "▶", "focus next" },                            │
+│test picker::tests::fuzzy_prefers_prefixes ... ok         ││  9     { "⌃", "latch ctrl" },                            │
+│test theme::tests::builtin_default_loads ... ok           ││ 10     { "⎋", "send esc" },                              │
+│test whichkey::tests::flows_at_40_columns ... ok          ││ 11     { "⊞", "workspace_switcher" },                    │
+│                                                          ││ 12     { "✕", "close_pane" },                            │
+│test result: ok. 214 passed; 0 failed; 0 ignored          ││ 13   },                                                  │
+│                                                          ││ 14 })                                                    │
+│~/projects/ranma $                                        ││ 15                                                       │
+│                                                          │╰──────────────────────────────────────────────────────────╯
+│                                                          │╭ logs ────────────────────────────────────────────────────╮
+│                                                          ││Sep 29 14:40:58 vps caddy[812]: handled request /api/healt│
+│                                                          ││Sep 29 14:41:02 vps caddy[812]: handled request / 200     │
+│                                                          ││Sep 29 14:41:07 vps sshd[20431]: Accepted publickey for m │
+│                                                          ││Sep 29 14:41:07 vps sshd[20431]: pam_unix(sshd:session): o│
+│                                                          ││Sep 29 14:41:30 vps caddy[812]: tls: renewing certificate │
+│                                                          ││Sep 29 14:41:31 vps caddy[812]: certificate obtained      │
+│                                                          ││Sep 29 14:42:00 vps systemd[1]: Started backup.timer      │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+│                                                          ││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+
+  ⧉    1:zsh   2:vps   3:ai    S                          nvim                                        Tue 29 Sep  14:42
+
+
+    ≡ menu         + new          ◀ prev         ▶ next         ⌃ ctrl         ⎋ esc         ⊞ spaces        ✕ close
+
+## desk
+ sync   links   copy mode   rename   servers   reload   detach
+ zsh                                               nvim                                              btop                                              logs
+╭ ⇉ nvim ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  1 ranma.toolbar("touch", {                                                                                                                                                                          │
+│  2   position = "bottom",                                                                                                                                                                            │
+│  3   size = "large",                                                                                                                                                                                 │
+│  4   buttons = {                                                                                                                                                                                     │
+│  5     { "≡", "pane_menu" },                                                                                                                                                                         │
+│  6     { "+", "new_pane" },                                                                                                                                                                          │
+│  7     { "◀", "focus prev" },                                                                                                                                                                        │
+│  8     { "▶", "focus next" },                                                                                                                                                                        │
+│  9     { "⌃", "latch ctrl" },                                                                                                                                                                        │
+│ 10     { "⎋", "send esc" },                                                                                                                                                                          │
+│ 11     { "⊞", "workspace_switcher" },                                                                                                                                                                │
+│ 12     { "✕", "close_pane" },                                                                                                                                                                        │
+│ 13   },                                                                                                                                                                                              │
+│ 14 })                                                                                                                                                                                                │
+│ 15                                                                                                                                                                                                   │
+│ 16 ranma.on("client_attach", function(c)                                                                                                                                                             │
+│ 17   if c.mobile then                                                                                                                                                                                │
+│ 18     ranma.profile("mobile")                                                                                                                                                                       │
+│ 19   else                                                                                                                                                                                            │
+│ 20     ranma.profile(nil)                                                                                                                                                                            │
+│ 21   end                                                                                                                                                                                             │
+│ 22 end)                                                                                                                                                                                              │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+│~                                                                                                                                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ⧉    ⇉ sync 4    1:zsh  2:vps  3:ai  S                                                           nvim                                                                                 Tue 29 Sep  14:42

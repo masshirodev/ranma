@@ -872,6 +872,75 @@ is a nested ranma (the outer's centre and the inner's own border); the handoff
 suggests a setting to leave the centre empty then. The host an inner ranma runs
 on is not reported (the session name covers it when there are several).
 
+### A mobile view, from scriptable pieces
+
+**Decided 2026-09-29** (card c78, brief `doc/briefs/done/MOBILE_VIEW.md`,
+handoff `doc/handoffs/MOBILE_VIEW_MOCK.txt`). A phone or a tablet in Termux
+attaches over SSH to the ranma already running on the PC or the VPS. It runs no
+ranma of its own: a native Android build would fight Android's killer of
+background processes for the one thing the server is for.
+
+**ranma has no mobile mode.** The mobile view is a *profile* the user's
+`init.lua` switches to, built from pieces that each work on the desktop too:
+
+- **Client facts.** The client sends `mobile` in its hello, from
+  `RANMA_MOBILE=1` (set on the phone with `SetEnv` in Termux's SSH config; the
+  far sshd must `AcceptEnv RANMA_*`) or `ranma attach --mobile`. Lua reads the
+  driver's facts with `ranma.client()` and hears them change in `driver_change`.
+- **Profiles.** `ranma.profile(name, { set, bar, toolbars })` declares
+  overrides; `ranma.use_profile(name)` applies one over the base configuration
+  and `ranma.use_profile(nil)` goes back to it exactly. A profile is an overlay,
+  never an edit of the base, so reverting cannot drift.
+- **Toolbars**: named rows of buttons, each a label and an action or a Lua
+  function, `top`, `bottom` or `beside` the bar, `normal` or `large`.
+- **`send <keys>` and latching modifiers** (`latch ctrl`): what Gboard cannot
+  type, without the leader.
+- **`layout = "monocle"`** with a **`pane_strip`**: one pane on screen, the
+  others as tabs.
+- **Large** bar, toolbars and pickers; a picker at large size is a **sheet**
+  rising from the toolbar.
+- **`pane_menu`** (there is no right click on a touch screen) and a
+  **`workspace_switcher`**.
+
+What gives way as the screen gets shorter (Gboard takes half of it) is decided
+by one pure function of the driver's size, in the handoff's order: the strip
+folds into the bar, the bar goes to normal size, the pane border goes, the
+toolbar goes to normal size, the toolbar hides. The toolbar gives way last,
+because the keyboard is open exactly when Esc and Ctrl are needed.
+
+**With several terminals on one server** (see that section) there is still one
+screen, so:
+
+1. **The profile follows the driver**, as the size, colours and title do.
+   `mobile` is one more fact the driver supplies. While the phone drives, the
+   PC's terminal shows the phone's screen in its corner; typing on the PC takes it
+   back. Drawing each client its own view would be two screens, the copy the
+   non-goals refuse.
+2. **A peek changes nothing.** A phone that joins sees the desk's screen,
+   clipped, until it types or taps.
+3. **The click that takes the drive does nothing else.** Its position was read
+   off the screen as it was before the resize (and now before a profile change),
+   so passing it on would land it on whatever is there afterwards. The press is
+   swallowed with the drag and release that follow it. Keys and pastes have no
+   position and go through. This was already wrong in the several-terminals
+   change, for any two sizes.
+4. **A latched modifier belongs to the terminal that latched it** and is cleared
+   when another one drives: the PC's next key is never sent with the phone's
+   Ctrl.
+5. **Sheets close when the drive moves to another profile**, since they are laid
+   out for the other screen. A driver change within one profile keeps them.
+6. An upgrade carries `mobile` in each client's hello (defaulted, so an older
+   handover reads). Latches and the pressed button are not carried, and the
+   profile is derived again by firing `driver_change` after the restore.
+
+Where it departs from the handoff: its example hook was `client_attach`, which
+with several terminals is the wrong moment, because attaching changes no screen
+and driving does. It is `driver_change`. Its `ranma.profile(name)` to switch is
+`ranma.use_profile(name)`, so declaring and switching are not one overloaded
+call. The labels follow the handoff's own corrections: `⊞` for the workspace
+switcher, since `⧉` is already the bar's mode slot, and `+`, since `＋` is two
+cells.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:
