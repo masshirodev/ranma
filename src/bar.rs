@@ -32,6 +32,9 @@ pub enum Style {
     /// The deepest current workspace inside a nested ranma: bold text in that
     /// ranma's session accent (the theme's active colour without one).
     WsInner(Option<[u8; 3]>),
+    /// A pane chip in the `pane_strip` module, drawn as a tab.
+    TabActive,
+    TabInactive,
 }
 
 impl Style {
@@ -55,6 +58,8 @@ pub enum Click {
     SessionSwitcher,
     /// Run the update.
     Update,
+    /// Focus this pane (a `pane_strip` chip).
+    Pane(crate::layout::PaneId),
     /// A workspace inside the ranma in workspace `holder`'s focused pane,
     /// `depth` levels down: `path` holds each level's workspace (0 for its
     /// scratchpad).

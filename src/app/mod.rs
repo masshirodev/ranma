@@ -495,7 +495,44 @@ impl App {
         if let Some(ws) = self.workspaces.get(&self.current) {
             let full = ws.focused.filter(|f| ws.fullscreen && ws.contains(*f));
             let lay = ws.tree.layout_full(area, gap);
+            let monocle = self.config.settings.layout == Layout::Monocle;
             match full {
+                None if monocle => {
+                    let tiles = ws.tree.panes();
+                    let shown = ws
+                        .focused
+                        .filter(|f| ws.tree.contains(*f))
+                        .or(ws.last_tile)
+                        .filter(|t| ws.tree.contains(*t))
+                        .or(tiles.first().copied());
+                    let order = ws.panes();
+                    // One pane has nothing to switch to: no strip for it.
+                    let strip = order.len() > 1 && area.h > 1;
+                    let body = if strip {
+                        f.tab_bars.push(TabBar {
+                            rect: Rect::new(area.x, area.y, area.w, 1),
+                            active: order
+                                .iter()
+                                .position(|p| Some(*p) == ws.focused)
+                                .unwrap_or(0),
+                            tabs: order,
+                        });
+                        Rect::new(area.x, area.y + 1, area.w, area.h - 1)
+                    } else {
+                        area
+                    };
+                    for id in tiles {
+                        if Some(id) == shown {
+                            f.views.push(view(id, body, false));
+                        } else {
+                            // Sized as if shown: switching does not resize it.
+                            f.hidden.push((id, body.inset(b, b)));
+                        }
+                    }
+                    for (id, r) in &ws.floating {
+                        f.views.push(view(*id, r.clamp_into(area), true));
+                    }
+                }
                 Some(fid) => {
                     f.views.push(view(fid, area, false));
                     for (id, r) in lay.visible.iter().chain(&lay.hidden) {
@@ -639,6 +676,8 @@ impl App {
             // Placed after the focused pane in tree order, then put into the
             // master shape by relayout: it joins the stack after the focused one.
             Layout::Master => Placement::Dwindle,
+            // Placed as dwindle would, so the tiling is there to go back to.
+            Layout::Monocle => Placement::Dwindle,
         };
         let area = self.workspace_area();
         let in_scratch = self.scratch_shown;
@@ -786,12 +825,52 @@ impl App {
     }
 
     /// Focus a pane in the active workspace: reveal its tab, raise it if it floats.
+    /// Focus the next or previous pane of the active layer, wrapping.
+    fn focus_cycle(&mut self, forward: bool) {
+        let order = self.active().panes();
+        let Some(at) = self
+            .focused()
+            .and_then(|f| order.iter().position(|p| *p == f))
+        else {
+            return;
+        };
+        let n = order.len();
+        let next = if forward {
+            (at + 1) % n
+        } else {
+            (at + n - 1) % n
+        };
+        if next != at {
+            self.active_mut().fullscreen = false;
+            self.focus(order[next]);
+            self.relayout();
+        }
+    }
+
+    /// A pane's name on a tab or strip chip: its label, `◇` before a float.
+    pub fn chip_label(&self, id: PaneId) -> String {
+        let title = self
+            .panes
+            .get(&id)
+            .map(|p| p.label())
+            .filter(|t| !t.is_empty())
+            .unwrap_or("shell");
+        if self.active().floating.iter().any(|(f, _)| *f == id) {
+            format!("◇ {title}")
+        } else {
+            title.to_string()
+        }
+    }
+
     fn focus(&mut self, id: PaneId) {
         let ws = self.active_mut();
         if !ws.contains(id) {
             return;
         }
         ws.focused = Some(id);
+        if ws.tree.contains(id) {
+            ws.last_tile = Some(id);
+        }
         ws.tree.reveal(id);
         ws.raise(id);
         self.dirty = true;
@@ -1284,6 +1363,11 @@ impl App {
                 }
                 Some(Click::SessionSwitcher) => self.open_session_switcher(),
                 Some(Click::Update) => self.run_action(Action::Update),
+                Some(Click::Pane(id)) => {
+                    self.active_mut().fullscreen = false;
+                    self.focus(id);
+                    self.relayout();
+                }
                 Some(Click::Nested {
                     holder,
                     depth,
@@ -1746,6 +1830,13 @@ impl App {
                 if let Some(id) = focused {
                     self.close_pane(id);
                 }
+            }
+            Action::FocusCycle { forward } => self.focus_cycle(forward),
+            // Monocle shows one tile: sideways is through the tabs.
+            Action::Focus(dir @ (Dir::Left | Dir::Right))
+                if self.config.settings.layout == Layout::Monocle && !self.scratch_shown =>
+            {
+                self.focus_cycle(dir == Dir::Right);
             }
             Action::Focus(dir) => {
                 if let Some(id) = focused {
@@ -2531,6 +2622,26 @@ impl App {
                 .map(|t| vec![Piece::new(t, Style::Normal)])
                 .unwrap_or_default(),
             "panes" => vec![Piece::new(self.panes.len().to_string(), Style::Dim)],
+            "pane_strip" => {
+                let ws = self.active();
+                let order = ws.panes();
+                if order.len() < 2 {
+                    Vec::new()
+                } else {
+                    order
+                        .into_iter()
+                        .map(|id| {
+                            let style = if Some(id) == ws.focused {
+                                Style::TabActive
+                            } else {
+                                Style::TabInactive
+                            };
+                            Piece::new(format!(" {} ", self.chip_label(id)), style)
+                                .on_click(Click::Pane(id))
+                        })
+                        .collect()
+                }
+            }
             "update" => match self.update_available {
                 Some(b) => vec![
                     Piece::new(format!("⬆ {}", b.commits()), Style::Accent).on_click(Click::Update),
@@ -2851,6 +2962,78 @@ mod tests {
                 .unwrap_or("")
                 .contains("no profile `nope`")
         );
+    }
+
+    #[test]
+    fn monocle_shows_one_tile_and_the_rest_as_tabs() {
+        let mut a = app(Some(
+            r#"ranma.set { layout = "monocle" }
+               ranma.profile("tile", { set = { layout = "dwindle" } })"#,
+        ));
+        for id in [1, 2, 3] {
+            with_pane(&mut a, id);
+        }
+        a.workspaces
+            .get_mut(&1)
+            .unwrap()
+            .floating
+            .push((4, Rect::new(10, 5, 30, 8)));
+        let tree_before = format!("{:?}", a.workspaces[&1].tree);
+        a.focus(2);
+        let f = a.frame();
+        let tiles: Vec<_> = f
+            .views
+            .iter()
+            .filter(|v| !v.floating)
+            .map(|v| v.id)
+            .collect();
+        assert_eq!(tiles, vec![2], "one tile on screen");
+        assert!(
+            f.views.iter().any(|v| v.id == 4 && v.floating),
+            "floats still float"
+        );
+        let area = a.workspace_area();
+        let v = f.views.iter().find(|v| v.id == 2).unwrap();
+        assert_eq!(v.outer, Rect::new(area.x, area.y + 1, area.w, area.h - 1));
+        assert_eq!(f.tab_bars.len(), 1);
+        assert_eq!(f.tab_bars[0].tabs, vec![1, 2, 3, 4], "tiles, then floats");
+        assert_eq!(f.tab_bars[0].active, 1);
+        let hidden: Vec<_> = f.hidden.iter().map(|(id, r)| (*id, *r)).collect();
+        assert!(
+            hidden.iter().all(|(_, r)| *r == v.inner),
+            "sized as if shown"
+        );
+        assert_eq!(hidden.len(), 2);
+        // A float focused: the tile last focused stays on screen.
+        a.focus(4);
+        let f = a.frame();
+        assert!(f.views.iter().any(|v| v.id == 2 && !v.floating));
+        assert_eq!(f.tab_bars[0].active, 3);
+        // Sideways is through the tabs, wrapping.
+        a.run_action("focus right".parse().unwrap());
+        assert_eq!(a.focused(), Some(1));
+        a.run_action("focus prev".parse().unwrap());
+        assert_eq!(a.focused(), Some(4));
+        // The strip in the bar lists the same panes.
+        let strip = a.segment("pane_strip");
+        assert_eq!(strip.len(), 4);
+        assert_eq!(strip[3].text, " ◇ shell ");
+        assert_eq!(strip[3].style, Style::TabActive);
+        assert_eq!(strip[0].click, Some(Click::Pane(1)));
+        // Another layout gives the tiling back: the tree was never touched.
+        a.run_action("profile tile".parse().unwrap());
+        assert_eq!(format!("{:?}", a.workspaces[&1].tree), tree_before);
+        assert!(a.frame().tab_bars.is_empty());
+    }
+
+    #[test]
+    fn monocle_draws_no_strip_for_one_pane() {
+        let mut a = app(Some(r#"ranma.set { layout = "monocle" }"#));
+        with_pane(&mut a, 1);
+        let f = a.frame();
+        assert!(f.tab_bars.is_empty());
+        assert_eq!(f.views[0].outer, a.workspace_area());
+        assert!(a.segment("pane_strip").is_empty());
     }
 
     #[test]

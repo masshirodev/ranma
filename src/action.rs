@@ -67,6 +67,11 @@ pub enum Action {
     NewPaneAt(Dir),
     ClosePane,
     Focus(Dir),
+    /// Focus the next (or previous) pane of the workspace: its tiles in tree
+    /// order, then its floats, wrapping.
+    FocusCycle {
+        forward: bool,
+    },
     /// Swap the focused pane with its neighbour in that direction.
     Move(Dir),
     /// Grow the focused pane's edge in that direction by this many cells.
@@ -210,7 +215,7 @@ pub enum ActionError {
 pub const CATALOGUE: &[(&str, &str)] = &[
     ("new_pane", "[left|right|up|down]"),
     ("close_pane", ""),
-    ("focus", "<left|right|up|down>"),
+    ("focus", "<left|right|up|down|next|prev>"),
     ("move", "<left|right|up|down>"),
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
@@ -337,7 +342,11 @@ impl FromStr for Action {
                 Some(_) => Ok(Action::NewPaneAt(parse_dir(name, first)?)),
             },
             "close_pane" => no_arg(Action::ClosePane),
-            "focus" => Ok(Action::Focus(parse_dir(name, first)?)),
+            "focus" => match first {
+                Some("next") => Ok(Action::FocusCycle { forward: true }),
+                Some("prev") => Ok(Action::FocusCycle { forward: false }),
+                _ => Ok(Action::Focus(parse_dir(name, first)?)),
+            },
             "move" => Ok(Action::Move(parse_dir(name, first)?)),
             "resize" => {
                 let dir = parse_dir(name, first)?;
@@ -551,6 +560,8 @@ impl fmt::Display for Action {
             Action::NewPaneAt(d) => write!(f, "new_pane {d}"),
             Action::ClosePane => f.write_str("close_pane"),
             Action::Focus(d) => write!(f, "focus {d}"),
+            Action::FocusCycle { forward: true } => f.write_str("focus next"),
+            Action::FocusCycle { forward: false } => f.write_str("focus prev"),
             Action::Move(d) => write!(f, "move {d}"),
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),

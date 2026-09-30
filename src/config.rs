@@ -26,6 +26,10 @@ pub enum Layout {
     Manual,
     /// One master pane on the left, the rest stacked on the right.
     Master,
+    /// One tiled pane on screen at a time, the others as tabs above it: the
+    /// whole workspace drawn as a tabbed group. The tree is kept as it is, so
+    /// another layout gives the tiling back.
+    Monocle,
 }
 
 /// What the mouse does outside WM mode.
@@ -223,8 +227,15 @@ impl FromStr for Event {
 
 /// Modules ranma draws itself. Anything else in a bar list must be defined with
 /// `ranma.module`.
-pub const BUILTIN_MODULES: [&str; 6] =
-    ["mode", "session", "workspaces", "title", "panes", "update"];
+pub const BUILTIN_MODULES: [&str; 7] = [
+    "mode",
+    "session",
+    "workspaces",
+    "title",
+    "panes",
+    "pane_strip",
+    "update",
+];
 
 /// Built-in modules that read the machine on a timer (see `sysstat`), with
 /// their default interval in seconds. Named in the bar, they are defined with

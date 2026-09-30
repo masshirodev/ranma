@@ -16,6 +16,10 @@ pub struct Workspace {
     pub name: Option<String>,
     /// Where tiled panes last floated, so floating one again puts it back there.
     pub float_memory: std::collections::HashMap<PaneId, Rect>,
+    /// The tile last focused: the one `monocle` keeps on screen while a float
+    /// has the focus. Defaulted, so an upgrade from a build without it reads.
+    #[serde(default)]
+    pub last_tile: Option<PaneId>,
 }
 
 impl Workspace {

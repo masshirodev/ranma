@@ -92,7 +92,7 @@ Each call changes only the fields it names; call it as often as you like.
 | --- | --- | --- |
 | `leader` | `"ctrl+b"` | The chord that enters WM mode. |
 | `theme` | `"default"` | Theme name; see [Themes](#themes). |
-| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. |
+| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. |
 | `master_ratio` | `0.55` | With `layout = "master"`: the master's share of the width when a master area forms (0.1-0.9). Resizing it afterwards sticks. |
 | `preserve_split` | `true` | Keep a split's direction across resizes. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
@@ -143,7 +143,8 @@ does not matter; it is ignored.
 | `new_pane` | Open a pane with the shell, placed by the layout, in the directory the focused pane's shell is in. |
 | `new_pane <dir>` | The same, on that side of the focused pane (`leader Alt+arrow`): `new_pane down` opens below. |
 | `close_pane` | Close the focused pane. |
-| `focus <dir>` | Focus the pane in that direction (`left right up down`). |
+| `focus <dir>` | Focus the pane in that direction (`left right up down`). In `monocle`, `left` and `right` go through the tabs. |
+| `focus next` / `focus prev` | Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping. |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
@@ -393,6 +394,7 @@ with `…`. A message from ranma or `ranma.notify` takes the centre while it is 
 | `workspaces` | The workspaces as ` 3:name `, the current one highlighted, urgent ones marked; `S` when the scratchpad has panes. Clickable. The name is the one given with `rename_workspace`, else the program in the workspace's focused pane (` 3:nvim `, ` 1:zsh ` at a prompt), read from `/proc` at most twice a second and only when something happened. A connection is named for where it goes: ` 2:vps ` for `ssh vps` (the destination as typed); with no plain `ssh` to read, such as under mosh, the host a ranma on the far side reports. | `show = "occupied"` (default) or `"all"` (1-10); `label = "program"` (default) or `"number"` (only ` 3 ` unless named); `nested = "focused"` (default), `"all"` or `"off"`: which workspaces show the workspaces of a ranma inside them (see [ranma inside ranma](#ranma-inside-ranma)) |
 | `title` | The focused pane's title | — |
 | `panes` | How many panes are open | — |
+| `pane_strip` | The panes of the current workspace as tabs (` zsh  nvim `, `◇` before a float), the focused one in the active-tab colours; click one to focus it. Nothing with one pane. Monocle's strip, in the bar. | — |
 | `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`) |
 | `mem` | Memory in use (total minus available), from `/proc/meminfo` (`mem 24.1G`). Urgent at 90% of total and above. | `interval` (default `5`), `format` (`%s` is `24.1G`, default `"mem %s"`) |
 

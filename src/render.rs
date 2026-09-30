@@ -320,14 +320,11 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
                 .fg(color(c.tab_inactive_fg))
                 .bg(color(c.tab_inactive_bg))
         };
-        let title = app
-            .panes
-            .get(id)
-            .map(|p| p.label())
-            .filter(|t| !t.is_empty())
-            .unwrap_or("shell");
         let width = x1.saturating_sub(x0) as usize;
-        let label: String = format!(" {title} ").chars().take(width).collect();
+        let label: String = format!(" {} ", app.chip_label(*id))
+            .chars()
+            .take(width)
+            .collect();
         let padded = format!("{label:<width$}");
         buf.set_stringn(x0, tb.rect.y, &padded, width, style);
     }
@@ -345,7 +342,10 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
         let style = piece_style(c, piece.style).patch(Style::default().bg(color(c.bar_bg)));
         let style = match piece.style {
             // These carry their own background.
-            bar::Style::Mode | bar::Style::WsActive => piece_style(c, piece.style),
+            bar::Style::Mode
+            | bar::Style::WsActive
+            | bar::Style::TabActive
+            | bar::Style::TabInactive => piece_style(c, piece.style),
             _ => style,
         };
         buf.set_stringn(
@@ -582,6 +582,13 @@ fn piece_style(c: &Colors, s: bar::Style) -> Style {
         bar::Style::WsEmpty => fg(c.ws_empty),
         bar::Style::WsUrgent => fg(c.ws_urgent).add_modifier(Modifier::BOLD),
         bar::Style::WsHolder => fg(c.ws_occupied).add_modifier(Modifier::BOLD),
+        bar::Style::TabActive => Style::default()
+            .fg(color(c.tab_active_fg))
+            .bg(color(c.tab_active_bg))
+            .add_modifier(Modifier::BOLD),
+        bar::Style::TabInactive => Style::default()
+            .fg(color(c.tab_inactive_fg))
+            .bg(color(c.tab_inactive_bg)),
         bar::Style::WsInner(accent) => match accent {
             Some([r, g, b]) => Style::default().fg(Color::Rgb(r, g, b)),
             None => fg(c.ws_active_bg),

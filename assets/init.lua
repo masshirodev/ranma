@@ -20,7 +20,9 @@ ranma.set {
   -- side, like Hyprland; "manual" splits the way the last toggle_split said, like i3;
   -- "master" keeps one master pane on the left and stacks the rest on the right
   -- (a new pane joins the stack after the focused one; swap_master, leader
-  -- shift+m, trades the focused pane with the master).
+  -- shift+m, trades the focused pane with the master); "monocle" shows one
+  -- tiled pane at a time with the others as tabs above it (focus left/right,
+  -- next/prev, or click a tab), keeping the tree for another layout to use.
   layout = "dwindle",
   -- The master's share of the width in layout "master", 0.1-0.9. Resizing it
   -- (shift+arrows, or the mouse) sticks.
