@@ -6,6 +6,7 @@
 pub mod action;
 pub mod app;
 pub mod bar;
+pub mod chrome;
 pub mod client;
 pub mod config;
 pub mod hints;
@@ -26,6 +27,7 @@ pub mod sysstat;
 pub mod theme;
 pub mod tmux;
 pub mod toast;
+pub mod toolbar;
 pub mod update;
 pub mod whichkey;
 pub mod workspace;

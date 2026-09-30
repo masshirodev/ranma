@@ -258,6 +258,8 @@ ranma.bar {
   left = { "mode", "session", "workspaces" },
   center = { "title" },
   right = { "update", "datetime" },
+  -- "large": three rows with thumb-sized chips, for a touch screen.
+  size = "normal",
 }
 
 -- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.

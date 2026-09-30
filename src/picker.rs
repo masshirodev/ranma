@@ -33,6 +33,8 @@ pub enum Target {
     Run(String),
     /// A typed command line that does not parse; the label says why.
     Invalid,
+    /// A toolbar's button, by the toolbar's name and its index (`⋯`).
+    Button(String, usize),
 }
 
 /// What the palette shows, by the query's first character.
@@ -74,6 +76,8 @@ pub enum Kind {
     ConfirmKill(String),
     /// A pane's right-click menu: entries that run an action on it.
     Menu,
+    /// The buttons of a toolbar that did not fit on it (its `⋯`).
+    ToolbarMore,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

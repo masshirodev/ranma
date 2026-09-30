@@ -565,7 +565,7 @@ impl App {
         let kind = self.picker.as_ref().map(|p| p.kind.clone());
         match outcome {
             Outcome::Open => {}
-            Outcome::Cancel => self.picker = None,
+            Outcome::Cancel => self.close_picker(),
             Outcome::Rename(i) => self.open_rename_prompt(i),
             Outcome::Kill(name) => self.confirm_kill(name),
             Outcome::Submit(text) => {
@@ -581,6 +581,7 @@ impl App {
                 }
             }
             Outcome::Accept(target) => {
+                self.sheet_from = None;
                 let query = self
                     .picker
                     .take()
@@ -601,6 +602,7 @@ impl App {
                     (_, Target::Action { name: line, .. } | Target::Run(line)) => {
                         self.run_command(&line)
                     }
+                    (_, Target::Button(toolbar, i)) => self.run_button(&toolbar, i),
                     (_, Target::Invalid) => {}
                 }
             }

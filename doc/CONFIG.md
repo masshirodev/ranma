@@ -182,6 +182,9 @@ does not matter; it is ignored.
 | `exit_mode` | Leave WM mode. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
+| `toolbar <name> [on\|off\|toggle]` | Show, hide or flip a toolbar (see [Toolbars](#toolbars--ranmatoolbarname-def)); toggle without a word. Until the next profile switch, which shows the profile's. |
+| `send <chord>` | Type the chord into the focused pane as if pressed there (`send ctrl+c`, `send esc`, `send alt+.`), with any latched modifier; binds are not looked up. For a toolbar button. |
+| `latch ctrl` / `latch alt` / `latch shift` | Hold the modifier for the next key; twice quickly, until tapped again (see [Toolbars](#toolbars--ranmatoolbarname-def)). |
 | `profile <name>` / `profile none` | Use a profile (see [Profiles](#profiles--ranmaprofilename-def)) over the configuration `init.lua` set, or go back to it. |
 | `detach` | Leave this terminal; the server and everything in it keep running (`leader d`). |
 | `server_switcher` | The servers `ranma ls` lists, opened on this one (`leader S`). `Enter` moves this terminal to the selected server, taking it from a terminal that shows it; the one you leave keeps running, detached. `Ctrl+X` kills the selected server after asking (`y` or `Enter` kills); this one is ended with `quit` instead. A server the terminal itself runs inside (ranma in ranma) cannot be picked. |
@@ -385,6 +388,12 @@ side first (it holds what you glance at), then the left, and the centre gets the
 gap between them, centred on the bar when it fits. Whatever does not fit is cut
 with `…`. A message from ranma or `ranma.notify` takes the centre while it is up.
 
+`size = "large"` makes the bar three rows, for a touch screen: the text sits on
+the middle row, and the mode, workspace and strip chips are at least five
+columns wide, a column apart, filled top to bottom so a thumb can hit them.
+`"normal"` (the default) is one row. On a short screen a large bar gives way
+to a normal one (see [Toolbars](#toolbars--ranmatoolbarname-def)).
+
 ### Built-in modules
 
 | Module | Shows | Options |
@@ -581,6 +590,108 @@ These refuse to run while the config itself is loading; there is nothing to act 
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
 Actions that fire hooks that run actions stop after four levels.
 
+## Toolbars — `ranma.toolbar(name, def)`
+
+A toolbar is a row of buttons, each a label and an action: on a phone, what
+the keyboard cannot type and the leader is too slow for; on the desktop, a
+strip of the actions you have no key for. Buttons are tapped or clicked.
+
+```lua
+ranma.toolbar("touch", {
+  position = "bottom",  -- "top", "bottom" (the default), or "beside" the bar
+  size = "large",       -- "normal" (the default): one row; "large": three
+  show = false,         -- shown from the start, or only when asked (default)
+  buttons = {
+    { "≡", "pane_menu", text = "menu" },
+    { "+", "new_pane", text = "new" },
+    { "◀", "focus prev" },
+    { "▶", "focus next" },
+    { "⌃", "latch ctrl", text = "ctrl" },
+    { "⎋", "send esc" },
+    { "⊞", "workspace_switcher" },
+    { "✕", "close_pane" },
+    { "!", function() ranma.notify("hi") end },
+  },
+})
+```
+
+- A button is `{ label, action }`: the label is a symbol or short text, the
+  action any action ranma knows (checked at load, like a bind's) or a Lua
+  function. `text = "..."` is shown after the label wherever the button has
+  room (`≡ menu` on a tablet, `≡` on a phone). Use one-cell symbols: `+`, not
+  the full-width `＋`, which is two cells and sits off-centre.
+- **Large** buttons are three rows and at least five columns, and share the
+  whole row out, a column apart; the column between two buttons belongs to
+  the one on its left, so every cell of the row does something. **Normal**
+  ones are one row, at their natural width, dropping `text` before anything
+  is cut. Past what fits, the last button becomes `⋯`, which lists the rest.
+- **Where they go**: toolbars are the outermost rows, nearest the thumb
+  (`bottom`, under the bar) or the top edge. `beside` puts the toolbar in the
+  bar's own rows, on the right, when it fits in half the width (a phone on its
+  side, a tablet), and at the bottom when it does not.
+- **How a button looks** says what its action would do: *pressed* while held
+  (and a moment after, so a quick tap is seen); *active* for a toggle that is
+  on (`sync_toggle`, `fullscreen`, the profile or toolbar it switches) and for
+  the button whose list is open; *latched* or *locked* for a held modifier;
+  *disabled* when it cannot run (`close_pane` with no pane), when a tap does
+  nothing.
+- Show and hide them with the `toolbar NAME on|off|toggle` action, or name
+  them in a [profile](#profiles--ranmaprofilename-def)'s `toolbars`.
+
+**What gives way on a short screen.** When the bar or a toolbar is large,
+the rows decide, in this order: under 30 rows the monocle strip folds into
+the bar (its tabs where they fit, else one `2/4 nvim` chip that opens the
+pane switcher); under 24 the bar goes to one row, the strip's tabs inside it
+and only the current workspace named; under 20 the pane on screen loses its
+border; under 12 the toolbar goes to one row; under 8 it hides. A toolbar
+`beside` the bar counts its rows back, since it takes none of its own. The
+toolbar gives way last, because the keyboard is open exactly when Esc and
+Ctrl are needed. Normal-size chrome never folds.
+
+**Latched modifiers.** `latch ctrl` (`alt`, `shift`) holds the modifier for
+the next key, from the keyboard or a `send` button: `ctrl`, then `c` is
+`ctrl+c`. Tapped twice quickly it locks, until tapped again. Latches stack
+(`ctrl`, then `alt`, then `esc` is `ctrl+alt+esc`). While one is held, the
+bar's mode slot says ` CTRL ` (` CTRL LOCK `, ` CTRL ALT `) and the focused
+border takes the mode colour, as in WM mode. A button that runs anything else
+lets go of what was latched for one key. A latch is the terminal's that set
+it: another terminal driving the screen clears it.
+
+## A mobile view
+
+Nothing about the pieces above is mobile; put together in a
+[profile](#profiles--ranmaprofilename-def), they are the mobile view:
+
+```lua
+ranma.toolbar("touch", { size = "large", buttons = { --[[ as above ]] } })
+ranma.profile("mobile", {
+  set = { layout = "monocle" },
+  bar = { size = "large", center = {}, right = {} },
+  toolbars = { "touch" },
+})
+ranma.on("driver_change", function(c)
+  ranma.use_profile(c.mobile and "mobile" or nil)
+end)
+```
+
+A terminal says it is a phone or a tablet with `RANMA_MOBILE=1`, or
+`ranma attach --mobile NAME`. Over SSH from Termux, set it in Termux's
+`~/.ssh/config` so every connection says so:
+
+```
+Host vps
+  SetEnv RANMA_MOBILE=1
+```
+
+and let the far side's sshd take it (`/etc/ssh/sshd_config`, then reload
+sshd): `AcceptEnv RANMA_*`. Without that line sshd drops the variable
+silently, and the phone gets the desk's layout.
+
+When the phone and the desk both show a server, the screen follows the one
+last typed in (see [Servers](#servers-closing-the-terminal-does-not-end-ranma)),
+and so does the profile: tapping on the phone brings the mobile view (the tap
+itself only takes the screen), typing at the desk brings the desk's back.
+
 ## Profiles — `ranma.profile(name, def)`
 
 A profile is a set of settings and bar sides used **over** the configuration
@@ -601,7 +712,8 @@ end)
 ```
 
 - `set` takes what `ranma.set` takes, except `theme` (read once, at load);
-  `bar` what `ranma.bar` takes. Both are checked when `init.lua` loads, as
+  `bar` what `ranma.bar` takes; `toolbars` the names of the toolbars shown
+  while it is in use, instead of the base's. Both are checked when `init.lua` loads, as
   strictly as the calls they mirror: a typo in a profile is a config error,
   not a surprise the first time a phone attaches.
 - Anything the profile does not name is the base's. Switching rebuilds the
@@ -687,6 +799,16 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.ws_active_fg`, `ws_active_bg`, `ws_occupied`, `ws_empty`, `ws_urgent` | the workspaces module |
 | `colors.tab_active_fg`, `tab_active_bg`, `tab_inactive_fg`, `tab_inactive_bg` | tab bars of groups |
 | `colors.picker_selected_fg`, `picker_selected_bg` | the selected row in switchers and help |
+| `colors.toolbar_bg` | a toolbar's row and the gaps between its buttons; unset, `bar_bg` |
+| `colors.button_fg`, `button_bg` | a button, and the entries of a large picker; unset, `tab_inactive_fg` / `tab_inactive_bg` |
+| `colors.button_pressed_fg`, `button_pressed_bg` | a button held down; unset, the button's colours reversed |
+| `colors.button_active_fg`, `button_active_bg` | a toggle that is on, and the button whose list is open; unset, `tab_active_fg` / `tab_active_bg` |
+| `colors.button_latched_fg`, `button_latched_bg` | a latched or locked modifier; unset, `mode_fg` / `mode_bg` |
+| `colors.button_disabled_fg` | a button that cannot run now, on `button_bg`; unset, `bar_dim` |
+
+The toolbar keys are optional: each follows the role it names when unset, so
+a theme that only sets the older roles (one rendered from the wallpaper's
+palette, say) styles toolbars too.
 | `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
 | `colors.toast_fg`, `toast_bg` | toasts (their border is `bar_accent`, or `bar_urgent` when urgent) |
 | `border.style` | `rounded`, `plain`, `thick`, `double`, `none` |

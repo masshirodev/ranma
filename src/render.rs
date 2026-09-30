@@ -99,6 +99,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     if let Some(bar) = app.bar_rect() {
         draw_bar(f, app, bar);
     }
+    draw_toolbars(f, app);
     if app.which_key_shown() {
         draw_which_key(f, app);
     }
@@ -256,6 +257,8 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     // pane the next action applies to.
     let border = match (view.focused, app.mode, view.floating) {
         (true, Mode::Wm | Mode::Copy, _) => c.mode_bg,
+        // A latched modifier takes the next key, as WM mode does.
+        (true, Mode::Normal, _) if app.latched() => c.mode_bg,
         (true, Mode::Normal, _) => c.border_active,
         (false, _, true) => c.border_floating,
         (false, _, false) => c.border_inactive,
@@ -303,13 +306,15 @@ fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintSta
 /// Tabs share the row equally; a click maps back the same way (see App's mouse).
 fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
     let c: &Colors = &app.config.theme.colors;
-    let n = tb.tabs.len().max(1) as u16;
     let buf = f.buffer_mut();
-    for (i, id) in tb.tabs.iter().enumerate() {
-        let i = i as u16;
-        let x0 = tb.rect.x + i * tb.rect.w / n;
-        let x1 = tb.rect.x + (i + 1) * tb.rect.w / n;
-        let active = i as usize == tb.active;
+    // A tall (touch-sized) strip: its row's background under the gaps, the
+    // chips filled top to bottom, the titles on the middle row.
+    if tb.rect.h > 1 {
+        buf.set_style(rrect(tb.rect), Style::default().bg(color(c.bar_bg)));
+    }
+    let mid = tb.rect.y + tb.rect.h / 2;
+    for (i, (id, (x0, x1))) in tb.tabs.iter().zip(tb.spans()).enumerate() {
+        let active = i == tb.active;
         let style = if active {
             Style::default()
                 .fg(color(c.tab_active_fg))
@@ -326,7 +331,63 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
             .take(width)
             .collect();
         let padded = format!("{label:<width$}");
-        buf.set_stringn(x0, tb.rect.y, &padded, width, style);
+        let face = RRect::new(x0, tb.rect.y, x1.saturating_sub(x0), tb.rect.h);
+        buf.set_style(face, style);
+        buf.set_stringn(x0, mid, &padded, width, style);
+    }
+}
+
+/// The toolbars: faces filled with their state's colours, the label centred
+/// on the middle row (the handoff's section 01).
+fn draw_toolbars(f: &mut Frame, app: &App) {
+    use crate::app::ButtonState;
+    let c = app.colors();
+    let buf = f.buffer_mut();
+    for t in app.shown_toolbars() {
+        buf.set_style(
+            rrect(t.placed.rect),
+            Style::default().bg(color(c.toolbar_bg())),
+        );
+        for face in &t.faces {
+            let state = app.button_state(&t.name, face.slot);
+            let (fg, bg, bold) = match state {
+                ButtonState::Normal => (c.button_fg(), c.button_bg(), false),
+                ButtonState::Pressed => (c.button_pressed_fg(), c.button_pressed_bg(), true),
+                ButtonState::Latched | ButtonState::Locked => {
+                    (c.button_latched_fg(), c.button_latched_bg(), true)
+                }
+                ButtonState::Active => (c.button_active_fg(), c.button_active_bg(), true),
+                ButtonState::Disabled => (c.button_disabled_fg(), c.button_bg(), false),
+            };
+            let mut style = Style::default().fg(color(fg)).bg(color(bg));
+            if bold {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            let r = face.rect;
+            buf.set_style(rrect(r), style);
+            let inner = r.w.saturating_sub(2) as usize;
+            let label: String = if face.label.width() > inner {
+                face.label
+                    .chars()
+                    .take(inner.saturating_sub(1))
+                    .collect::<String>()
+                    + "…"
+            } else {
+                face.label.clone()
+            };
+            let lw = label.width() as u16;
+            let mid = r.y + r.h / 2;
+            let locked = state == ButtonState::Locked;
+            let label_style = if locked && r.h == 1 {
+                style.add_modifier(Modifier::UNDERLINED)
+            } else {
+                style
+            };
+            buf.set_stringn(r.x + (r.w - lw) / 2, mid, &label, inner, label_style);
+            if locked && r.h >= 3 && r.w >= 4 {
+                buf.set_stringn(r.x + (r.w - 4) / 2, r.bottom() - 1, "lock", 4, style);
+            }
+        }
     }
 }
 
@@ -338,23 +399,30 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Clear, rrect(area));
     let buf = f.buffer_mut();
     buf.set_style(rrect(area), base);
+    // A large bar is three rows: the chips fill all of them, the text sits on
+    // the middle one.
+    let mid = area.y + area.h / 2;
     for (x, piece) in app.bar_pieces(area.w) {
         let style = piece_style(c, piece.style).patch(Style::default().bg(color(c.bar_bg)));
-        let style = match piece.style {
-            // These carry their own background.
+        let filled = matches!(
+            piece.style,
             bar::Style::Mode
-            | bar::Style::WsActive
-            | bar::Style::TabActive
-            | bar::Style::TabInactive => piece_style(c, piece.style),
-            _ => style,
-        };
-        buf.set_stringn(
-            area.x + x,
-            area.y,
-            &piece.text,
-            area.w.saturating_sub(x) as usize,
-            style,
+                | bar::Style::WsActive
+                | bar::Style::TabActive
+                | bar::Style::TabInactive
         );
+        // These carry their own background.
+        let style = if filled {
+            piece_style(c, piece.style)
+        } else {
+            style
+        };
+        let room = area.w.saturating_sub(x);
+        if filled && area.h > 1 {
+            let w = (piece.text.width() as u16).min(room);
+            buf.set_style(RRect::new(area.x + x, area.y, w, area.h), style);
+        }
+        buf.set_stringn(area.x + x, mid, &piece.text, room as usize, style);
     }
 }
 

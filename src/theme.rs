@@ -124,6 +124,69 @@ pub struct Colors {
     pub search_current_bg: Color,
     pub toast_fg: Color,
     pub toast_bg: Color,
+    // Toolbars (DESIGN.md, "A mobile view"). Each follows an existing role
+    // when unset, so every theme draws them without setting any, and a theme
+    // rendered from a palette (matugen) gets them from the roles it sets.
+    #[serde(default)]
+    pub toolbar_bg: Option<Color>,
+    #[serde(default)]
+    pub button_fg: Option<Color>,
+    #[serde(default)]
+    pub button_bg: Option<Color>,
+    #[serde(default)]
+    pub button_pressed_fg: Option<Color>,
+    #[serde(default)]
+    pub button_pressed_bg: Option<Color>,
+    #[serde(default)]
+    pub button_active_fg: Option<Color>,
+    #[serde(default)]
+    pub button_active_bg: Option<Color>,
+    #[serde(default)]
+    pub button_latched_fg: Option<Color>,
+    #[serde(default)]
+    pub button_latched_bg: Option<Color>,
+    #[serde(default)]
+    pub button_disabled_fg: Option<Color>,
+}
+
+impl Colors {
+    /// The gaps between buttons and the rest of a toolbar's row: `bar_bg`.
+    pub fn toolbar_bg(&self) -> Color {
+        self.toolbar_bg.unwrap_or(self.bar_bg)
+    }
+    /// A button's face: the inactive tab's colours.
+    pub fn button_fg(&self) -> Color {
+        self.button_fg.unwrap_or(self.tab_inactive_fg)
+    }
+    pub fn button_bg(&self) -> Color {
+        self.button_bg.unwrap_or(self.tab_inactive_bg)
+    }
+    /// Pressed: the face in reverse.
+    pub fn button_pressed_fg(&self) -> Color {
+        self.button_pressed_fg.unwrap_or(self.button_bg())
+    }
+    pub fn button_pressed_bg(&self) -> Color {
+        self.button_pressed_bg.unwrap_or(self.button_fg())
+    }
+    /// A toggle that is on, and the button whose sheet is open: the active tab's.
+    pub fn button_active_fg(&self) -> Color {
+        self.button_active_fg.unwrap_or(self.tab_active_fg)
+    }
+    pub fn button_active_bg(&self) -> Color {
+        self.button_active_bg.unwrap_or(self.tab_active_bg)
+    }
+    /// A latched or locked modifier: WM mode's colours, since the next key is
+    /// taken the way it is there.
+    pub fn button_latched_fg(&self) -> Color {
+        self.button_latched_fg.unwrap_or(self.mode_fg)
+    }
+    pub fn button_latched_bg(&self) -> Color {
+        self.button_latched_bg.unwrap_or(self.mode_bg)
+    }
+    /// A disabled label, on `button_bg`.
+    pub fn button_disabled_fg(&self) -> Color {
+        self.button_disabled_fg.unwrap_or(self.bar_dim)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

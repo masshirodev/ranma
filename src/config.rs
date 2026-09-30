@@ -248,6 +248,8 @@ pub struct BarLayout {
     pub left: Vec<String>,
     pub center: Vec<String>,
     pub right: Vec<String>,
+    /// `large`: three rows, chips on the middle one (DESIGN.md, "A mobile view").
+    pub size: crate::toolbar::Size,
 }
 
 impl BarLayout {
@@ -306,6 +308,7 @@ struct BarPatch {
     left: Option<Vec<String>>,
     center: Option<Vec<String>>,
     right: Option<Vec<String>>,
+    size: Option<crate::toolbar::Size>,
 }
 
 /// `ranma.profile(name, def)`: overrides applied over the base configuration
@@ -318,6 +321,9 @@ pub struct Profile {
     set: SettingsPatch,
     #[serde(default)]
     bar: BarPatch,
+    /// The toolbars shown while it is in use, instead of the base's.
+    #[serde(default)]
+    toolbars: Option<Vec<String>>,
 }
 
 impl Profile {
@@ -327,6 +333,148 @@ impl Profile {
             .flatten()
             .flatten()
     }
+}
+
+/// `ranma.toolbar(name, def)`: a row of buttons (DESIGN.md, "A mobile view").
+#[derive(Debug)]
+pub struct ToolbarDef {
+    pub position: crate::toolbar::Position,
+    pub size: crate::toolbar::Size,
+    pub buttons: Vec<Button>,
+}
+
+#[derive(Debug)]
+pub struct Button {
+    pub label: crate::toolbar::Label,
+    pub action: BindAction,
+}
+
+impl Button {
+    /// The action a button runs, when it is one ranma knows (not Lua).
+    pub fn builtin(&self) -> Option<&Action> {
+        match &self.action {
+            BindAction::Builtin(a) => Some(a),
+            BindAction::Lua(_) => None,
+        }
+    }
+}
+
+/// Parse `ranma.toolbar`'s definition, strictly.
+fn parse_toolbar(lua: &Lua, name: &str, def: &Table) -> mlua::Result<(ToolbarDef, bool)> {
+    let who = format!("ranma.toolbar(\"{name}\")");
+    let mut position = crate::toolbar::Position::Bottom;
+    let mut size = crate::toolbar::Size::Normal;
+    let mut show = false;
+    let mut buttons = None;
+    for pair in def.pairs::<String, Value>() {
+        let (k, v) = pair?;
+        match k.as_str() {
+            "position" | "size" => {
+                let v: String = lua
+                    .from_value(v)
+                    .map_err(|_| rt_err(format!("{who}: `{k}` must be a string")))?;
+                let bad =
+                    |expected: &str| rt_err(format!("{who}: {k} = \"{v}\" (expected {expected})"));
+                if k == "position" {
+                    position = lua
+                        .from_value(Value::String(lua.create_string(&v)?))
+                        .map_err(|_| bad("top, bottom or beside"))?;
+                } else {
+                    size = lua
+                        .from_value(Value::String(lua.create_string(&v)?))
+                        .map_err(|_| bad("normal or large"))?;
+                }
+            }
+            "show" => match v {
+                Value::Boolean(b) => show = b,
+                other => {
+                    return Err(rt_err(format!(
+                        "{who}: `show` must be true or false, not {}",
+                        other.type_name()
+                    )));
+                }
+            },
+            "buttons" => match v {
+                Value::Table(t) => buttons = Some(t),
+                other => {
+                    return Err(rt_err(format!(
+                        "{who}: `buttons` must be a list, not {}",
+                        other.type_name()
+                    )));
+                }
+            },
+            _ => {
+                return Err(rt_err(format!(
+                    "{who}: unknown option `{k}` (expected position, size, show, buttons)"
+                )));
+            }
+        }
+    }
+    let list = buttons.ok_or_else(|| rt_err(format!("{who}: `buttons` is required")))?;
+    let mut out = Vec::new();
+    for (i, entry) in list.sequence_values::<Value>().enumerate() {
+        let n = i + 1;
+        let Value::Table(b) = entry? else {
+            return Err(rt_err(format!(
+                "{who}: button {n} must be a table like {{ \"+\", \"new_pane\" }}"
+            )));
+        };
+        let mut label = None;
+        let mut action = None;
+        let mut text = None;
+        for pair in b.pairs::<Value, Value>() {
+            let (k, v) = pair?;
+            match (&k, v) {
+                (Value::Integer(1), Value::String(s)) => label = Some(s.to_str()?.to_string()),
+                (Value::Integer(2), Value::String(s)) => {
+                    let s = s.to_str()?.to_string();
+                    let a: Action = s
+                        .parse()
+                        .map_err(|e| rt_err(format!("{who}: button {n}: {e}")))?;
+                    action = Some(BindAction::Builtin(a));
+                }
+                (Value::Integer(2), Value::Function(f)) => {
+                    action = Some(BindAction::Lua(lua.create_registry_value(f)?));
+                }
+                (Value::String(s), Value::String(t)) if s.to_str()? == "text" => {
+                    text = Some(t.to_str()?.to_string());
+                }
+                (k, v) => {
+                    let k = match k {
+                        Value::String(s) => s.to_str()?.to_string(),
+                        other => format!("{other:?}"),
+                    };
+                    return Err(rt_err(format!(
+                        "{who}: button {n}: unexpected `{k}` ({}); a button is {{ label, action, text = \"...\" }}",
+                        v.type_name()
+                    )));
+                }
+            }
+        }
+        let (Some(label), Some(action)) = (label, action) else {
+            return Err(rt_err(format!(
+                "{who}: button {n} needs a label and an action (a string or a function)"
+            )));
+        };
+        if label.is_empty() {
+            return Err(rt_err(format!("{who}: button {n} has an empty label")));
+        }
+        out.push(Button {
+            label: crate::toolbar::Label { label, text },
+            action,
+        });
+    }
+    if out.is_empty() {
+        return Err(rt_err(format!("{who}: `buttons` is empty")));
+    }
+    Ok((
+        ToolbarDef {
+            position,
+            size,
+            buttons: out,
+        },
+        show,
+    ))
 }
 
 /// A window rule: what to do with a pane whose command or title matches.
@@ -453,6 +601,8 @@ struct Builder {
     rules: Vec<Rule>,
     session_accents: HashMap<String, theme::Color>,
     profiles: HashMap<String, Profile>,
+    toolbars: Vec<(String, ToolbarDef)>,
+    toolbars_shown: Vec<String>,
 }
 
 pub struct Config {
@@ -480,8 +630,13 @@ pub struct Config {
     pub profiles: HashMap<String, Profile>,
     /// The profile in use, applied over `base`.
     pub profile: Option<String>,
-    /// The settings and bar as `init.lua` left them, before any profile.
-    base: (Settings, BarLayout),
+    /// The settings, bar and shown toolbars as `init.lua` left them, before
+    /// any profile.
+    base: (Settings, BarLayout, Vec<String>),
+    /// `ranma.toolbar` definitions, in the order written.
+    pub toolbars: Vec<(String, ToolbarDef)>,
+    /// The toolbars shown now, by name, in definition order.
+    pub toolbars_shown: Vec<String>,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
     /// Owns every Lua function referenced by `binds` and `hooks`.
@@ -503,8 +658,40 @@ impl Config {
     /// Use the profile `name` over the base configuration, or none: the
     /// settings and bar are rebuilt from the base each time, so nothing a
     /// profile changed outlives it.
+    pub fn toolbar(&self, name: &str) -> Option<&ToolbarDef> {
+        self.toolbars
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, t)| t)
+    }
+
+    /// Show, hide or flip a toolbar until the next profile switch.
+    pub fn show_toolbar(&mut self, name: &str, show: Option<bool>) -> Result<(), String> {
+        if self.toolbar(name).is_none() {
+            let known: Vec<&str> = self.toolbars.iter().map(|(n, _)| n.as_str()).collect();
+            return Err(format!(
+                "no toolbar `{name}` (defined: {})",
+                if known.is_empty() {
+                    "none".into()
+                } else {
+                    known.join(", ")
+                }
+            ));
+        }
+        let shown = self.toolbars_shown.iter().any(|n| n == name);
+        let want = show.unwrap_or(!shown);
+        self.toolbars_shown.retain(|n| n != name);
+        if want {
+            self.toolbars_shown.push(name.to_string());
+            let defs = &self.toolbars;
+            self.toolbars_shown
+                .sort_by_key(|s| defs.iter().position(|(n, _)| n == s));
+        }
+        Ok(())
+    }
+
     pub fn use_profile(&mut self, name: Option<&str>) -> Result<(), String> {
-        let (mut settings, mut bar) = self.base.clone();
+        let (mut settings, mut bar, mut toolbars) = self.base.clone();
         if let Some(name) = name {
             let Some(p) = self.profiles.get(name) else {
                 let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
@@ -520,9 +707,13 @@ impl Config {
             };
             apply_settings(&mut settings, p.set.clone(), &format!("profile `{name}`"))?;
             apply_bar(&mut bar, p.bar.clone());
+            if let Some(t) = &p.toolbars {
+                toolbars = t.clone();
+            }
         }
         self.settings = settings;
         self.bar = bar;
+        self.toolbars_shown = toolbars;
         self.profile = name.map(str::to_string);
         Ok(())
     }
@@ -633,6 +824,9 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
     }
     if let Some(v) = patch.right {
         bar.right = v;
+    }
+    if let Some(s) = patch.size {
+        bar.size = s;
     }
 }
 
@@ -796,9 +990,11 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
         "profile",
         lua.create_function(|lua, (name, value): (String, Value)| {
             let who = format!("ranma.profile(\"{name}\")");
-            let def: Profile = lua
-                .from_value(value)
-                .map_err(|e| rt_err(format!("{who}: {e} (a profile takes set and bar)")))?;
+            let def: Profile = lua.from_value(value).map_err(|e| {
+                rt_err(format!(
+                    "{who}: {e} (a profile takes set, bar and toolbars)"
+                ))
+            })?;
             if def.set.theme.is_some() {
                 return Err(rt_err(format!(
                     "{who}: a profile cannot change the theme; the theme is read once at load"
@@ -810,6 +1006,21 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             let mut probe = b.settings.clone();
             apply_settings(&mut probe, def.set.clone(), &format!("{who} set")).map_err(rt_err)?;
             b.profiles.insert(name, def);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "toolbar",
+        lua.create_function(|lua, (name, def): (String, Table)| {
+            let (def, show) = parse_toolbar(lua, &name, &def)?;
+            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            b.toolbars.retain(|(n, _)| *n != name);
+            b.toolbars_shown.retain(|n| *n != name);
+            if show {
+                b.toolbars_shown.push(name.clone());
+            }
+            b.toolbars.push((name, def));
             Ok(())
         })?,
     )?;
@@ -1221,10 +1432,40 @@ pub fn load_from(
             builtins.join(", ")
         );
     }
+    // Also after the whole file: a profile may name a toolbar defined later.
+    for (pname, p) in &builder.profiles {
+        if let Some(t) = p
+            .toolbars
+            .iter()
+            .flatten()
+            .find(|t| !builder.toolbars.iter().any(|(n, _)| n == *t))
+        {
+            anyhow::bail!(
+                "ranma.profile(\"{pname}\"): unknown toolbar `{t}` (define it with ranma.toolbar)"
+            );
+        }
+    }
+    // Shown in the order they were defined, whatever order they were named in.
+    let order = |shown: &mut Vec<String>, defs: &[(String, ToolbarDef)]| {
+        shown.sort_by_key(|s| defs.iter().position(|(n, _)| n == s));
+        shown.dedup();
+    };
+    order(&mut builder.toolbars_shown, &builder.toolbars);
+    for p in builder.profiles.values_mut() {
+        if let Some(t) = &mut p.toolbars {
+            order(t, &builder.toolbars);
+        }
+    }
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
 
     Ok(Config {
-        base: (builder.settings.clone(), builder.bar.clone()),
+        base: (
+            builder.settings.clone(),
+            builder.bar.clone(),
+            builder.toolbars_shown.clone(),
+        ),
+        toolbars: builder.toolbars,
+        toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,
         profile: None,
         settings: builder.settings,
@@ -1289,6 +1530,76 @@ mod tests {
             "{e}"
         );
         assert_eq!(cfg.settings, settings, "a failed switch changes nothing");
+    }
+
+    #[test]
+    fn a_toolbar_is_parsed_strictly() {
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        let ok = with_user(
+            r#"ranma.toolbar("t", { position = "top", size = "large", show = true,
+                 buttons = { { "+", "new_pane", text = "new" }, { "f", function() end } } })"#,
+        )
+        .unwrap();
+        let t = ok.toolbar("t").unwrap();
+        assert_eq!(t.position, crate::toolbar::Position::Top);
+        assert_eq!(t.buttons.len(), 2);
+        assert_eq!(t.buttons[0].label.text.as_deref(), Some("new"));
+        assert_eq!(ok.toolbars_shown, vec!["t".to_string()]);
+        assert!(err(r#"ranma.toolbar("t", { buttons = {}, colour = 1 })"#).contains("colour"));
+        assert!(
+            err(r#"ranma.toolbar("t", { position = "left", buttons = { { "+", "new_pane" } } })"#)
+                .contains("top, bottom or beside")
+        );
+        assert!(
+            err(r#"ranma.toolbar("t", { buttons = { { "+", "new_pnae" } } })"#)
+                .contains("new_pnae")
+        );
+        assert!(
+            err(r#"ranma.toolbar("t", { buttons = { { "+" } } })"#)
+                .contains("needs a label and an action")
+        );
+        assert!(
+            err(r#"ranma.toolbar("t", { buttons = { { "+", "new_pane", colour = "x" } } })"#)
+                .contains("colour")
+        );
+        assert!(err(r#"ranma.toolbar("t", { buttons = {} })"#).contains("empty"));
+        assert!(
+            err(r#"ranma.profile("m", { toolbars = { "nope" } })"#)
+                .contains("unknown toolbar `nope`")
+        );
+        assert!(err(r#"ranma.bar { size = "huge" }"#).contains("huge"));
+    }
+
+    #[test]
+    fn toolbars_show_and_hide_and_a_profile_brings_its_own() {
+        let mut cfg = with_user(
+            r#"ranma.toolbar("a", { buttons = { { "a", "help" } } })
+               ranma.toolbar("b", { show = true, buttons = { { "b", "help" } } })
+               ranma.profile("p", { toolbars = { "b", "a" } })"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.toolbars_shown, vec!["b".to_string()]);
+        cfg.show_toolbar("a", None).unwrap();
+        assert_eq!(
+            cfg.toolbars_shown,
+            vec!["a".to_string(), "b".to_string()],
+            "in definition order"
+        );
+        cfg.show_toolbar("b", Some(false)).unwrap();
+        assert_eq!(cfg.toolbars_shown, vec!["a".to_string()]);
+        assert!(
+            cfg.show_toolbar("c", None)
+                .unwrap_err()
+                .contains("no toolbar `c`")
+        );
+        cfg.use_profile(Some("p")).unwrap();
+        assert_eq!(cfg.toolbars_shown, vec!["a".to_string(), "b".to_string()]);
+        cfg.use_profile(None).unwrap();
+        assert_eq!(
+            cfg.toolbars_shown,
+            vec!["b".to_string()],
+            "the base's, not what was toggled"
+        );
     }
 
     #[test]

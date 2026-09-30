@@ -60,6 +60,8 @@ pub enum Click {
     Update,
     /// Focus this pane (a `pane_strip` chip).
     Pane(crate::layout::PaneId),
+    /// Open the pane switcher (the folded strip's `2/4 nvim` chip).
+    Panes,
     /// A workspace inside the ranma in workspace `holder`'s focused pane,
     /// `depth` levels down: `path` holds each level's workspace (0 for its
     /// scratchpad).
@@ -96,6 +98,57 @@ pub type Segment = Vec<Piece>;
 
 fn width(pieces: &[Piece]) -> usize {
     pieces.iter().map(|p| p.text.width()).sum()
+}
+
+/// A module's chips at the large size: each at least five columns with its
+/// text centred, one column apart, so a thumb can hit them (the handoff's
+/// section 06). A workspace's `[k]` count stays with its chip.
+pub fn enlarge(seg: Segment) -> Segment {
+    let mut out: Segment = Vec::new();
+    for p in seg {
+        // Its own gaps replace the module's.
+        if p.text.trim().is_empty() {
+            continue;
+        }
+        if p.text.starts_with('[') {
+            out.push(p);
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(Piece::new(" ", Style::Normal));
+        }
+        let t = p.text.trim();
+        let w = t.width().max(3) + 2;
+        let left = (w - t.width()) / 2;
+        let text = format!(
+            "{}{t}{}",
+            " ".repeat(left),
+            " ".repeat(w - t.width() - left)
+        );
+        out.push(Piece { text, ..p });
+    }
+    out
+}
+
+/// Share `spare` columns out among a segment's chips (its clickable pieces),
+/// as trailing space: the folded strip in a large bar stretches across the
+/// room it has, the way the strip's own row does.
+pub fn stretch(seg: Segment, spare: usize) -> Segment {
+    let n = seg.iter().filter(|p| p.click.is_some()).count();
+    if n == 0 || spare == 0 {
+        return seg;
+    }
+    let mut i = 0;
+    seg.into_iter()
+        .map(|mut p| {
+            if p.click.is_some() {
+                let extra = (i + 1) * spare / n - i * spare / n;
+                p.text.push_str(&" ".repeat(extra));
+                i += 1;
+            }
+            p
+        })
+        .collect()
 }
 
 /// Join a side's modules with the separator, skipping empty ones.

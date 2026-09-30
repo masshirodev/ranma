@@ -40,6 +40,14 @@ tab_active_fg = "#1e1e2e"
 tab_active_bg = "#89b4fa"
 tab_inactive_fg = "#cdd6f4"
 tab_inactive_bg = "#313244"
+# Toolbars (ranma.toolbar). Unset here on purpose: each follows the role after
+# it, so a theme that sets only those roles styles toolbars too.
+# toolbar_bg = bar_bg                   the gaps and the rest of the row
+# button_fg / button_bg = tab_inactive_fg / tab_inactive_bg
+# button_pressed_fg / _bg = button_bg / button_fg    (reversed)
+# button_active_fg / _bg = tab_active_fg / tab_active_bg
+# button_latched_fg / _bg = mode_fg / mode_bg
+# button_disabled_fg = bar_dim
 
 [border]
 # rounded | plain | thick | double | none

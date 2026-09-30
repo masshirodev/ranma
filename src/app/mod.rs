@@ -35,6 +35,9 @@ mod rules;
 mod run;
 mod session;
 mod switch;
+mod touch;
+
+pub use touch::ButtonState;
 pub(crate) mod upgrade;
 
 pub use copy::CopyState;
@@ -209,6 +212,12 @@ pub struct App {
     /// The terminal driving the screen is a phone or a tablet (see
     /// `proto::Hello::mobile`).
     client_mobile: bool,
+    /// Modifiers held for the next key (`latch`), and the toolbar face being
+    /// pressed (see `touch`).
+    latches: touch::Latches,
+    pressed: Option<touch::Pressed>,
+    /// The toolbar face whose picker (sheet) is open: tapped again, it closes.
+    sheet_from: Option<(String, crate::toolbar::Slot)>,
     /// The program in the foreground of each workspace's focused pane, for the
     /// workspaces module (` 3:nvim `). Read from /proc at most every
     /// `PROGRAMS_EVERY`, and only after something happened, so idle stays idle.
@@ -306,6 +315,9 @@ impl App {
             client_inside: None,
             client_remote: false,
             client_mobile: false,
+            latches: Default::default(),
+            pressed: None,
+            sheet_from: None,
             programs: HashMap::new(),
             programs_read: None,
             programs_due: None,
@@ -431,8 +443,12 @@ impl App {
         self.bar_row()
     }
 
-    /// The bar's row as the theme places it.
+    /// The bar's rows: where the chrome puts them, or, for a yielded bar drawn
+    /// over the panes, the edge row the theme names.
     fn bar_row(&self) -> Option<Rect> {
+        if !self.bar_yielded() {
+            return self.chrome().bar;
+        }
         let s = self.screen;
         match self.config.theme.bar.position {
             BarPosition::Hidden => None,
@@ -444,21 +460,10 @@ impl App {
 
     /// The area panes are laid out in: the screen minus the bar and outer gaps.
     fn workspace_area(&self) -> Rect {
-        let s = self.screen;
-        // A yielded bar keeps no row: focus coming and going must not resize
-        // the panes, so the bar is drawn over them when it shows at all.
-        let row = if self.bar_yielded() {
-            None
-        } else {
-            self.bar_row()
-        };
-        let a = match row {
-            None => s,
-            Some(_) if self.config.theme.bar.position == BarPosition::Top => {
-                Rect::new(s.x, s.y + 1, s.w, s.h.saturating_sub(1))
-            }
-            Some(_) => Rect::new(s.x, s.y, s.w, s.h.saturating_sub(1)),
-        };
+        // What the bar, toolbars and monocle strip leave (see `chrome`). A
+        // yielded bar keeps no row: focus coming and going must not resize the
+        // panes, so the bar is drawn over them when it shows at all.
+        let a = self.chrome().workspace;
         let g = &self.config.theme.gaps;
         a.inset(g.outer_horizontal, g.outer_vertical)
     }
@@ -499,28 +504,21 @@ impl App {
             match full {
                 None if monocle => {
                     let tiles = ws.tree.panes();
-                    let shown = ws
-                        .focused
-                        .filter(|f| ws.tree.contains(*f))
-                        .or(ws.last_tile)
-                        .filter(|t| ws.tree.contains(*t))
-                        .or(tiles.first().copied());
-                    let order = ws.panes();
-                    // One pane has nothing to switch to: no strip for it.
-                    let strip = order.len() > 1 && area.h > 1;
-                    let body = if strip {
+                    let shown = self.lone_tile(ws);
+                    // Its own row(s) when the chrome gave it some, else
+                    // folded into the bar (see `chrome`).
+                    if let Some(rect) = self.strip_row() {
+                        let order = ws.panes();
                         f.tab_bars.push(TabBar {
-                            rect: Rect::new(area.x, area.y, area.w, 1),
+                            rect,
                             active: order
                                 .iter()
                                 .position(|p| Some(*p) == ws.focused)
                                 .unwrap_or(0),
                             tabs: order,
                         });
-                        Rect::new(area.x, area.y + 1, area.w, area.h - 1)
-                    } else {
-                        area
-                    };
+                    }
+                    let body = area;
                     for id in tiles {
                         if Some(id) == shown {
                             f.views.push(view(id, body, false));
@@ -1264,6 +1262,13 @@ impl App {
     }
 
     fn handle_input(&mut self, ev: Event) {
+        // Toolbars answer taps in every mode, over an open picker too: the
+        // button that opened a sheet closes it.
+        if let Event::Mouse(m) = ev
+            && self.toolbar_mouse(m)
+        {
+            return;
+        }
         // An open picker takes the keyboard and the mouse, whatever the mode.
         if self.picker.is_some() {
             match ev {
@@ -1363,6 +1368,7 @@ impl App {
                 }
                 Some(Click::SessionSwitcher) => self.open_session_switcher(),
                 Some(Click::Update) => self.run_action(Action::Update),
+                Some(Click::Panes) => self.run_action(Action::PaneSwitcher),
                 Some(Click::Pane(id)) => {
                     self.active_mut().fullscreen = false;
                     self.focus(id);
@@ -1378,8 +1384,7 @@ impl App {
             return true;
         }
         if let Some(tb) = frame.tab_bars.iter().find(|t| t.rect.contains(x, y)) {
-            let i = ((x - tb.rect.x) as usize * tb.tabs.len()) / tb.rect.w.max(1) as usize;
-            if let Some(p) = tb.tabs.get(i) {
+            if let Some(p) = tb.tab_at(x).and_then(|i| tb.tabs.get(i)) {
                 self.focus(*p);
                 self.relayout();
             }
@@ -1608,6 +1613,7 @@ impl App {
         if key.kind == KeyEventKind::Release {
             return;
         }
+        let key = self.latched_key(key);
         let chord = input::chord_of(&key);
         let leader = self.config.settings.leader;
 
@@ -1942,6 +1948,12 @@ impl App {
             Action::ServerSwitcher => self.list_servers(),
             Action::Attach(name) => self.switch_requested = Some(name),
             Action::Profile(name) => self.use_profile(name.as_deref()),
+            Action::Toolbar(name, show) => match self.config.show_toolbar(&name, show) {
+                Ok(()) => self.relayout(),
+                Err(e) => self.status = Some(e),
+            },
+            Action::Send(chord) => self.send_chord(chord),
+            Action::Latch(l) => self.tap_latch(l),
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
@@ -2174,6 +2186,9 @@ impl App {
     /// `init.lua`, which may switch profiles for it (DESIGN.md, "A mobile view").
     pub fn driven_by(&mut self, mobile: bool, remote: bool) {
         let previous = self.client_mobile;
+        // What the last terminal held or pressed was its own.
+        self.latches.release(true);
+        self.pressed = None;
         self.client_mobile = mobile;
         self.client_remote = remote;
         let facts = self.client_facts();
@@ -2280,6 +2295,7 @@ impl App {
             .chain(self.programs_due)
             .chain(self.toasts.next_expiry())
             .chain(self.hint_due)
+            .chain(self.press_due())
             .min()
     }
 
@@ -2418,6 +2434,7 @@ impl App {
     }
 
     fn run_timers(&mut self, now: Instant) {
+        self.expire_press(now);
         if self.hint_due.is_some_and(|t| t <= now) {
             self.hint_due = None;
             self.hint_on = self.mode == Mode::Wm;
@@ -2543,6 +2560,10 @@ impl App {
                 // Keys are going to a ranma inside the focused pane. One that
                 // draws no bar of its own says its mode here.
                 Mode::Normal if self.hints.is_some() => vec![Piece::new(" LINK ", Style::Mode)],
+                Mode::Normal if self.latches.any() => self
+                    .latch_label()
+                    .map(|l| vec![Piece::new(format!(" {l} "), Style::Mode)])
+                    .unwrap_or_default(),
                 Mode::Normal if self.passes_through() => {
                     // ⧉ stays (keys go inside); an inner mode follows it, so
                     // a bare ` WM ` is always this ranma's own.
@@ -2574,6 +2595,7 @@ impl App {
             }
             "session" => Vec::new(),
             "workspaces" => {
+                let compact = self.chrome().compact_workspaces;
                 let mut seg: Segment = self
                     .workspace_list()
                     .into_iter()
@@ -2588,6 +2610,8 @@ impl App {
                             Style::WsEmpty
                         };
                         // The number always shows: it is the key that gets you there.
+                        // A short screen keeps only the current one's name.
+                        let name = name.filter(|_| current || !compact);
                         let label = match &name {
                             Some(name) => format!(" {n}:{name} "),
                             None => format!(" {n} "),
@@ -2628,18 +2652,23 @@ impl App {
                 if order.len() < 2 {
                     Vec::new()
                 } else {
-                    order
-                        .into_iter()
-                        .map(|id| {
-                            let style = if Some(id) == ws.focused {
-                                Style::TabActive
-                            } else {
-                                Style::TabInactive
-                            };
+                    let mut seg = Vec::new();
+                    for id in order {
+                        // Filled chips, a column apart, so each reads as one.
+                        if !seg.is_empty() {
+                            seg.push(Piece::new(" ", Style::Normal));
+                        }
+                        let style = if Some(id) == ws.focused {
+                            Style::TabActive
+                        } else {
+                            Style::TabInactive
+                        };
+                        seg.push(
                             Piece::new(format!(" {} ", self.chip_label(id)), style)
-                                .on_click(Click::Pane(id))
-                        })
-                        .collect()
+                                .on_click(Click::Pane(id)),
+                        );
+                    }
+                    seg
                 }
             }
             "update" => match self.update_available {
@@ -2655,9 +2684,20 @@ impl App {
     /// The bar's pieces and where they go, for `cols` columns. A status message
     /// takes the centre while it is up.
     pub fn bar_pieces(&self, cols: u16) -> Vec<(u16, Piece)> {
-        let side =
-            |names: &[String]| -> Vec<Segment> { names.iter().map(|n| self.segment(n)).collect() };
+        let chrome = self.chrome();
+        let large = chrome.bar_size == crate::toolbar::Size::Large;
+        // Chips a thumb can hit: padded to five columns and a column apart.
+        let seg = |n: &String| {
+            let s = self.segment(n);
+            if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
+                bar::enlarge(s)
+            } else {
+                s
+            }
+        };
+        let side = |names: &[String]| -> Vec<Segment> { names.iter().map(seg).collect() };
         let bar = &self.config.bar;
+        let cols = cols.min(chrome.bar_room);
         // A message of this ranma's, else one from a nested ranma that draws
         // no bar of its own, the deepest first.
         let status = self.status.clone().or_else(|| {
@@ -2671,7 +2711,13 @@ impl App {
             None => side(&bar.center),
         };
         let right = side(&bar.right);
-        let sep = &self.config.theme.bar.separator;
+        // Chips a column apart, whatever the theme's separator: the large
+        // bar's spacing is the design's (the handoff's section 06).
+        let sep = if large {
+            " "
+        } else {
+            self.config.theme.bar.separator.as_str()
+        };
         // The workspaces module, with the workspaces of the ranmas inside
         // them (see `nestbar`), when there are any to show.
         if self.config.workspaces_nested != config::NestedWorkspaces::Off
@@ -2698,7 +2744,46 @@ impl App {
                 );
             }
         }
-        bar::fit(&side(&bar.left), &center, &right, sep, cols)
+        let mut left = side(&bar.left);
+        let mut right = right;
+        // The monocle strip folded into the bar (see `chrome`): its chips after
+        // the workspaces where they fit, else one `2/4 nvim` chip at the end.
+        if chrome.strip == crate::chrome::Strip::InBar {
+            // Left-aligned, as the strip's own row draws them, not centred.
+            let chips = self.segment("pane_strip");
+            let mut with = left.clone();
+            with.push(chips.clone());
+            let width = |segs: &[Segment]| -> usize {
+                segs.iter()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| {
+                        use unicode_width::UnicodeWidthStr;
+                        s.iter().map(|p| p.text.width()).sum::<usize>() + sep.width()
+                    })
+                    .sum()
+            };
+            let used = width(&with) + width(&right) + width(&center);
+            if !large {
+                left = with;
+            } else if used <= cols as usize {
+                left.push(bar::stretch(chips, cols as usize - used));
+            } else if let Some(chip) = self.strip_count() {
+                right.push(vec![
+                    Piece::new(chip, Style::TabActive).on_click(Click::Panes),
+                ]);
+            }
+        }
+        bar::fit(&left, &center, &right, sep, cols)
+    }
+
+    /// The folded strip's one chip: ` 2/4 nvim `, where the focused pane is
+    /// among the workspace's and what it is called.
+    fn strip_count(&self) -> Option<String> {
+        let ws = self.active();
+        let panes = ws.panes();
+        let f = ws.focused?;
+        let at = panes.iter().position(|p| *p == f)? + 1;
+        Some(format!(" {at}/{} {} ", panes.len(), self.chip_label(f)))
     }
 
     /// Clear wakeup flags of the panes a frame just drew.
@@ -2779,6 +2864,11 @@ fn lua_segment(v: &Value) -> Segment {
 
 /// The bytes a chord would have sent had it not been the leader.
 pub(super) fn chord_bytes(chord: crate::keys::Chord, modes: input::PaneModes) -> Option<Vec<u8>> {
+    input::encode_key(&chord_event(chord), modes)
+}
+
+/// The key event a terminal would report for `chord`.
+pub(super) fn chord_event(chord: crate::keys::Chord) -> KeyEvent {
     use crate::keys::Key;
     use crossterm::event::{KeyCode, KeyModifiers};
     let code = match chord.key {
@@ -2803,7 +2893,7 @@ pub(super) fn chord_bytes(chord: crate::keys::Chord, modes: input::PaneModes) ->
     mods.set(KeyModifiers::CONTROL, chord.mods.ctrl);
     mods.set(KeyModifiers::ALT, chord.mods.alt);
     mods.set(KeyModifiers::SHIFT, chord.mods.shift);
-    input::encode_key(&KeyEvent::new(code, mods), modes)
+    KeyEvent::new(code, mods)
 }
 
 pub(super) fn spawn_input_thread(tx: Sender<AppEvent>) {
@@ -2994,8 +3084,13 @@ mod tests {
         );
         let area = a.workspace_area();
         let v = f.views.iter().find(|v| v.id == 2).unwrap();
-        assert_eq!(v.outer, Rect::new(area.x, area.y + 1, area.w, area.h - 1));
+        assert_eq!(
+            v.outer, area,
+            "the strip's row is the chrome's, not the pane's"
+        );
         assert_eq!(f.tab_bars.len(), 1);
+        assert_eq!(f.tab_bars[0].rect, Rect::new(0, 0, 80, 1));
+        assert_eq!(area.y, 1);
         assert_eq!(f.tab_bars[0].tabs, vec![1, 2, 3, 4], "tiles, then floats");
         assert_eq!(f.tab_bars[0].active, 1);
         let hidden: Vec<_> = f.hidden.iter().map(|(id, r)| (*id, *r)).collect();
@@ -3015,7 +3110,11 @@ mod tests {
         a.run_action("focus prev".parse().unwrap());
         assert_eq!(a.focused(), Some(4));
         // The strip in the bar lists the same panes.
-        let strip = a.segment("pane_strip");
+        let strip: Vec<_> = a
+            .segment("pane_strip")
+            .into_iter()
+            .filter(|p| p.click.is_some())
+            .collect();
         assert_eq!(strip.len(), 4);
         assert_eq!(strip[3].text, " ◇ shell ");
         assert_eq!(strip[3].style, Style::TabActive);
@@ -3034,6 +3133,186 @@ mod tests {
         assert!(f.tab_bars.is_empty());
         assert_eq!(f.views[0].outer, a.workspace_area());
         assert!(a.segment("pane_strip").is_empty());
+    }
+
+    /// The mobile view as the handoff draws it: workspaces 1:zsh, 2:vps (four
+    /// panes, current) and 3:ai, the scratchpad in use, a phone driving.
+    fn phone(rows: u16) -> App {
+        let mut a = app(Some(
+            r#"
+            ranma.toolbar("touch", {
+              size = "large",
+              buttons = {
+                { "≡", "help", text = "menu" },
+                { "+", "new_pane", text = "new" },
+                { "◀", "focus prev", text = "prev" },
+                { "▶", "focus next", text = "next" },
+                { "⌃", "latch ctrl", text = "ctrl" },
+                { "⎋", "send esc", text = "esc" },
+                { "⊞", "pane_switcher", text = "spaces" },
+                { "✕", "close_pane", text = "close" },
+              },
+            })
+            ranma.profile("mobile", {
+              set = { layout = "monocle" },
+              bar = { size = "large", left = { "mode", "workspaces" }, center = {}, right = {} },
+              toolbars = { "touch" },
+            })
+            ranma.on("driver_change", function(c)
+              ranma.use_profile(c.mobile and "mobile" or nil)
+            end)
+            "#,
+        ));
+        let mut id = 1;
+        for (n, name, count) in [(1u8, "zsh", 1), (3, "ai", 1), (2, "vps", 4)] {
+            a.switch_workspace(n);
+            for _ in 0..count {
+                with_pane_in(&mut a, n, id);
+                id += 1;
+            }
+            a.rename_workspace(n, name);
+        }
+        a.focus(5);
+        a.scratch.floating.push((99, Rect::new(5, 5, 20, 5)));
+        a.handle(AppEvent::Input(Event::Resize(52, rows)));
+        a.driven_by(true, true);
+        a
+    }
+
+    fn with_pane_in(app: &mut App, n: u8, id: PaneId) {
+        let ws = app.workspaces.entry(n).or_default();
+        ws.tree
+            .insert(id, ws.focused, None, crate::layout::Placement::Dwindle);
+        ws.focused = Some(id);
+    }
+
+    /// The screen as text, each row trimmed at the end.
+    fn screen(a: &App) -> Vec<String> {
+        use ratatui::backend::TestBackend;
+        let (w, h) = (a.screen.w, a.screen.h);
+        let mut t = ratatui::Terminal::new(TestBackend::new(w, h)).unwrap();
+        t.draw(|f| {
+            crate::render::draw(f, a);
+        })
+        .unwrap();
+        let buf = t.backend().buffer().clone();
+        (0..h)
+            .map(|y| {
+                let mut row = String::new();
+                let mut x = 0;
+                while x < w {
+                    let sym = buf[(x, y)].symbol();
+                    row.push_str(sym);
+                    x += (unicode_width::UnicodeWidthStr::width(sym) as u16).max(1);
+                }
+                row.trim_end().to_string()
+            })
+            .collect()
+    }
+
+    /// Section 03, keyboard closed, row for row where the mock's rows are
+    /// ranma's. The mock's bar opens with a dim ⧉ that ranma shows only while
+    /// keys go to a ranma inside (DESIGN.md, "A mobile view", departures), so
+    /// the bar here starts where the mock's workspaces do.
+    #[test]
+    fn the_phone_matches_the_handoff() {
+        let a = phone(34);
+        assert_eq!(a.config.profile.as_deref(), Some("mobile"));
+        let s = screen(&a);
+        let names: Vec<usize> = s[1].match_indices("shell").map(|(i, _)| i).collect();
+        assert_eq!(
+            names,
+            vec![1, 14, 27, 40],
+            "the strip's chips, as stripLarge lays them"
+        );
+        assert_eq!(s[0], "");
+        assert_eq!(s[29], " 1:zsh   2:vps   3:ai    S");
+        assert_eq!(s[28], "");
+        assert_eq!(s[32], "  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕");
+        // The desk takes the screen back: the base again, no toolbar.
+        let mut a = a;
+        a.handle(AppEvent::Input(Event::Resize(200, 50)));
+        a.driven_by(false, false);
+        assert_eq!(a.config.profile, None);
+        assert!(a.shown_toolbars().is_empty());
+        assert!(a.frame().tab_bars.is_empty());
+    }
+
+    /// Section 03, Gboard open: one bar row with the strip's chips in it and
+    /// only the current workspace named; no border; the toolbar still large.
+    #[test]
+    fn the_phone_with_the_keyboard_open_matches_the_handoff() {
+        let a = phone(18);
+        let s = screen(&a);
+        assert_eq!(s[14], " 1  2:vps  3  S    shell   shell   shell   shell");
+        assert_eq!(s[16], "  ≡     +      ◀     ▶      ⌃      ⎋     ⊞      ✕");
+        assert_eq!(a.frameless(), Some(5), "the pane on screen has no border");
+        assert!(a.frame().tab_bars.is_empty(), "the strip is in the bar");
+    }
+
+    /// Section 09: phone landscape. The toolbar sits beside the bar, the
+    /// strip's chips between them, and the pane keeps 19 rows and its border.
+    #[test]
+    fn landscape_matches_the_handoff() {
+        let mut a = phone(22);
+        a.config.toolbars[0].1.position = crate::toolbar::Position::Beside;
+        a.handle(AppEvent::Input(Event::Resize(110, 22)));
+        let s = screen(&a);
+        let row: Vec<char> = s[20].chars().collect();
+        let symbols: String = [65, 71, 77, 83, 89, 95, 101, 107]
+            .iter()
+            .map(|x| row[*x])
+            .collect();
+        assert_eq!(symbols, "≡+◀▶⌃⎋⊞✕", "{:?}", s[20]);
+        assert!(
+            s[20].starts_with(" 1:zsh   2:vps   3:ai    S    shell"),
+            "{:?}",
+            s[20]
+        );
+        let chips: Vec<usize> = s[20].match_indices("shell").map(|(i, _)| i).collect();
+        assert_eq!(chips.len(), 4, "the strip's chips, in the bar");
+        assert!(chips[3] + 6 < 63, "left of the toolbar");
+        assert_eq!(a.workspace_area(), Rect::new(0, 0, 110, 19));
+        assert_eq!(a.frameless(), None);
+    }
+
+    /// Section 08: Ctrl latched shows in the mode slot and on its button,
+    /// goes with the next key only, and belongs to the terminal that latched.
+    #[test]
+    fn a_latched_ctrl_shows_and_goes_with_the_next_key() {
+        let mut a = phone(34);
+        let tap = |a: &mut App, x: u16, y: u16| {
+            for kind in [
+                MouseEventKind::Down(MouseButton::Left),
+                MouseEventKind::Up(MouseButton::Left),
+            ] {
+                a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+                    kind,
+                    column: x,
+                    row: y,
+                    modifiers: crossterm::event::KeyModifiers::NONE,
+                })));
+            }
+        };
+        // The fifth face, ⌃, over its gap column too.
+        tap(&mut a, 31, 32);
+        assert_eq!(a.latch_label().as_deref(), Some("CTRL"));
+        assert_eq!(
+            a.button_state("touch", crate::toolbar::Slot::Button(4)),
+            ButtonState::Pressed,
+            "held a moment after the release"
+        );
+        a.expire_press(Instant::now() + Duration::from_secs(1));
+        assert_eq!(
+            a.button_state("touch", crate::toolbar::Slot::Button(4)),
+            ButtonState::Latched
+        );
+        let s = screen(&a);
+        // The mock's p34ctrl bar row, exactly (CTRL takes the ⧉ slot).
+        assert_eq!(s[29], " CTRL   1:zsh   2:vps   3:ai    S");
+        // The desk types: its keys are not the phone's Ctrl.
+        a.driven_by(false, false);
+        assert_eq!(a.latch_label(), None);
     }
 
     #[test]

@@ -946,6 +946,16 @@ call. The labels follow the handoff's own corrections: `⊞` for the workspace
 switcher, since `⧉` is already the bar's mode slot, and `+`, since `＋` is two
 cells.
 
+The handoff says the bar "in normal mode starts with a dim `⧉`", and draws
+every bar that way. It does not: `mode` shows `⧉` only while keys go to a
+ranma inside the focused pane, and nothing otherwise; the mock was drawn from
+a nested screen. So ranma's mobile bar starts where the mock's workspaces do,
+and the tests pin the mock's rows from there (`app::tests`, "the_phone_*").
+Where the handoff gives the thresholds of what gives way (30, 24, 20, 12 and
+8 rows), they were measured with everything stacked on a phone; a toolbar
+beside the bar takes no rows, so it counts its rows back
+(`chrome::plan`), which is what makes the landscape mock come out as drawn.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

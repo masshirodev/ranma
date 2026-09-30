@@ -105,6 +105,14 @@ pub enum Action {
     Attach(String),
     /// Use a `ranma.profile` over the base configuration; `None` goes back to it.
     Profile(Option<String>),
+    /// Show (`Some(true)`), hide or flip a `ranma.toolbar`.
+    Toolbar(String, Option<bool>),
+    /// Type this chord into the focused pane, as if pressed there: what a
+    /// phone's keyboard cannot type. Binds are not looked up.
+    Send(crate::keys::Chord),
+    /// Hold a modifier for the next key; tapped twice quickly, until tapped
+    /// again.
+    Latch(Latch),
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -190,6 +198,24 @@ impl Action {
     }
 }
 
+/// A modifier a `latch` holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Latch {
+    Ctrl,
+    Alt,
+    Shift,
+}
+
+impl Latch {
+    pub fn name(self) -> &'static str {
+        match self {
+            Latch::Ctrl => "ctrl",
+            Latch::Alt => "alt",
+            Latch::Shift => "shift",
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ActionError {
     #[error("unknown action `{0}`")]
@@ -262,6 +288,9 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("server_switcher", ""),
     ("attach", "<server>"),
     ("profile", "<name|none>"),
+    ("toolbar", "<name> [on|off|toggle]"),
+    ("send", "<key chord>"),
+    ("latch", "<ctrl|alt|shift>"),
     ("quit", "[now]"),
 ];
 
@@ -419,6 +448,60 @@ impl FromStr for Action {
             "update" => no_arg(Action::Update),
             "detach" => no_arg(Action::Detach),
             "server_switcher" => no_arg(Action::ServerSwitcher),
+            "toolbar" => match (first, second) {
+                (Some(n), op) => {
+                    let show = match op {
+                        Some("on") => Some(true),
+                        Some("off") => Some(false),
+                        None | Some("toggle") => None,
+                        Some(other) => {
+                            return Err(ActionError::BadArg {
+                                action: name.into(),
+                                arg: other.into(),
+                                expected: "on, off or toggle",
+                            });
+                        }
+                    };
+                    Ok(Action::Toolbar(n.to_string(), show))
+                }
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a toolbar name (from ranma.toolbar), then on, off or toggle",
+                }),
+            },
+            "send" => match (first, second) {
+                (Some(k), None) => k
+                    .parse()
+                    .map(Action::Send)
+                    .map_err(|_| ActionError::BadArg {
+                        action: name.into(),
+                        arg: k.into(),
+                        expected: "one key chord, as binds spell them (ctrl+c, esc, alt+.)",
+                    }),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a key chord (ctrl+c, esc, alt+.)",
+                }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one key chord",
+                }),
+            },
+            "latch" => match (first, second) {
+                (Some("ctrl"), None) => Ok(Action::Latch(Latch::Ctrl)),
+                (Some("alt"), None) => Ok(Action::Latch(Latch::Alt)),
+                (Some("shift"), None) => Ok(Action::Latch(Latch::Shift)),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "ctrl, alt or shift",
+                }),
+                (Some(_), _) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "ctrl, alt or shift",
+                }),
+            },
             "profile" => match (first, second) {
                 (Some("none"), None) => Ok(Action::Profile(None)),
                 (Some(n), None) => Ok(Action::Profile(Some(n.to_string()))),
@@ -580,6 +663,11 @@ impl fmt::Display for Action {
             Action::Detach => f.write_str("detach"),
             Action::ServerSwitcher => f.write_str("server_switcher"),
             Action::Attach(n) => write!(f, "attach {n}"),
+            Action::Toolbar(n, None) => write!(f, "toolbar {n} toggle"),
+            Action::Toolbar(n, Some(true)) => write!(f, "toolbar {n} on"),
+            Action::Toolbar(n, Some(false)) => write!(f, "toolbar {n} off"),
+            Action::Send(c) => write!(f, "send {c}"),
+            Action::Latch(m) => write!(f, "latch {}", m.name()),
             Action::Profile(None) => f.write_str("profile none"),
             Action::Profile(Some(n)) => write!(f, "profile {n}"),
             Action::ToggleGroup => f.write_str("toggle_group"),

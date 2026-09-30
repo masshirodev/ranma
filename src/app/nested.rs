@@ -227,6 +227,13 @@ impl App {
             return None;
         }
         let ws = self.workspaces.get(&self.current)?;
+        // A short touch screen gives the one tile on screen no border: the
+        // strip's chips carry its title (see `chrome`).
+        if self.chrome().borderless
+            && let Some(id) = self.lone_tile(ws)
+        {
+            return Some(id);
+        }
         let id = ws.focused?;
         self.report_of(id)?;
         let alone = ws.fullscreen

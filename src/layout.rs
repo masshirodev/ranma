@@ -177,6 +177,29 @@ pub struct TabBar {
     pub active: usize,
 }
 
+impl TabBar {
+    /// Each tab's columns, `[x0, x1)`. They share the row; a tall (touch-sized)
+    /// bar puts a column between them, as toolbar faces have.
+    pub fn spans(&self) -> Vec<(u16, u16)> {
+        let n = self.tabs.len().max(1) as u16;
+        let gap = u16::from(self.rect.h > 1);
+        let room = self.rect.w.saturating_sub(gap * (n - 1));
+        (0..n)
+            .map(|i| {
+                let x0 = self.rect.x + i * room / n + gap * i;
+                let x1 = self.rect.x + (i + 1) * room / n + gap * i;
+                (x0, x1)
+            })
+            .collect()
+    }
+
+    /// The tab a click at column `x` lands on; a gap answers for the tab on
+    /// its left.
+    pub fn tab_at(&self, x: u16) -> Option<usize> {
+        self.spans().iter().rposition(|(x0, _)| x >= *x0)
+    }
+}
+
 /// A full layout: every pane (hidden ones sized as if shown, so switching tabs
 /// does not resize the program) and the tab bars.
 #[derive(Debug, Clone, Default, PartialEq)]
