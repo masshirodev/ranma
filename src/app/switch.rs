@@ -405,6 +405,43 @@ impl App {
     /// The right-click menu of a pane, at the pointer: what can be done to it,
     /// with the key that does it. It focuses the pane first, so every entry is
     /// the ordinary action on the focused pane.
+    /// `workspace_switcher`: the shown session's workspaces, the current one
+    /// marked, each with its pane count; a name no workspace has opens one.
+    pub(super) fn open_workspace_switcher(&mut self) {
+        let count = |n: usize| {
+            if n == 1 {
+                "1 pane".to_string()
+            } else {
+                format!("{n} panes")
+            }
+        };
+        let mut items: Vec<Item> = self
+            .workspace_list()
+            .into_iter()
+            .map(|(n, current, _, _, name)| Item {
+                label: match name {
+                    Some(name) => format!("{n}:{name}"),
+                    None => n.to_string(),
+                },
+                detail: count(self.workspaces.get(&n).map_or(0, |w| w.len())),
+                target: Target::Workspace(n),
+                current: current && !self.scratch_shown,
+            })
+            .collect();
+        if !self.scratch.is_empty() {
+            items.push(Item {
+                label: "S scratchpad".into(),
+                detail: count(self.scratch.len()),
+                target: Target::Workspace(crate::app::SCRATCHPAD),
+                current: self.scratch_shown,
+            });
+        }
+        let mut p = Picker::new(Kind::Workspaces, "workspaces", items);
+        p.select_current();
+        self.picker = Some(p);
+        self.dirty = true;
+    }
+
     pub(super) fn open_pane_menu(&mut self, id: crate::layout::PaneId, x: u16, y: u16) {
         if !self.active().contains(id) {
             return;
@@ -507,6 +544,7 @@ impl App {
             return;
         };
         let outcome = p.key(key);
+        p.touched = true;
         self.dirty = true;
         self.picker_outcome(outcome);
     }
@@ -520,6 +558,9 @@ impl App {
 
     /// Clicks pick an item; a click outside closes the picker; the wheel moves.
     pub(super) fn picker_mouse(&mut self, m: MouseEvent) {
+        if let Some(l) = self.sheet_layout() {
+            return self.sheet_mouse(m, &l);
+        }
         let Some(l) = self.picker_layout() else {
             return;
         };
@@ -559,6 +600,10 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    pub(super) fn sheet_outcome(&mut self, outcome: Outcome) {
+        self.picker_outcome(outcome);
     }
 
     fn picker_outcome(&mut self, outcome: Outcome) {
@@ -603,6 +648,22 @@ impl App {
                         self.run_command(&line)
                     }
                     (_, Target::Button(toolbar, i)) => self.run_button(&toolbar, i),
+                    (_, Target::Workspace(crate::app::SCRATCHPAD)) => {
+                        if !self.scratch_shown {
+                            self.run_action(crate::action::Action::ScratchpadToggle);
+                        }
+                    }
+                    (_, Target::Workspace(n)) => self.run_action(crate::action::Action::Workspace(
+                        crate::action::WorkspaceTarget::Index(n),
+                    )),
+                    (_, Target::NewWorkspace) => {
+                        self.run_action(crate::action::Action::Workspace(
+                            crate::action::WorkspaceTarget::Empty,
+                        ));
+                        if !query.is_empty() {
+                            self.rename_workspace(self.current, &query);
+                        }
+                    }
                     (_, Target::Invalid) => {}
                 }
             }

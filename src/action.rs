@@ -113,6 +113,10 @@ pub enum Action {
     /// Hold a modifier for the next key; tapped twice quickly, until tapped
     /// again.
     Latch(Latch),
+    /// The focused pane's menu, with no pointer to open it at (a button, a key).
+    PaneMenu,
+    /// The workspaces of the shown session, filterable; a new name opens one.
+    WorkspaceSwitcher,
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -178,6 +182,8 @@ impl Action {
                 | Action::ExitMode
                 | Action::SendLeader
                 | Action::PaneSwitcher
+                | Action::WorkspaceSwitcher
+                | Action::PaneMenu
                 | Action::SessionSwitcher
                 | Action::Help
                 | Action::CommandPalette
@@ -290,6 +296,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("profile", "<name|none>"),
     ("toolbar", "<name> [on|off|toggle]"),
     ("send", "<key chord>"),
+    ("pane_menu", ""),
+    ("workspace_switcher", ""),
     ("latch", "<ctrl|alt|shift>"),
     ("quit", "[now]"),
 ];
@@ -448,6 +456,8 @@ impl FromStr for Action {
             "update" => no_arg(Action::Update),
             "detach" => no_arg(Action::Detach),
             "server_switcher" => no_arg(Action::ServerSwitcher),
+            "pane_menu" => no_arg(Action::PaneMenu),
+            "workspace_switcher" => no_arg(Action::WorkspaceSwitcher),
             "toolbar" => match (first, second) {
                 (Some(n), op) => {
                     let show = match op {
@@ -667,6 +677,8 @@ impl fmt::Display for Action {
             Action::Toolbar(n, Some(true)) => write!(f, "toolbar {n} on"),
             Action::Toolbar(n, Some(false)) => write!(f, "toolbar {n} off"),
             Action::Send(c) => write!(f, "send {c}"),
+            Action::PaneMenu => f.write_str("pane_menu"),
+            Action::WorkspaceSwitcher => f.write_str("workspace_switcher"),
             Action::Latch(m) => write!(f, "latch {}", m.name()),
             Action::Profile(None) => f.write_str("profile none"),
             Action::Profile(Some(n)) => write!(f, "profile {n}"),

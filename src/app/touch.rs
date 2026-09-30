@@ -154,6 +154,28 @@ pub enum ButtonState {
     Disabled,
 }
 
+/// A picker drawn as a sheet (the handoff's section 07): a full-width box
+/// rising from the toolbar, its entries three-row faces in two columns (three
+/// from 100 columns).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetLayout {
+    pub outer: Rect,
+    /// The filter line, for pickers that have one (not a menu).
+    pub query: Option<Rect>,
+    /// Each face on screen: its index in `Picker::visible()` and its cells.
+    pub faces: Vec<(usize, Rect)>,
+    /// Entries below what is shown: `▾ N more`.
+    pub more: usize,
+    /// Every entry's detail fits beside its label, so all show one; else none do.
+    pub details: bool,
+}
+
+/// An entry that takes a row of its own: Close, and a new workspace.
+pub fn spans_row(t: &crate::picker::Target) -> bool {
+    use crate::picker::Target;
+    matches!(t, Target::NewWorkspace) || matches!(t, Target::Run(a) if a == "close_pane")
+}
+
 /// A toolbar as drawn: its name, where it is and its faces.
 pub struct ShownToolbar {
     pub name: String,
@@ -425,6 +447,163 @@ impl App {
                 .or(tiles.first().copied())
         } else {
             (tiles.len() == 1).then(|| tiles[0])
+        }
+    }
+
+    /// Pickers are sheets while the chrome is touch-sized: a large bar or a
+    /// large toolbar shown.
+    pub fn touch_sized(&self) -> bool {
+        self.config.bar.size == toolbar::Size::Large
+            || self
+                .config
+                .toolbars_shown
+                .iter()
+                .filter_map(|n| self.config.toolbar(n))
+                .any(|t| t.size == toolbar::Size::Large)
+    }
+
+    pub fn sheet_layout(&self) -> Option<SheetLayout> {
+        use crate::picker::Kind;
+        use unicode_width::UnicodeWidthStr;
+        let p = self.picker.as_ref()?;
+        if p.is_prompt() || !self.touch_sized() {
+            return None;
+        }
+        let s = self.screen;
+        // It rises from a toolbar at the bottom edge, else from the edge.
+        let bottom = self
+            .shown_toolbars()
+            .iter()
+            .filter(|t| t.placed.rect.bottom() == s.bottom())
+            .map(|t| t.placed.rect.y)
+            .min()
+            .unwrap_or(s.bottom());
+        let items = p.visible();
+        let q = u16::from(!matches!(p.kind, Kind::Menu | Kind::ToolbarMore));
+        let cols: usize = if s.w >= 100 { 3 } else { 2 };
+        // Row and column of each entry; a spanning one has a row to itself.
+        let mut places = Vec::new();
+        let (mut r, mut c) = (0usize, 0usize);
+        for it in &items {
+            let span = spans_row(&it.target);
+            if span && c > 0 {
+                r += 1;
+                c = 0;
+            }
+            places.push((r, (!span).then_some(c)));
+            if span {
+                r += 1;
+                c = 0;
+            } else {
+                c += 1;
+                if c == cols {
+                    r += 1;
+                    c = 0;
+                }
+            }
+        }
+        let rows = (if c > 0 { r + 1 } else { r }).max(1);
+        // Border, filter line, a blank row, four rows a face (three and a
+        // gap), border; never taller than leaves a row above to tap outside.
+        let content = 2 + q + rows as u16 * 4 + 1;
+        let h = content.min(bottom.saturating_sub(s.y + 1));
+        if h < 5 {
+            return None;
+        }
+        let y = bottom - h;
+        let outer = Rect::new(s.x, y, s.w, h);
+        let first = y + 1 + q + 1;
+        let last = y + h - 1;
+        let fit_rows = if first + 3 <= last {
+            ((last - 3 - first) / 4 + 1) as usize
+        } else {
+            0
+        };
+        let mut scroll = p.scroll.min(rows.saturating_sub(fit_rows));
+        if p.touched
+            && let Some(&(sr, _)) = places.get(p.selected)
+        {
+            if sr < scroll {
+                scroll = sr;
+            } else if fit_rows > 0 && sr >= scroll + fit_rows {
+                scroll = sr + 1 - fit_rows;
+            }
+        }
+        let iw = s.w.saturating_sub(4);
+        let room = iw.saturating_sub(cols as u16 - 1);
+        let n = cols as u16;
+        let mut faces = Vec::new();
+        let mut more = 0;
+        for (i, (r, c)) in places.iter().enumerate() {
+            if *r < scroll {
+                continue;
+            }
+            if *r >= scroll + fit_rows {
+                more += 1;
+                continue;
+            }
+            let fy = first + (*r - scroll) as u16 * 4;
+            let (fx, fw) = match c {
+                None => (s.x + 2, iw),
+                Some(c) => {
+                    let c = *c as u16;
+                    (
+                        s.x + 2 + c * room / n + c,
+                        (c + 1) * room / n - c * room / n,
+                    )
+                }
+            };
+            faces.push((i, Rect::new(fx, fy, fw, 3)));
+        }
+        let marks = items.iter().any(|it| it.current);
+        let narrowest = (room / n) as usize;
+        let details = items.iter().all(|it| {
+            it.detail.is_empty()
+                || usize::from(marks) * 2 + it.label.width() + it.detail.width() + 3 <= narrowest
+        });
+        Some(SheetLayout {
+            outer,
+            query: (q == 1).then(|| Rect::new(s.x + 1, y + 1, s.w.saturating_sub(2), 1)),
+            faces,
+            more,
+            details,
+        })
+    }
+
+    /// A tap on a face picks it; outside the sheet closes it; the wheel (a
+    /// swipe) scrolls a row of faces.
+    pub(super) fn sheet_mouse(&mut self, m: MouseEvent, l: &SheetLayout) {
+        let (x, y) = (m.column, m.row);
+        match m.kind {
+            MouseEventKind::Down(_) => {
+                if !l.outer.contains(x, y) {
+                    self.close_picker();
+                    return;
+                }
+                let Some((i, _)) = l.faces.iter().find(|(_, r)| r.contains(x, y)) else {
+                    return;
+                };
+                let Some(p) = self.picker.as_mut() else {
+                    return;
+                };
+                p.selected = *i;
+                let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+                let outcome = p.key(&enter);
+                self.dirty = true;
+                self.sheet_outcome(outcome);
+            }
+            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                if let Some(p) = self.picker.as_mut() {
+                    p.scroll = if m.kind == MouseEventKind::ScrollDown {
+                        p.scroll + usize::from(l.more > 0)
+                    } else {
+                        p.scroll.saturating_sub(1)
+                    };
+                    p.touched = false;
+                }
+                self.dirty = true;
+            }
+            _ => {}
         }
     }
 

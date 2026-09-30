@@ -165,6 +165,8 @@ does not matter; it is ignored.
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
 | `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
+| `workspace_switcher` | The shown session's workspaces, filterable, the current one marked `●`, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers `new workspace: NAME`, which opens an empty one by that name. |
+| `pane_menu` | The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key. Centred, or a sheet on a touch screen. |
 | `session_switcher` | The sessions, filterable, opened on the current one (marked `●`). A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
 | `session <name>` / `session next` / `session prev` | Switch sessions. |
@@ -656,6 +658,17 @@ bar's mode slot says ` CTRL ` (` CTRL LOCK `, ` CTRL ALT `) and the focused
 border takes the mode colour, as in WM mode. A button that runs anything else
 lets go of what was latched for one key. A latch is the terminal's that set
 it: another terminal driving the screen clears it.
+
+**Pickers become sheets.** While the bar or a shown toolbar is large, every
+picker (the pane menu, the switchers, the palette, `⋯`) is drawn as a sheet
+rising from the toolbar across the whole width: its entries are three-row
+faces two to a row (three from 100 columns), the current one marked `●`, key
+hints and counts shown only when every entry has room for its own. A tap on a
+face picks it; a tap outside the sheet, or on the button that opened it,
+closes it, as does Esc. Nothing is highlighted until a key moves the
+selection, since a tap picks, not Enter; once something is typed, the top
+match is, because Enter runs it. A swipe scrolls a row of faces, and the
+bottom border counts what is below (`▾ 5 more`).
 
 ## A mobile view
 

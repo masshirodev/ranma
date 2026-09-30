@@ -35,6 +35,10 @@ pub enum Target {
     Invalid,
     /// A toolbar's button, by the toolbar's name and its index (`⋯`).
     Button(String, usize),
+    /// Go to this workspace (0 is the scratchpad).
+    Workspace(u8),
+    /// Open an empty workspace, named by the query if there is one.
+    NewWorkspace,
 }
 
 /// What the palette shows, by the query's first character.
@@ -78,6 +82,8 @@ pub enum Kind {
     Menu,
     /// The buttons of a toolbar that did not fit on it (its `⋯`).
     ToolbarMore,
+    /// The workspaces of the shown session (`workspace_switcher`).
+    Workspaces,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +111,11 @@ pub struct Picker {
     items: Vec<Item>,
     /// Index into `visible()`, not into `items`.
     pub selected: usize,
+    /// A key moved the selection or typed: until then a sheet highlights
+    /// nothing, since a tap, not Enter, is what picks there.
+    pub touched: bool,
+    /// Rows of faces a sheet is scrolled down by (the wheel, a swipe).
+    pub scroll: usize,
 }
 
 impl Picker {
@@ -116,6 +127,8 @@ impl Picker {
             query: String::new(),
             items,
             selected: 0,
+            touched: false,
+            scroll: 0,
         }
     }
 
@@ -228,6 +241,29 @@ impl Picker {
             .map(|(_, i)| self.items[i].clone())
             .collect();
         let q = self.query.trim();
+        if self.kind == Kind::Workspaces {
+            // A name no workspace has offers one; with nothing typed, an
+            // empty one.
+            if q.is_empty() {
+                out.push(Item {
+                    label: "+ new workspace".into(),
+                    detail: String::new(),
+                    target: Target::NewWorkspace,
+                    current: false,
+                });
+            } else if !self
+                .items
+                .iter()
+                .any(|it| it.label.split_once(':').is_some_and(|(_, n)| n == q))
+            {
+                out.push(Item {
+                    label: format!("new workspace: {q}"),
+                    detail: String::new(),
+                    target: Target::NewWorkspace,
+                    current: false,
+                });
+            }
+        }
         if matches!(self.kind, Kind::Sessions | Kind::MoveWorkspace)
             && !q.is_empty()
             && !self.items.iter().any(|it| it.label == q)

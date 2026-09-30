@@ -104,6 +104,10 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         draw_which_key(f, app);
     }
     draw_toasts(f, app);
+    if let (Some(p), Some(l)) = (app.picker(), app.sheet_layout()) {
+        draw_sheet(f, app, p, &l);
+        return None;
+    }
     if let (Some(p), Some(_)) = (app.picker(), app.picker_layout()) {
         draw_picker(f, app, p);
         // The picker's query line has the cursor; nothing else does.
@@ -529,6 +533,105 @@ fn draw_toasts(f: &mut Frame, app: &App) {
                 body,
             );
         }
+    }
+}
+
+/// A picker as a touch sheet (the handoff's section 07): entries are faces a
+/// thumb can hit, nothing is highlighted until a key moves the selection, and
+/// what does not fit is counted on the bottom border.
+fn draw_sheet(f: &mut Frame, app: &App, p: &Picker, l: &crate::app::SheetLayout) {
+    let c = app.colors();
+    f.render_widget(Clear, rrect(l.outer));
+    let border_type = match app.config.theme.border.style {
+        BorderStyle::Rounded | BorderStyle::None => BorderType::Rounded,
+        BorderStyle::Plain => BorderType::Plain,
+        BorderStyle::Thick => BorderType::Thick,
+        BorderStyle::Double => BorderType::Double,
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(border_type)
+        .border_style(Style::default().fg(color(c.mode_bg)))
+        .title(Line::from(format!(" {} ", p.heading())));
+    f.render_widget(block, rrect(l.outer));
+    let buf = f.buffer_mut();
+    let text = Style::default().fg(color(c.bar_fg));
+    let dim = Style::default().fg(color(c.bar_dim));
+    if let Some(q) = l.query {
+        let prompt = format!("> {}", p.query);
+        buf.set_stringn(q.x, q.y, &prompt, q.w as usize, text);
+        if p.query.is_empty() {
+            let x = q.x + prompt.width() as u16 + 1;
+            buf.set_stringn(
+                x,
+                q.y,
+                "type to filter",
+                q.right().saturating_sub(x) as usize,
+                dim,
+            );
+        }
+    }
+    let items = p.visible();
+    let marks = items.iter().any(|it| it.current);
+    let highlight = p.touched || !p.query.is_empty();
+    for (i, r) in &l.faces {
+        let Some(item) = items.get(*i) else {
+            continue;
+        };
+        let selected = highlight && *i == p.selected;
+        let urgent = matches!(&item.target, crate::picker::Target::Run(a) if a == "close_pane");
+        let (fg, bg) = if selected {
+            (c.picker_selected_fg, c.picker_selected_bg)
+        } else if urgent {
+            (c.bar_urgent, c.button_bg())
+        } else {
+            (c.button_fg(), c.button_bg())
+        };
+        let face = Style::default().fg(color(fg)).bg(color(bg));
+        buf.set_style(rrect(*r), face);
+        let mid = r.y + r.h / 2;
+        let detail = if l.details { item.detail.as_str() } else { "" };
+        let dw = if detail.is_empty() {
+            0
+        } else {
+            detail.width() + 1
+        };
+        let mark = match (marks, item.current) {
+            (true, true) => "● ",
+            (true, false) => "  ",
+            (false, _) => "",
+        };
+        let label = format!("{mark}{}", item.label);
+        let room = (r.w as usize).saturating_sub(2 + dw);
+        let label: String = if label.width() > room {
+            label
+                .chars()
+                .take(room.saturating_sub(1))
+                .collect::<String>()
+                + "…"
+        } else {
+            label
+        };
+        let style = if item.current {
+            face.add_modifier(Modifier::BOLD)
+        } else {
+            face
+        };
+        buf.set_stringn(r.x + 1, mid, &label, room, style);
+        if !detail.is_empty() {
+            let hint = if selected {
+                face
+            } else {
+                Style::default().fg(color(c.bar_dim)).bg(color(bg))
+            };
+            let x = r.right().saturating_sub(1 + detail.width() as u16);
+            buf.set_stringn(x, mid, detail, detail.width(), hint);
+        }
+    }
+    if l.more > 0 {
+        let s = format!(" ▾ {} more ", l.more);
+        let x = l.outer.right().saturating_sub(2 + s.width() as u16);
+        buf.set_stringn(x, l.outer.bottom() - 1, &s, s.width(), text);
     }
 }
 

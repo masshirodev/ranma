@@ -37,7 +37,7 @@ mod session;
 mod switch;
 mod touch;
 
-pub use touch::ButtonState;
+pub use touch::{ButtonState, SheetLayout};
 pub(crate) mod upgrade;
 
 pub use copy::CopyState;
@@ -1954,6 +1954,14 @@ impl App {
             },
             Action::Send(chord) => self.send_chord(chord),
             Action::Latch(l) => self.tap_latch(l),
+            Action::PaneMenu => {
+                if let Some(id) = focused {
+                    self.open_pane_menu(id, 0, 0);
+                    // No pointer: centred, or a sheet on a touch screen.
+                    self.menu_at = None;
+                }
+            }
+            Action::WorkspaceSwitcher => self.open_workspace_switcher(),
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
@@ -2192,10 +2200,16 @@ impl App {
         self.client_mobile = mobile;
         self.client_remote = remote;
         let facts = self.client_facts();
+        let profile = self.config.profile.clone();
         self.emit(HookEvent::DriverChange, |t| {
             facts.fill(t)?;
             t.set("previous_mobile", previous)
         });
+        // A sheet laid out for the other terminal's screen goes with it; within
+        // one profile a picker stays open for whoever drives now.
+        if self.config.profile != profile && self.picker.is_some() {
+            self.close_picker();
+        }
         self.dirty = true;
     }
 
@@ -3143,13 +3157,13 @@ mod tests {
             ranma.toolbar("touch", {
               size = "large",
               buttons = {
-                { "≡", "help", text = "menu" },
+                { "≡", "pane_menu", text = "menu" },
                 { "+", "new_pane", text = "new" },
                 { "◀", "focus prev", text = "prev" },
                 { "▶", "focus next", text = "next" },
                 { "⌃", "latch ctrl", text = "ctrl" },
                 { "⎋", "send esc", text = "esc" },
-                { "⊞", "pane_switcher", text = "spaces" },
+                { "⊞", "workspace_switcher", text = "spaces" },
                 { "✕", "close_pane", text = "close" },
               },
             })
@@ -3276,6 +3290,129 @@ mod tests {
         assert_eq!(a.frameless(), None);
     }
 
+    fn tap(a: &mut App, x: u16, y: u16) {
+        for kind in [
+            MouseEventKind::Down(MouseButton::Left),
+            MouseEventKind::Up(MouseButton::Left),
+        ] {
+            a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+                kind,
+                column: x,
+                row: y,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            })));
+        }
+        a.expire_press(Instant::now() + Duration::from_secs(1));
+    }
+
+    /// Section 07: the pane menu as a sheet rising from the toolbar, at 34
+    /// rows and with the keyboard open (MOBILE_VIEW_MOCK.txt, menu34, menu18).
+    #[test]
+    fn the_pane_menu_is_a_sheet_on_a_phone() {
+        let mut a = phone(34);
+        tap(&mut a, 2, 32);
+        assert_eq!(a.sheet_layout().unwrap().outer, Rect::new(0, 4, 52, 27));
+        assert_eq!(
+            a.button_state("touch", crate::toolbar::Slot::Button(0)),
+            ButtonState::Active,
+            "the button whose sheet is open"
+        );
+        let s = screen(&a);
+        let rows = [
+            (5, "│                                                  │"),
+            (7, "│  Float                   Fullscreen              │"),
+            (11, "│  Group                   Swap with master        │"),
+            (15, "│  Synced input            Links on screen         │"),
+            (19, "│  Copy mode               Rename                  │"),
+            (23, "│  Move to an empty wor…   Move to the scratchpad  │"),
+            (27, "│  Close                                           │"),
+            (30, "╰──────────────────────────────────────────────────╯"),
+        ];
+        for (y, want) in rows {
+            assert_eq!(s[y], want, "row {y}");
+        }
+        // Its button again closes it.
+        tap(&mut a, 2, 32);
+        assert!(a.picker.is_none());
+
+        let mut a = phone(18);
+        tap(&mut a, 2, 16);
+        assert_eq!(a.sheet_layout().unwrap().outer, Rect::new(0, 1, 52, 14));
+        let s = screen(&a);
+        assert_eq!(s[4], "│  Float                   Fullscreen              │");
+        assert_eq!(
+            s[12],
+            "│  Synced input            Links on screen         │"
+        );
+        assert_eq!(
+            s[14],
+            "╰─────────────────────────────────────── ▾ 5 more ─╯"
+        );
+        // Swiped up, the rest show; tapped outside, it closes.
+        a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 10,
+            row: 8,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        })));
+        assert_eq!(
+            screen(&a)[4],
+            "│  Group                   Swap with master        │"
+        );
+        tap(&mut a, 10, 0);
+        assert!(a.picker.is_none());
+    }
+
+    /// Section 07: the workspace switcher, with its counts, the current one
+    /// marked, and a typed name offering a new workspace.
+    #[test]
+    fn the_workspace_switcher_is_a_sheet_on_a_phone() {
+        let mut a = phone(34);
+        tap(&mut a, 44, 32);
+        assert_eq!(a.sheet_layout().unwrap().outer, Rect::new(0, 15, 52, 16));
+        let s = screen(&a);
+        assert_eq!(
+            s[16],
+            "│>  type to filter                                 │"
+        );
+        assert_eq!(
+            s[19],
+            "│    1:zsh        1 pane   ● 2:vps        4 panes  │"
+        );
+        assert_eq!(
+            s[23],
+            "│    3:ai         1 pane     S scratchpad  1 pane  │"
+        );
+        assert_eq!(
+            s[27],
+            "│    + new workspace                               │"
+        );
+        // A tap on a face goes there.
+        tap(&mut a, 10, 23);
+        assert_eq!(a.current, 3);
+        assert!(a.picker.is_none());
+
+        let mut a = phone(18);
+        a.run_action(Action::WorkspaceSwitcher);
+        for c in "notes".chars() {
+            a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+                crossterm::event::KeyCode::Char(c),
+                crossterm::event::KeyModifiers::NONE,
+            ))));
+        }
+        let l = a.sheet_layout().unwrap();
+        assert_eq!(l.faces.len(), 1);
+        assert_eq!(
+            screen(&a)[l.faces[0].1.y as usize + 1],
+            "│  new workspace: notes                            │"
+        );
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))));
+        assert_eq!(a.workspaces[&a.current].name.as_deref(), Some("notes"));
+    }
+
     /// Section 08: Ctrl latched shows in the mode slot and on its button,
     /// goes with the next key only, and belongs to the terminal that latched.
     #[test]
@@ -3313,6 +3450,18 @@ mod tests {
         // The desk types: its keys are not the phone's Ctrl.
         a.driven_by(false, false);
         assert_eq!(a.latch_label(), None);
+    }
+
+    /// A sheet open on the phone closes when the desk takes the screen (its
+    /// profile changes); a second phone driving keeps it.
+    #[test]
+    fn a_sheet_goes_with_the_profile_it_was_drawn_for() {
+        let mut a = phone(34);
+        a.run_action(Action::WorkspaceSwitcher);
+        a.driven_by(true, true);
+        assert!(a.picker.is_some(), "the same profile");
+        a.driven_by(false, false);
+        assert!(a.picker.is_none());
     }
 
     #[test]

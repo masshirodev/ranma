@@ -954,7 +954,12 @@ and the tests pin the mock's rows from there (`app::tests`, "the_phone_*").
 Where the handoff gives the thresholds of what gives way (30, 24, 20, 12 and
 8 rows), they were measured with everything stacked on a phone; a toolbar
 beside the bar takes no rows, so it counts its rows back
-(`chrome::plan`), which is what makes the landscape mock come out as drawn.
+(`chrome::plan`), which is what makes the landscape mock come out as drawn. The
+filtered workspace switcher in the mock offers `new workspace: ai` while
+`3:ai` exists; ranma offers a new one only for a name no workspace has, as
+the session switcher does for sessions. And a sheet open on the phone closes
+when the desk takes the screen, since it changes profile; a second phone
+driving keeps it.
 
 ### Stack
 
