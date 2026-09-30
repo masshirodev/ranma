@@ -101,6 +101,7 @@ and SSH servers, animation).
 - [x] Dim unfocused panes
 - [x] URL hints
 - [x] A right-click pane menu
+- [x] A right-click workspace menu on the bar
 - [x] A `command_finished` hook from OSC 133; OSC 9 and 777 as toasts
 - [x] A which-key hint after a pause in WM mode (designed from `doc/briefs/done/WHICH_KEY.md`)
 

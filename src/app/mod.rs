@@ -1349,8 +1349,9 @@ impl App {
     }
 
     /// Clicks on the bar and on tab bars work in any mode: they are ranma's own.
-    /// Returns true when the click was one of those.
-    fn click_chrome(&mut self, frame: &Frame, x: u16, y: u16) -> bool {
+    /// Returns true when the click was one of those. A right click on a
+    /// workspace opens its menu; everywhere else it is a click like any other.
+    fn click_chrome(&mut self, frame: &Frame, x: u16, y: u16, right: bool) -> bool {
         if let Some(bar) = self.bar_rect()
             && bar.contains(x, y)
         {
@@ -1363,6 +1364,7 @@ impl App {
                 .and_then(|(_, p)| p.click);
             match target {
                 Some(Click::Workspace(SCRATCHPAD)) => self.run_action(Action::ScratchpadToggle),
+                Some(Click::Workspace(n)) if right => self.open_workspace_menu(n, x, y),
                 Some(Click::Workspace(n)) => {
                     self.run_action(Action::Workspace(WorkspaceTarget::Index(n)))
                 }
@@ -1438,8 +1440,8 @@ impl App {
     fn handle_mouse_normal(&mut self, m: MouseEvent) {
         let (x, y) = (m.column, m.row);
         let frame = self.frame();
-        if let MouseEventKind::Down(_) = m.kind
-            && self.click_chrome(&frame, x, y)
+        if let MouseEventKind::Down(b) = m.kind
+            && self.click_chrome(&frame, x, y, b == MouseButton::Right)
         {
             return;
         }
@@ -1574,7 +1576,7 @@ impl App {
             return;
         };
         let frame = self.frame();
-        if self.click_chrome(&frame, x, y) {
+        if self.click_chrome(&frame, x, y, button == MouseButton::Right) {
             return;
         }
         let Some(v) = self.pane_at(&frame, x, y) else {
@@ -3552,6 +3554,62 @@ mod tests {
                 other => panic!("{other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn a_right_click_on_a_workspace_opens_its_menu() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.workspaces.entry(3).or_default().name = Some("web".into());
+        let bar = a.bar_rect().unwrap();
+        let (px, _) = a
+            .bar_pieces(bar.w)
+            .into_iter()
+            .find(|(_, p)| p.click == Some(Click::Workspace(3)))
+            .expect("workspace 3 has a chip");
+        let right = |kind| {
+            AppEvent::Input(Event::Mouse(MouseEvent {
+                kind,
+                column: bar.x + px,
+                row: bar.y,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            }))
+        };
+        a.handle(right(MouseEventKind::Down(MouseButton::Right)));
+        a.handle(right(MouseEventKind::Up(MouseButton::Right)));
+        assert_eq!(a.current, 3, "the menu is about the workspace clicked");
+        let p = a.picker.as_ref().expect("a menu");
+        assert_eq!(p.title, "workspace 3:web");
+        let labels: Vec<String> = p.visible().into_iter().map(|i| i.label).collect();
+        assert!(labels.iter().any(|l| l == "Rename"), "{labels:?}");
+        assert!(!labels.iter().any(|l| l == "Float"), "not the pane menu");
+        // Empty, it has nothing to equalize and nothing to send away.
+        assert!(
+            !labels
+                .iter()
+                .any(|l| l == "Equalize" || l.starts_with("Send"))
+        );
+        for it in p.visible() {
+            match it.target {
+                crate::picker::Target::Run(line) => {
+                    assert!(line.parse::<Action>().is_ok(), "{line}")
+                }
+                other => panic!("{other:?}"),
+            }
+        }
+        // An occupied workspace can be equalized and sent away.
+        a.picker = None;
+        a.open_workspace_menu(1, 0, 0);
+        let labels: Vec<String> = a
+            .picker
+            .as_ref()
+            .unwrap()
+            .visible()
+            .into_iter()
+            .map(|i| i.label)
+            .collect();
+        assert!(labels.iter().any(|l| l == "Equalize"), "{labels:?}");
+        assert!(labels.iter().any(|l| l.starts_with("Send")), "{labels:?}");
     }
 
     #[test]

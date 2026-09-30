@@ -347,6 +347,12 @@ use the mouse. WM mode keeps its right-drag resizing floats. The menu is the
 one picker again, anchored at the pointer, whose entries are ordinary actions
 on the pane it focused, shown with their keys, so the menu also teaches them.
 
+A right click on a workspace in the bar opens that workspace's menu the same
+way (2026-09-29): it goes to the workspace first, as the pane menu focuses its
+pane, so its entries (new pane, rename, equalize, send to another session, all
+workspaces) are the ordinary actions on the current workspace and none needs a
+workspace argument. The scratchpad chip has no menu; any click toggles it.
+
 Text selection stays one modifier away, since every common terminal lets Shift
 override a program's mouse capture. `mouse = "off"` restores the milestone 1
 behaviour for anyone who prefers the host's own selection: the mouse is captured

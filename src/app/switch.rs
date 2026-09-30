@@ -402,9 +402,6 @@ impl App {
         keys
     }
 
-    /// The right-click menu of a pane, at the pointer: what can be done to it,
-    /// with the key that does it. It focuses the pane first, so every entry is
-    /// the ordinary action on the focused pane.
     /// `workspace_switcher`: the shown session's workspaces, the current one
     /// marked, each with its pane count; a name no workspace has opens one.
     pub(super) fn open_workspace_switcher(&mut self) {
@@ -442,6 +439,9 @@ impl App {
         self.dirty = true;
     }
 
+    /// The right-click menu of a pane, at the pointer: what can be done to it,
+    /// with the key that does it. It focuses the pane first, so every entry is
+    /// the ordinary action on the focused pane.
     pub(super) fn open_pane_menu(&mut self, id: crate::layout::PaneId, x: u16, y: u16) {
         if !self.active().contains(id) {
             return;
@@ -481,17 +481,49 @@ impl App {
         if self.scratch_shown {
             entries.retain(|(_, a)| *a != "move_to_scratchpad");
         }
+        let title = self.pane_title(id);
+        self.open_menu(title, &entries, x, y);
+    }
+
+    /// The right-click menu of a workspace chip in the bar, at the pointer. As
+    /// the pane menu focuses its pane, this one goes to its workspace first, so
+    /// every entry is the ordinary action on the current workspace.
+    pub(super) fn open_workspace_menu(&mut self, n: u8, x: u16, y: u16) {
+        if n != self.current || self.scratch_shown {
+            self.run_action(crate::action::Action::Workspace(
+                crate::action::WorkspaceTarget::Index(n),
+            ));
+        }
+        let mut entries: Vec<(&str, &str)> =
+            vec![("New pane", "new_pane"), ("Rename", "rename_workspace")];
+        let occupied = self.workspaces.get(&n).is_some_and(|w| !w.is_empty());
+        if occupied {
+            entries.push(("Equalize", "equalize"));
+        }
+        if self.movable_workspace().is_ok() {
+            entries.push(("Send to another session", "move_workspace_to_session"));
+        }
+        entries.push(("All workspaces", "workspace_switcher"));
+        let title = match self.workspaces.get(&n).and_then(|w| w.name.as_deref()) {
+            Some(name) => format!("workspace {n}:{name}"),
+            None => format!("workspace {n}"),
+        };
+        self.open_menu(title, &entries, x, y);
+    }
+
+    /// A menu at the pointer of `(label, action)` entries, each shown with the
+    /// key bound to its action, so the menu also teaches the keys.
+    fn open_menu(&mut self, title: String, entries: &[(&str, &str)], x: u16, y: u16) {
         let keys = self.bound_keys();
         let items = entries
-            .into_iter()
+            .iter()
             .map(|(label, action)| Item {
                 label: label.to_string(),
-                detail: keys.get(action).cloned().unwrap_or_default(),
+                detail: keys.get(*action).cloned().unwrap_or_default(),
                 target: Target::Run(action.to_string()),
                 current: false,
             })
             .collect();
-        let title = self.pane_title(id);
         self.picker = Some(Picker::new(Kind::Menu, title, items));
         self.menu_at = Some((x, y));
         self.dirty = true;

@@ -56,6 +56,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   lands in its buffer and is read back with `show-buffer`
 - a right click in a shell opens its menu at the pointer; Float floats the
   pane, and its menu then offers Tile
+- a right click on a workspace in the bar goes there and opens its menu
+  (Rename, not the pane entries)
 - a link printed in a pane gets a label from `leader o`, and typing it puts
   the link on the clipboard
 - ranma inside ranma: the outer bar shows the inner's workspaces in brackets,

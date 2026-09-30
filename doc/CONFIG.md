@@ -369,6 +369,11 @@ or pick it with the arrows and `Enter`; typing filters it; `Esc` or a click
 outside closes it. A program that asked for the mouse keeps its right clicks;
 its border still opens the menu.
 
+**A right click on a workspace in the bar opens its menu**, in any mode. It goes
+to that workspace, then offers a new pane, rename, equalize and sending it to
+another session (those two only when it has panes), and the workspace switcher.
+A left click just goes there, as before.
+
 In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
 anywhere with the left button, resize it with the right. `mouse = "off"` limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.
