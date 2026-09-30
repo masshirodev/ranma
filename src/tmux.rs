@@ -74,7 +74,7 @@ pub fn launch(command: &[String]) -> Result<ExitCode> {
     let pane = std::env::var("RANMA_PANE").context("not inside a ranma pane")?;
     let server = std::env::var("RANMA").unwrap_or_else(|_| "0".into());
     let dir = ipc::server_dir().join("tmux-bin");
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let link = dir.join("tmux");
     let exe = std::env::current_exe().context("finding the ranma binary")?;
     if std::fs::read_link(&link).ok().as_deref() != Some(exe.as_path()) {

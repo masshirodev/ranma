@@ -52,6 +52,17 @@ shells as you left them.
 Servers are named 1, 2, 3...; their sockets are in `$XDG_RUNTIME_DIR/ranma/` and
 their logs in `~/.cache/ranma/`.
 
+**On WSL, turn lingering on** (`sudo loginctl enable-linger $USER`). With
+`systemd=true` in `/etc/wsl.conf`, a Windows Terminal shell is not a logind
+session, so nothing keeps `/run/user/$UID` for it: the directory is in whatever
+state WSL left it at boot, and logind mounts a fresh tmpfs over it when an SSH
+login starts and removes it when the last one ends. Every server's socket is
+hidden under that mount while it lasts (`ranma ls` answers "no ranma servers
+running", and a new terminal starts a new server instead of attaching), and
+anything that has to create a directory there, such as `ranma tmux-shim`
+making `tmux-bin/`, can fail with *permission denied*. Lingering makes logind
+keep the directory from boot, owned by you, with or without a session.
+
 **Upgrading keeps everything.** A server takes a new build by executing it in
 its own place: the shells keep running, unaware (they are still its children,
 their PTYs never close), every pane comes back with its screen and scrollback,
