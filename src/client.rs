@@ -230,12 +230,24 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
         .name("client-input".into())
         .spawn(move || {
             while let Ok(ev) = crossterm::event::read() {
+                if crate::winch::from_crossterm(&ev) {
+                    continue;
+                }
                 // A server that has gone is noticed by the reading side, which
                 // ends the client; a key lost mid-switch is not worth more.
                 let mut w = input.lock().expect("writer lock");
                 let _ = proto::send_to_server(&mut *w, &ToServer::Event(ev));
             }
         })?;
+    let resizes = writer.clone();
+    crate::winch::spawn(crossterm::terminal::size, move |cols, rows| {
+        let mut w = resizes.lock().expect("writer lock");
+        let _ = proto::send_to_server(
+            &mut *w,
+            &ToServer::Event(crossterm::event::Event::Resize(cols, rows)),
+        );
+        true
+    })?;
 
     let mut name = name.to_string();
     let mut out = std::io::stdout();

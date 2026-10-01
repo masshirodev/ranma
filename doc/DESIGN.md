@@ -903,6 +903,21 @@ is a nested ranma (the outer's centre and the inner's own border); the handoff
 suggests a setting to leave the centre empty then. The host an inner ranma runs
 on is not reported (the session name covers it when there are several).
 
+**Resizes are read off SIGWINCH, not from crossterm** (2026-10-01). A
+nested ranma over SSH garbled whenever the outer opened its scratchpad over
+it: the outer frames the pane then, which resizes it, and reports focus to it
+in the same instant. Both crossed SSH in one burst, and crossterm drops the
+signal when one wakeup of its poll has both input and SIGWINCH: it returns the
+first key parsed and discards the rest of the batch, and mio's epoll is
+edge-triggered, so the signal is never reported again. The inner went on
+drawing at the old size, diffing against a grid that had been cut and grown
+back, and both sizes' text stayed overlaid until something redrew it whole.
+`winch` now takes SIGWINCH through signal-hook's own blocking iterator, which
+misses none, and both input threads (the client's and a standalone ranma's)
+drop crossterm's `Resize`. Several signals before the thread wakes are one
+resize at the size by then. smoke.sh stops the client while a resize and a
+focus report arrive, which puts them in one wakeup.
+
 ### A mobile view, from scriptable pieces
 
 **Decided 2026-09-29** (card c78, brief `doc/briefs/done/MOBILE_VIEW.md`,

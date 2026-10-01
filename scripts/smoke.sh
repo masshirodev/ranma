@@ -346,6 +346,30 @@ T kill-session -t e1; T kill-session -t e2; sleep 0.8
 $ENV $BIN kill 2; sleep 0.8
 $ENV $BIN ls | grep -q '^2 ' && fail "ranma kill 2 left it running"
 
+# A resize that arrives in the same instant as input is still a resize.
+# crossterm drops the signal when one wakeup has both, and an outer ranma
+# framing a nested pane for its scratchpad sends exactly that (the resize and a
+# focus report), over SSH in one burst. Stopping the client while both arrive
+# puts them in one wakeup. The bar must then be the terminal's width, its
+# clock whole: drawn at the old width it is short, or cut with a stray digit.
+T new-session -d -s w -x 120 -y 30 "exec $ENV $BIN attach 6"
+for _ in $(seq 1 40); do T capture-pane -p -t w | grep -q '╭' && break; sleep 0.25; done
+lost=0
+for i in $(seq 1 10); do
+  cols=$((90 + i % 2 * 20))
+  cp=$(T display -p -t w '#{pane_pid}')
+  kill -STOP "$cp"
+  T resize-window -t w -x "$cols" -y 30 \; send-keys -t w -H 1b 5b 4f
+  sleep 0.2
+  kill -CONT "$cp"
+  sleep 0.6
+  wbar=$(T capture-pane -p -t w | tail -1)
+  { [ ${#wbar} -eq "$cols" ] && echo "$wbar" | grep -Eq '[0-9]{2}:[0-9]{2}$'; } || lost=$((lost + 1))
+done
+[ "$lost" -eq 0 ] || fail "$lost of 10 resizes that came with input were lost ($(T capture-pane -p -t w | tail -1))"
+T kill-session -t w; sleep 0.5
+$ENV $BIN kill 6; sleep 0.5
+
 # The mobile view follows the terminal driving the screen: a phone
 # (RANMA_MOBILE=1) joining changes nothing, typing on it brings the touch
 # toolbar, typing at the desk takes it away. The hook is the one

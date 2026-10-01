@@ -30,4 +30,5 @@ pub mod toast;
 pub mod toolbar;
 pub mod update;
 pub mod whichkey;
+pub mod winch;
 pub mod workspace;

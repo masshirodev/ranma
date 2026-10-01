@@ -2913,11 +2913,20 @@ pub(super) fn chord_event(chord: crate::keys::Chord) -> KeyEvent {
 }
 
 pub(super) fn spawn_input_thread(tx: Sender<AppEvent>) {
+    let resizes = tx.clone();
+    if let Err(e) = crate::winch::spawn(crossterm::terminal::size, move |cols, rows| {
+        resizes
+            .send(AppEvent::Input(Event::Resize(cols, rows)))
+            .is_ok()
+    }) {
+        eprintln!("ranma: watching for resizes: {e}");
+    }
     std::thread::Builder::new()
         .name("input".into())
         .spawn(move || {
             loop {
                 match crossterm::event::read() {
+                    Ok(ev) if crate::winch::from_crossterm(&ev) => {}
                     Ok(ev) => {
                         if tx.send(AppEvent::Input(ev)).is_err() {
                             return;

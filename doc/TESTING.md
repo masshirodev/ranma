@@ -25,6 +25,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `snapshot` | a pane's screen as text and back: history, colours, wide characters and wrapped rows cell for cell, the cursor; the shell kept behind a full-screen program, and its modes; palette changes |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
+| `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |
 
@@ -91,6 +92,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   driving, shows the screen cut off rather than wrapped and scrolled, the
   pointer moving over it does not take the screen,
   `leader d` in one leaves the other, and `attach --steal` sends the other away
+- a resize that arrives in the same wakeup as input (the client stopped while
+  both arrive, ten times): the bar is redrawn at the new width every time
 - the mobile view on a shared server: a phone (`RANMA_MOBILE=1`, 52×34)
   joining changes nothing, typing on it brings the touch toolbar, typing at
   the desk takes it away (its own config dir, with the `driver_change` hook
