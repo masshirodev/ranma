@@ -331,6 +331,11 @@ e1 | grep -Eq 'W9[0-9]W' || fail "typing in the first terminal did not take the 
 # autowrap on, every row too long for it ran onto the next and scrolled the
 # top border away.
 e2 | head -1 | grep -q '^╭' || fail "a smaller terminal wraps the driver's rows instead of cutting them ($(e2 | head -2))"
+# The pointer crossing the other terminal (a desk seen through VNC) is nobody
+# there: it does not take the screen, which would leave the first terminal
+# showing it in a corner, its own bar row empty.
+T send-keys -t e2 -l $'\e[<35;20;10M'; sleep 0.8
+e1 | tail -1 | grep -q '[0-9]:[0-9]' || fail "the pointer moving over the other terminal took the screen ($(e1 | tail -1))"
 T send-keys -t e2 C-b d; sleep 0.8
 e2 | grep -q '\[ranma 2: detached\]' || fail "leader d in the second terminal did not detach it ($(e2 | tail -3))"
 e1 | grep -q '╭' || fail "the second terminal detaching took the first one with it"

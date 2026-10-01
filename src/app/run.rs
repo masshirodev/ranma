@@ -181,8 +181,15 @@ impl Clients {
             }
             return false;
         }
-        if at == 0 || !is_presence(ev) {
+        if at == 0 {
             return true;
+        }
+        if !is_presence(ev) {
+            // The pointer passing over a terminal that is not driving: its
+            // position is on a screen of another size, so it hovers nothing.
+            // A release still ends a drag that began there before it lost the
+            // screen, so that drag is not left held.
+            return !matches!(ev, Event::Mouse(m) if !matches!(m.kind, MouseEventKind::Up(_)));
         }
         self.touch(at);
         match ev {
@@ -213,9 +220,19 @@ impl Clients {
 
 /// Input that means someone is at that terminal, and so moves the screen to
 /// it. Not a resize, and not a focus report: every terminal answers the
-/// focus-reporting mode with one as it is (re)enabled on each attach.
+/// focus-reporting mode with one as it is (re)enabled on each attach. Of the
+/// mouse, only a press or the wheel: with motion reporting on, the pointer
+/// crossing a terminal on its way elsewhere (a desk seen through VNC) would
+/// otherwise take the screen from the one being typed in.
 fn is_presence(ev: &Event) -> bool {
-    matches!(ev, Event::Key(_) | Event::Mouse(_) | Event::Paste(_))
+    match ev {
+        Event::Key(_) | Event::Paste(_) => true,
+        Event::Mouse(m) => !matches!(
+            m.kind,
+            MouseEventKind::Moved | MouseEventKind::Drag(_) | MouseEventKind::Up(_)
+        ),
+        _ => false,
+    }
 }
 
 /// Standalone: ranma in this terminal, ending with it.
@@ -979,6 +996,13 @@ mod tests {
         // manager around it: not a person.
         assert!(!is_presence(&Event::FocusGained));
         assert!(!is_presence(&Event::Resize(80, 24)));
+        let moved = Event::Mouse(crossterm::event::MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(!is_presence(&moved), "a pointer passing over");
     }
 
     #[test]
@@ -1021,6 +1045,41 @@ mod tests {
             cs.arrive(0, &mouse(MouseEventKind::ScrollUp)),
             "no release to wait for"
         );
+    }
+
+    #[test]
+    fn a_pointer_passing_over_does_not_take_the_screen() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent};
+        let mouse = |kind| {
+            Event::Mouse(MouseEvent {
+                kind,
+                column: 140,
+                row: 38,
+                modifiers: KeyModifiers::NONE,
+            })
+        };
+        let mut cs = Clients::default();
+        cs.list.push(sized(1, 120));
+        cs.list.push(sized(2, 150));
+        cs.new_driver();
+        // The desk's pointer moves or drags with nobody pressing there: the
+        // screen stays, and positions read off the desk's size reach nothing.
+        for kind in [
+            MouseEventKind::Moved,
+            MouseEventKind::Drag(MouseButton::Left),
+        ] {
+            assert!(!cs.arrive(1, &mouse(kind)), "{kind:?} went through");
+            assert_eq!(cs.new_driver(), None, "{kind:?} took the screen");
+        }
+        // A release takes nothing either, but goes through: it may end a drag
+        // begun there while that terminal still drove.
+        assert!(cs.arrive(1, &mouse(MouseEventKind::Up(MouseButton::Left))));
+        assert_eq!(cs.new_driver(), None);
+        // The driver's own motion still hovers.
+        assert!(cs.arrive(0, &mouse(MouseEventKind::Moved)));
+        // A press is someone there.
+        assert!(!cs.arrive(1, &mouse(MouseEventKind::Down(MouseButton::Left))));
+        assert_eq!(cs.new_driver().map(|h| h.cols), Some(150));
     }
 
     #[test]

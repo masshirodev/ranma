@@ -98,8 +98,8 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
 - **The screen takes the size of the terminal last typed in** (tmux's
   `window-size latest`). The clients are kept most recently active first, and
   the front one *drives*: its size, its colours, its title, whether it came
-  over SSH, whether a ranma is around it. Only a key, a click or a paste moves
-  the screen to a terminal. Not a resize, and not a focus report: every
+  over SSH, whether a ranma is around it. Only a key, a click or the wheel, or a
+  paste moves the screen to a terminal. Not the pointer moving, not a resize, and not a focus report: every
   terminal answers the focus mode with one as it is re-enabled on each attach,
   which would hand the screen to whichever answered last. A terminal that
   joins does not drive, so a peek from a tablet leaves the PC's layout as it
@@ -117,6 +117,17 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
   there. Off, a long row is cut at the edge; its last cell shows whatever the
   row ended with, and rows below the terminal's height land on its last row,
   which is where the bar is drawn last.
+- **The pointer passing over is nobody there** (2026-10-01). Mouse capture
+  turns on motion reporting, and every mouse event used to count as presence,
+  so the pointer merely crossing a terminal took the screen. Found with a desk
+  watched through VNC from work while working in a terminal SSHed home: moving
+  the mouse across the VNC window flipped the screen to the desk's size, and
+  the terminal being typed in got a cut-off screen; every resize it sent then
+  (the outer ranma framing the pane as its scratchpad opened) was answered at
+  the desk's size, leaving text from both sizes overlaid. Now only a press or
+  the wheel takes the drive. From a terminal not driving, motion and drags are
+  dropped (their positions are on a screen of another size); a release goes
+  through, so a drag begun there before it lost the screen is not left held.
 - **The click that takes the drive does nothing else** (2026-09-29, found
   planning the mobile view): its position was read off the screen at the old
   driver's size, and it arrived after the resize, landing on whatever was there

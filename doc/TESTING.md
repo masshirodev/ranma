@@ -88,7 +88,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   killed, and `ranma kill 2` ends it
 - two terminals `ranma attach 2`: both show the screen, typing in either
   reaches it, the size follows the one last typed in, the smaller one, not
-  driving, shows the screen cut off rather than wrapped and scrolled,
+  driving, shows the screen cut off rather than wrapped and scrolled, the
+  pointer moving over it does not take the screen,
   `leader d` in one leaves the other, and `attach --steal` sends the other away
 - the mobile view on a shared server: a phone (`RANMA_MOBILE=1`, 52×34)
   joining changes nothing, typing on it brings the touch toolbar, typing at
