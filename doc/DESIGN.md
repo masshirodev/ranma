@@ -487,7 +487,10 @@ so repeating it walks the whole pile. Keyboard `move` shifts a float and `resize
 changes its size; the mouse drags it by its top border and sizes it by the right
 or bottom one (anywhere, in WM mode), with the PTY resized once on release. A
 float tiled again goes next to the tile it was over, and floated again returns
-where it last floated.
+where it last floated. A focused float that closes hands focus to the float left
+on top, never to a geometric neighbour: in a cascade the pane to the left is
+the one buried under it, and focus on a pane you cannot see sends keys blind.
+Whatever pane inherits focus is raised.
 
 Keyboard placement goes by the workspace, not by cells: `float_size 60 40`
 sizes a float in percent around its centre, and `snap` puts it on a half, a

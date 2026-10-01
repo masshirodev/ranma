@@ -739,14 +739,21 @@ impl App {
         }
     }
 
-    /// Where focus goes when `id` leaves a visible workspace: the neighbour the
-    /// eye lands on (left, up, right, down), else any pane left there.
+    /// Where focus goes when `id` leaves a visible workspace: for a float, the
+    /// float now on top, the one the eye lands on in a pile (a geometric
+    /// neighbour there is usually buried under it); for a tile, the neighbour
+    /// the eye lands on (left, up, right, down); else any pane left there.
     fn successor(&self, ws_num: u8, id: PaneId) -> Option<PaneId> {
         let ws = if ws_num == SCRATCHPAD {
             &self.scratch
         } else {
             self.workspaces.get(&ws_num)?
         };
+        if ws.is_floating(id)
+            && let Some((top, _)) = ws.floating.iter().rev().find(|(p, _)| *p != id)
+        {
+            return Some(*top);
+        }
         let rects: Vec<(PaneId, Rect)> = self
             .frame()
             .views
@@ -769,6 +776,11 @@ impl App {
         let was = ws.take(id)?;
         if ws.focused == Some(id) {
             ws.focused = next.filter(|p| *p != id);
+            // A focused float is never left under another: typing into a pane
+            // you cannot see is the one thing focus must not do.
+            if let Some(f) = ws.focused {
+                ws.raise(f);
+            }
         }
         ws.fullscreen &= ws.focused.is_some();
         Some((n, was))
@@ -3042,6 +3054,32 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn closing_a_float_focuses_the_one_left_on_top() {
+        let mut a = app(None);
+        // A cascaded pile in the scratchpad, 3 on top and focused.
+        for id in 1..=3u16 {
+            a.scratch
+                .floating
+                .push((id as PaneId, Rect::new(10 + 3 * id, 5 + id, 30, 10)));
+        }
+        a.scratch.focused = Some(3);
+        a.scratch_shown = true;
+        a.detach(3);
+        assert_eq!(
+            a.scratch.focused,
+            Some(2),
+            "the float under it, not one buried"
+        );
+        assert_eq!(a.scratch.floating.last().unwrap().0, 2);
+
+        // Focus on a float that is not on top (a click raises, but a hook may not).
+        a.scratch.floating.push((4, Rect::new(40, 10, 30, 10)));
+        a.scratch.focused = Some(2);
+        a.detach(2);
+        assert_eq!(a.scratch.focused, Some(4));
     }
 
     #[test]
