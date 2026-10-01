@@ -1659,6 +1659,10 @@ impl App {
                 self.run_bind(c, true);
                 return;
             }
+            if self.enter_opens_pane(&key) {
+                self.run_action(Action::NewPane);
+                return;
+            }
             // Typing ends a mouse selection, as in any terminal.
             if self.selection_pane.is_some() {
                 self.clear_selection();
@@ -1708,6 +1712,22 @@ impl App {
         if (exits || !self.config.settings.wm_mode_sticky) && self.mode == Mode::Wm {
             self.set_mode(Mode::Normal);
         }
+    }
+
+    /// Enter on a workspace with nothing in it opens a shell there: the key
+    /// would reach no program, and a terminal is what you came for. The
+    /// keypad's Enter is CR, the same key, on terminals that send that (ranma
+    /// never asks the host for application keypad mode), and LF on some, tmux
+    /// among them, which arrives as Ctrl+J. With Ctrl or Alt otherwise it is
+    /// somebody's chord.
+    fn enter_opens_pane(&self, key: &KeyEvent) -> bool {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let line_feed = key.code == KeyCode::Char('j') && key.modifiers == KeyModifiers::CONTROL;
+        let enter = key.code == KeyCode::Enter
+            && !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        self.focused().is_none() && (enter || line_feed)
     }
 
     /// Run the bind for `chord` from the WM or the global table. Returns whether
@@ -3022,6 +3042,30 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn enter_on_an_empty_workspace_opens_a_pane() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let mut a = app(None);
+        assert!(a.focused().is_none(), "a new app starts empty");
+        assert!(a.enter_opens_pane(&enter));
+        assert!(
+            a.enter_opens_pane(&KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT)),
+            "shift is still Enter"
+        );
+        for mods in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+            assert!(!a.enter_opens_pane(&KeyEvent::new(KeyCode::Enter, mods)));
+        }
+        assert!(!a.enter_opens_pane(&KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)));
+        assert!(
+            a.enter_opens_pane(&KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL)),
+            "a keypad Enter sent as LF"
+        );
+        // With a pane there, Enter is the program's.
+        with_pane(&mut a, 1);
+        assert!(!a.enter_opens_pane(&enter));
     }
 
     #[test]

@@ -137,6 +137,17 @@ T send-keys -t s C-b 2 Escape; sleep 0.3
 bar | grep -Eq ' 1(:[a-z]+)?  2(:[a-z]+)? ' || fail "workspace 2 not shown in the bar"
 T send-keys -t s C-b 1 Escape; sleep 0.3
 bar | grep -q ' 2 ' && fail "empty workspace 2 still in the bar"
+# Enter, and the keypad's Enter, on an empty workspace open a shell there.
+for enter in Enter KPEnter; do
+  T send-keys -t s C-b 3 Escape; sleep 0.3
+  screen | grep -q '╭' && fail "workspace 3 is not empty to begin with"
+  T send-keys -t s "$enter"
+  wait_for '╭' 20 || fail "$enter on an empty workspace opened no pane"
+  for _ in $(seq 1 20); do bar | grep -q ' 3:bash ' && break; sleep 0.25; done
+  bar | grep -q ' 3:bash ' || fail "$enter opened the pane somewhere else ($(bar))"
+  T send-keys -t s 'exit' Enter; sleep 0.6
+  T send-keys -t s C-b 1 Escape; sleep 0.3
+done
 
 # A click in the bar reaches no program. Its press was always ranma's, but the
 # release and the motion over the bar went to the focused pane, clamped to its

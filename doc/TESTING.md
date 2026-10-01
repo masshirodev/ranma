@@ -50,6 +50,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - two panes marked for synchronized input both get a typed line, and the bar
   says so; unmarked, the next line reaches only the focused one
 - workspace 2 shows in the bar while current and disappears once left empty
+- Enter and the keypad's Enter (tmux sends it as LF) on an empty workspace open
+  a shell there
 - a broken config written while running is reported at once, and the old one kept
 - help opens and filters by action
 - `leader /` finds a string in the history, and `y` puts the match on the

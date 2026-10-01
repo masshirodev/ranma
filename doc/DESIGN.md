@@ -256,6 +256,14 @@ survive in a master workspace. The tree remembers the master's share, so a
 master that closes is replaced at the same width; `master_ratio` applies when
 a master area forms, one pane becoming two.
 
+**Enter on an empty workspace opens a shell there** (2026-10-01). With no
+pane, a key in normal mode reached nothing and was dropped; Enter is the key
+you reach for in a blank terminal, so it now runs `new_pane`. The keypad's
+Enter counts too: CR on most terminals (ranma never turns on the host's
+application keypad mode, so it never arrives as `ESC O M`), LF on some, tmux
+among them, read as Ctrl+J. Other keys on an empty workspace still do
+nothing, and a global bind on Enter or Ctrl+J is checked first and wins.
+
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 

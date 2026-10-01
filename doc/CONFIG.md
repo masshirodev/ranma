@@ -205,7 +205,8 @@ does not matter; it is ignored.
 | `quit` / `quit now` | Quit ranma, closing every pane in every session (`leader Delete`). `quit` asks first (`y` or `Enter` quits, any other key cancels); `quit now` does not, for scripts: `ranma action "quit now"`. |
 
 Workspaces exist while they have panes or are shown; an empty workspace you leave
-is gone. Floats overlap freely and cascade as they open. **Sessions** are separate sets of workspaces, one shown at a time; the
+is gone. Enter (or the keypad's Enter) on an empty workspace opens a
+shell there. Floats overlap freely and cascade as they open. **Sessions** are separate sets of workspaces, one shown at a time; the
 others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of free floating panes
 over whatever workspace is shown. Its first pane opens centred at 80%, later ones
 cascade; move, size and stack them like any float.
