@@ -134,6 +134,8 @@ struct Observed {
     /// Whether this ranma is engaged (see `engaged`); announced to a ranma around it.
     engaged: bool,
     focus: Option<PaneId>,
+    /// A ranma under the shown scratchpad that keeps its focus (see `held_focus`).
+    held: Option<PaneId>,
     workspace: u8,
     mode_wm: bool,
     title: String,
@@ -886,6 +888,19 @@ impl App {
         self.dirty = true;
     }
 
+    /// The ranma in the workspace under the shown scratchpad, which keeps its
+    /// focus. To a ranma, focus means "the bar around you shows your
+    /// workspaces"; told otherwise, it drew its own bar over its bottom row the
+    /// moment the scratchpad opened, and took it away again when it closed.
+    /// The scratchpad is a layer over the workspace and leaves it as it was.
+    fn held_focus(&self) -> Option<PaneId> {
+        if !self.scratch_shown {
+            return None;
+        }
+        let id = self.workspaces.get(&self.current)?.focused?;
+        self.reports_from(id).then_some(id)
+    }
+
     fn focused_pane(&self) -> Option<&Pane> {
         self.focused().and_then(|f| self.panes.get(&f))
     }
@@ -1083,6 +1098,7 @@ impl App {
             engaged: self.engaged(),
             session: self.session_name().to_string(),
             focus: self.focused(),
+            held: self.held_focus(),
             workspace: self.current,
             mode_wm: self.mode == Mode::Wm,
             title: self.focused_title().unwrap_or("").to_string(),
@@ -1102,15 +1118,30 @@ impl App {
             self.last_focused = now.focus;
         }
 
-        if now.focus != before.focus {
-            // Programs that asked for focus events get them, as in any terminal.
-            for (id, gained) in [(before.focus, false), (now.focus, true)] {
-                if let Some(p) = id.and_then(|i| self.panes.get(&i))
-                    && let Some(b) = input::encode_focus(gained, p.modes())
-                {
-                    p.write(b);
-                }
+        // Programs that asked for focus events get them, as in any terminal.
+        // A held pane counts as focused: it hears nothing while the scratchpad
+        // comes and goes over it.
+        let had = [before.focus, before.held];
+        let has = [now.focus, now.held];
+        for (id, gained) in had
+            .iter()
+            .flatten()
+            .filter(|id| !has.contains(&Some(**id)))
+            .map(|id| (*id, false))
+            .chain(
+                has.iter()
+                    .flatten()
+                    .filter(|id| !had.contains(&Some(**id)))
+                    .map(|id| (*id, true)),
+            )
+        {
+            if let Some(p) = self.panes.get(&id)
+                && let Some(b) = input::encode_focus(gained, p.modes())
+            {
+                p.write(b);
             }
+        }
+        if now.focus != before.focus {
             self.emit(HookEvent::FocusChange, |t| {
                 t.set("pane", now.focus)?;
                 t.set("previous", before.focus)

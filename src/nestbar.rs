@@ -335,16 +335,15 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
         if !pad {
             out.push(Piece::new(" ", Style::Normal));
         }
-        let (text, style) = if pad {
-            let s = if set.scratch_shown {
-                Style::WsActive
-            } else {
-                Style::WsOccupied
-            };
-            (" S ", s)
-        } else {
-            ("S", Style::WsOccupied)
+        // Shown, the scratchpad is where that ranma is (its `current` is 0),
+        // so it takes the colour its current workspace would.
+        let style = match (set.scratch_shown, pad, on_path) {
+            (false, _, _) => Style::WsOccupied,
+            (true, true, _) => Style::WsActive,
+            (true, false, true) => Style::WsInner(set.accent),
+            (true, false, false) => Style::WsHolder,
         };
+        let text = if pad { " S " } else { "S" };
         out.push(with(Piece::new(text, style), click(0)));
     }
     out
@@ -490,6 +489,35 @@ mod tests {
         let mut three = ws(3, "ai");
         three.nest = Some(Box::new(ai));
         report(2, vec![ws(1, "zsh"), two, three])
+    }
+
+    /// A shown scratchpad is where its ranma is, so its `S` takes the colour
+    /// that ranma's current workspace would: the inner accent on the path,
+    /// the holder's colour off it, and plain occupied when it is hidden.
+    #[test]
+    fn a_shown_inner_scratchpad_looks_current() {
+        let s_style = |set: &Report, on_path: bool| {
+            pieces(set, 1, on_path, &Opts::default(), &[2])
+                .into_iter()
+                .find(|p| p.text == "S")
+                .map(|p| p.style)
+        };
+        let mut inner = report(3, vec![ws(1, "kumiko"), ws(3, "ranma")]);
+        inner.scratch = true;
+        inner.accent = Some([1, 2, 3]);
+        assert_eq!(s_style(&inner, true), Some(Style::WsOccupied));
+        inner.scratch_shown = true;
+        inner.current = 0;
+        assert_eq!(s_style(&inner, true), Some(Style::WsInner(Some([1, 2, 3]))));
+        assert_eq!(s_style(&inner, false), Some(Style::WsHolder));
+        assert_eq!(
+            pieces(&inner, 0, true, &Opts::default(), &[])
+                .into_iter()
+                .find(|p| p.text == " S ")
+                .map(|p| p.style),
+            Some(Style::WsActive),
+            "the outer's own, as the workspaces module draws it"
+        );
     }
 
     const TITLE: &str = "✳Features to yank from tuios";

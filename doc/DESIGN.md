@@ -916,6 +916,26 @@ departs from the handoff, whose mock
 lines that changed are pinned beside it in `nestbar`'s tests
 (`SINCE_HANDOFF`), and differ from it only by the count.
 
+**The outer's scratchpad leaves the inner ranma as it was** (2026-10-02).
+Opening it over a workspace whose pane holds a ranma did two things there:
+the pane, frameless while it filled the workspace, got a border, which
+resized the inner; and the inner, told its focus was gone, drew its own bar
+over its bottom row. Both went back when the scratchpad closed, so the
+layout jumped twice for a quick shell. The scratchpad is a layer over the
+workspace, so neither happens now: the frameless pane stays frameless, and a
+reporting ranma under it is *held*. It hears no focus change while the
+scratchpad comes and goes, though keys go to the scratchpad. Its workspaces
+show only as the count after the collapsed holder until the scratchpad
+closes. A held pane that leaves (a workspace switch, the scratchpad
+emptied) gets the focus-out it was spared.
+
+**A shown scratchpad looks current in the nested bar too** (2026-10-02). An
+inner ranma reports `current` 0 while its scratchpad is shown, so none of
+its workspaces looked current and its `S` stayed the plain occupied colour.
+The outer's own `S` had the active background, but nothing marked where the
+inner was. The inner `S` now takes the colour that ranma's current workspace
+would: its accent on the path, the holder's colour off it.
+
 What it does not do yet: the title is still shown twice when the focused pane
 is a nested ranma (the outer's centre and the inner's own border); the handoff
 suggests a setting to leave the centre empty then. The host an inner ranma runs

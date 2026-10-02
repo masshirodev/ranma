@@ -222,10 +222,10 @@ impl App {
     /// The pane that is drawn without a border: one whose ranma reports and
     /// that fills the workspace shown (alone there, or fullscreen), so the
     /// ranma inside draws the only frame.
+    /// The scratchpad shown over it changes nothing: framing the pane then
+    /// resized the ranma inside, and the layout under the scratchpad jumped
+    /// as it opened and again as it closed.
     pub(super) fn frameless(&self) -> Option<PaneId> {
-        if self.scratch_shown {
-            return None;
-        }
         let ws = self.workspaces.get(&self.current)?;
         // A short touch screen gives the one tile on screen no border: the
         // strip's chips carry its title (see `chrome`).

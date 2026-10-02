@@ -270,6 +270,22 @@ for _ in $(seq 1 20); do bar | grep -Eq ' 1:[a-z]+\[1\] ' && break; sleep 0.25; 
 bar | grep -Eq ' 1:[a-z]+\[1\] ' || fail "a collapsed holder does not count the inner's workspaces ($(bar))"
 T send-keys -t s M-1; sleep 0.6
 bar | grep -q ' \[1' || fail "going back did not expand the holder again ($(bar))"
+# The outer's scratchpad over the inner changes nothing under it: the pane
+# keeps no border (framing it resized the inner) and the inner keeps its focus
+# (told it lost it, the inner drew its own bar). Leaving the scratchpad's shell
+# empties it, and an empty scratchpad hides. Fullscreen in the outer, so the
+# inner fills it and draws the only frame.
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s M-Enter; sleep 0.3; T send-keys -t s Escape; sleep 0.6
+screen | head -1 | grep -q '^╭─' && fail "the inner ranma filling the outer is still framed by it"
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s s
+for _ in $(seq 1 20); do bar | grep -q ' S ' && break; sleep 0.25; done
+sleep 0.6
+screen | grep -q '^│╭' && fail "the outer framed the inner ranma under its scratchpad"
+screen | head -n -1 | grep -q '│ 1[: ]' && fail "the outer's scratchpad made the inner ranma draw its bar"
+T send-keys -t s exit Enter
+for _ in $(seq 1 20); do bar | grep -q ' \[1' && break; sleep 0.25; done
+bar | grep -q ' \[1' || fail "closing the scratchpad did not give the inner its workspaces back ($(bar))"
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s M-Enter; sleep 0.3; T send-keys -t s Escape; sleep 0.3
 HOST=$(uname -n | cut -d. -f1)
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma@$HOST · " && break; sleep 0.25; done
 OUTER=$(T display -p -t s '#{pane_title}')
