@@ -512,6 +512,13 @@ thing reached for most, and a leader first makes it two chords. It is a global
 bind, so outside WM mode it toggles and inside WM mode `alt+s` keeps sending the
 focused pane there — the same split `alt+<digit>` has between going to a
 workspace and sending a pane to one.
+**A click on none of its panes hides it** (2026-10-02), the way a click outside
+a dropdown closes it. While it is shown only its panes take clicks, so a press
+beside them used to do nothing at all, and getting rid of it meant reaching for
+the key. The press is spent on hiding and clicks nothing underneath: the panes
+there were out of reach a moment ago, and a click that both dismisses and acts
+would act on a pane you were not looking at. The bar is not "off" it: a click
+there still does what the bar does.
 
 ### Sessions swap in and out
 

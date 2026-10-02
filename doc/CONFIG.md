@@ -209,7 +209,8 @@ is gone. Enter (or the keypad's Enter) on an empty workspace opens a
 shell there. Floats overlap freely and cascade as they open. **Sessions** are separate sets of workspaces, one shown at a time; the
 others keep running. A session whose last pane closes ends, and another is shown. The **scratchpad** is Hyprland's special workspace: a layer of free floating panes
 over whatever workspace is shown. Its first pane opens centred at 80%, later ones
-cascade; move, size and stack them like any float.
+cascade; move, size and stack them like any float. A click beside its panes hides
+it (and does nothing else); the panes keep running.
 
 ### The which-key hint
 

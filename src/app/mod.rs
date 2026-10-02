@@ -1458,6 +1458,11 @@ impl App {
             return;
         }
         let under = self.pane_at(&frame, x, y);
+        if let MouseEventKind::Down(_) = m.kind
+            && self.click_off_scratchpad(under)
+        {
+            return;
+        }
         // A right press opens the pane's menu: on its border or title bar, or
         // in its text when its program does not use the mouse. A program that
         // asked for the mouse keeps its right clicks.
@@ -1591,7 +1596,11 @@ impl App {
         if self.click_chrome(&frame, x, y, button == MouseButton::Right) {
             return;
         }
-        let Some(v) = self.pane_at(&frame, x, y) else {
+        let under = self.pane_at(&frame, x, y);
+        if self.click_off_scratchpad(under) {
+            return;
+        }
+        let Some(v) = under else {
             return;
         };
         self.focus(v.id);
@@ -1613,6 +1622,19 @@ impl App {
             };
         }
         self.relayout();
+    }
+
+    /// A press on none of the scratchpad's panes hides it, the way a click
+    /// outside a dropdown closes it. While it is shown only its panes take
+    /// clicks, so the press would otherwise do nothing at all. The press is
+    /// spent on hiding: it does not also click whatever was under it.
+    fn click_off_scratchpad(&mut self, under: Option<PaneView>) -> bool {
+        if !self.scratch_shown || under.is_some() {
+            return false;
+        }
+        self.scratch_shown = false;
+        self.relayout();
+        true
     }
 
     /// Whether the host terminal should report the mouse: always, unless the
@@ -3080,6 +3102,31 @@ mod tests {
         a.scratch.focused = Some(2);
         a.detach(2);
         assert_eq!(a.scratch.focused, Some(4));
+    }
+
+    #[test]
+    fn a_click_off_the_scratchpad_hides_it() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.scratch.floating.push((2, Rect::new(30, 6, 20, 8)));
+        a.scratch.focused = Some(2);
+        let press = |x, y| {
+            AppEvent::Input(Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: x,
+                row: y,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            }))
+        };
+        for mode in [Mode::Normal, Mode::Wm] {
+            a.mode = mode;
+            a.scratch_shown = true;
+            a.handle(press(40, 10));
+            assert!(a.scratch_shown, "{mode:?}: a click on its pane keeps it");
+            a.handle(press(5, 3));
+            assert!(!a.scratch_shown, "{mode:?}: a click beside it hides it");
+            assert_eq!(a.scratch.len(), 1, "{mode:?}: hidden, not closed");
+        }
     }
 
     #[test]
