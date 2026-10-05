@@ -30,6 +30,7 @@ mod copy;
 mod drag;
 mod hints;
 mod nested;
+mod paste;
 mod query;
 mod rules;
 mod run;
@@ -244,6 +245,9 @@ pub struct App {
     menu_at: Option<(u16, u16)>,
     /// When the which-key hint shows, if WM mode is still waiting then.
     hint_due: Option<Instant>,
+    /// A paste waiting on its upload (see `paste`).
+    pending_paste: Option<paste::PendingPaste>,
+    paste_seq: u64,
     /// The which-key hint is up (see `whichkey`).
     hint_on: bool,
     /// The chord that opened WM mode: the hint's title.
@@ -332,6 +336,8 @@ impl App {
             hints: None,
             menu_at: None,
             hint_due: None,
+            pending_paste: None,
+            paste_seq: 0,
             hint_on: false,
             wm_chord: None,
             reports: HashMap::new(),
@@ -1058,6 +1064,7 @@ impl App {
             AppEvent::Mark(id, m) => self.pane_mark(id, m),
             AppEvent::UpdateAvailable(b) => self.update_found(b),
             AppEvent::Servers(list) => self.open_server_switcher(list),
+            AppEvent::Pasted { id, result } => self.pasted(id, result),
             // The event loop (run.rs) deals with clients itself.
             AppEvent::Attach { .. }
             | AppEvent::Upgrade { .. }
@@ -1354,9 +1361,12 @@ impl App {
                 _ => {}
             }
         }
+        if self.hold_for_paste(&ev) {
+            return;
+        }
         match ev {
             Event::Key(key) => self.handle_key(key),
-            Event::Paste(text) => self.typed(|modes| Some(input::encode_paste(&text, modes))),
+            Event::Paste(text) => self.paste(text),
             Event::FocusGained | Event::FocusLost => {
                 self.host_focused = ev == Event::FocusGained;
                 self.dirty = true;
@@ -2152,6 +2162,7 @@ impl App {
                     p.write(bytes);
                 }
             }
+            Action::PasteImage => self.paste_image(),
             Action::ReloadConfig => self.reload_config(),
             Action::Quit { now: true } => self.quit = true,
             Action::Quit { now: false } => self.confirm_quit(),
@@ -3629,6 +3640,80 @@ mod tests {
         // The desk types: its keys are not the phone's Ctrl.
         a.driven_by(false, false);
         assert_eq!(a.latch_label(), None);
+    }
+
+    fn uploading(a: &mut App, id: u64) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        a.paste_seq = id;
+        a.pending_paste = Some(super::paste::PendingPaste {
+            id,
+            pane: 1,
+            fallback: "/home/me/a.png".into(),
+            held: Vec::new(),
+            cancel: cancel.clone(),
+        });
+        cancel
+    }
+
+    fn press(a: &mut App, code: crossterm::event::KeyCode) {
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ))));
+    }
+
+    /// Keys typed while a paste uploads wait for it, so they cannot land
+    /// before its path; an answer for an earlier paste is dropped.
+    #[test]
+    fn keys_typed_during_an_upload_wait_for_it() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        uploading(&mut a, 7);
+        press(&mut a, crossterm::event::KeyCode::Char('x'));
+        a.handle(AppEvent::Input(Event::Paste("more".into())));
+        assert_eq!(a.pending_paste.as_ref().unwrap().held.len(), 2);
+        a.handle(AppEvent::Pasted {
+            id: 6,
+            result: Ok("/tmp/old.png".into()),
+        });
+        assert!(
+            a.pending_paste.is_some(),
+            "a late answer is not this paste's"
+        );
+        a.handle(AppEvent::Pasted {
+            id: 7,
+            result: Ok("/tmp/ranma-paste-1000/f.png".into()),
+        });
+        assert!(a.pending_paste.is_none());
+        assert!(a.toasts.is_empty(), "nothing to say when it worked");
+    }
+
+    /// Esc cancels an upload: the thread is told, and the paste is typed as
+    /// it came, with a toast saying why.
+    #[test]
+    fn esc_cancels_an_upload() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        let cancel = uploading(&mut a, 1);
+        press(&mut a, crossterm::event::KeyCode::Esc);
+        assert!(a.pending_paste.is_none());
+        assert!(cancel.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!a.toasts.is_empty());
+        // The thread's answer, arriving after, changes nothing.
+        a.handle(AppEvent::Pasted {
+            id: 1,
+            result: Ok("/tmp/x.png".into()),
+        });
+        assert!(a.pending_paste.is_none());
+    }
+
+    /// A pasted image path into a pane that runs no ssh is only text.
+    #[test]
+    fn an_image_path_into_a_local_pane_is_typed() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.handle(AppEvent::Input(Event::Paste("/tmp/a.png".into())));
+        assert!(a.pending_paste.is_none());
     }
 
     /// A leader button does what the leader does, and a second tap undoes it:

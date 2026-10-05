@@ -111,6 +111,10 @@ pub struct Settings {
     /// again in WM mode, it goes one level down.
     pub outer_leader: Chord,
     pub title_host: TitleHost,
+    /// A pasted image path into a pane running ssh is uploaded first.
+    pub paste_upload: bool,
+    /// Writes the clipboard's image as PNG to stdout; `None` is the platform's.
+    pub paste_image_command: Option<String>,
 }
 
 impl Default for Settings {
@@ -133,6 +137,8 @@ impl Default for Settings {
             nested: NestedMode::Auto,
             outer_leader: "ctrl+alt+b".parse().unwrap(),
             title_host: TitleHost::Ssh,
+            paste_upload: true,
+            paste_image_command: None,
         }
     }
 }
@@ -156,6 +162,14 @@ struct SettingsPatch {
     nested: Option<NestedMode>,
     outer_leader: Option<String>,
     title_host: Option<TitleHost>,
+    paste: Option<PastePatch>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PastePatch {
+    upload: Option<bool>,
+    image_command: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -792,6 +806,17 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(h) = patch.title_host {
         s.title_host = h;
+    }
+    if let Some(p) = patch.paste {
+        if let Some(u) = p.upload {
+            s.paste_upload = u;
+        }
+        if let Some(c) = p.image_command {
+            if c.trim().is_empty() {
+                return Err(format!("{who}: paste.image_command is empty"));
+            }
+            s.paste_image_command = Some(c);
+        }
     }
     if let Some(k) = patch.outer_leader {
         s.outer_leader = k
@@ -1841,6 +1866,27 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn paste_settings_are_read_strictly() {
+        let d = with_user("").unwrap();
+        assert!(d.settings.paste_upload, "uploading is the default");
+        assert_eq!(d.settings.paste_image_command, None);
+        let c =
+            with_user(r#"ranma.set { paste = { upload = false, image_command = "pngpaste -" } }"#)
+                .unwrap();
+        assert!(!c.settings.paste_upload);
+        assert_eq!(
+            c.settings.paste_image_command.as_deref(),
+            Some("pngpaste -")
+        );
+        let err = format!(
+            "{:#}",
+            with_user("ranma.set { paste = { uplaod = true } }").unwrap_err()
+        );
+        assert!(err.contains("uplaod"), "{err}");
+        assert!(with_user(r#"ranma.set { paste = { image_command = " " } }"#).is_err());
     }
 
     #[test]

@@ -28,6 +28,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |
+| `paste` | which pastes are one image path (quoted, escaped, `file://`, Windows under WSL) and which are text; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload through a stand-in ssh that runs the far side's real shell |
 
 Seconds to run. Run them on every change.
 

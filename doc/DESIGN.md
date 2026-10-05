@@ -956,6 +956,110 @@ drop crossterm's `Resize`. Several signals before the thread wakes are one
 resize at the size by then. smoke.sh stops the client while a resize and a
 focus report arrive, which puts them in one wakeup.
 
+### Pasting images into a pane that runs ssh
+
+**Decided 2026-10-05** (card c99). A program on the far side of an `ssh` (Claude
+Code on the PC or the VPS) cannot see an image on this machine. Its own image
+paste reads the clipboard of the machine it runs on, which has none, and a
+pasted path names a file that is not there. Every way of using it goes through a
+ranma on the machine with the clipboard, because every interactive shell starts
+in one:
+
+```
+work (Windows → WSL2 Arch)    PC (Arch, kitty)        VPS
+ ranma ─ pane: ssh pc ──────▶ ranma ─ pane: ssh vps ─▶ ranma ─ claude
+```
+
+The ranma holding the clipboard knows when the focused pane's foreground
+program is `ssh`, and where it connects (`Pane::ssh_host`, already used for
+workspace names). So it copies the image over first and types the far path, and
+the far program receives a path, which it already handles.
+
+**The two triggers:**
+
+1. **`paste_image`**, an action (`leader v` by default; no key outside WM mode
+   by default, since `alt+v` would be taken from every program). ranma reads an image off
+   the clipboard itself. It has to be an action, not the terminal's paste:
+   Windows Terminal takes `Ctrl+V` and `Ctrl+Shift+V` for itself, and a
+   terminal's paste carries text, so a clipboard holding only an image (a
+   screenshot) gives ranma no paste event to work with. With an `ssh` pane focused, the image is uploaded
+   and the far path typed. With anything else, the local file's path is typed,
+   so the action is useful without ssh too.
+2. **A bracketed paste whose whole text is one path to an image file**, into a
+   pane running `ssh`: a file copied in a file manager, or dragged onto the
+   terminal. Only `png jpg jpeg gif webp`, only an existing regular file, and
+   only a single path with nothing else, so pasting text that merely contains a
+   path is untouched. Under WSL a Windows path (`C:\Users\...`) counts too, after
+   `wslpath`. This is how the chain works: the work ranma types
+   `/tmp/ranma-paste-1000/…png` into `ssh pc`, the PC ranma receives it as a
+   paste into `ssh vps` and uploads again. Nothing on the PC needs to know it
+   came from Windows.
+
+This is not the input guessing that the tuios cluster warns against. Whether
+something *is* a paste is still decided only by bracketed paste. The rule
+looks only at what a paste already marked as one contains, under three
+conditions that must all hold. It is on by default (`paste.upload`), since
+it changes nothing a program across ssh could have used: the path it would
+have received names nothing there. It is also skipped when the pane is
+marked for synchronized input, where the paste would go to several panes.
+
+**Reading the clipboard** is one command that writes PNG to stdout, picked
+when the action runs:
+
+| Where the server runs | Command |
+| --- | --- |
+| WSL (`WSL_DISTRO_NAME` set) | `powershell.exe -NoProfile -Command` with `[Windows.Forms.Clipboard]::GetImage()`, saved as PNG. WSLg's Wayland clipboard bridge carries text reliably and images not, so it is not used. |
+| Wayland (`WAYLAND_DISPLAY`) | `wl-paste --no-newline --type image/png` |
+| X11 (`DISPLAY`) | `xclip -selection clipboard -t image/png -o` |
+| anything else | `paste.image_command`, or an error naming that setting |
+
+`paste.image_command` overrides the table (macOS's `pngpaste -` is the obvious
+use). The server takes the variables from the environment of the terminal that
+started it, which is the desktop's, since that is where shells start.
+
+**Uploading with the pane's own ssh, not scp.** `ssh_host` strips the user, port
+and options, and `scp` spells some of them differently (`-P`, not `-p`). So the
+upload runs the foreground `ssh`'s own argv, cut after the destination, with a
+remote command in place of a shell. `-o BatchMode=yes` and
+`-o ClearAllForwardings=yes` go first, because ssh keeps the first value an
+option is given, so the session's own `-o`s cannot undo them; the session's
+`-t`, `-N` and `-f` are taken out of its flags (a tty would mangle the
+image, no command would upload nothing, and the background would answer
+nothing), and `-T` is added. The forwards are cleared because the session
+already holds their ports:
+
+```sh
+d="${TMPDIR:-/tmp}/ranma-paste-$(id -u)"; mkdir -p -m 700 "$d" && cat > "$d/NAME" && printf %s "$d/NAME"
+```
+
+Its stdout is the path to type, absolute because the far program may not
+expand `~`. The `sh -c` is there because the login shell on the far side may
+not be a POSIX one, and `[ -O "$d" ]` refuses a directory somebody else made
+first under that predictable name. A `ControlMaster` in the user's ssh config
+makes it reuse the open connection; without one it is a fresh login, which
+`BatchMode` makes fail fast instead of asking for a password on a screen
+ranma owns. `NAME` is the image's hash, so pasting the same image twice
+replaces one copy instead of adding another, and every machine of a chain
+calls it the same. The local copy goes in
+the same kind of directory, so the chain's paths look alike on every machine.
+
+**Never blocking.** The upload runs on its own thread, never on the render or
+PTY path, with a toast while it runs (`uploading to vps…`). Keys typed into
+that pane meanwhile are held and sent after the path, so they cannot land
+before it. Esc cancels; 30 seconds times out. Either way, and on any failure,
+the original paste text is typed (nothing, for `paste_image`) and a toast
+says why. Over 50 MB is refused before uploading. An upgrade does not carry an
+upload in flight: the original text is typed before the handover.
+
+The which-key hint lists `v paste image` under history. Its tests pin the
+panel to the which-key handoff's drawing, which predates the bind, so they
+build it from the defaults without it, and a test of its own checks the bind
+is listed; the handoff is not redrawn for one row.
+
+**Not covered:** the phone. Termux reaches the VPS ranma directly, with no
+ranma on the clipboard's side to do the upload. That would need a Termux-side
+script, which is outside ranma.
+
 ### A mobile view, from scriptable pieces
 
 **Decided 2026-09-29** (card c78, brief `doc/briefs/done/MOBILE_VIEW.md`,

@@ -110,6 +110,8 @@ Each call changes only the fields it names; call it as often as you like.
 | `scrollback_lines` | `10000` | Scrollback per pane. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
+| `paste.upload` | `true` | A paste that is the path of one image file, into a pane running `ssh`, is uploaded and the far path typed instead. See [Pasting images over ssh](#pasting-images-over-ssh). |
+| `paste.image_command` | unset | What `paste_image` reads the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -195,6 +197,7 @@ does not matter; it is ignored.
 | `exit_mode` | Leave WM mode. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
+| `paste_image` | Type the path of the clipboard's image into the focused pane (`leader v`), uploading it first when the pane runs `ssh`. See [Pasting images over ssh](#pasting-images-over-ssh). |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
 | `toolbar <name> [on\|off\|toggle]` | Show, hide or flip a toolbar (see [Toolbars](#toolbars--ranmatoolbarname-def)); toggle without a word. Until the next profile switch, which shows the profile's. |
 | `send <chord>` | Type the chord into the focused pane as if pressed there (`send ctrl+c`, `send esc`, `send alt+.`), with any latched modifier; binds are not looked up. For a toolbar button. |
@@ -465,6 +468,36 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 Give exactly one of `render` or `exec`. A module that fails shows its error in the
 `urgent` style instead of its text. Modules never run while a frame is drawn; the
 bar shows their last result.
+
+## Pasting images over ssh
+
+A program across `ssh` (Claude Code on another machine) cannot see an image
+on this one: its own image paste reads the clipboard of the machine it runs
+on, and a pasted path names a file that is not there. The ranma on the
+machine with the image does the carrying:
+
+- **`paste_image`** (`leader v`) reads the clipboard's image itself, saves it
+  under `$TMPDIR/ranma-paste-UID/`, and types its path. When the focused
+  pane's program is `ssh`, the image goes to the same directory on the far
+  side first and that path is typed instead. It is an action because a
+  terminal's own paste carries text (and Windows Terminal keeps `Ctrl+V` for
+  itself). For one key without the leader:
+  `ranma.bind("alt+v", "paste_image", { global = true })`.
+- **A paste that is one image path** (`png jpg jpeg gif webp`; plain, quoted,
+  backslash-escaped or a `file://` URI; a `C:\` path under WSL) into a pane
+  running `ssh` is uploaded the same way (`paste.upload`). Anything else
+  about the paste, a second line or other words, and it is typed as it came.
+  This is how a chain works: work → PC → VPS, each ranma uploading to the
+  next.
+
+The upload is the pane's own `ssh` command line, its remote command dropped,
+with `BatchMode=yes` (it never asks for a password: use keys, an agent, or a
+`ControlMaster`, which also makes it quick), forwards cleared and no tty. It
+runs off the screen's thread: a toast says where it goes, keys typed into the
+pane meanwhile are sent after the path, and Esc cancels. A failure, a cancel or
+30 seconds types the paste as it came and says why in a toast. Images over
+50 MB are refused. The same image always has the same name, so pasting it
+again replaces the copy instead of adding one.
 
 ## Toasts and `ranma notify`
 

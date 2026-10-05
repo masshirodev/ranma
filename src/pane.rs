@@ -66,6 +66,11 @@ pub enum AppEvent {
     Status(Sender<crate::proto::Status>),
     /// Every server's status, gathered off the UI thread for the server switcher.
     Servers(Vec<crate::proto::Status>),
+    /// A paste's upload finished (see `paste`): the path to type, or why not.
+    Pasted {
+        id: u64,
+        result: std::result::Result<String, String>,
+    },
     /// A shell mark or a notification a pane's program sent (see `osc`).
     Mark(PaneId, crate::osc::Mark),
     /// `ranma upgrade`: take the new build in place (see `app::upgrade`).
@@ -481,6 +486,11 @@ impl Pane {
         foreground_ssh_host(self.pid)
     }
 
+    /// The whole command line of that `ssh`, for a paste to upload over.
+    pub fn ssh_argv(&self) -> Option<Vec<String>> {
+        foreground_ssh_argv(self.pid)
+    }
+
     /// The ranma in this pane is engaged: in WM mode, or with an engaged ranma
     /// of its own. The outer leader goes on down to it instead of stopping here.
     pub fn inner_engaged(&self) -> bool {
@@ -736,6 +746,12 @@ pub fn workspace_label(
 /// Where the `ssh` in the foreground of that terminal went, if one is there:
 /// `vps` for `ssh -p 22 masshiro@vps htop`.
 pub fn foreground_ssh_host(pid: u32) -> Option<String> {
+    let args = foreground_ssh_argv(pid)?;
+    ssh_destination(args.iter().skip(1).map(String::as_str))
+}
+
+/// The argv of the `ssh` in the foreground of that terminal, if one is there.
+pub fn foreground_ssh_argv(pid: u32) -> Option<Vec<String>> {
     let fg = foreground_pid(pid);
     if std::fs::read_to_string(format!("/proc/{fg}/comm"))
         .ok()?
@@ -745,36 +761,44 @@ pub fn foreground_ssh_host(pid: u32) -> Option<String> {
         return None;
     }
     let raw = std::fs::read(format!("/proc/{fg}/cmdline")).ok()?;
-    let args: Vec<String> = raw
-        .split(|b| *b == 0)
-        .filter(|a| !a.is_empty())
-        .map(|a| String::from_utf8_lossy(a).into_owned())
-        .collect();
-    ssh_destination(args.iter().skip(1).map(String::as_str))
+    Some(
+        raw.split(|b| *b == 0)
+            .filter(|a| !a.is_empty())
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect(),
+    )
 }
 
 /// The host an ssh command line connects to: its first argument that is not
 /// an option (nor an option's value), without `ssh://`, the user or the port.
 pub fn ssh_destination<'a>(args: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    let args: Vec<&str> = args.into_iter().collect();
+    host_of(args[ssh_destination_at(&args)?])
+}
+
+/// Where the destination is among ssh's arguments (its own name left out).
+pub fn ssh_destination_at(args: &[&str]) -> Option<usize> {
     // ssh's options that take a value (ssh(1), SYNOPSIS).
     const WITH_VALUE: &str = "BbcDEeFIiJLlmOoPpQRSWw";
-    let mut args = args.into_iter();
-    while let Some(a) = args.next() {
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i];
         if a == "--" {
-            return args.next().and_then(host_of);
+            return (i + 1 < args.len()).then_some(i + 1);
         }
         let Some(flags) = a.strip_prefix('-').filter(|f| !f.is_empty()) else {
-            return host_of(a);
+            return Some(i);
         };
-        for (i, c) in flags.char_indices() {
+        for (j, c) in flags.char_indices() {
             if WITH_VALUE.contains(c) {
                 // `-p22` carries it; `-p 22` takes the next argument.
-                if i + c.len_utf8() == flags.len() {
-                    args.next();
+                if j + c.len_utf8() == flags.len() {
+                    i += 1;
                 }
                 break;
             }
         }
+        i += 1;
     }
     None
 }

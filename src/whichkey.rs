@@ -166,19 +166,20 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::Search => (30, 0),
         Action::CopyMode => (31, 0),
         Action::Hints => (32, 0),
-        Action::CommandPalette => (33, 0),
-        Action::ReloadConfig => (34, 0),
-        Action::Detach => (35, 0),
-        Action::ServerSwitcher => (36, 0),
-        Action::Update => (37, 0),
-        Action::Quit { now: false } => (38, 0),
-        Action::ExitMode => (39, 0),
+        Action::PasteImage => (33, 0),
+        Action::CommandPalette => (34, 0),
+        Action::ReloadConfig => (35, 0),
+        Action::Detach => (36, 0),
+        Action::ServerSwitcher => (37, 0),
+        Action::Update => (38, 0),
+        Action::Quit { now: false } => (39, 0),
+        Action::ExitMode => (40, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 40] = [
+const KINDS: [Kind; 41] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -212,6 +213,7 @@ const KINDS: [Kind; 40] = [
     k("history", "search", Shape::Single),
     k("history", "copy mode", Shape::Single),
     k("history", "links", Shape::Single),
+    k("history", "paste image", Shape::Single),
     k("ranma", "commands", Shape::Single),
     k("ranma", "reload config", Shape::Single),
     k("ranma", "detach", Shape::Single),
@@ -637,9 +639,36 @@ mod tests {
     use super::*;
 
     /// The default binds, as the hint reads them.
+    /// The default binds as the handoff drew them: binds added since (only
+    /// `paste_image` so far) would redraw the mock, which pins the layout, not
+    /// the bind table. `the_defaults_list_paste_image` covers those.
     fn default_groups() -> Vec<Group> {
         let cfg = crate::config::load_from(None, None, None).unwrap();
-        groups(cfg.binds.iter().map(|(c, b)| {
+        groups(
+            cfg.binds
+                .iter()
+                .filter(|(_, b)| {
+                    !matches!(
+                        b.action,
+                        crate::config::BindAction::Builtin(Action::PasteImage)
+                    )
+                })
+                .map(|(c, b)| {
+                    (
+                        *c,
+                        match &b.action {
+                            crate::config::BindAction::Builtin(a) => BindKind::Action(a),
+                            crate::config::BindAction::Lua(_) => BindKind::Lua(None),
+                        },
+                    )
+                }),
+        )
+    }
+
+    #[test]
+    fn the_defaults_list_paste_image() {
+        let cfg = crate::config::load_from(None, None, None).unwrap();
+        let all = groups(cfg.binds.iter().map(|(c, b)| {
             (
                 *c,
                 match &b.action {
@@ -647,7 +676,18 @@ mod tests {
                     crate::config::BindAction::Lua(_) => BindKind::Lua(None),
                 },
             )
-        }))
+        }));
+        let history = all.iter().find(|g| g.name == "history").unwrap();
+        assert!(
+            history
+                .rows
+                .iter()
+                .any(|r| r.key == "v" && r.name == "paste image")
+        );
+        assert!(
+            all.iter().all(|g| g.name != "yours"),
+            "nothing of the defaults is unknown"
+        );
     }
 
     /// The panel as text, with the frame the design draws for a border style.

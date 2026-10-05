@@ -163,6 +163,9 @@ pub enum Action {
     Leader,
     /// Send the leader chord itself to the focused program.
     SendLeader,
+    /// Type the path of the clipboard's image into the focused pane, uploaded
+    /// first when the pane runs ssh (DESIGN.md, "Pasting images").
+    PasteImage,
     ReloadConfig,
     /// Quit ranma, closing every pane. Asks first unless `now` (`quit now`).
     Quit {
@@ -184,6 +187,7 @@ impl Action {
                 | Action::Exec(_)
                 | Action::ExitMode
                 | Action::SendLeader
+                | Action::PasteImage
                 | Action::PaneSwitcher
                 | Action::WorkspaceSwitcher
                 | Action::PaneMenu
@@ -292,6 +296,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("exit_mode", ""),
     ("leader", ""),
     ("send_leader", ""),
+    ("paste_image", ""),
     ("reload_config", ""),
     ("update", ""),
     ("detach", ""),
@@ -596,6 +601,7 @@ impl FromStr for Action {
             "exit_mode" => no_arg(Action::ExitMode),
             "leader" => no_arg(Action::Leader),
             "send_leader" => no_arg(Action::SendLeader),
+            "paste_image" => no_arg(Action::PasteImage),
             "reload_config" => no_arg(Action::ReloadConfig),
             "quit" => match rest {
                 None => Ok(Action::Quit { now: false }),
@@ -720,6 +726,7 @@ impl fmt::Display for Action {
             Action::ExitMode => f.write_str("exit_mode"),
             Action::Leader => f.write_str("leader"),
             Action::SendLeader => f.write_str("send_leader"),
+            Action::PasteImage => f.write_str("paste_image"),
             Action::ReloadConfig => f.write_str("reload_config"),
             Action::Quit { now: false } => f.write_str("quit"),
             Action::Quit { now: true } => f.write_str("quit now"),

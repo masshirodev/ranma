@@ -18,6 +18,7 @@ pub mod layout;
 pub mod nestbar;
 pub mod osc;
 pub mod pane;
+pub mod paste;
 pub mod picker;
 pub mod proto;
 pub mod pty;

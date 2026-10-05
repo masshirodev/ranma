@@ -157,6 +157,15 @@ mobile view"; card c78).
 - [x] A `leader` action, and the touch toolbar's leader in place of Ctrl
   (Termux's extra-keys row has Ctrl already)
 
+## 9. Images into a pane that runs ssh
+
+DESIGN.md, "Pasting images into a pane that runs ssh"; card c99.
+
+- [x] Design agreed
+- [x] `paste_image`, the clipboard command per platform, `paste.image_command`
+- [x] Upload with the pane's own ssh argv, held input, cancel and timeout
+- [x] A pasted image path into an ssh pane uploads (WSL paths too), `paste.upload`
+
 ## Later, maybe
 
 - Saving layouts to respawn them after a reboot (processes cannot survive one).

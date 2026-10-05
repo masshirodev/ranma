@@ -104,6 +104,7 @@ impl App {
     /// (`hold_output`) first. The server can go on after it: only a program on
     /// the alternate screen needs to draw again (see `snapshot::take`).
     pub(crate) fn hand_over(&mut self) -> State {
+        self.abandon_paste();
         let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
         ids.sort_unstable();
         let panes = ids
