@@ -1064,6 +1064,13 @@ replaces one copy instead of adding another, and every machine of a chain
 calls it the same. The local copy goes in
 the same kind of directory, so the chain's paths look alike on every machine.
 
+The upload is a second connection beside the pane's, so it can fail where
+the pane's session did not, for example when a ProxyJump's tunnel is
+reconnecting. ssh's own failure (exit 255) is retried once after a second,
+and the toast names the host and gives ssh's last two lines: behind a jump
+the last one is only "Connection closed by UNKNOWN port 65535", with the
+reason on the line before it.
+
 **Never blocking.** The upload runs on its own thread, never on the render or
 PTY path, with a toast while it runs (`uploading to vps…`). Keys typed into
 that pane meanwhile are held and sent after the path, so they cannot land

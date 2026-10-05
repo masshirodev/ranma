@@ -497,7 +497,9 @@ with `BatchMode=yes` (it never asks for a password: use keys, an agent, or a
 `ControlMaster`, which also makes it quick), forwards cleared and no tty. It
 runs off the screen's thread: a toast says where it goes, keys typed into the
 pane meanwhile are sent after the path, and Esc cancels. A failure, a cancel or
-30 seconds types the paste as it came and says why in a toast. Images over
+30 seconds types the paste as it came and says why in a toast. A connection
+that cannot be made (a tunnel reconnecting) is tried once more a second
+later, then reported as `could not reach HOST:` with ssh's own reason. Images over
 50 MB are refused. The same image always has the same name, so pasting it
 again replaces the copy instead of adding one.
 

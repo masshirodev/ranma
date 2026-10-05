@@ -289,13 +289,29 @@ pub fn work(job: &Job) -> Result<String, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
     let argv = upload_argv(ssh, &remote_command(&file_name(&bytes, ext)))
         .ok_or("cannot tell where the ssh in this pane goes")?;
-    let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let out = run(
-        Command::new(&argv[0]).args(&argv[1..]),
-        Some(file),
-        &job.cancel,
-        deadline,
-    )?;
+    let host = crate::pane::ssh_destination(ssh.iter().skip(1).map(String::as_str))
+        .unwrap_or_else(|| "the far side".into());
+    let mut tries = 0;
+    let out = loop {
+        tries += 1;
+        let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        match run_raw(
+            Command::new(&argv[0]).args(&argv[1..]),
+            Some(file),
+            &job.cancel,
+            deadline,
+        ) {
+            Ok(out) => break out,
+            // 255 is ssh's own failure, not the command's: no connection. A
+            // tunnel that is reconnecting is back a moment later, so once more.
+            Err(Failed::Exit(Some(255), _))
+                if tries == 1 && wait(&job.cancel, RETRY_AFTER, deadline) => {}
+            Err(Failed::Exit(Some(255), err)) => {
+                return Err(format!("could not reach {host}: {}", ssh_reason(&err)));
+            }
+            Err(f) => return Err(f.message(&argv[0])),
+        }
+    };
     let far = String::from_utf8_lossy(&out).trim().to_string();
     if !far.starts_with('/') {
         return Err(format!("the far side answered `{far}`, not a path"));
@@ -369,6 +385,71 @@ fn from_clipboard(
     Ok((path, bytes))
 }
 
+/// How long a failed connection waits before its one retry.
+const RETRY_AFTER: Duration = Duration::from_secs(1);
+
+/// Sleep, unless cancelled or past the deadline first; whether it slept.
+fn wait(cancel: &AtomicBool, d: Duration, deadline: Instant) -> bool {
+    let until = Instant::now() + d;
+    if until >= deadline {
+        return false;
+    }
+    while Instant::now() < until {
+        if cancel.load(Ordering::Relaxed) {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    true
+}
+
+/// Why ssh failed, from its stderr: its last two lines that say something.
+/// The very last is often only "Connection closed by UNKNOWN port 65535"
+/// (a ProxyJump's placeholder), with the reason on the line before.
+pub fn ssh_reason(stderr: &str) -> String {
+    let lines: Vec<&str> = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("Killed by signal"))
+        .collect();
+    let why = lines[lines.len().saturating_sub(2)..].join("; ");
+    if why.is_empty() {
+        "ssh gave no reason".into()
+    } else {
+        why
+    }
+}
+
+/// How a command failed.
+#[derive(Debug)]
+enum Failed {
+    Cancelled,
+    TimedOut,
+    Spawn(String),
+    /// Its exit code (none if a signal ended it) and its stderr.
+    Exit(Option<i32>, String),
+}
+
+impl Failed {
+    fn message(self, name: &str) -> String {
+        match self {
+            Failed::Cancelled => "cancelled".into(),
+            Failed::TimedOut => format!("{name} took over {}s", TIMEOUT.as_secs()),
+            Failed::Spawn(e) => format!("{name}: {e}"),
+            Failed::Exit(Some(3), _) if name == "powershell.exe" => {
+                "no image on the clipboard".into()
+            }
+            Failed::Exit(code, err) => match err.lines().map(str::trim).rfind(|l| !l.is_empty()) {
+                Some(why) => format!("{name}: {why}"),
+                None => format!(
+                    "{name} failed (exit {})",
+                    code.map_or("by a signal".into(), |c| c.to_string())
+                ),
+            },
+        }
+    }
+}
+
 /// Run a command to its end, its stdout collected (up to [`MAX_BYTES`]), unless
 /// it is cancelled or the deadline passes, which kill it.
 fn run(
@@ -378,12 +459,21 @@ fn run(
     deadline: Instant,
 ) -> Result<Vec<u8>, String> {
     let name = cmd.get_program().to_string_lossy().into_owned();
+    run_raw(cmd, stdin, cancel, deadline).map_err(|f| f.message(&name))
+}
+
+fn run_raw(
+    cmd: &mut Command,
+    stdin: Option<std::fs::File>,
+    cancel: &AtomicBool,
+    deadline: Instant,
+) -> Result<Vec<u8>, Failed> {
     let mut child = cmd
         .stdin(stdin.map_or(Stdio::null(), Stdio::from))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("{name}: {e}"))?;
+        .map_err(|e| Failed::Spawn(e.to_string()))?;
     let mut out = child.stdout.take().expect("piped");
     let mut err = child.stderr.take().expect("piped");
     let reader = std::thread::spawn(move || {
@@ -401,26 +491,21 @@ fn run(
             let _ = child.kill();
             let _ = child.wait();
             return Err(if cancel.load(Ordering::Relaxed) {
-                "cancelled".into()
+                Failed::Cancelled
             } else {
-                format!("{name} took over {}s", TIMEOUT.as_secs())
+                Failed::TimedOut
             });
         }
         match child.try_wait() {
             Ok(Some(s)) => break s,
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(e) => return Err(format!("{name}: {e}")),
+            Err(e) => return Err(Failed::Spawn(e.to_string())),
         }
     };
     let out = reader.join().unwrap_or_default();
     let err = err_reader.join().unwrap_or_default();
     if !status.success() {
-        let why = err.lines().last().unwrap_or("").trim();
-        return Err(match (status.code(), why.is_empty()) {
-            (Some(3), _) if name == "powershell.exe" => "no image on the clipboard".into(),
-            (_, true) => format!("{name} failed ({status})"),
-            (_, false) => format!("{name}: {why}"),
-        });
+        return Err(Failed::Exit(status.code(), err));
     }
     Ok(out)
 }
@@ -559,6 +644,53 @@ mod tests {
             clipboard(Some("pngpaste -"), env(&[("DISPLAY", ":0")])),
             Some(Clipboard::Shell("pngpaste -".into()))
         );
+    }
+
+    /// The reason ssh gives is on the line before its last, behind a ProxyJump.
+    #[test]
+    fn ssh_says_why_on_the_line_before_its_last() {
+        assert_eq!(
+            ssh_reason("stdio forwarding failed\nConnection closed by UNKNOWN port 65535\n"),
+            "stdio forwarding failed; Connection closed by UNKNOWN port 65535"
+        );
+        assert_eq!(
+            ssh_reason("Warning: x\nssh: Could not resolve hostname nope\nKilled by signal 1.\n"),
+            "Warning: x; ssh: Could not resolve hostname nope"
+        );
+        assert_eq!(ssh_reason(""), "ssh gave no reason");
+    }
+
+    /// No connection (ssh's 255) is tried once more, then said plainly.
+    #[test]
+    fn an_unreachable_host_is_tried_twice_and_named() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("ranma-paste-retry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ssh = dir.join("fake-ssh");
+        let count = dir.join("count");
+        std::fs::write(
+            &ssh,
+            format!(
+                "#!/bin/sh\necho x >> {}\necho 'stdio forwarding failed' >&2\necho 'Connection closed by UNKNOWN port 65535' >&2\nexit 255\n",
+                count.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let img = dir.join("shot.png");
+        std::fs::write(&img, b"png").unwrap();
+        let job = Job {
+            source: Source::File(Named::Local(img)),
+            ssh: Some(vec![ssh.display().to_string(), "work".into()]),
+            cancel: Arc::new(AtomicBool::new(false)),
+        };
+        let err = work(&job).unwrap_err();
+        assert_eq!(
+            err,
+            "could not reach work: stdio forwarding failed; Connection closed by UNKNOWN port 65535"
+        );
+        assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
