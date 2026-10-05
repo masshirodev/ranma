@@ -92,10 +92,59 @@ fn set_nonblocking(fd: RawFd) -> io::Result<()> {
     Ok(())
 }
 
-/// Ask the programs in a PTY's foreground to draw again: SIGWINCH to its
-/// foreground process group, as a resize would. A server that took a new
-/// build does this for panes whose program drew on the alternate screen.
+/// How long a PTY stays a row short before [`redraw`] puts its size back:
+/// long enough for the program to have read the first change (ssh sends it
+/// on at once), short enough not to be seen.
+pub const REDRAW_NUDGE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Ask the programs in a PTY's foreground to draw again, as a resize would:
+/// a server that took a new build does this for panes whose program drew on
+/// the alternate screen. A bare SIGWINCH at the same size is not enough,
+/// since programs that compare the size skip it, OpenSSH among them (it sends
+/// a window change on only when the size differs), so a ranma or nvim across
+/// ssh never heard it and its pane stayed blank. So the PTY really changes
+/// size, a row shorter, and is put back after [`REDRAW_NUDGE`]: the kernel
+/// signals both. The size is put back only if nothing resized the pane in
+/// between.
 pub fn redraw(fd: RawFd) {
+    // SAFETY: plain ioctls and fcntl on a descriptor this server owns; the
+    // duplicate is the thread's own, so the pane closing meanwhile cannot
+    // leave it naming another file.
+    unsafe {
+        let mut was: libc::winsize = std::mem::zeroed();
+        if libc::ioctl(fd, libc::TIOCGWINSZ, &mut was) != 0 || was.ws_row == 0 {
+            signal_foreground(fd);
+            return;
+        }
+        let dup = libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 0);
+        if dup < 0 {
+            signal_foreground(fd);
+            return;
+        }
+        let mut short = was;
+        short.ws_row = if was.ws_row > 1 {
+            was.ws_row - 1
+        } else {
+            was.ws_row + 1
+        };
+        libc::ioctl(dup, libc::TIOCSWINSZ, &short);
+        let _ = std::thread::Builder::new()
+            .name("redraw".into())
+            .spawn(move || {
+                std::thread::sleep(REDRAW_NUDGE);
+                let mut now: libc::winsize = std::mem::zeroed();
+                if libc::ioctl(dup, libc::TIOCGWINSZ, &mut now) == 0
+                    && (now.ws_row, now.ws_col) == (short.ws_row, short.ws_col)
+                {
+                    libc::ioctl(dup, libc::TIOCSWINSZ, &was);
+                }
+                libc::close(dup);
+            });
+    }
+}
+
+/// SIGWINCH to a PTY's foreground process group, when its size cannot be read.
+fn signal_foreground(fd: RawFd) {
     // SAFETY: tcgetpgrp and kill are plain syscalls; failures are ignored.
     unsafe {
         let pgrp = libc::tcgetpgrp(fd);
@@ -195,6 +244,80 @@ impl Drop for AdoptedPty {
             libc::kill(self.pid, libc::SIGHUP);
             let mut status = 0;
             libc::waitpid(self.pid, &mut status, 0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pty(rows: u16, cols: u16) -> (RawFd, RawFd) {
+        let (mut master, mut slave) = (0, 0);
+        let ws = libc::winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: openpty fills the two descriptors; the null names are allowed.
+        let r = unsafe {
+            libc::openpty(
+                &mut master,
+                &mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                &ws,
+            )
+        };
+        assert_eq!(r, 0);
+        (master, slave)
+    }
+
+    fn size(fd: RawFd) -> (u16, u16) {
+        // SAFETY: a plain ioctl into a local.
+        unsafe {
+            let mut ws: libc::winsize = std::mem::zeroed();
+            libc::ioctl(fd, libc::TIOCGWINSZ, &mut ws);
+            (ws.ws_row, ws.ws_col)
+        }
+    }
+
+    /// A redraw is a real size change and back, which a program that skips
+    /// a same-size SIGWINCH (ssh) still hears.
+    #[test]
+    fn a_redraw_changes_the_size_and_puts_it_back() {
+        let (m, s) = pty(24, 80);
+        redraw(m);
+        assert_eq!(size(s), (23, 80), "a row short first");
+        std::thread::sleep(REDRAW_NUDGE * 3);
+        assert_eq!(size(s), (24, 80), "and back");
+        // SAFETY: closing the descriptors this test opened.
+        unsafe {
+            libc::close(m);
+            libc::close(s);
+        }
+    }
+
+    /// A pane resized while it is a row short keeps its new size.
+    #[test]
+    fn a_resize_meanwhile_is_not_undone() {
+        let (m, s) = pty(24, 80);
+        redraw(m);
+        let ws = libc::winsize {
+            ws_row: 40,
+            ws_col: 120,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: a plain ioctl on the descriptor this test opened.
+        unsafe { libc::ioctl(m, libc::TIOCSWINSZ, &ws) };
+        std::thread::sleep(REDRAW_NUDGE * 3);
+        assert_eq!(size(s), (40, 120));
+        // SAFETY: closing the descriptors this test opened.
+        unsafe {
+            libc::close(m);
+            libc::close(s);
         }
     }
 }

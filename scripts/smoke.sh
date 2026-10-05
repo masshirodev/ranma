@@ -490,6 +490,34 @@ screen | grep -q 'before-upg' || fail "the screen was not kept across the upgrad
 T send-keys -t s 'echo "after-$UPG"' Enter
 wait_for 'after-kept-across' 10 || fail "the shell did not survive the upgrade"
 
+# A full-screen program that redraws only when its size changes, as ssh only
+# passes a resize on when the size differs: after an upgrade it must still be
+# made to draw again (a bare SIGWINCH left a ranma across ssh blank).
+LAZY=$(mktemp --suffix .py)
+cat > "$LAZY" <<'PY'
+import os, signal, sys, time
+def draw():
+    c, r = os.get_terminal_size()
+    sys.stdout.write("\x1b[2J\x1b[H" + "lazy-%dx%d\r\n" % (c, r)); sys.stdout.flush()
+last = os.get_terminal_size()
+def winch(*_):
+    global last
+    if os.get_terminal_size() != last:
+        last = os.get_terminal_size(); draw()
+signal.signal(signal.SIGWINCH, winch)
+sys.stdout.write("\x1b[?1049h"); draw()
+while True: time.sleep(1)
+PY
+T send-keys -t s "python3 $LAZY" Enter
+wait_for 'lazy-' 10 || fail "the lazy program did not start"
+LAZY_SIZE=$(screen | grep -o 'lazy-[0-9]*x[0-9]*' | head -1)
+$ENV $BIN upgrade 1 >/dev/null || fail "ranma upgrade with a full-screen program failed"
+sleep 1.5
+screen | grep -q -- "$LAZY_SIZE" ||
+  fail "a full-screen program was not redrawn at its size after the upgrade (want $LAZY_SIZE)"
+T send-keys -t s C-c; sleep 0.3
+rm -f "$LAZY"
+
 # Resize the host: both panes follow.
 T resize-window -t s -x 90 -y 24
 sleep 0.5

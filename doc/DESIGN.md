@@ -170,8 +170,16 @@ close-on-exec, and that is the whole trick:
   emulator's own structures: those are large, and belong to a crate that may
   change between the two builds. The main screen behind a full-screen program
   is saved (alacritty's `swap_alt`); the program's own screen is not, and it
-  gets a SIGWINCH to draw itself again, as nvim and htop do. Shells come back
-  with their scrollback as it was.
+  is made to draw itself again. Shells come back with their scrollback as
+  it was.
+- **A redraw is a real resize** (2026-10-05). It was a bare SIGWINCH at the
+  same size, which programs that compare sizes skip. OpenSSH is one: it sends
+  a window change on only when the size differs, so a ranma or nvim across
+  `ssh` never heard it, and its pane stayed blank until something redrew it
+  cell by cell (a selection). Now the PTY is made a row shorter and put back
+  150 ms later, unless the pane was resized in between. Each step is a real
+  change that the kernel signals and ssh forwards. A ranma in a pane locally
+  was never affected: it treats every SIGWINCH as a resize.
 - **Output is held, not lost.** Before the state is written, every pane's
   reader stops reading (the scanner's reader reports "nothing yet"), so what
   a program prints meanwhile waits in the kernel's PTY buffer for the new

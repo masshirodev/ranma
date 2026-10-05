@@ -28,6 +28,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |
+| `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
 | `paste` | which pastes are one image path (quoted, escaped, `file://`, Windows under WSL) and which are text; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload through a stand-in ssh that runs the far side's real shell |
 
 Seconds to run. Run them on every change.
@@ -84,6 +85,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - `ranma upgrade 1` moves the server to its build again in place: a toast, the
   same process, the screen kept, and a shell variable set before it still
   there after
+- a full-screen program that redraws only when its size changes (as ssh
+  passes resizes on) is drawn again after an upgrade, at its own size
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)
 - a two-million-line flood finishes and leaves a clean screen
 - the layout follows a host resize
