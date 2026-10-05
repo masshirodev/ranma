@@ -503,6 +503,27 @@ later, then reported as `could not reach HOST:` with ssh's own reason. Images ov
 50 MB are refused. The same image always has the same name, so pasting it
 again replaces the copy instead of adding one.
 
+**Reusing the pane's connection.** Each upload is a second ssh connection
+beside the pane's: another login, and another trip through any `ProxyJump`,
+which can fail while the pane's session is fine. With connection sharing in
+the ssh config of the machine you paste from, the pane's `ssh` becomes the
+master and the upload rides it instead: no second login, and nothing new to
+route.
+
+```
+Host *
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%C
+    ControlPersist 10m
+```
+
+Only connections started after the change share: reconnect the pane once.
+`%C` is a hash of the host, port and user, so every destination gets its
+own socket, and `ControlPersist 10m` keeps the master open ten minutes
+after its last session closes, so a quick reconnect is instant too. It
+applies to every ssh from that machine, not only ranma's; `ssh -O exit
+HOST` closes a master that has gone stale.
+
 ## Toasts and `ranma notify`
 
 Toasts are short notifications stacked at the top right, gone after five seconds
