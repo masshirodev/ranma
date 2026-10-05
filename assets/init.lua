@@ -317,7 +317,9 @@ ranma.module("datetime", {
 --   end)
 --
 -- A button is { label, action }, text = "..." showing beside the label where
--- there is room. Large buttons are three rows, a thumb's height; past what
+-- there is room. The action may be a Lua function instead, as in a bind. ◆ is
+-- the leader (tapped again, out of WM mode): Termux's extra-keys row already
+-- has Ctrl. Without that row, { "⌃", "latch ctrl", text = "ctrl" } is one. Large buttons are three rows, a thumb's height; past what
 -- fits, the last becomes ⋯ for the rest.
 ranma.toolbar("touch", {
   position = "bottom",
@@ -327,7 +329,7 @@ ranma.toolbar("touch", {
     { "+", "new_pane", text = "new" },
     { "◀", "focus prev", text = "prev" },
     { "▶", "focus next", text = "next" },
-    { "⌃", "latch ctrl", text = "ctrl" },
+    { "◆", "leader", text = "leader" },
     { "⎋", "send esc", text = "esc" },
     { "⊞", "workspace_switcher", text = "spaces" },
     { "✕", "close_pane", text = "close" },

@@ -2136,6 +2136,14 @@ impl App {
                 }
             }
             Action::ExitMode => {}
+            // A tap, unlike the key, has no "again goes to the program": the
+            // second one leaves, since a toolbar button is a toggle.
+            Action::Leader if self.mode == Mode::Wm => self.set_mode(Mode::Normal),
+            Action::Leader => {
+                self.exit_copy_mode();
+                self.exit_hints();
+                self.enter_wm(self.config.settings.leader);
+            }
             Action::SendLeader => {
                 let leader = self.config.settings.leader;
                 if let Some(p) = self.focused_pane()
@@ -3621,6 +3629,26 @@ mod tests {
         // The desk types: its keys are not the phone's Ctrl.
         a.driven_by(false, false);
         assert_eq!(a.latch_label(), None);
+    }
+
+    /// A leader button does what the leader does, and a second tap undoes it:
+    /// Termux has its own Ctrl key, but nothing that types ranma's leader.
+    #[test]
+    fn a_leader_button_enters_wm_mode_and_leaves_it() {
+        let mut a = app(Some(
+            r#"ranma.toolbar("t", { show = true, buttons = { { "◆", "leader", text = "leader" } } })"#,
+        ));
+        with_pane(&mut a, 1);
+        let leader = crate::toolbar::Slot::Button(0);
+        assert_eq!(a.button_state("t", leader), ButtonState::Normal);
+        a.run_button("t", 0);
+        assert_eq!(a.mode, Mode::Wm);
+        assert_eq!(a.button_state("t", leader), ButtonState::Active);
+        assert_eq!(a.wm_chord(), a.config.settings.leader);
+        a.run_button("t", 0);
+        assert_eq!(a.mode, Mode::Normal);
+        // Scripts reach it too: `ranma action leader`.
+        assert_eq!("leader".parse::<Action>().unwrap(), Action::Leader);
     }
 
     /// A sheet open on the phone closes when the desk takes the screen (its

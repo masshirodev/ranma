@@ -373,6 +373,7 @@ impl App {
                 ButtonState::Active
             }
             Action::Fullscreen if ws.fullscreen => ButtonState::Active,
+            Action::Leader if self.mode == Mode::Wm => ButtonState::Active,
             Action::Profile(p) if self.config.profile == *p => ButtonState::Active,
             Action::Toolbar(n, _) if self.config.toolbars_shown.contains(n) => ButtonState::Active,
             Action::ClosePane

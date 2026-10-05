@@ -158,6 +158,9 @@ pub enum Action {
     /// Open a new pane running this command line.
     Exec(String),
     ExitMode,
+    /// Enter WM mode as the leader does, or leave it when in it: the leader
+    /// for a toolbar button, a mouse or a script.
+    Leader,
     /// Send the leader chord itself to the focused program.
     SendLeader,
     ReloadConfig,
@@ -287,6 +290,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("rename_pane", "[name]"),
     ("exec", "<command line>"),
     ("exit_mode", ""),
+    ("leader", ""),
     ("send_leader", ""),
     ("reload_config", ""),
     ("update", ""),
@@ -590,6 +594,7 @@ impl FromStr for Action {
                     })
             }
             "exit_mode" => no_arg(Action::ExitMode),
+            "leader" => no_arg(Action::Leader),
             "send_leader" => no_arg(Action::SendLeader),
             "reload_config" => no_arg(Action::ReloadConfig),
             "quit" => match rest {
@@ -713,6 +718,7 @@ impl fmt::Display for Action {
             Action::MoveWorkspaceToSession(Some(t)) => write!(f, "move_workspace_to_session {t}"),
             Action::Exec(cmd) => write!(f, "exec {cmd}"),
             Action::ExitMode => f.write_str("exit_mode"),
+            Action::Leader => f.write_str("leader"),
             Action::SendLeader => f.write_str("send_leader"),
             Action::ReloadConfig => f.write_str("reload_config"),
             Action::Quit { now: false } => f.write_str("quit"),

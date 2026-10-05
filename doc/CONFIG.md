@@ -193,6 +193,7 @@ does not matter; it is ignored.
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
+| `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
 | `toolbar <name> [on\|off\|toggle]` | Show, hide or flip a toolbar (see [Toolbars](#toolbars--ranmatoolbarname-def)); toggle without a word. Until the next profile switch, which shows the profile's. |
@@ -626,6 +627,7 @@ ranma.toolbar("touch", {
     { "+", "new_pane", text = "new" },
     { "◀", "focus prev" },
     { "▶", "focus next" },
+    { "◆", "leader", text = "leader" },
     { "⌃", "latch ctrl", text = "ctrl" },
     { "⎋", "send esc" },
     { "⊞", "workspace_switcher" },
@@ -651,9 +653,9 @@ ranma.toolbar("touch", {
   side, a tablet), and at the bottom when it does not.
 - **How a button looks** says what its action would do: *pressed* while held
   (and a moment after, so a quick tap is seen); *active* for a toggle that is
-  on (`sync_toggle`, `fullscreen`, the profile or toolbar it switches) and for
-  the button whose list is open; *latched* or *locked* for a held modifier;
-  *disabled* when it cannot run (`close_pane` with no pane), when a tap does
+  on (`sync_toggle`, `fullscreen`, the profile or toolbar it switches), for
+  the button whose list is open, and for the `leader` button while in WM
+  mode; *latched* or *locked* for a held modifier; *disabled* when it cannot run (`close_pane` with no pane), when a tap does
   nothing.
 - Show and hide them with the `toolbar NAME on|off|toggle` action, or name
   them in a [profile](#profiles--ranmaprofilename-def)'s `toolbars`.
@@ -833,7 +835,7 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.toolbar_bg` | a toolbar's row and the gaps between its buttons; unset, `bar_bg` |
 | `colors.button_fg`, `button_bg` | a button, and the entries of a large picker; unset, `tab_inactive_fg` / `tab_inactive_bg` |
 | `colors.button_pressed_fg`, `button_pressed_bg` | a button held down; unset, the button's colours reversed |
-| `colors.button_active_fg`, `button_active_bg` | a toggle that is on, and the button whose list is open; unset, `tab_active_fg` / `tab_active_bg` |
+| `colors.button_active_fg`, `button_active_bg` | a toggle that is on, the button whose list is open, and `leader` in WM mode; unset, `tab_active_fg` / `tab_active_bg` |
 | `colors.button_latched_fg`, `button_latched_bg` | a latched or locked modifier; unset, `mode_fg` / `mode_bg` |
 | `colors.button_disabled_fg` | a button that cannot run now, on `button_bg`; unset, `bar_dim` |
 

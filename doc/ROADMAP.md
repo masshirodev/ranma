@@ -154,6 +154,8 @@ mobile view"; card c78).
 - [x] Sheets, `pane_menu`, `workspace_switcher`
 - [x] The touch toolbar and `mobile` profile in the defaults, unused until
   switched to
+- [x] A `leader` action, and the touch toolbar's leader in place of Ctrl
+  (Termux's extra-keys row has Ctrl already)
 
 ## Later, maybe
 

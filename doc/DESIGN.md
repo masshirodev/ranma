@@ -979,6 +979,14 @@ background processes for the one thing the server is for.
   function, `top`, `bottom` or `beside` the bar, `normal` or `large`.
 - **`send <keys>` and latching modifiers** (`latch ctrl`): what Gboard cannot
   type, without the leader.
+- **A `leader` action** (2026-10-05): the leader as a button. The default
+  touch toolbar had `latch ctrl` in that slot, but Termux's extra-keys row
+  already shows Ctrl on every screen, and typing `ctrl+b` with it is two taps
+  across two rows for the one key every WM action starts with. The button is
+  a toggle: tapped in WM mode it leaves, where the key pressed again would
+  send the leader to the program, because a toolbar face that cannot undo
+  itself is a trap on a touch screen. `send_leader` still sends it. `latch
+  ctrl` stays an action, for a terminal without Termux's row.
 - **`layout = "monocle"`** with a **`pane_strip`**: one pane on screen, the
   others as tabs.
 - **Large** bar, toolbars and pickers; a picker at large size is a **sheet**
