@@ -248,6 +248,9 @@ pub struct App {
     /// A paste waiting on its upload (see `paste`).
     pending_paste: Option<paste::PendingPaste>,
     paste_seq: u64,
+    /// The pane a key was last passed to a ranma in, and when: a ranma there
+    /// asking for `paste_image` is only heard just after (see `paste`).
+    passed_key: Option<(PaneId, Instant)>,
     /// The which-key hint is up (see `whichkey`).
     hint_on: bool,
     /// The chord that opened WM mode: the hint's title.
@@ -338,6 +341,7 @@ impl App {
             hint_due: None,
             pending_paste: None,
             paste_seq: 0,
+            passed_key: None,
             hint_on: false,
             wm_chord: None,
             reports: HashMap::new(),
@@ -1278,6 +1282,7 @@ impl App {
             m @ (crate::osc::Mark::RanmaHello | crate::osc::Mark::RanmaReport(_)) => {
                 self.nested_mark(id, m);
             }
+            crate::osc::Mark::RanmaPasteImage => self.paste_image_asked(id),
             crate::osc::Mark::CommandFinished { exit, duration } => {
                 let workspace = self
                     .locate(id)
@@ -1721,6 +1726,7 @@ impl App {
                 {
                     p.write(bytes);
                 }
+                self.passed_key = self.focused().map(|id| (id, Instant::now()));
                 return;
             }
             if chord == Some(leader) {
@@ -3705,6 +3711,40 @@ mod tests {
             result: Ok("/tmp/x.png".into()),
         });
         assert!(a.pending_paste.is_none());
+    }
+
+    /// Inside another ranma, `paste_image` is the outer one's to do: the
+    /// clipboard is on the machine at the keyboard. This one only asks.
+    #[test]
+    fn a_nested_ranma_asks_the_outer_one_to_paste_the_image() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        a.host_out.clear();
+        a.run_action(Action::PasteImage);
+        assert!(a.pending_paste.is_none(), "nothing read here");
+        assert_eq!(
+            a.host_out,
+            vec![crate::nestbar::PASTE_IMAGE.as_bytes().to_vec()]
+        );
+    }
+
+    /// The request is heard only from a pane a key was just passed to:
+    /// printed out of the blue, it would send the clipboard's image there.
+    #[test]
+    fn a_paste_image_request_nobody_typed_for_is_ignored() {
+        let mut a = app(Some(
+            r#"ranma.set { paste = { image_command = "exit 1" } }"#,
+        ));
+        with_pane(&mut a, 1);
+        a.paste_image_asked(1);
+        assert!(a.pending_paste.is_none());
+        a.passed_key = Some((1, Instant::now() - Duration::from_secs(5)));
+        a.paste_image_asked(1);
+        assert!(a.pending_paste.is_none(), "too long after the key");
+        a.passed_key = Some((2, Instant::now()));
+        a.paste_image_asked(1);
+        assert!(a.pending_paste.is_none(), "a key to another pane");
     }
 
     /// A pasted image path into a pane that runs no ssh is only text.

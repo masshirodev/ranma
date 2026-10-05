@@ -11,12 +11,17 @@ use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use super::App;
 use crate::input;
 use crate::layout::PaneId;
+use crate::nestbar;
 use crate::pane::AppEvent;
 use crate::paste::{self, Job, Source};
 
 /// Input held while one is held back by an upload: more is a stuck paste,
 /// not typing, and is dropped.
 const HELD_MAX: usize = 4096;
+
+/// How soon after a key passed to a ranma in a pane its `paste_image` request
+/// must come: over ssh it is a round trip, never seconds.
+const ASKED_WITHIN: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// A paste on its way: what it types into which pane, and the keys typed
 /// meanwhile, sent after it so they cannot land first.
@@ -35,34 +40,66 @@ impl App {
     pub(super) fn paste(&mut self, text: String) {
         if self.config.settings.paste_upload
             && self.typing_targets().len() == 1
+            && let Some(pane) = self.focused()
             && let Some(ssh) = self.focused_pane().and_then(|p| p.ssh_argv())
             && let Some(named) = paste::image_path(&text, paste::wsl())
         {
-            return self.start_paste(Source::File(named), Some(ssh), text);
+            return self.start_paste(pane, Source::File(named), Some(ssh), text);
         }
         self.typed(|modes| Some(input::encode_paste(&text, modes)));
     }
 
     /// `paste_image`: the clipboard's image, uploaded when the pane runs ssh.
+    /// Inside another ranma it is that one's to do, since the clipboard is on
+    /// the machine at the keyboard: the path comes back as a paste.
     pub(super) fn paste_image(&mut self) {
-        if self.focused().is_none() {
+        let Some(pane) = self.focused() else {
             self.status = Some("paste_image: no pane to paste into".into());
             return;
+        };
+        if self.bar_yielded() {
+            self.host_out.push(nestbar::PASTE_IMAGE.as_bytes().to_vec());
+            return;
         }
+        self.paste_image_into(pane);
+    }
+
+    /// A ranma in pane `id` asked for `paste_image`. Heard only from a pane
+    /// that runs a ranma and was typed into a moment ago: anything printing
+    /// the sequence otherwise would be sent the clipboard's image.
+    pub(super) fn paste_image_asked(&mut self, id: PaneId) {
+        let recent = self
+            .passed_key
+            .is_some_and(|(p, at)| p == id && at.elapsed() < ASKED_WITHIN);
+        if !recent || !self.panes.get(&id).is_some_and(|p| p.hosts_ranma()) {
+            return;
+        }
+        // Still not the outermost: on up, and the path comes back down.
+        if self.bar_yielded() {
+            self.host_out.push(nestbar::PASTE_IMAGE.as_bytes().to_vec());
+            return;
+        }
+        self.paste_image_into(id);
+    }
+
+    fn paste_image_into(&mut self, pane: PaneId) {
         let custom = self.config.settings.paste_image_command.as_deref();
         let Some(clip) = paste::clipboard(custom, |v| std::env::var(v).ok()) else {
             self.status =
                 Some("paste_image: no WSL, Wayland or X11 here; set paste.image_command".into());
             return;
         };
-        let ssh = self.focused_pane().and_then(|p| p.ssh_argv());
-        self.start_paste(Source::Clipboard(clip), ssh, String::new());
+        let ssh = self.panes.get(&pane).and_then(|p| p.ssh_argv());
+        self.start_paste(pane, Source::Clipboard(clip), ssh, String::new());
     }
 
-    fn start_paste(&mut self, source: Source, ssh: Option<Vec<String>>, fallback: String) {
-        let Some(pane) = self.focused() else {
-            return;
-        };
+    fn start_paste(
+        &mut self,
+        pane: PaneId,
+        source: Source,
+        ssh: Option<Vec<String>>,
+        fallback: String,
+    ) {
         if self.pending_paste.is_some() {
             self.status = Some("a paste is still uploading (Esc cancels it)".into());
             return;

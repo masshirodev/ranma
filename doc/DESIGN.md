@@ -995,6 +995,19 @@ the far program receives a path, which it already handles.
    paste into `ssh vps` and uploads again. Nothing on the PC needs to know it
    came from Windows.
 
+**Nested, `paste_image` belongs to the outermost ranma.** With
+`nested = "auto"` every key goes to the innermost ranma, so `leader v` typed
+at work reaches the PC's ranma, whose clipboard is the wrong one. A ranma
+with a ranma around it (`bar_yielded`) runs no clipboard command: it sends
+`ESC ] 51377 ; paste-image BEL` out over the private OSC the nested bar
+already uses, and the ranma around it does the same, up to the outermost.
+That one reads its clipboard and uploads into the pane the request came
+from. The path then travels back down as a paste, and each level uploads it
+again where its focused pane runs ssh, which is trigger 2. A request is heard
+only from a pane that runs a ranma and that a key was passed to in the last
+two seconds. Without that check, any program printing the sequence would be
+sent the clipboard's image.
+
 This is not the input guessing that the tuios cluster warns against. Whether
 something *is* a paste is still decided only by bracketed paste. The rule
 looks only at what a paste already marked as one contains, under three

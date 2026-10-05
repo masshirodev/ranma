@@ -481,7 +481,9 @@ machine with the image does the carrying:
   pane's program is `ssh`, the image goes to the same directory on the far
   side first and that path is typed instead. It is an action because a
   terminal's own paste carries text (and Windows Terminal keeps `Ctrl+V` for
-  itself). For one key without the leader:
+  itself). Inside another ranma it is the outermost one's to do, since that
+  one is on the machine at the keyboard: the inner one asks it, and the path
+  comes back down as a paste. For one key without the leader:
   `ranma.bind("alt+v", "paste_image", { global = true })`.
 - **A paste that is one image path** (`png jpg jpeg gif webp`; plain, quoted,
   backslash-escaped or a `file://` URI; a `C:\` path under WSL) into a pane

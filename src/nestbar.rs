@@ -118,6 +118,11 @@ pub fn report_osc(r: &Report) -> Vec<u8> {
 /// What a client asks its terminal at start: is a ranma drawing around me?
 pub const HELLO: &str = "\x1b]51377;?\x07";
 
+/// An inner ranma asks the one around it to run `paste_image` for it: the
+/// clipboard is on the machine at the keyboard, which the outermost ranma is
+/// on (DESIGN.md, "Pasting images into a pane that runs ssh").
+pub const PASTE_IMAGE: &str = "\x1b]51377;paste-image\x07";
+
 /// An outer ranma's answer to `HELLO`.
 pub fn hello_reply() -> Vec<u8> {
     format!("\x1b]{OSC};ranma;{PROTOCOL}\x07").into_bytes()

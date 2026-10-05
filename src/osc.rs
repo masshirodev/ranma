@@ -28,6 +28,8 @@ pub enum Mark {
     RanmaHello,
     /// A ranma in the pane reports its workspaces (JSON; see `nestbar`).
     RanmaReport(String),
+    /// A ranma in the pane asks this one to run `paste_image` for it.
+    RanmaPasteImage,
 }
 
 #[derive(Debug, Default)]
@@ -141,6 +143,7 @@ impl Scanner {
             }),
             crate::nestbar::OSC => match rest {
                 "?" => out.push(Mark::RanmaHello),
+                "paste-image" => out.push(Mark::RanmaPasteImage),
                 r => {
                     if let Some(json) = r.strip_prefix("report;") {
                         out.push(Mark::RanmaReport(json.to_string()));
@@ -239,9 +242,14 @@ mod tests {
         let mut s = Scanner::default();
         let mut bytes = crate::nestbar::HELLO.as_bytes().to_vec();
         bytes.extend(b"\x1b]51377;report;{\"v\":1}\x07\x1b]51377;ranma;1\x07");
+        bytes.extend(crate::nestbar::PASTE_IMAGE.as_bytes());
         assert_eq!(
             s.feed(&bytes, t),
-            vec![Mark::RanmaHello, Mark::RanmaReport("{\"v\":1}".into())]
+            vec![
+                Mark::RanmaHello,
+                Mark::RanmaReport("{\"v\":1}".into()),
+                Mark::RanmaPasteImage
+            ]
         );
     }
 
