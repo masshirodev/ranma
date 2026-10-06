@@ -1,5 +1,7 @@
 # ranma
 
+![ranma inside ranma: a desktop ranma with an ssh pane running a second ranma beside a local shell, the outer bar showing the inner's workspaces in brackets](doc/screenshot.png)
+
 A tiling window manager for the terminal: i3's container tree and Hyprland's
 dwindle placement, where every window is a PTY. Sessions, workspaces, a floating
 layer and a scratchpad, driven by a leader key and a modal WM mode, configured in
