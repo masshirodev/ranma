@@ -316,9 +316,16 @@ Over SSH, three levels deep, each machine starting ranma: with
   workspaces in brackets after the workspace that holds it: ` 1:zsh  2 [1:kumiko
   2:notebooks 3:ranma S]  3:ai `, the holder's own number first. Your screen's
   workspace is filled as always; the one the inner ranma shows is in bold, in
-  its session's accent. The inner ranma draws no bar of its own while its pane
-  has focus (that is when the outer shows it), and draws it over its bottom row
-  when it has not, so moving focus never resizes it. Its mode shows after `⧉`
+  its session's accent. The inner ranma draws no bar of its own. While its pane
+  has focus the outer bar shows its workspaces; while another pane has it, the
+  outer writes them on that pane's border instead, right-aligned on the edge
+  nearest the bar: `╰──── pc [1:zsh 2:nvim 3:logs S] ─╯`, the connection's
+  name, then the workspaces in use, the current one bold, an urgent one in
+  `ws_urgent`, and ` WM ` if you left it in WM mode. As the pane narrows,
+  names go first, then the other workspaces, down to the host alone; an
+  urgent workspace stays longest. Click a workspace there to focus the pane
+  and go to it. With `border.style = "none"` the label sits over the end of
+  the pane's last row instead. Its mode shows after `⧉`
   (`⧉  WM `), and its messages in the outer bar's centre. A pane whose ranma
   does this has no title on its border, and no border at all when it fills
   the workspace: the ranma inside draws its own. Clicking an inner workspace

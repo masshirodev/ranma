@@ -30,6 +30,7 @@ mod copy;
 mod drag;
 mod hints;
 mod nested;
+pub use nested::NestLabel;
 mod paste;
 mod query;
 mod rules;
@@ -260,6 +261,8 @@ pub struct App {
     /// A ranma around the attached client answered its question: it shows
     /// this ranma's workspaces (see `nested`).
     pub client_outer: bool,
+    /// The protocol the ranma around this one answered in (0 with none).
+    outer_v: u32,
     /// The terminal showing this ranma has focus (the last focus event).
     host_focused: bool,
     /// The report last sent outward, so only a change is sent.
@@ -346,6 +349,7 @@ impl App {
             wm_chord: None,
             reports: HashMap::new(),
             client_outer: false,
+            outer_v: 0,
             host_focused: true,
             last_report: None,
             frameless_was: None,
@@ -1439,6 +1443,7 @@ impl App {
                     depth,
                     path,
                 }) => self.click_nested(holder, &path[..depth as usize]),
+                Some(Click::InPane { pane, n }) => self.click_in_pane(pane, Some(n)),
                 None => {}
             }
             return true;
@@ -1471,6 +1476,12 @@ impl App {
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) if self.drag.is_none() => {
                 let frame = self.frame();
+                // A pane's label sits on its border: a click there goes where
+                // the label says, and never starts a resize.
+                if let Some((pane, n)) = self.nest_label_at(&frame, x, y) {
+                    self.click_in_pane(pane, n);
+                    return;
+                }
                 if let Some(hit) = self.border_hit(&frame, x, y) {
                     self.start_border_drag(hit, x, y);
                     return;
@@ -2483,6 +2494,14 @@ impl App {
             .workspaces
             .values()
             .filter_map(|ws| ws.focused)
+            // A pane holding a ranma is named on its border's label even
+            // when another pane has the focus (see `nest_labels`).
+            .chain(
+                self.panes
+                    .iter()
+                    .filter(|(_, p)| p.hosts_ranma())
+                    .map(|(id, _)| *id),
+            )
             .filter_map(|id| Some((id, self.panes.get(&id)?.workspace_label()?)))
             .collect();
         if programs != self.programs {
@@ -3711,6 +3730,33 @@ mod tests {
             result: Ok("/tmp/x.png".into()),
         });
         assert!(a.pending_paste.is_none());
+    }
+
+    /// Under an outer of protocol 1 the unfocused inner draws its bar over its
+    /// bottom row, as it always did, and reports in version 1, the only one
+    /// that outer reads. A newer outer labels its border instead, so the inner
+    /// draws no bar, focused or not.
+    #[test]
+    fn the_inner_bar_follows_what_the_outer_speaks() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.set_outer(Some(1));
+        assert!(a.bar_yielded());
+        a.host_focused = false;
+        assert!(a.bar_overlaid(), "a version-1 outer shows nothing for it");
+        assert!(a.bar_rect().is_some());
+        assert_eq!(a.own_report().v, 1);
+
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        a.host_focused = false;
+        assert!(!a.bar_overlaid(), "the outer labels the border instead");
+        assert_eq!(a.bar_rect(), None);
+        assert_eq!(a.own_report().v, crate::nestbar::PROTOCOL);
+
+        // An answer this build does not speak is no outer at all.
+        a.set_outer(Some(crate::nestbar::PROTOCOL + 1));
+        assert!(!a.bar_yielded());
+        assert!(a.bar_rect().is_some());
     }
 
     /// Inside another ranma, `paste_image` is the outer one's to do: the

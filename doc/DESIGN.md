@@ -832,7 +832,8 @@ ranma it shows draws no bar.
 ignore and SSH carries as output. A ranma's client asks at attach, in the same
 batch as the colour queries and before DA1: `51377;?`. A ranma around it sees
 the question on its PTY scanner (see "What alacritty_terminal drops") and
-answers into the pane, `51377;ranma;1`; its answer is sent before the parser's
+answers into the pane, `51377;ranma;1;2` (see "An unfocused nested ranma is
+a label on its border" for the second number); its answer is sent before the parser's
 reply to DA1, through the same ordered channel, so it arrives before the
 reading stops. A plain terminal answers nothing, and an outer ranma with no
 bar of its own (and none to pass the workspaces on to) does not answer. The
@@ -851,9 +852,10 @@ are in the outer bar exactly while its pane has focus, which it already
 learns from focus events (ranma passes them to panes that ask). That is the
 "told back, per pane" the handoff asked for, with no message of its own. With
 `nested = "all"`, holders in other workspaces expand too, but those are not on
-screen. While the inner's pane is not focused (beside another in the outer), it
-draws its bar over its bottom row; it never takes the row back from its panes,
-since that would resize them on every change of focus in the outer.
+screen. While the inner's pane is not focused (beside another in the outer), the
+outer writes a compact label of its workspaces on that pane's border, and the
+inner draws no bar at all (2026-10-06, below). It never takes the row back from
+its panes, since that would resize them on every change of focus in the outer.
 **The window losing focus is not the inner losing it** (2026-09-29): the
 outer forwards the terminal's own focus-in and focus-out to its focused pane,
 except a pane whose ranma reports. There they meant "not shown" to the inner,
@@ -894,9 +896,10 @@ Where it departs from the handoff, and why:
 - "Shown" is told back through focus events rather than a message of its
   own: in the default the two are the same thing, and focus events already
   reach every level.
-- An inner ranma whose pane is not focused draws its bar over its bottom row
-  instead of taking the row back, so focus moving in the outer never resizes
-  its panes.
+- An inner ranma whose pane is not focused drew its bar over its bottom row
+  instead of taking the row back, so focus moving in the outer never resized
+  its panes. Since 2026-10-06 the outer labels that pane's border instead
+  (below), and the overlaid bar is left only for an outer of protocol 1.
 - The inner's mode shows after `⧉` (`⧉  WM `), and its messages in the outer
   bar's centre: with no bar of its own they would otherwise not show at all.
   `⧉` stays, as the brief asked, so a bare ` WM ` is always the outer's own.
@@ -947,6 +950,95 @@ What it does not do yet: the title is still shown twice when the focused pane
 is a nested ranma (the outer's centre and the inner's own border); the handoff
 suggests a setting to leave the centre empty then. The host an inner ranma runs
 on is not reported (the session name covers it when there are several).
+
+**An unfocused nested ranma is a label on its border** (2026-10-06; designed
+from `doc/briefs/done/UNFOCUSED_BAR.md`, handoff
+`doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt`). A ranma beside another pane in
+the outer, with the focus on the other, used to draw its whole bar over its
+own bottom row: the desktop bar squeezed into half a screen, a second clock
+and date over the outer's, its `cpu` and `mem` modules, its toasts a second
+time, and a row of the pane's output hidden for as long as it stayed
+unfocused. The outer now writes a label on the edge of that pane's border
+nearest its bar, right-aligned like which-key's footer:
+
+```
+╰──────────────── pc [1:zsh 2:nvim 3:logs S] ─╯
+```
+
+The outer draws it from the report it already keeps per pane
+(`App::nest_labels`, `nestbar::label`), and the inner then draws no bar at
+all, focused or not. It covers no pane cells.
+
+*What it carries:* the name of the connection, as the workspace holding it
+would be called (`ssh pc` is `pc`, else the host the inner's title mark names,
+else `ranma` for one running locally), the session name when it has more
+than one (`pc:work`), the inner's mode when it is not normal (` WM `, the
+label's one filled cell: going back, the next key is a bind), and the
+workspaces in use, one level only. A workspace holding a ranma shows its
+count, `3:vps[2]`, never a second pair of brackets. Never shown: the clock,
+the date, modules, the title, messages. Empty workspaces are left out except
+a current one, since there is nothing in them to see from another pane.
+
+*Colours,* all roles `render.rs` already had: the host `bar_fg`, the current
+workspace bold occupied (`WsHolder`), the rest and the brackets `bar_dim`, an
+urgent one `ws_urgent` bold, the mode its own colours, and the blanks around
+the label the border's colour. The session accent is not used: it means "you
+are here", which this pane is not.
+
+*Out of room,* the label takes the first step that fits between `╰─` and
+`─╯`, each step on top of the ones before: names go except the current one,
+then the session, then the workspaces neither current nor urgent (and `S`),
+then the current name, then the brackets (the host alone, `ws_urgent` when
+anything inside is), then the host is cut with `…`. An urgent workspace
+outlives everything but the host. `nestbar`'s tests hold every edge and all
+21 ladder strips of the mock cell for cell.
+
+*With no border* (`border.style = "none"`) the outer draws the same label over
+the right end of the pane's last row, one blank cell either side, on the bar's
+ground. It covers cells there, which is why it is only the fallback.
+
+*Clicks:* a workspace in the label focuses the pane and goes there, typing
+what reaches it as a click in the nested bar does; the rest of the label
+focuses the pane. A click on the label never starts a resize of the border
+under it. A float over the label takes its clicks.
+
+*The protocol:* an inner ranma must know the outer labels its border, or it
+would draw nothing and show nothing. The protocol is 2 (`EDGE_SINCE`), with
+1 still understood both ways. The outer answers the hello `ranma;1;2`: a
+version-1 inner reads only the first number and wants exactly 1, so it keeps
+working as before; a newer one reads the last. An inner under a version-1
+outer reports in version 1, the only one that outer reads, and draws its bar
+over its bottom row as before; the outer labels only a report of version 2.
+So a build behind on either side gives the old overlaid bar, not a blank.
+
+Where it departs from the handoff, and why:
+
+- The handoff said the outer keeps a report only for each workspace's
+  focused pane and would need one per pane. It already kept one per pane
+  (`App::reports`); what was per focused pane is the name cache, which now
+  also covers every pane holding a ranma.
+- The handoff asked to add the host to the report. The outer already names
+  the connection itself, and better: what was typed (`pc`) rather than what
+  the machine calls itself.
+- The handoff saw a title on the nested pane's border and proposed dropping
+  it. The outer already draws no title there; the title in the screenshot
+  was the inner ranma's own frame.
+- The handoff had the inner draw the no-border fallback. The outer draws it:
+  it composes the pane's cells and knows its own border style, so the inner
+  needs no word of it.
+- The hello answer keeps `1` first and adds the newest version after it,
+  which the handoff did not cover: a plain bump to `2` would have turned
+  nesting off between this build and a version-1 one.
+- A shown inner scratchpad (`current` 0) counts as the current workspace:
+  `S` is bold and stays as long as a current name would.
+- Modes other than WM (copy, search, link) show as the outer bar spells them
+  after `⧉`; the mock draws only WM.
+
+What it does not do yet: a message from the inner (a toast) is not shown
+anywhere while its pane is unfocused, and if it expires first it is never
+seen. A server one version behind its client (between `install.sh` and the
+server's upgrade) refuses the outer's answer `2`, so that one attach shows
+the bars of before nesting.
 
 **Resizes are read off SIGWINCH, not from crossterm** (2026-10-01). A
 nested ranma over SSH garbled whenever the outer opened its scratchpad over

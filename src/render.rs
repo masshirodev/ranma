@@ -42,6 +42,7 @@ pub struct CursorState {
 
 pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     let frame = app.frame();
+    let labels = app.nest_labels(&frame);
     let mut cursor = None;
     let mut overlay_cleared = false;
 
@@ -74,6 +75,9 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         }
         if let Some(c) = draw_pane(f, app, view, pane) {
             cursor = Some(c);
+        }
+        if let Some(l) = labels.iter().find(|l| l.pane == view.id) {
+            draw_nest_label(f, app, view, l);
         }
     }
 
@@ -276,6 +280,45 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         block = block.title(Line::from(format!(" {mark}{title} ")));
     }
     f.render_widget(block, rrect(view.outer));
+}
+
+/// The compact label of a ranma this bar is not showing (see
+/// `App::nest_labels`): on its pane's border, in the border's colour around
+/// it, or, with no border, over the end of the pane's row on the bar's ground.
+fn draw_nest_label(f: &mut Frame, app: &App, view: &PaneView, l: &crate::app::NestLabel) {
+    let c = &app.config.theme.colors;
+    let ground = if l.on_border {
+        let edge = if view.floating {
+            c.border_floating
+        } else {
+            c.border_inactive
+        };
+        Style::default().fg(color(edge))
+    } else {
+        Style::default().fg(color(c.bar_fg)).bg(color(c.bar_bg))
+    };
+    let buf = f.buffer_mut();
+    let area = buf.area;
+    if l.y >= area.bottom() {
+        return;
+    }
+    let mut x = l.x;
+    let mut put = |text: &str, style: Style, x: &mut u16| {
+        let w = text.width() as u16;
+        if *x + w <= area.right() {
+            buf.set_stringn(*x, l.y, text, w as usize, style);
+        }
+        *x += w;
+    };
+    put(" ", ground, &mut x);
+    for p in &l.pieces {
+        let mut style = piece_style(c, p.style);
+        if !l.on_border && style.bg.is_none() {
+            style = style.bg(color(c.bar_bg));
+        }
+        put(&p.text, style, &mut x);
+    }
+    put(" ", ground, &mut x);
 }
 
 /// Each link's label over its first cells, in the mode colours; labels that

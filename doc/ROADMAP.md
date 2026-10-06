@@ -123,6 +123,9 @@ an outer shows it.
   workspace
 - [x] A collapsed holder counts the inner's workspaces in use (` 3:vps[2] `),
   and a connection is named for where it goes (` 2:vps `, not ` 2:ssh `)
+- [x] An unfocused nested ranma is a label on its pane's border, not a second
+  bar (design: `doc/briefs/done/UNFOCUSED_BAR.md`, handoff in
+  `doc/handoffs/done/`); protocol 2, with 1 still understood
 
 ## 7. Upgrading without closing anything
 

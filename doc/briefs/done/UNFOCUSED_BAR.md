@@ -1,6 +1,7 @@
 # Brief: the bar of a nested ranma that is not focused
 
-For Claude Design. Nothing is built yet; this brief is what the design is for.
+For Claude Design. Built 2026-10-06 (DESIGN.md, "An unfocused nested ranma is
+a label on its border"); kept as the brief the design answered.
 It continues the nested bar (`doc/briefs/done/NESTED_BAR.md`, with its handoff
 in `doc/handoffs/done/NESTED_BAR_MOCK.txt`) and should read as part of the
 same system, like the which-key hint (`doc/briefs/done/WHICH_KEY.md`).

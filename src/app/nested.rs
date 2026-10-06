@@ -13,11 +13,28 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{App, Mode, SCRATCHPAD, chord_bytes};
+use super::{App, Frame, Mode, SCRATCHPAD, chord_bytes};
 use crate::action::{Action, WorkspaceTarget};
+use crate::bar::Segment;
 use crate::config::{BindAction, NestedMode};
 use crate::layout::PaneId;
 use crate::nestbar::{self, Report, Ws};
+
+type PlaceFn = fn(&Report, &str, u16, PaneId) -> Option<(u16, usize, Segment)>;
+
+/// A pane's compact label, placed (see `App::nest_labels`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NestLabel {
+    pub pane: PaneId,
+    /// The blank cell before the label; the label starts one to the right.
+    pub x: u16,
+    pub y: u16,
+    /// The step of the ladder it took.
+    pub step: usize,
+    pub pieces: Segment,
+    /// On the border's edge, rather than over the pane's own row.
+    pub on_border: bool,
+}
 
 impl App {
     /// The report of the ranma in a pane: only while one runs there (its
@@ -105,7 +122,12 @@ impl App {
             .collect();
         let (scratch, scratch_shown) = self.scratch_state();
         Report {
-            v: nestbar::PROTOCOL,
+            // In the outer's version when it is older: a version-1 outer
+            // drops a report in any other.
+            v: match self.outer_v {
+                0 => nestbar::PROTOCOL,
+                v => v.min(nestbar::PROTOCOL),
+            },
             session: self.session_name().to_string(),
             sessions: self.session_count(),
             current: if scratch_shown {
@@ -197,7 +219,8 @@ impl App {
     /// answered, in a protocol this build speaks. The report goes out afresh.
     pub fn set_outer(&mut self, outer: Option<u32>) {
         let was = self.bar_yielded();
-        self.client_outer = outer == Some(nestbar::PROTOCOL);
+        self.client_outer = outer.is_some_and(nestbar::speaks);
+        self.outer_v = outer.filter(|v| nestbar::speaks(*v)).unwrap_or(0);
         self.host_focused = true;
         self.last_report = None;
         if self.bar_yielded() != was {
@@ -214,9 +237,98 @@ impl App {
     /// The bar is drawn over the bottom row instead of beside the panes: a
     /// ranma around this one shows the workspaces while this terminal has
     /// focus, and keeping the row free means focus coming and going never
-    /// resizes the panes.
+    /// resizes the panes. Only under an outer of protocol 1: a newer one
+    /// labels this pane's border while it is not focused, so this ranma draws
+    /// no bar at all.
     pub fn bar_overlaid(&self) -> bool {
-        self.bar_yielded() && !self.host_focused
+        self.bar_yielded() && !self.host_focused && self.outer_v < nestbar::EDGE_SINCE
+    }
+
+    /// The compact labels of the panes whose ranma reports but is not on the
+    /// focus path, so this bar does not show its workspaces: on the edge of
+    /// the pane's border nearest the bar, or, with no border, over the end of
+    /// the pane's own row there. Drawing and clicks both read this.
+    pub fn nest_labels(&self, frame: &Frame) -> Vec<NestLabel> {
+        let top = self.config.theme.bar.position == crate::theme::BarPosition::Top;
+        frame
+            .views
+            .iter()
+            .filter(|v| !v.focused)
+            .filter_map(|v| {
+                let r = self
+                    .report_of(v.id)
+                    .filter(|r| r.v >= nestbar::EDGE_SINCE)?;
+                let host = self.nest_host(v.id);
+                let on_border = v.inner != v.outer;
+                let (rect, place) = if on_border {
+                    (v.outer, nestbar::on_edge as PlaceFn)
+                } else {
+                    (v.inner, nestbar::in_row as PlaceFn)
+                };
+                if rect.h == 0 {
+                    return None;
+                }
+                let (dx, step, pieces) = place(r, &host, rect.w, v.id)?;
+                Some(NestLabel {
+                    pane: v.id,
+                    x: rect.x + dx,
+                    y: if top { rect.y } else { rect.bottom() - 1 },
+                    step,
+                    pieces,
+                    on_border,
+                })
+            })
+            .collect()
+    }
+
+    /// What a pane's label calls the ranma in it: the connection's name, as
+    /// its workspace would be named (`ssh pc` is `pc`), else the host that
+    /// ranma says it is on.
+    fn nest_host(&self, id: PaneId) -> String {
+        self.programs
+            .get(&id)
+            .cloned()
+            .or_else(|| self.panes.get(&id)?.inner_host().map(str::to_string))
+            .unwrap_or_else(|| "ranma".into())
+    }
+
+    /// What a click at `x`, `y` hits on a label: its pane, and the workspace
+    /// for a workspace's piece.
+    pub(super) fn nest_label_at(
+        &self,
+        frame: &Frame,
+        x: u16,
+        y: u16,
+    ) -> Option<(PaneId, Option<u8>)> {
+        // Side by side, two labels share a row; a float over one hides it.
+        let top = self.pane_at(frame, x, y)?.id;
+        let l = self
+            .nest_labels(frame)
+            .into_iter()
+            .find(|l| l.y == y && l.pane == top)?;
+        let mut px = l.x + 1;
+        for p in &l.pieces {
+            let w = unicode_width::UnicodeWidthStr::width(p.text.as_str()) as u16;
+            if x >= px && x < px + w {
+                return match p.click {
+                    Some(crate::bar::Click::InPane { pane, n }) => Some((pane, Some(n))),
+                    _ => Some((l.pane, None)),
+                };
+            }
+            px += w;
+        }
+        None
+    }
+
+    /// A click on a label: focus its pane, then go to the workspace (or
+    /// just focus, for anything but a workspace).
+    pub(super) fn click_in_pane(&mut self, pane: PaneId, n: Option<u8>) {
+        self.active_mut().fullscreen = false;
+        self.focus(pane);
+        self.relayout();
+        if let Some(n) = n {
+            self.reach_nested(pane, &[n]);
+        }
     }
 
     /// The pane that is drawn without a border: one whose ranma reports and
@@ -262,6 +374,12 @@ impl App {
         let Some(pane) = self.workspaces.get(&holder).and_then(|w| w.focused) else {
             return;
         };
+        self.reach_nested(pane, path);
+    }
+
+    /// Type into `pane` what takes the ranma there (and the ones inside it)
+    /// down `path` to a workspace.
+    fn reach_nested(&mut self, pane: PaneId, path: &[u8]) {
         let mut level = self.report_of(pane).cloned();
         let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         let mut bytes = Vec::new();

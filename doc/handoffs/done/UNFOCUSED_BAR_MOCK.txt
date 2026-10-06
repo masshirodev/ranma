@@ -1,0 +1,220 @@
+# The unfocused nested bar, cell for cell (Unfocused Bar.dc.html, from unfocused-bar.js).
+# Default theme; colour roles are in the design, not here.
+## today, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│ 1:zsh  2:nvim  3:l… cpu 89%  mem 31.1G  Tue 06 Oct  11:12││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## inner 100
+╭ me@pc:~ ─────────────────────────────────────────────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns pieces with their column.                   ││ ❯ cd ~/notes                                                                                     │
+│ pub fn fit(                                                                                      ││ ❯ ls                                                                                             │
+│     left: &[Segment],                                                                            ││ inbox.md  ranma.md  todo.md                                                                      │
+│     center: &[Segment],                                                                          ││ ❯                                                                                                │
+│     right: &[Segment],                                                                           ││                                                                                                  │
+│     sep: &str,                                                                                   ││                                                                                                  │
+│     cols: u16,                                                                                   ││                                                                                                  │
+╰───────────────────────────────────────────────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                                                                   me@work:~                                                                               Tue 06 Oct  11:12
+## inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                                           ││                                                          │
+╰───────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰───────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## 3:logs urgent, inner 100
+╭ me@pc:~ ─────────────────────────────────────────────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns pieces with their column.                   ││ ❯ cd ~/notes                                                                                     │
+│ pub fn fit(                                                                                      ││ ❯ ls                                                                                             │
+│     left: &[Segment],                                                                            ││ inbox.md  ranma.md  todo.md                                                                      │
+│     center: &[Segment],                                                                          ││ ❯                                                                                                │
+│     right: &[Segment],                                                                           ││                                                                                                  │
+│     sep: &str,                                                                                   ││                                                                                                  │
+│     cols: u16,                                                                                   ││                                                                                                  │
+╰───────────────────────────────────────────────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                                                                   me@work:~                                                                               Tue 06 Oct  11:12
+## 3:logs urgent, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                                           ││                                                          │
+╰───────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## 3:logs urgent, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰───────── pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## WM mode, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                                           ││                                                          │
+╰────────────────────────  WM  pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## WM mode, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰────  WM  pc [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## two sessions, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                                           ││                                                          │
+╰──────────────────────── pc:work [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## two sessions, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰──── pc:work [1:zsh 2:nvim 3:logs S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## two levels, 3 holds vps, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                                           ││                                                          │
+╰─────────────────────────── pc [1:zsh 2:nvim 3:vps[2] S] ─╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## two levels, 3 holds vps, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰─────── pc [1:zsh 2:nvim 3:vps[2] S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## two levels, bell inside vps, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: u16,                       ││                                      │
+╰─────── pc [1:zsh 2:nvim 3:vps[2] S] ─╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## fallback in the row, inner 60
+╭ me@pc:~ ─────────────────────────────────────────────────╮╭ me@work:~ ───────────────────────────────────────────────╮
+│ /// Place the three sides in `cols` columns. Returns piec││ ❯ cd ~/notes                                             │
+│ pub fn fit(                                              ││ ❯ ls                                                     │
+│     left: &[Segment],                                    ││ inbox.md  ranma.md  todo.md                              │
+│     center: &[Segment],                                  ││ ❯                                                        │
+│     right: &[Segment],                                   ││                                                          │
+│     sep: &str,                                           ││                                                          │
+│     cols: u16,                pc [1:zsh 2:nvim 3:logs S] ││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+ 1:zsh  2:ai                                           me@work:~                                       Tue 06 Oct  11:12
+## fallback in the row, inner 40
+╭ me@pc:~ ─────────────────────────────╮╭ me@work:~ ───────────────────────────╮
+│ /// Place the three sides in `cols` c││ ❯ cd ~/notes                         │
+│ pub fn fit(                          ││ ❯ ls                                 │
+│     left: &[Segment],                ││ inbox.md  ranma.md  todo.md          │
+│     center: &[Segment],              ││ ❯                                    │
+│     right: &[Segment],               ││                                      │
+│     sep: &str,                       ││                                      │
+│     cols: pc [1:zsh 2:nvim 3:logs S] ││                                      │
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1:zsh  2:ai                       me@work:~                   Tue 06 Oct  11:12
+## ladder, plain, 100 cols, step 0
+╰───────────────────────────────────────────────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯
+## ladder, plain, 34 cols, step 0
+╰─── pc [1:zsh 2:nvim 3:logs S] ─╯
+## ladder, plain, 28 cols, step 1
+╰────── pc [1 2:nvim 3 S] ─╯
+## ladder, plain, 22 cols, step 3
+╰────── pc [2:nvim] ─╯
+## ladder, plain, 18 cols, step 3
+╰── pc [2:nvim] ─╯
+## ladder, plain, 12 cols, step 4
+╰─ pc [2] ─╯
+## ladder, plain, 10 cols, step 5
+╰─── pc ─╯
+## ladder, urgent, 100 cols, step 0
+╰───────────────────────────────────────────────────────────────────── pc [1:zsh 2:nvim 3:logs S] ─╯
+## ladder, urgent, 34 cols, step 0
+╰─── pc [1:zsh 2:nvim 3:logs S] ─╯
+## ladder, urgent, 28 cols, step 1
+╰────── pc [1 2:nvim 3 S] ─╯
+## ladder, urgent, 22 cols, step 3
+╰──── pc [2:nvim 3] ─╯
+## ladder, urgent, 18 cols, step 4
+╰───── pc [2 3] ─╯
+## ladder, urgent, 12 cols, step 5
+╰───── pc ─╯
+## ladder, urgent, 10 cols, step 5
+╰─── pc ─╯
+## ladder, wm+sessions, 100 cols, step 0
+╰───────────────────────────────────────────────────────────  WM  pc:work [1:zsh 2:nvim 3:logs S] ─╯
+## ladder, wm+sessions, 34 cols, step 1
+╰──  WM  pc:work [1 2:nvim 3 S] ─╯
+## ladder, wm+sessions, 28 cols, step 2
+╰─  WM  pc [1 2:nvim 3 S] ─╯
+## ladder, wm+sessions, 22 cols, step 3
+╰─  WM  pc [2:nvim] ─╯
+## ladder, wm+sessions, 18 cols, step 4
+╰──  WM  pc [2] ─╯
+## ladder, wm+sessions, 12 cols, step 6
+╰─  WM  … ─╯
+## ladder, wm+sessions, 10 cols, step 6
+╰─  WM… ─╯

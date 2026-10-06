@@ -10,11 +10,26 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::bar::{Click, Piece, Segment, Style};
+use unicode_width::UnicodeWidthStr;
 
-/// The protocol a report speaks. A report with another version is ignored:
-/// its holder is drawn as if no report had come.
-pub const PROTOCOL: u32 = 1;
+use crate::bar::{Click, Piece, Segment, Style};
+use crate::layout::PaneId;
+
+/// The protocol this build speaks. A report or an answer from `OLDEST` up
+/// to here is understood; anything else is ignored, and its holder is drawn
+/// as if no report had come.
+pub const PROTOCOL: u32 = 2;
+/// The oldest protocol still understood.
+pub const OLDEST: u32 = 1;
+/// From this version an outer ranma labels the border of a pane whose ranma
+/// it is not showing in its bar (the compact label below), so the ranma
+/// inside draws no bar of its own even then. Version 1 did not.
+pub const EDGE_SINCE: u32 = 2;
+
+/// Whether this build understands a peer speaking version `v`.
+pub fn speaks(v: u32) -> bool {
+    (OLDEST..=PROTOCOL).contains(&v)
+}
 /// The private OSC number: `ESC ] 51377 ; ... BEL`.
 pub const OSC: &str = "51377";
 /// A centre (the title) that would be cut below this many cells is left out.
@@ -90,7 +105,7 @@ impl Report {
     /// Parse a report's JSON; `None` for anything this build does not speak.
     pub fn parse(json: &str) -> Option<Report> {
         let r: Report = serde_json::from_str(json).ok()?;
-        (r.v == PROTOCOL).then_some(r)
+        speaks(r.v).then_some(r)
     }
 
     fn any_urgent(&self) -> bool {
@@ -123,9 +138,11 @@ pub const HELLO: &str = "\x1b]51377;?\x07";
 /// on (DESIGN.md, "Pasting images into a pane that runs ssh").
 pub const PASTE_IMAGE: &str = "\x1b]51377;paste-image\x07";
 
-/// An outer ranma's answer to `HELLO`.
+/// An outer ranma's answer to `HELLO`: `ranma;1;<newest>`. The first number
+/// stays 1 for good, because a version-1 inner accepts exactly that and reads
+/// no further; a newer one reads the last number as what the outer speaks.
 pub fn hello_reply() -> Vec<u8> {
-    format!("\x1b]{OSC};ranma;{PROTOCOL}\x07").into_bytes()
+    format!("\x1b]{OSC};ranma;{OLDEST};{PROTOCOL}\x07").into_bytes()
 }
 
 /// The protocol an outer ranma answered `HELLO` with, found in what the
@@ -134,11 +151,14 @@ pub fn outer_in(input: &[u8]) -> Option<u32> {
     let text = String::from_utf8_lossy(input);
     let marker = format!("\x1b]{OSC};ranma;");
     let at = text.find(&marker)? + marker.len();
-    let v: String = text[at..]
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    v.parse().ok()
+    let mut rest = text[at..].chars().peekable();
+    loop {
+        let v: String = std::iter::from_fn(|| rest.next_if(char::is_ascii_digit)).collect();
+        let v: u32 = v.parse().ok()?;
+        if rest.next_if_eq(&';').is_none() {
+            return Some(v);
+        }
+    }
 }
 
 // ---- drawing -------------------------------------------------------------------
@@ -433,6 +453,182 @@ pub fn fit_nested(
         }
     }
     crate::bar::fit_floor(&left, center, right, sep, cols, floor)
+}
+
+// ---- the compact label -------------------------------------------------------------
+//
+// A pane whose ranma reports but is not on the focus path: the outer bar does
+// not show its workspaces, so the outer writes a label on the pane's border
+// instead (design: `doc/briefs/done/UNFOCUSED_BAR.md`, cell for cell in
+// `doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt`):
+//
+//     ╰──────────── pc [1:zsh 2:nvim 3:logs S] ─╯
+
+/// The last step of the label's ladder: the host cut with `…`. Each step
+/// adds to the ones before:
+///
+/// 0. everything: host, session, workspaces in use with names, `S`
+/// 1. names go, except the current one (a `[k]` count goes with its name)
+/// 2. the session name goes
+/// 3. workspaces neither current nor urgent go, and `S`
+/// 4. the current name goes: number only
+/// 5. the brackets go: the host alone, urgent when anything inside is
+/// 6. the host is cut with `…`
+pub const LABEL_LAST_STEP: usize = 6;
+
+fn urgent_ws(w: &Ws) -> bool {
+    w.urgent || w.nest.as_ref().is_some_and(|n| n.any_urgent())
+}
+
+/// The label at one step of its ladder (0 to 5). Clicks: a workspace goes
+/// there inside `pane`, anything else focuses `pane`.
+pub fn label(r: &Report, host: &str, step: usize, pane: PaneId) -> Segment {
+    let k = step;
+    let focus = Click::Pane(pane);
+    let go = |n: u8| Click::InPane { pane, n };
+    let mut out: Segment = Vec::new();
+    if !r.mode.is_empty() && r.mode != "normal" {
+        out.push(Piece::new(format!(" {} ", r.mode.to_uppercase()), Style::Mode).on_click(focus));
+        out.push(Piece::new(" ", Style::Normal));
+    }
+    let any_urgent = r.ws.iter().any(urgent_ws);
+    let host_style = if k >= 5 && any_urgent {
+        Style::WsUrgent
+    } else {
+        Style::Normal
+    };
+    out.push(Piece::new(host, host_style).on_click(focus));
+    if r.sessions > 1 && k < 2 {
+        out.push(Piece::new(format!(":{}", r.session), Style::Dim).on_click(focus));
+    }
+    if k >= 5 {
+        return out;
+    }
+    let mut items: Vec<Segment> = Vec::new();
+    for w in &r.ws {
+        let cur = w.n == r.current;
+        let urg = urgent_ws(w);
+        // Nothing to see from another pane in an empty workspace.
+        if !cur && !w.occ && !urg {
+            continue;
+        }
+        if k >= 3 && !cur && !urg {
+            continue;
+        }
+        let keep = if cur { k < 4 } else { k < 1 };
+        let text = match (&w.name, keep) {
+            (Some(name), true) => format!("{}:{name}", w.n),
+            _ => w.n.to_string(),
+        };
+        let style = if urg {
+            Style::WsUrgent
+        } else if cur {
+            Style::WsHolder
+        } else {
+            Style::Dim
+        };
+        let mut it = vec![Piece::new(text, style).on_click(go(w.n))];
+        if keep
+            && w.name.is_some()
+            && let Some(c) = w.nest.as_deref().and_then(in_use)
+        {
+            it.push(Piece::new(format!("[{c}]"), Style::Dim).on_click(go(w.n)));
+        }
+        items.push(it);
+    }
+    // Shown, the scratchpad is where that ranma is: it stays as the current
+    // workspace would.
+    if r.scratch && (k < 3 || (r.scratch_shown && k < 5)) {
+        let style = if r.scratch_shown {
+            Style::WsHolder
+        } else {
+            Style::Dim
+        };
+        items.push(vec![Piece::new("S", style).on_click(go(0))]);
+    }
+    if items.is_empty() {
+        return out;
+    }
+    out.push(Piece::new(" ", Style::Normal));
+    out.push(Piece::new("[", Style::Dim).on_click(focus));
+    for (i, it) in items.into_iter().enumerate() {
+        if i > 0 {
+            out.push(Piece::new(" ", Style::Normal));
+        }
+        out.extend(it);
+    }
+    out.push(Piece::new("]", Style::Dim).on_click(focus));
+    out
+}
+
+fn seg_width(s: &[Piece]) -> usize {
+    s.iter().map(|p| p.text.width()).sum()
+}
+
+/// Cut pieces to `max` cells, the last one kept ending in `…`.
+fn cut(seg: Segment, max: usize) -> Segment {
+    if seg_width(&seg) <= max {
+        return seg;
+    }
+    let mut out = Vec::new();
+    let mut used = 0;
+    for p in seg {
+        let w = p.text.width();
+        if used + w < max {
+            used += w;
+            out.push(p);
+            continue;
+        }
+        let mut t = String::new();
+        for c in p.text.chars() {
+            let cw = c.to_string().width();
+            if used + cw + 1 > max {
+                break;
+            }
+            used += cw;
+            t.push(c);
+        }
+        t.push('…');
+        out.push(Piece { text: t, ..p });
+        break;
+    }
+    out
+}
+
+/// The first step of the ladder whose label fits in `avail` cells, and that
+/// label; the last step cuts the host.
+pub fn compact(r: &Report, host: &str, avail: usize, pane: PaneId) -> (usize, Segment) {
+    for k in 0..LABEL_LAST_STEP {
+        let l = label(r, host, k, pane);
+        if seg_width(&l) <= avail {
+            return (k, l);
+        }
+    }
+    let l = label(r, host, LABEL_LAST_STEP - 1, pane);
+    if avail == 0 {
+        return (LABEL_LAST_STEP, Vec::new());
+    }
+    (LABEL_LAST_STEP, cut(l, avail))
+}
+
+/// The label on a border edge `w` cells wide: the column (from the edge's
+/// left end) of the space before it, the step it took, and the label.
+/// ` label ` ends three cells from the right, leaving `─╯`; at least `╰─`
+/// stays on the left. `None` when the edge has no room for a cell of it.
+pub fn on_edge(r: &Report, host: &str, w: u16, pane: PaneId) -> Option<(u16, usize, Segment)> {
+    let avail = (w as usize).checked_sub(6).filter(|a| *a >= 1)?;
+    let (k, l) = compact(r, host, avail, pane);
+    let lw = seg_width(&l) as u16;
+    Some((w - 4 - lw, k, l))
+}
+
+/// The fallback with no border: the label over the right end of a row `w`
+/// cells wide, one blank cell either side; the column of the blank before it.
+pub fn in_row(r: &Report, host: &str, w: u16, pane: PaneId) -> Option<(u16, usize, Segment)> {
+    let avail = (w as usize).checked_sub(2).filter(|a| *a >= 1)?;
+    let (k, l) = compact(r, host, avail, pane);
+    let lw = seg_width(&l) as u16;
+    Some((w - 2 - lw, k, l))
 }
 
 #[cfg(test)]
@@ -774,6 +970,12 @@ mod tests {
     fn the_hello_and_its_answer() {
         let reply = hello_reply();
         assert_eq!(outer_in(&reply), Some(PROTOCOL));
+        // A version-1 inner reads the digits after `ranma;` and wants 1.
+        let text = String::from_utf8_lossy(&reply);
+        assert!(text.contains(";ranma;1;"), "{text:?}");
+        // A version-1 outer answers with one number.
+        assert_eq!(outer_in(b"\x1b]51377;ranma;1\x07"), Some(1));
+        assert!(speaks(1) && speaks(PROTOCOL) && !speaks(PROTOCOL + 1) && !speaks(0));
         let mut noise = b"\x1b]11;rgb:1e1e/1e1e/2e2e\x07".to_vec();
         noise.extend(&reply);
         noise.extend(b"\x1b[?62;c");
@@ -794,5 +996,214 @@ mod tests {
             .unwrap();
         assert!(!json.contains(['\x07', '\x1b']));
         assert_eq!(Report::parse(json), Some(s));
+    }
+
+    // ---- the compact label, against doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt ----
+
+    const PANE: PaneId = 7;
+
+    /// The handoff's scenario: `1:zsh 2:nvim 3:logs` and the scratchpad,
+    /// current `2:nvim`, on `pc`.
+    fn unfocused(urgent: bool, wm: bool, sessions: bool, nested: Option<bool>) -> Report {
+        let mut r = report(2, vec![ws(1, "zsh"), ws(2, "nvim"), ws(3, "logs")]);
+        r.session = "main".into();
+        r.scratch = true;
+        if urgent {
+            r.ws[2].urgent = true;
+        }
+        if wm {
+            r.mode = "wm".into();
+        }
+        if sessions {
+            r.sessions = 2;
+            r.session = "work".into();
+        }
+        if let Some(bell) = nested {
+            let mut vps = report(1, vec![ws(1, "zsh"), ws(2, "htop")]);
+            vps.ws[1].urgent = bell;
+            r.ws[2] = ws(3, "vps");
+            r.ws[2].nest = Some(Box::new(vps));
+        }
+        r
+    }
+
+    fn text(seg: &[Piece]) -> String {
+        seg.iter().map(|p| p.text.as_str()).collect()
+    }
+
+    /// A bottom edge `w` cells wide, as the outer draws it.
+    fn edge(r: &Report, w: u16) -> (Option<usize>, String) {
+        match on_edge(r, "pc", w, PANE) {
+            None => (None, format!("╰{}╯", "─".repeat(w as usize - 2))),
+            Some((dx, k, l)) => (
+                Some(k),
+                format!("╰{} {} ─╯", "─".repeat(dx as usize - 1), text(&l)),
+            ),
+        }
+    }
+
+    fn unfocused_mock() -> &'static str {
+        include_str!("../doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt")
+    }
+
+    /// The rows of a mock block, by its exact title.
+    fn block(title: &str) -> Vec<&'static str> {
+        let src = unfocused_mock();
+        let head = format!("## {title}\n");
+        let at = src.find(&head).unwrap_or_else(|| panic!("no mock {title}")) + head.len();
+        src[at..]
+            .lines()
+            .take_while(|l| !l.starts_with("## "))
+            .collect()
+    }
+
+    fn left(row: &str, w: u16) -> String {
+        row.chars().take(w as usize).collect()
+    }
+
+    #[test]
+    fn the_label_steps_down_the_handoffs_ladder() {
+        let variants = [
+            ("plain", unfocused(false, false, false, None)),
+            ("urgent", unfocused(true, false, false, None)),
+            ("wm+sessions", unfocused(false, true, true, None)),
+        ];
+        let mut seen = 0;
+        for (name, r) in &variants {
+            for w in [100u16, 34, 28, 22, 18, 12, 10] {
+                let (k, row) = edge(r, w);
+                let k = k.expect("room for a label");
+                let title = format!("ladder, {name}, {w} cols, step {k}");
+                assert_eq!(row, block(&title)[0], "{title}");
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 21);
+    }
+
+    #[test]
+    fn the_label_on_the_unfocused_panes_edge() {
+        let cases: [(&str, Report, &[u16]); 6] = [
+            (
+                "inner",
+                unfocused(false, false, false, None),
+                &[100, 60, 40],
+            ),
+            (
+                "3:logs urgent, inner",
+                unfocused(true, false, false, None),
+                &[100, 60, 40],
+            ),
+            (
+                "WM mode, inner",
+                unfocused(false, true, false, None),
+                &[60, 40],
+            ),
+            (
+                "two sessions, inner",
+                unfocused(false, false, true, None),
+                &[60, 40],
+            ),
+            (
+                "two levels, 3 holds vps, inner",
+                unfocused(false, false, false, Some(false)),
+                &[60, 40],
+            ),
+            (
+                "two levels, bell inside vps, inner",
+                unfocused(false, false, false, Some(true)),
+                &[40],
+            ),
+        ];
+        for (name, r, widths) in &cases {
+            for w in widths.iter() {
+                let title = format!("{name} {w}");
+                // The bottom border: after the top border and seven rows.
+                let mock = left(block(&title)[8], *w);
+                assert_eq!(edge(r, *w).1, mock, "{title}");
+            }
+        }
+    }
+
+    #[test]
+    fn with_no_border_the_label_ends_the_panes_last_row() {
+        let r = unfocused(true, false, false, None);
+        for w in [60u16, 40] {
+            let title = format!("fallback in the row, inner {w}");
+            // The mock draws the boxes anyway: the row inside them is the pane's.
+            let row: String = left(block(&title)[7], w)
+                .chars()
+                .skip(1)
+                .take(w as usize - 2)
+                .collect();
+            let (dx, _, l) = in_row(&r, "pc", w - 2, PANE).unwrap();
+            let drawn = format!(" {} ", text(&l));
+            assert_eq!(
+                dx as usize + drawn.chars().count(),
+                w as usize - 2,
+                "{title}"
+            );
+            assert_eq!(
+                row.chars().skip(dx as usize).collect::<String>(),
+                drawn,
+                "{title}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_labels_colours_and_clicks() {
+        let r = unfocused(true, true, true, None);
+        let l = label(&r, "pc", 0, PANE);
+        let style = |t: &str| l.iter().find(|p| p.text == t).unwrap().style;
+        assert_eq!(style(" WM "), Style::Mode);
+        assert_eq!(style("pc"), Style::Normal);
+        assert_eq!(style(":work"), Style::Dim);
+        assert_eq!(style("1:zsh"), Style::Dim);
+        assert_eq!(style("2:nvim"), Style::WsHolder);
+        assert_eq!(style("3:logs"), Style::WsUrgent);
+        assert_eq!(style("S"), Style::Dim);
+        assert_eq!(style("["), Style::Dim);
+        // At the narrowest the host carries the urgency.
+        assert_eq!(
+            label(&r, "pc", 5, PANE).last().unwrap().style,
+            Style::WsUrgent
+        );
+        let calm = unfocused(false, false, false, None);
+        assert_eq!(
+            label(&calm, "pc", 5, PANE).last().unwrap().style,
+            Style::Normal
+        );
+        // A workspace goes there; the rest focuses the pane.
+        let click = |t: &str| l.iter().find(|p| p.text == t).unwrap().click;
+        assert_eq!(click("3:logs"), Some(Click::InPane { pane: PANE, n: 3 }));
+        assert_eq!(click("S"), Some(Click::InPane { pane: PANE, n: 0 }));
+        assert_eq!(click("pc"), Some(Click::Pane(PANE)));
+        assert_eq!(click("]"), Some(Click::Pane(PANE)));
+        // An edge too short for a cell of label gets none.
+        assert!(on_edge(&r, "pc", 6, PANE).is_none());
+    }
+
+    #[test]
+    fn a_shown_scratchpad_stays_as_the_current_workspace_would() {
+        let mut r = unfocused(false, false, false, None);
+        r.current = 0;
+        r.scratch_shown = true;
+        assert_eq!(text(&label(&r, "pc", 3, PANE)), "pc [S]");
+        assert_eq!(text(&label(&r, "pc", 4, PANE)), "pc [S]");
+        assert_eq!(
+            label(&r, "pc", 4, PANE).last().map(|p| p.text.as_str()),
+            Some("]")
+        );
+        // Empty workspaces are left out; with nothing left, so are the brackets.
+        let idle = report(
+            1,
+            vec![Ws {
+                occ: false,
+                ..ws(1, "zsh")
+            }],
+        );
+        assert_eq!(text(&label(&idle, "pc", 0, PANE)), "pc [1:zsh]");
+        assert_eq!(text(&label(&report(9, vec![]), "pc", 0, PANE)), "pc");
     }
 }

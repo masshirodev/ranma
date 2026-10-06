@@ -21,13 +21,14 @@ Everything that can be pure is, and is tested without a terminal:
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
 | `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), a nested ranma's hello, report and paste-image request, long and unrelated sequences passed without keeping state |
 | `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/done/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
-| `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; a shown inner scratchpad's `S` coloured as current; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC |
+| `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; a shown inner scratchpad's `S` coloured as current; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC; the compact label on an unfocused pane's border at 100, 60 and 40 columns (urgent, WM, two sessions, two levels) and all 21 strips of its ladder, cell for cell against `doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt`, its colours and clicks, and the no-border fallback; the hello answer a version-1 build still reads |
 | `snapshot` | a pane's screen as text and back: history, colours, wide characters and wrapped rows cell for cell, the cursor; the shell kept behind a full-screen program, and its modes; palette changes |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
 | `workspace` | taking panes out of the tree or the floating layer |
 | `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |
+| `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer |
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
 | `paste` | which pastes are one image path (quoted, escaped, `file://`, Windows under WSL) and which are text; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload through a stand-in ssh that runs the far side's real shell |
 
@@ -68,7 +69,10 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - ranma inside ranma: the outer bar shows the inner's workspaces in brackets,
   the inner draws no bar of its own, and the inner's WM mode shows after `⧉`;
   the outer's scratchpad opened over a fullscreen inner neither frames it nor
-  makes it draw its bar
+  makes it draw its bar; with a pane opened beside it, the inner's border
+  carries the compact label and the inner still draws no bar, a click on the
+  label's workspace focuses the inner, and closing the other pane takes the
+  label away
 - a new session shows in the bar; when its only shell exits, it ends and main is
   shown again
 - `ranma open -P -d` opens a pane in the background and prints its id;

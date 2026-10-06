@@ -70,6 +70,12 @@ pub enum Click {
         depth: u8,
         path: [u8; 4],
     },
+    /// Workspace `n` (0 for its scratchpad) of the ranma in `pane`, from the
+    /// label on that pane's border: focus the pane, then go there.
+    InPane {
+        pane: crate::layout::PaneId,
+        n: u8,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

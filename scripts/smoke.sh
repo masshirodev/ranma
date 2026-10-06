@@ -297,6 +297,32 @@ T send-keys -t s C-b; sleep 0.4
 bar | grep -q '⧉  WM ' || fail "the leader did not reach the inner ranma ($(bar))"
 bar | grep -q '^ WM ' && fail "the outer ranma took the leader"
 T send-keys -t s Escape; sleep 0.3
+# A pane beside the inner one takes the outer's focus: the outer bar no longer
+# shows the inner's workspaces, so the outer labels the inner pane's border
+# with them, and the inner still draws no bar of its own (the compact label,
+# doc/briefs/done/UNFOCUSED_BAR.md). Closing the pane gives it all back.
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s t
+label() { screen | head -n -1 | grep -E ' \[1[^]]*\] ─╯'; }
+for _ in $(seq 1 20); do label >/dev/null && break; sleep 0.25; done
+label >/dev/null || fail "the unfocused inner ranma's border carries no label ($(screen | tail -3))"
+screen | head -n -1 | grep -q '│ 1[: ]' && fail "the unfocused inner ranma drew its own bar"
+# A click on its workspace in the label focuses the inner pane (and goes
+# there), never starting a resize of the border it sits on.
+LINE=$(screen | grep -n -E ' \[1[^]]*\] ─╯' | head -1)
+ROW=${LINE%%:*}
+COL=$(LC_ALL=C.UTF-8 bash -c 'p=${1%%\[1*}; echo $(( ${#p} + 2 ))' _ "${LINE#*:}")
+T send-keys -t s -l $'\e[<0;'"$COL;$ROW"'M'; T send-keys -t s -l $'\e[<0;'"$COL;$ROW"'m'
+for _ in $(seq 1 20); do bar | grep -q ' \[1' && break; sleep 0.25; done
+bar | grep -q ' \[1' || fail "a click on the label did not focus the inner ranma ($(bar))"
+label >/dev/null && fail "the focused inner ranma's border still carries the label"
+# Back to the shell beside it (the outer leader: keys go to the inner now).
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s Right; sleep 0.3; T send-keys -t s Escape; sleep 0.3
+for _ in $(seq 1 20); do label >/dev/null && break; sleep 0.25; done
+label >/dev/null || fail "focus did not go back to the shell beside the inner ranma"
+T send-keys -t s exit Enter
+for _ in $(seq 1 20); do bar | grep -q ' \[1' && break; sleep 0.25; done
+bar | grep -q ' \[1' || fail "closing the pane beside it did not give the inner its workspaces back ($(bar))"
+label >/dev/null && fail "the inner ranma alone again still carries the label"
 T send-keys -t s C-b; sleep 0.2; T send-keys -t s DC; sleep 0.3; T send-keys -t s y; sleep 1
 bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"
 
