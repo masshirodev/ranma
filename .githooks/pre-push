@@ -6,8 +6,8 @@
 #
 # The smoke runs on every push, not only when a change touches app, pane, render
 # or input, because a hook cannot judge that and a skipped smoke is how a
-# terminal that drops to a plain shell gets installed. On the VPS, where CPU is
-# budgeted, SKIP_SMOKE is the flag to reach for.
+# terminal that drops to a plain shell gets installed. On a machine where CPU is
+# scarce, SKIP_SMOKE is the flag to reach for.
 #
 # Skip flags (set to any non-empty value):
 #   SKIP_TESTS SKIP_SMOKE SKIP_ALL

@@ -149,7 +149,7 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
 
 ### Upgrading a server in place
 
-**Decided 2026-09-29** (card c76). A server kept the binary it started with,
+**Decided 2026-09-29.** A server kept the binary it started with,
 so taking a new version meant ending it, and every shell with it. Now a
 server **re-executes itself**: `execve` of the new binary into its own
 process. Linux keeps the process id and every descriptor not marked
@@ -295,13 +295,12 @@ with shells and editors. So every WM action goes through a **leader chord**
   Actions that lead straight into typing (`new_pane`, `exec`, the switchers) end it.
 - The leader pressed again inside WM mode sends the leader through, tmux style.
 
-The default keymap mirrors the author's Hyprland binds (`~/.config/myconf/hypr/keybindings.conf`)
-with Super removed: arrows to focus, Shift+arrows to resize, `1`-`0` for workspaces,
-`w` to float, `g` to group, `s` for the scratchpad, `Backspace` for the session
+The default keymap mirrors a typical Hyprland keymap with Super removed: arrows
+to focus, Shift+arrows to resize, `1`-`0` for workspaces, `w` to float, `g` to group, `s` for the scratchpad, `Backspace` for the session
 switcher (where Hyprland's session menu is). hjkl is not bound by default because `j`
 is `toggle_split` there.
 
-**Digits: Alt, not Shift** (decided 2026-09-28, card c13). A terminal reports
+**Digits: Alt, not Shift** (decided 2026-09-28). A terminal reports
 Shift+1 as the symbol the layout puts on the key — `!` on US and ABNT2, something
 else elsewhere — so `shift+<digit>` cannot be bound reliably. The kitty keyboard
 protocol does carry the base key, but crossterm replaces it with the shifted one
@@ -321,7 +320,7 @@ place and the place is in one pane. The bar says ` ⇉ sync N ` in the urgent
 style while any mark is on: input going somewhere you are not looking is the
 one thing about this feature that must never be forgotten.
 
-**The which-key hint** (2026-09-29, card c64; designed from
+**The which-key hint** (2026-09-29; designed from
 `doc/briefs/done/WHICH_KEY.md`, handoff in `doc/handoffs/done/`). A pause in WM mode
 (`wm_mode.hint`, 0.5 s) opens a panel standing on the bar at its left end,
 next to ` WM `, listing what the keys do. It never takes a key: any key puts
@@ -466,7 +465,7 @@ the two kept in sync by hand. So:
   ` 1:ssh `. Every ssh workspace used to read the same. The name is the
   destination the `ssh` command line gives (the one the title reads,
   `ssh_destination`), because that is what was typed and so what is
-  recognised: the VPS calls itself `masshiro`, which names nothing at the desk.
+  recognised: a server's own hostname is often something nobody types.
   With no plain `ssh` to read (mosh, a wrapper), the host a ranma on the far
   side puts in its mark stands in. A ranma running locally keeps the name
   `ranma`, since its workspaces are its own and not a host's. It is the same
@@ -822,7 +821,7 @@ were read along with the host's colour replies and lost. The flag is re-armed
 before drawing now, and early keys are handed to the first pane.
 
 
-**One bar for nested ranmas** (2026-09-29, card c74; designed from
+**One bar for nested ranmas** (2026-09-29; designed from
 `doc/briefs/done/NESTED_BAR.md`, handoff in `doc/handoffs/done/`). Two ranmas
 used to draw everything twice: two bars, two clocks, the title four times, a
 border around a border. Now the outermost bar shows the workspaces of the
@@ -966,15 +965,15 @@ focus report arrive, which puts them in one wakeup.
 
 ### Pasting images into a pane that runs ssh
 
-**Decided 2026-10-05** (card c99). A program on the far side of an `ssh` (Claude
-Code on the PC or the VPS) cannot see an image on this machine. Its own image
-paste reads the clipboard of the machine it runs on, which has none, and a
-pasted path names a file that is not there. Every way of using it goes through a
-ranma on the machine with the clipboard, because every interactive shell starts
-in one:
+**Decided 2026-10-05.** A program on the far side of an `ssh` (an AI
+coding agent on the PC or the VPS, say) cannot see an image on this
+machine. Its own image paste reads the clipboard of the machine it runs on,
+which has none, and a pasted path names a file that is not there. With ranma
+started from every interactive shell, every way of reaching it goes through a
+ranma on the machine with the clipboard:
 
 ```
-work (Windows → WSL2 Arch)    PC (Arch, kitty)        VPS
+work (WSL2)                   PC (kitty)              VPS
  ranma ─ pane: ssh pc ──────▶ ranma ─ pane: ssh vps ─▶ ranma ─ claude
 ```
 
@@ -1090,7 +1089,7 @@ script, which is outside ranma.
 
 ### A mobile view, from scriptable pieces
 
-**Decided 2026-09-29** (card c78, brief `doc/briefs/done/MOBILE_VIEW.md`,
+**Decided 2026-09-29** (brief `doc/briefs/done/MOBILE_VIEW.md`,
 handoff `doc/handoffs/done/MOBILE_VIEW_MOCK.txt`). A phone or a tablet in Termux
 attaches over SSH to the ranma already running on the PC or the VPS. It runs no
 ranma of its own: a native Android build would fight Android's killer of

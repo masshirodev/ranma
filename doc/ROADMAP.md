@@ -141,7 +141,7 @@ client (DESIGN.md, "Upgrading a server in place").
 
 A phone or tablet in Termux attaches over SSH and gets a touch-sized screen,
 built in `init.lua` from pieces that work on the desktop too (DESIGN.md, "A
-mobile view"; card c78).
+mobile view").
 
 - [x] Design: `doc/briefs/done/MOBILE_VIEW.md`, handoff in `doc/handoffs/done/`
 - [x] The click that takes a shared screen does nothing else
@@ -159,7 +159,7 @@ mobile view"; card c78).
 
 ## 9. Images into a pane that runs ssh
 
-DESIGN.md, "Pasting images into a pane that runs ssh"; card c99.
+DESIGN.md, "Pasting images into a pane that runs ssh".
 
 - [x] Design agreed
 - [x] `paste_image`, the clipboard command per platform, `paste.image_command`

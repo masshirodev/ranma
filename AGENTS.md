@@ -35,10 +35,11 @@ until `scripts/hooks.sh` has armed it once. Make them pass; do not set skip flag
 - Lua never runs on the render or PTY path: only binds, hooks, and throttled ticks.
 - Decisions change `doc/DESIGN.md` in the same commit; finished work ticks
   `doc/ROADMAP.md`.
-- **A new theme key reaches the desktop's rendered theme only after the binary
-  that knows it is installed.** Theme keys are parsed strictly, and the
-  desktop's theme is rendered by matugen from
-  `~/.config/myconf/matugen/templates/ranma.toml`. Adding the key to that
-  template (or re-rendering it) before `cargo install` makes the installed ranma
-  reject the theme, and every new terminal falls back to a plain shell. Order:
-  add the key here with a default, `./install.sh`, then the template.
+- **A new theme key goes into a user's theme only after the binary that knows
+  it is installed.** Theme keys are parsed strictly, so a theme file (or a
+  template that renders one) gaining the key before `./install.sh` makes the
+  installed ranma reject the theme, and a shell that starts ranma falls back to
+  a plain shell. Order: add the key here with a default, `./install.sh`, then
+  the theme.
+- `AGENTS.local.md` (gitignored) carries what is true of one checkout on one
+  machine. Read it when it exists; never commit it.

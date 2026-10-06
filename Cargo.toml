@@ -2,6 +2,14 @@
 name = "ranma"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+description = "A tiling window manager for the terminal: i3's container tree and Hyprland's dwindle placement, where every window is a PTY"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/masshirodev/ranma"
+readme = "README.md"
+keywords = ["terminal", "tiling", "window-manager", "multiplexer", "tui"]
+categories = ["command-line-utilities"]
+exclude = ["doc/briefs/", "doc/handoffs/", "scripts/", ".githooks/"]
 
 [dependencies]
 alacritty_terminal = "0.26"

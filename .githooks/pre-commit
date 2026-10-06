@@ -2,7 +2,7 @@
 
 # Format and lint, the first half of the gate in AGENTS.md. Both are seconds on
 # a warm target/, so they run on every commit; the tests and the smoke run once
-# per push in pre-push. Ported from Kumiko's husky hooks, without husky: this is
+# per push in pre-push. There is no husky: this is
 # a Cargo repo, and git's core.hooksPath does the same job with no package.json
 # (scripts/hooks.sh arms it). See doc/TESTING.md, "Git hooks".
 #

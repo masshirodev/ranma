@@ -744,7 +744,7 @@ pub fn workspace_label(
 }
 
 /// Where the `ssh` in the foreground of that terminal went, if one is there:
-/// `vps` for `ssh -p 22 masshiro@vps htop`.
+/// `vps` for `ssh -p 22 me@vps htop`.
 pub fn foreground_ssh_host(pid: u32) -> Option<String> {
     let args = foreground_ssh_argv(pid)?;
     ssh_destination(args.iter().skip(1).map(String::as_str))
@@ -854,13 +854,10 @@ mod tests {
         let host = || p("vps");
         let none = || None;
         // `ssh vps` is `vps`, whatever the far side calls itself.
-        assert_eq!(workspace_label(p("ssh"), host, Some("masshiro")), p("vps"));
+        assert_eq!(workspace_label(p("ssh"), host, Some("server")), p("vps"));
         // An ssh whose destination could not be read: the far ranma's host,
         // else still `ssh`.
-        assert_eq!(
-            workspace_label(p("ssh"), none, Some("masshiro")),
-            p("masshiro")
-        );
+        assert_eq!(workspace_label(p("ssh"), none, Some("server")), p("server"));
         assert_eq!(workspace_label(p("ssh"), none, None), p("ssh"));
         // mosh and the like carry no destination we read; the ranma there says.
         assert_eq!(
@@ -930,7 +927,7 @@ mod tests {
     fn the_destination_of_an_ssh_command_line() {
         let d = |line: &str| ssh_destination(line.split_whitespace());
         assert_eq!(d("vps").as_deref(), Some("vps"));
-        assert_eq!(d("masshiro@vps htop").as_deref(), Some("vps"));
+        assert_eq!(d("me@vps htop").as_deref(), Some("vps"));
         assert_eq!(d("-p 2222 -A vps").as_deref(), Some("vps"));
         assert_eq!(d("-p2222 -tt vps").as_deref(), Some("vps"));
         assert_eq!(

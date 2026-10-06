@@ -119,7 +119,7 @@ About 15 seconds. Run it when a change touches `app`, `pane`, `render` or `input
 
 ## Git hooks — `.githooks/`
 
-The gate above, run by git, ported from Kumiko's husky hooks. There is no husky
+The gate above, run by git. There is no husky
 here: this is a Cargo repo, and `core.hooksPath` does the same job without a
 `package.json`. A clone does not carry git config, so arm each checkout once with
 `scripts/hooks.sh` (`--check` says whether it is armed); worktrees share it.
@@ -133,7 +133,7 @@ here: this is a Cargo repo, and `core.hooksPath` does the same job without a
 The split is by cost: fmt and clippy are seconds on a warm `target/`, the smoke
 is about fifteen, and pushes are rarer than commits. The smoke runs on every
 push rather than only for changes to `app`, `pane`, `render` or `input`, because
-a hook cannot tell which a change touches. On the VPS, where CPU is budgeted,
+a hook cannot tell which a change touches. On a machine where CPU is scarce,
 `SKIP_SMOKE` is the one to reach for.
 
 ## By hand
