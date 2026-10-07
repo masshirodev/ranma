@@ -147,6 +147,17 @@ pub struct Colors {
     pub button_latched_bg: Option<Color>,
     #[serde(default)]
     pub button_disabled_fg: Option<Color>,
+    // Copy mode's selection; unset, the cells are drawn reversed.
+    #[serde(default)]
+    pub selection_fg: Option<Color>,
+    #[serde(default)]
+    pub selection_bg: Option<Color>,
+    // A bar module's ground, between `bar.module_left` and `module_right`;
+    // unset, modules sit on the bar's own ground as they always did.
+    #[serde(default)]
+    pub module_bg: Option<Color>,
+    #[serde(default)]
+    pub module_fg: Option<Color>,
 }
 
 impl Colors {
@@ -196,13 +207,274 @@ pub enum BorderStyle {
     Plain,
     Thick,
     Double,
+    /// `+`, `-` and `|`, for fonts without box drawing.
+    Ascii,
+    /// The six characters of `border.chars`.
+    Custom,
     None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TitlePosition {
+    Top,
+    Bottom,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Align {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Indicator {
+    None,
+    /// Arrows on the focused pane's edges, pointing in (tmux's
+    /// `pane-border-indicators arrows`).
+    Arrows,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Border {
     pub style: BorderStyle,
+    /// Floats and popups; unset, `style`.
+    #[serde(default)]
+    pub floating_style: Option<BorderStyle>,
+    /// With `custom`: top-left, top-right, bottom-left, bottom-right,
+    /// horizontal, vertical (`"╭╮╰╯─│"`).
+    #[serde(default)]
+    pub chars: Option<String>,
+    pub title: TitlePosition,
+    pub title_align: Align,
+    pub title_format: Format,
+    pub indicator: Indicator,
+}
+
+impl Border {
+    /// The style a float's (or a popup's) border takes.
+    pub fn floating(&self) -> BorderStyle {
+        self.floating_style.unwrap_or(self.style)
+    }
+
+    /// `chars` as the six strings a border set is made of.
+    pub fn custom_chars(&self) -> [&str; 6] {
+        let mut out = ["+", "+", "+", "+", "-", "|"];
+        if let Some(c) = &self.chars {
+            for (slot, (i, ch)) in out.iter_mut().zip(c.char_indices()) {
+                *slot = &c[i..i + ch.len_utf8()];
+            }
+        }
+        out
+    }
+}
+
+/// A text attribute a role can carry, tmux's `bold`, `dim` and the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Attrs {
+    pub bold: bool,
+    pub dim: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub reverse: bool,
+    pub strikethrough: bool,
+}
+
+impl<'de> Deserialize<'de> for Attrs {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let names = Vec::<String>::deserialize(d)?;
+        let mut a = Attrs::default();
+        for n in names {
+            let slot = match n.as_str() {
+                "bold" => &mut a.bold,
+                "dim" => &mut a.dim,
+                "italic" => &mut a.italic,
+                "underline" => &mut a.underline,
+                "reverse" => &mut a.reverse,
+                "strikethrough" => &mut a.strikethrough,
+                other => {
+                    return Err(serde::de::Error::custom(format!(
+                        "`{other}` is not an attribute (bold, dim, italic, underline, reverse, strikethrough)"
+                    )));
+                }
+            };
+            *slot = true;
+        }
+        Ok(a)
+    }
+}
+
+/// Text attributes per role. Colours stay in `[colors]`, so a theme rendered
+/// from a palette never has to know about these.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Styles {
+    /// Bar text in the `normal` style.
+    pub bar: Attrs,
+    pub dim: Attrs,
+    pub accent: Attrs,
+    pub urgent: Attrs,
+    pub mode: Attrs,
+    pub ws_active: Attrs,
+    pub ws_occupied: Attrs,
+    pub ws_empty: Attrs,
+    pub ws_urgent: Attrs,
+    pub tab_active: Attrs,
+    pub tab_inactive: Attrs,
+    /// A pane's title on its border, and the focused pane's.
+    pub title: Attrs,
+    pub title_active: Attrs,
+    pub picker_selected: Attrs,
+    pub toast: Attrs,
+}
+
+/// A format with `{placeholders}` and optional `[groups]`: a group shows only
+/// when every placeholder in it has a value. `[[`, `]]`, `{{` and `}}` are
+/// the characters themselves. Nothing else: logic belongs in Lua.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Format {
+    parts: Vec<Part>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Part {
+    Text(String),
+    Var(String),
+    Group(Vec<Part>),
+}
+
+impl Format {
+    pub fn parse(src: &str) -> Result<Format, String> {
+        let mut top: Vec<Part> = Vec::new();
+        let mut group: Option<Vec<Part>> = None;
+        let mut text = String::new();
+        let mut chars = src.chars().peekable();
+        let flush = |text: &mut String, into: &mut Vec<Part>| {
+            if !text.is_empty() {
+                into.push(Part::Text(std::mem::take(text)));
+            }
+        };
+        while let Some(c) = chars.next() {
+            match c {
+                '[' | ']' | '{' | '}' if chars.peek() == Some(&c) => {
+                    chars.next();
+                    text.push(c);
+                }
+                '{' => {
+                    let mut name = String::new();
+                    loop {
+                        match chars.next() {
+                            Some('}') => break,
+                            Some(ch) => name.push(ch),
+                            None => return Err(format!("`{src}`: `{{` without `}}`")),
+                        }
+                    }
+                    let into = group.as_mut().unwrap_or(&mut top);
+                    flush(&mut text, into);
+                    into.push(Part::Var(name));
+                }
+                '[' => {
+                    if group.is_some() {
+                        return Err(format!("`{src}`: groups do not nest (`[[` is a bracket)"));
+                    }
+                    flush(&mut text, &mut top);
+                    group = Some(Vec::new());
+                }
+                ']' => {
+                    let Some(mut g) = group.take() else {
+                        return Err(format!("`{src}`: `]` without `[` (`]]` is a bracket)"));
+                    };
+                    flush(&mut text, &mut g);
+                    top.push(Part::Group(g));
+                }
+                '}' => return Err(format!("`{src}`: `}}` without `{{` (`}}}}` is a brace)")),
+                c => text.push(c),
+            }
+        }
+        if group.is_some() {
+            return Err(format!("`{src}`: `[` without `]`"));
+        }
+        flush(&mut text, &mut top);
+        Ok(Format { parts: top })
+    }
+
+    /// The placeholders it uses, in order.
+    pub fn vars(&self) -> Vec<&str> {
+        fn walk<'a>(parts: &'a [Part], out: &mut Vec<&'a str>) {
+            for p in parts {
+                match p {
+                    Part::Var(v) => out.push(v),
+                    Part::Group(g) => walk(g, out),
+                    Part::Text(_) => {}
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.parts, &mut out);
+        out
+    }
+
+    /// Whether it uses this placeholder: what is not used is not read.
+    pub fn uses(&self, var: &str) -> bool {
+        self.vars().contains(&var)
+    }
+
+    /// Every placeholder must be one of `known`; `key` names it in the error.
+    fn check(&self, key: &str, known: &[&str]) -> Result<(), String> {
+        match self.vars().into_iter().find(|v| !known.contains(v)) {
+            Some(v) => Err(format!(
+                "{key}: unknown placeholder `{{{v}}}` (expected {})",
+                known
+                    .iter()
+                    .map(|k| format!("{{{k}}}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+            None => Ok(()),
+        }
+    }
+
+    /// The text, with each placeholder's value from `get` (`None` or empty
+    /// is no value).
+    pub fn render(&self, get: impl Fn(&str) -> Option<String>) -> String {
+        let value = |v: &str| get(v).filter(|s| !s.is_empty());
+        let mut out = String::new();
+        for p in &self.parts {
+            match p {
+                Part::Text(t) => out.push_str(t),
+                Part::Var(v) => out.push_str(&value(v).unwrap_or_default()),
+                Part::Group(g) => {
+                    let mut inner = String::new();
+                    let mut whole = true;
+                    for q in g {
+                        match q {
+                            Part::Text(t) => inner.push_str(t),
+                            Part::Var(v) => match value(v) {
+                                Some(x) => inner.push_str(&x),
+                                None => whole = false,
+                            },
+                            Part::Group(_) => unreachable!("groups do not nest"),
+                        }
+                    }
+                    if whole {
+                        out.push_str(&inner);
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+impl<'de> Deserialize<'de> for Format {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Format::parse(&String::deserialize(d)?).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -226,6 +498,13 @@ pub enum BarPosition {
 pub struct Bar {
     pub position: BarPosition,
     pub separator: String,
+    /// A workspace in the workspaces module, and the current one: `{n}` and
+    /// `{name}`.
+    pub workspace_format: Format,
+    pub workspace_current_format: Format,
+    /// Drawn before and after each module, on `colors.module_bg`'s edge.
+    pub module_left: String,
+    pub module_right: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -238,6 +517,7 @@ pub struct Theme {
     pub gaps: Gaps,
     pub bar: Bar,
     pub panes: Panes,
+    pub styles: Styles,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -246,7 +526,19 @@ pub struct Panes {
     /// How far the text of unfocused panes fades toward its background, 0
     /// (not at all) to 1 (gone).
     pub dim_unfocused: f32,
+    /// The ground a program leaves as the default background, in the focused
+    /// pane and in the others (tmux's `window-active-style` and
+    /// `window-style`); unset, the host terminal's.
+    #[serde(default)]
+    pub active_bg: Option<Color>,
+    #[serde(default)]
+    pub inactive_bg: Option<Color>,
 }
+
+/// What a border title's format can name.
+pub const TITLE_VARS: [&str; 4] = ["title", "index", "program", "cwd"];
+/// What a workspace's format can name.
+pub const WORKSPACE_VARS: [&str; 2] = ["n", "name"];
 
 /// Where themes are looked up, in order, before falling back to the built-ins.
 pub fn theme_dirs(config_dir: Option<&Path>) -> Vec<PathBuf> {
@@ -330,7 +622,47 @@ pub fn load(name: &str, dirs: &[PathBuf]) -> Result<Theme> {
     if !(0.0..=1.0).contains(&dim) {
         bail!("theme `{name}`: panes.dim_unfocused must be 0-1, not {dim}");
     }
+    check(&theme).map_err(|e| anyhow::anyhow!("theme `{name}`: {e}"))?;
     Ok(theme)
+}
+
+/// What serde cannot see: placeholders by key, and `chars` where `custom`
+/// needs them.
+fn check(t: &Theme) -> Result<(), String> {
+    t.border
+        .title_format
+        .check("border.title_format", &TITLE_VARS)?;
+    t.bar
+        .workspace_format
+        .check("bar.workspace_format", &WORKSPACE_VARS)?;
+    t.bar
+        .workspace_current_format
+        .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
+    let custom = t.border.style == BorderStyle::Custom
+        || t.border.floating_style == Some(BorderStyle::Custom);
+    if custom {
+        match &t.border.chars {
+            None => return Err("border style `custom` needs border.chars".into()),
+            Some(c) => {
+                use unicode_width::UnicodeWidthChar;
+                let n = c.chars().count();
+                if n != 6 || c.chars().any(|ch| ch.width() != Some(1)) {
+                    return Err(format!(
+                        "border.chars must be six one-cell characters (top-left, top-right, bottom-left, bottom-right, horizontal, vertical), not `{c}`"
+                    ));
+                }
+            }
+        }
+    }
+    for (key, cap) in [
+        ("bar.module_left", &t.bar.module_left),
+        ("bar.module_right", &t.bar.module_right),
+    ] {
+        if cap.chars().any(char::is_control) {
+            return Err(format!("{key}: no control characters"));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -395,6 +727,75 @@ mod tests {
         );
         let err = format!("{:#}", load("over", &[dir]).unwrap_err());
         assert!(err.contains("dim_unfocused"), "{err}");
+    }
+
+    #[test]
+    fn formats_have_placeholders_and_optional_groups() {
+        let f = Format::parse(" {n}[:{name}] ").unwrap();
+        fn get(name: Option<&str>) -> impl Fn(&str) -> Option<String> + '_ {
+            move |v| match v {
+                "n" => Some("3".to_string()),
+                "name" => name.map(str::to_string),
+                _ => None,
+            }
+        }
+        assert_eq!(f.render(get(Some("nvim"))), " 3:nvim ");
+        assert_eq!(f.render(get(None)), " 3 ");
+        assert_eq!(f.render(get(Some(""))), " 3 ", "empty is no value");
+        assert_eq!(f.vars(), vec!["n", "name"]);
+        let lit = Format::parse("[[{n}]] {{x}}").unwrap();
+        assert_eq!(lit.render(get(None)), "[3] {x}");
+        for bad in ["{n", "[{n}", "{n}]", "[a[b]]", "x}"] {
+            assert!(Format::parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_default_theme_looks_as_it_did() {
+        let t = load("default", &[]).unwrap();
+        // Bold where it was hard-coded, and nowhere else.
+        assert!(t.styles.mode.bold && t.styles.ws_active.bold && t.styles.urgent.bold);
+        assert_eq!(t.styles.bar, Attrs::default());
+        assert_eq!(t.border.title, TitlePosition::Top);
+        assert_eq!(t.border.floating(), BorderStyle::Rounded);
+        let title = t
+            .border
+            .title_format
+            .render(|v| (v == "title").then(|| "zsh".into()));
+        assert_eq!(title, " zsh ");
+        let ws = t
+            .bar
+            .workspace_format
+            .render(|v| (v == "n").then(|| "2".into()));
+        assert_eq!(ws, " 2 ");
+        assert_eq!((t.panes.active_bg, t.colors.module_bg), (None, None));
+    }
+
+    #[test]
+    fn new_keys_are_checked_like_the_old() {
+        let dir = tmp_dir("looks");
+        let w =
+            |name: &str, src: &str| std::fs::write(dir.join(format!("{name}.toml")), src).unwrap();
+        w("attr", "[styles]\nmode = [\"blink\"]\n");
+        w("var", "[border]\ntitle_format = \" {pid} \"\n");
+        w("nochars", "[border]\nstyle = \"custom\"\n");
+        w(
+            "fivechars",
+            "[border]\nstyle = \"custom\"\nchars = \"+++--\"\n",
+        );
+        w(
+            "good",
+            "[border]\nstyle = \"custom\"\nchars = \"┏┓┗┛━┃\"\ntitle = \"bottom\"\n[styles]\ntitle_active = [\"bold\", \"italic\"]\n",
+        );
+        let err = |n: &str| format!("{:#}", load(n, std::slice::from_ref(&dir)).unwrap_err());
+        assert!(err("attr").contains("blink"));
+        assert!(err("var").contains("{pid}"));
+        assert!(err("nochars").contains("needs border.chars"));
+        assert!(err("fivechars").contains("six"));
+        let t = load("good", std::slice::from_ref(&dir)).unwrap();
+        assert_eq!(t.border.custom_chars(), ["┏", "┓", "┗", "┛", "━", "┃"]);
+        assert!(t.styles.title_active.italic && !t.styles.title.italic);
+        assert_eq!(t.border.title, TitlePosition::Bottom);
     }
 
     #[test]

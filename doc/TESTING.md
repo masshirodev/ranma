@@ -60,6 +60,9 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - Enter and the keypad's Enter (tmux sends it as LF) on an empty workspace open
   a shell there
 - a broken config written while running is reported at once, and the old one kept
+- a theme written while running is drawn: an ascii border, the title on the
+  bottom edge from its format (with the program, read after a key), arrows on
+  the focused pane; removed, the default border comes back
 - help opens and filters by action
 - `leader /` finds a string in the history, and `y` puts the match on the
   clipboard: the tmux server runs with `set-clipboard on`, so the OSC 52 write

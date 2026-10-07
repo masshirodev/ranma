@@ -49,9 +49,30 @@ tab_inactive_bg = "#313244"
 # button_latched_fg / _bg = mode_fg / mode_bg
 # button_disabled_fg = bar_dim
 
+# Copy mode's selection, and a bar module's ground (see [bar]). Unset here on
+# purpose: the selection is drawn reversed, and modules sit on bar_bg.
+# selection_fg = ...    selection_bg = ...
+# module_fg = ...       module_bg = ...
+
 [border]
-# rounded | plain | thick | double | none
+# rounded | plain | thick | double | ascii | custom | none
 style = "rounded"
+# Floats and popups; unset, the same as style.
+# floating_style = "double"
+# With style = "custom": top-left, top-right, bottom-left, bottom-right,
+# horizontal, vertical.
+# chars = "╭╮╰╯─│"
+# Where a pane's title goes on its border: top | bottom | off.
+title = "top"
+# left | center | right
+title_align = "left"
+# {title} (its name, else what its program set), {index} (its place in the
+# workspace, from 1), {program} (the program in its foreground), {cwd} (its
+# directory, ~ for home). A part in [ ] shows only when every placeholder in
+# it has a value: " {index}[ {program}] ". [[ ]] {{ }} are the characters.
+title_format = " {title} "
+# none | arrows: arrows on the focused pane's edges, pointing in.
+indicator = "none"
 
 [gaps]
 # Measured in cells. A terminal cell is roughly twice as tall as it is wide,
@@ -65,9 +86,43 @@ outer_vertical = 0
 position = "bottom"
 # Drawn between two modules on the same side.
 separator = "  "
+# A workspace in the workspaces module, and the current one: {n} is its
+# number, {name} its name (or its program's). [:{name}] shows only with one.
+workspace_format = " {n}[:{name}] "
+workspace_current_format = " {n}[:{name}] "
+# Drawn before and after each module, in colors.module_bg on bar_bg: with
+# powerline glyphs ("\ue0b6" and "\ue0b4", say) and a module_bg, every module
+# is a pill. Empty: nothing.
+module_left = ""
+module_right = ""
 
 [panes]
 # Fade the text of unfocused panes toward their background: 0 is off, 0.3 is
 # a gentle hint of where focus is, 1 hides them. Uses the colours your
 # terminal reports; one that reports none gets its faint attribute instead.
 dim_unfocused = 0.0
+# The ground of the focused pane and of the others, where the program leaves
+# the default background (tmux's window-active-style and window-style).
+# Unset: the terminal's own.
+# active_bg = "#1e1e2e"
+# inactive_bg = "#181825"
+
+[styles]
+# Text attributes per role: bold, dim, italic, underline, reverse,
+# strikethrough. Colours are in [colors].
+bar = []
+dim = []
+accent = []
+urgent = ["bold"]
+mode = ["bold"]
+ws_active = ["bold"]
+ws_occupied = []
+ws_empty = []
+ws_urgent = ["bold"]
+tab_active = ["bold"]
+tab_inactive = []
+# A pane's title on its border, and the focused pane's.
+title = []
+title_active = []
+picker_selected = []
+toast = []

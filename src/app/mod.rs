@@ -227,6 +227,9 @@ pub struct App {
     /// workspaces module (` 3:nvim `). Read from /proc at most every
     /// `PROGRAMS_EVERY`, and only after something happened, so idle stays idle.
     programs: HashMap<PaneId, String>,
+    /// Each shown pane's foreground program and directory, for border titles
+    /// whose format names them; read with `programs`, never by a frame.
+    pane_facts: HashMap<PaneId, (Option<String>, Option<String>)>,
     programs_read: Option<Instant>,
     programs_due: Option<Instant>,
     /// The cpu module's previous /proc/stat sample: usage is the change since.
@@ -335,6 +338,7 @@ impl App {
             pressed: None,
             sheet_from: None,
             programs: HashMap::new(),
+            pane_facts: HashMap::new(),
             programs_read: None,
             programs_due: None,
             cpu_prev: None,
@@ -2543,6 +2547,57 @@ impl App {
             // the title names, whether or not its title changed.
             self.announce();
         }
+        // Only what a border title asks for is read, and only for panes on screen.
+        let fmt = &self.config.theme.border.title_format;
+        let (program, cwd) = (fmt.uses("program"), fmt.uses("cwd"));
+        let facts: HashMap<PaneId, (Option<String>, Option<String>)> = if program || cwd {
+            let home = dirs::home_dir();
+            self.visible
+                .iter()
+                .filter_map(|id| {
+                    let p = self.panes.get(id)?;
+                    Some((
+                        *id,
+                        (
+                            p.program().filter(|_| program),
+                            p.cwd()
+                                .filter(|_| cwd)
+                                .map(|c| crate::layouts::tilde(&c, home.as_deref())),
+                        ),
+                    ))
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+        if facts != self.pane_facts {
+            self.pane_facts = facts;
+            self.dirty = true;
+        }
+    }
+
+    /// A pane's title as its border shows it: `border.title_format`, with
+    /// what the pane is called, where it is in its workspace, and what the
+    /// last read of /proc found running there.
+    pub fn border_title(&self, id: PaneId) -> String {
+        let Some(p) = self.panes.get(&id) else {
+            return String::new();
+        };
+        let facts = self.pane_facts.get(&id);
+        self.config.theme.border.title_format.render(|v| match v {
+            "title" => Some(p.label().to_string()),
+            "index" => {
+                let ws = match self.locate(id)? {
+                    SCRATCHPAD => &self.scratch,
+                    n => self.workspaces.get(&n)?,
+                };
+                let at = ws.panes().iter().position(|q| *q == id)?;
+                Some((at + 1).to_string())
+            }
+            "program" => facts.and_then(|f| f.0.clone()),
+            "cwd" => facts.and_then(|f| f.1.clone()),
+            _ => None,
+        })
     }
 
     pub(super) fn announce(&mut self) {
@@ -2789,10 +2844,17 @@ impl App {
                         // The number always shows: it is the key that gets you there.
                         // A short screen keeps only the current one's name.
                         let name = name.filter(|_| current || !compact);
-                        let label = match &name {
-                            Some(name) => format!(" {n}:{name} "),
-                            None => format!(" {n} "),
+                        let theme_bar = &self.config.theme.bar;
+                        let fmt = if current {
+                            &theme_bar.workspace_current_format
+                        } else {
+                            &theme_bar.workspace_format
                         };
+                        let label = fmt.render(|v| match v {
+                            "n" => Some(n.to_string()),
+                            "name" => name.clone(),
+                            _ => None,
+                        });
                         // A holder drawn here is collapsed (nestbar draws the
                         // bar while one expands), so it gets its count too.
                         match name.and(self.holder_in_use(n)) {
@@ -2864,13 +2926,17 @@ impl App {
         let chrome = self.chrome();
         let large = chrome.bar_size == crate::toolbar::Size::Large;
         // Chips a thumb can hit: padded to five columns and a column apart.
+        let theme_bar = &self.config.theme.bar;
+        let wrap = |s: Segment| bar::boxed(s, &theme_bar.module_left, &theme_bar.module_right);
         let seg = |n: &String| {
             let s = self.segment(n);
-            if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
-                bar::enlarge(s)
-            } else {
-                s
-            }
+            wrap(
+                if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
+                    bar::enlarge(s)
+                } else {
+                    s
+                },
+            )
         };
         let side = |names: &[String]| -> Vec<Segment> { names.iter().map(seg).collect() };
         let bar = &self.config.bar;
@@ -2884,7 +2950,7 @@ impl App {
                 .find_map(|r| r.status.clone())
         });
         let center = match &status {
-            Some(msg) => vec![vec![Piece::new(msg.clone(), Style::Accent)]],
+            Some(msg) => vec![wrap(vec![Piece::new(msg.clone(), Style::Accent)])],
             None => side(&bar.center),
         };
         let right = side(&bar.right);
@@ -2912,6 +2978,7 @@ impl App {
                     sep,
                     cols,
                     expand_all,
+                    &wrap,
                     // A message is never left out; the title may be.
                     if status.is_some() {
                         0
@@ -2927,7 +2994,7 @@ impl App {
         // the workspaces where they fit, else one `2/4 nvim` chip at the end.
         if chrome.strip == crate::chrome::Strip::InBar {
             // Left-aligned, as the strip's own row draws them, not centred.
-            let chips = self.segment("pane_strip");
+            let chips = wrap(self.segment("pane_strip"));
             let mut with = left.clone();
             with.push(chips.clone());
             let width = |segs: &[Segment]| -> usize {
@@ -3502,6 +3569,53 @@ mod tests {
                 row.trim_end().to_string()
             })
             .collect()
+    }
+
+    /// A theme file in a fresh config directory, and an app using it.
+    fn themed(tag: &str, theme: &str, user: &str) -> App {
+        let dir = std::env::temp_dir().join(format!("ranma-looks-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::write(dir.join("themes").join("t.toml"), theme).unwrap();
+        let src = format!("ranma.set {{ theme = \"t\" }}\n{user}");
+        let config = crate::config::load_from(Some(&dir), None, Some(&src)).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        App::new(config, tx, 60, 6)
+    }
+
+    #[test]
+    fn workspaces_follow_their_formats_and_modules_sit_between_caps() {
+        let mut a = themed(
+            "bar",
+            r##"
+            [colors]
+            module_bg = "#313244"
+            [bar]
+            workspace_format = "<{n}[ {name}]>"
+            workspace_current_format = "[[{n}]]"
+            module_left = "("
+            module_right = ")"
+            separator = " "
+            "##,
+            r#"ranma.bar { left = { "workspaces" }, center = {}, right = { "panes" } }"#,
+        );
+        with_pane_in(&mut a, 1, 1);
+        with_pane_in(&mut a, 2, 2);
+        a.rename_workspace(2, "logs");
+        let bar = screen(&a).pop().unwrap();
+        assert!(bar.starts_with("([1]<2 logs>)"), "{bar:?}");
+        // `panes` counts running panes; these have no PTY behind them.
+        assert!(bar.ends_with("(0)"), "{bar:?}");
+        // The ground is the module's, the caps are its colour on the bar's.
+        let pieces = a.bar_pieces(60);
+        let cap = pieces.iter().find(|(_, p)| p.text == "(").unwrap();
+        assert_eq!(cap.1.style, Style::Cap);
+        assert!(
+            pieces
+                .iter()
+                .filter(|(_, p)| p.text.contains('2'))
+                .all(|(_, p)| p.boxed)
+        );
     }
 
     /// Section 03, keyboard closed, row for row where the mock's rows are

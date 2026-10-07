@@ -180,11 +180,11 @@ lets you style".
 - [x] Design agreed
 - [x] `select_layout` and `next_layout`: tmux's five presets
 - [x] Saved layouts: `ranma.layout`, `save_layout`, `load_layout` and its picker
-- [ ] `[styles]`: text attributes per role
-- [ ] Border titles (`title`, `title_align`, `title_format`), `indicator`,
+- [x] `[styles]`: text attributes per role
+- [x] Border titles (`title`, `title_align`, `title_format`), `indicator`,
   `ascii` and `custom` line sets, `floating_style`
-- [ ] `panes.active_bg` / `inactive_bg`, selection colours
-- [ ] Workspace formats, module grounds and caps
+- [x] `panes.active_bg` / `inactive_bg`, selection colours
+- [x] Workspace formats, module grounds and caps
 
 ## Later, maybe
 

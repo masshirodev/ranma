@@ -582,7 +582,14 @@ the three-row large bar exists for touch.
 text stays plain and clickable, the ground is filled under each module's whole
 width, and filled pieces inside it (the current workspace, ` WM `) keep their
 own background. The nested workspaces an outer bar expands are one module, so
-they sit between one pair of caps.
+they sit between one pair of caps; they keep their compact form rather than
+the workspace formats, whose room the nested bar's ladder already budgets.
+
+**A border title naming `{program}` or `{cwd}` costs a frame nothing.** Both
+come from /proc, so they are read where the workspaces module's program
+names are, after a key or a pane's output and at most every 500 ms, for the
+panes on screen, and only when the format names them. Idle stays at zero
+wakeups (the smoke test measures it with such a theme loaded earlier).
 
 ### Floating panes and the scratchpad
 

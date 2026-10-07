@@ -9,8 +9,10 @@ use alacritty_terminal::term::TermMode;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::vte::ansi::{Color as AColor, CursorShape, NamedColor};
 use ratatui::Frame;
+use ratatui::layout::Alignment;
 use ratatui::layout::{Position, Rect as RRect};
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::symbols::border;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear};
 use unicode_width::UnicodeWidthStr;
@@ -19,7 +21,7 @@ use crate::app::{App, Mode, PaneView};
 use crate::bar;
 use crate::layout::{Rect, TabBar};
 use crate::picker::Picker;
-use crate::theme::{self, BorderStyle, Colors};
+use crate::theme::{self, Attrs, BorderStyle, Colors, Styles, TitlePosition};
 
 pub fn color(c: theme::Color) -> Color {
     match c {
@@ -27,6 +29,64 @@ pub fn color(c: theme::Color) -> Color {
         theme::Color::Indexed(i) => Color::Indexed(i),
         theme::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
     }
+}
+
+/// A role's text attributes as ratatui's.
+pub fn modifier(a: Attrs) -> Modifier {
+    let mut m = Modifier::empty();
+    for (on, bit) in [
+        (a.bold, Modifier::BOLD),
+        (a.dim, Modifier::DIM),
+        (a.italic, Modifier::ITALIC),
+        (a.underline, Modifier::UNDERLINED),
+        (a.reverse, Modifier::REVERSED),
+        (a.strikethrough, Modifier::CROSSED_OUT),
+    ] {
+        if on {
+            m |= bit;
+        }
+    }
+    m
+}
+
+/// The characters a border style draws with; `None` draws no border.
+fn border_set(b: &theme::Border, style: BorderStyle) -> Option<border::Set<'_>> {
+    Some(match style {
+        BorderStyle::None => return None,
+        BorderStyle::Rounded => border::ROUNDED,
+        BorderStyle::Plain => border::PLAIN,
+        BorderStyle::Thick => border::THICK,
+        BorderStyle::Double => border::DOUBLE,
+        BorderStyle::Ascii => border::Set {
+            top_left: "+",
+            top_right: "+",
+            bottom_left: "+",
+            bottom_right: "+",
+            vertical_left: "|",
+            vertical_right: "|",
+            horizontal_top: "-",
+            horizontal_bottom: "-",
+        },
+        BorderStyle::Custom => {
+            let [tl, tr, bl, br, h, v] = b.custom_chars();
+            border::Set {
+                top_left: tl,
+                top_right: tr,
+                bottom_left: bl,
+                bottom_right: br,
+                vertical_left: v,
+                vertical_right: v,
+                horizontal_top: h,
+                horizontal_bottom: h,
+            }
+        }
+    })
+}
+
+/// A box that is always framed (a picker, a sheet, a toast): the theme's
+/// border, rounded when it has none.
+fn frame_set(b: &theme::Border) -> border::Set<'_> {
+    border_set(b, b.style).unwrap_or(border::ROUNDED)
 }
 
 fn rrect(r: Rect) -> RRect {
@@ -67,11 +127,11 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         // workspace, its own frame: then there is no border here at all).
         if view.inner != view.outer {
             let title = if app.reports_from(view.id) {
-                ""
+                String::new()
             } else {
-                pane.label()
+                app.border_title(view.id)
             };
-            draw_border(f, app, view, title);
+            draw_border(f, app, view, &title);
         }
         if let Some(c) = draw_pane(f, app, view, pane) {
             cursor = Some(c);
@@ -139,13 +199,33 @@ fn draw_pane(
         .fg(color(colors.search_current_fg))
         .bg(color(colors.search_current_bg));
     let selection = content.selection;
-    let dim = Some(app.config.theme.panes.dim_unfocused)
+    let panes = &app.config.theme.panes;
+    let ground = if view.focused {
+        panes.active_bg
+    } else {
+        panes.inactive_bg
+    };
+    let dim = Some(panes.dim_unfocused)
         .filter(|d| *d > 0.0 && !view.focused)
         .map(|amount| Dim {
             amount,
             host: &app.host_colors,
+            ground,
         });
+    let selected_style = match (colors.selection_fg, colors.selection_bg) {
+        (None, None) => None,
+        (fg, bg) => Some(Style {
+            fg: fg.map(color),
+            bg: bg.map(color),
+            ..Style::default()
+        }),
+    };
     let buf = f.buffer_mut();
+    // The pane's ground under everything, so cells the grid does not reach
+    // (a resize on its way) show it too.
+    if let Some(g) = ground {
+        buf.set_style(rrect(inner), Style::default().bg(color(g)));
+    }
 
     for indexed in content.display_iter {
         let line = indexed.point.line.0 + content.display_offset as i32;
@@ -175,9 +255,14 @@ fn draw_pane(
         } else {
             out.set_char(display_char(cell.c));
         }
+        let mut bg = term_color(cell.bg, content.colors);
+        // The program left the default background: the theme's ground, if any.
+        if let (Color::Reset, Some(g)) = (bg, ground) {
+            bg = color(g);
+        }
         let mut style = Style {
             fg: Some(term_color(cell.fg, content.colors)),
-            bg: Some(term_color(cell.bg, content.colors)),
+            bg: Some(bg),
             add_modifier: modifiers(cell.flags),
             ..Style::default()
         };
@@ -193,7 +278,10 @@ fn draw_pane(
             }
         }
         if selection.is_some_and(|sel| sel.contains(point)) {
-            style = style.add_modifier(Modifier::REVERSED);
+            style = match selected_style {
+                Some(sel) => style.patch(sel),
+                None => style.add_modifier(Modifier::REVERSED),
+            };
         }
         out.set_style(style);
     }
@@ -253,12 +341,10 @@ fn draw_pane(
 
 fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     let theme = &app.config.theme;
-    let border_type = match theme.border.style {
-        BorderStyle::None => return,
-        BorderStyle::Rounded => BorderType::Rounded,
-        BorderStyle::Plain => BorderType::Plain,
-        BorderStyle::Thick => BorderType::Thick,
-        BorderStyle::Double => BorderType::Double,
+    let b = &theme.border;
+    let style = if view.floating { b.floating() } else { b.style };
+    let Some(set) = border_set(b, style) else {
+        return;
     };
     let c = &app.colors();
     // In WM mode the focused border takes the mode colour, so it is obvious which
@@ -271,15 +357,53 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         (false, _, true) => c.border_floating,
         (false, _, false) => c.border_inactive,
     };
+    let edge = Style::default().fg(color(border));
     let mut block = Block::default()
         .borders(Borders::ALL)
-        .border_type(border_type)
-        .border_style(Style::default().fg(color(border)));
+        .border_set(set)
+        .border_style(edge);
     let mark = if app.is_synced(view.id) { "⇉ " } else { "" };
-    if !title.is_empty() || !mark.is_empty() {
-        block = block.title(Line::from(format!(" {mark}{title} ")));
+    if b.title != TitlePosition::Off && (!title.trim().is_empty() || !mark.is_empty()) {
+        // The sync mark goes in front of the text, inside the format's padding.
+        let text = if title.trim().is_empty() {
+            format!(" {mark}")
+        } else {
+            let lead = title.len() - title.trim_start().len();
+            format!("{}{mark}{}", &title[..lead], &title[lead..])
+        };
+        let attrs = if view.focused {
+            theme.styles.title_active
+        } else {
+            theme.styles.title
+        };
+        let line =
+            Line::styled(text, edge.add_modifier(modifier(attrs))).alignment(match b.title_align {
+                theme::Align::Left => Alignment::Left,
+                theme::Align::Center => Alignment::Center,
+                theme::Align::Right => Alignment::Right,
+            });
+        block = match b.title {
+            TitlePosition::Bottom => block.title_bottom(line),
+            _ => block.title_top(line),
+        };
     }
-    f.render_widget(block, rrect(view.outer));
+    let r = view.outer;
+    f.render_widget(block, rrect(r));
+    if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
+        let buf = f.buffer_mut();
+        let (mx, my) = (r.x + r.w / 2, r.y + r.h / 2);
+        let mut arrows = vec![(r.x, my, "▶"), (r.right() - 1, my, "◀")];
+        // Not over the title's edge.
+        if b.title != TitlePosition::Top {
+            arrows.push((mx, r.y, "▼"));
+        }
+        if b.title != TitlePosition::Bottom {
+            arrows.push((mx, r.bottom() - 1, "▲"));
+        }
+        for (x, y, a) in arrows {
+            buf.set_string(x, y, a, edge);
+        }
+    }
 }
 
 /// The compact label of a ranma this bar is not showing (see
@@ -312,7 +436,7 @@ fn draw_nest_label(f: &mut Frame, app: &App, view: &PaneView, l: &crate::app::Ne
     };
     put(" ", ground, &mut x);
     for p in &l.pieces {
-        let mut style = piece_style(c, p.style);
+        let mut style = piece_style(c, &app.config.theme.styles, p.style);
         if !l.on_border && style.bg.is_none() {
             style = style.bg(color(c.bar_bg));
         }
@@ -362,16 +486,15 @@ fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
     let mid = tb.rect.y + tb.rect.h / 2;
     for (i, (id, (x0, x1))) in tb.tabs.iter().zip(tb.spans()).enumerate() {
         let active = i == tb.active;
-        let style = if active {
-            Style::default()
-                .fg(color(c.tab_active_fg))
-                .bg(color(c.tab_active_bg))
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-                .fg(color(c.tab_inactive_fg))
-                .bg(color(c.tab_inactive_bg))
-        };
+        let style = piece_style(
+            c,
+            &app.config.theme.styles,
+            if active {
+                bar::Style::TabActive
+            } else {
+                bar::Style::TabInactive
+            },
+        );
         let width = x1.saturating_sub(x0) as usize;
         let label: String = format!(" {} ", app.chip_label(*id))
             .chars()
@@ -440,6 +563,7 @@ fn draw_toolbars(f: &mut Frame, app: &App) {
 
 fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
     let c = &app.colors();
+    let st = &app.config.theme.styles;
     let base = Style::default().fg(color(c.bar_fg)).bg(color(c.bar_bg));
     // The bar owns its row: drawn over a pane (a nested ranma's bar, while an
     // outer one shows its workspaces elsewhere), nothing underneath shows.
@@ -450,20 +574,30 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
     // the middle one.
     let mid = area.y + area.h / 2;
     for (x, piece) in app.bar_pieces(area.w) {
-        let style = piece_style(c, piece.style).patch(Style::default().bg(color(c.bar_bg)));
         let filled = matches!(
             piece.style,
             bar::Style::Mode
                 | bar::Style::WsActive
                 | bar::Style::TabActive
                 | bar::Style::TabInactive
+                | bar::Style::Cap
         );
-        // These carry their own background.
-        let style = if filled {
-            piece_style(c, piece.style)
-        } else {
-            style
-        };
+        let mut style = piece_style(c, st, piece.style);
+        // These carry their own background; the rest sit on the module's
+        // ground (between its caps) or the bar's.
+        if !filled {
+            match (piece.boxed, c.module_bg) {
+                (true, Some(ground)) => {
+                    style = style.bg(color(ground));
+                    if piece.style == bar::Style::Normal
+                        && let Some(fg) = c.module_fg
+                    {
+                        style = style.fg(color(fg));
+                    }
+                }
+                _ => style = style.bg(color(c.bar_bg)),
+            }
+        }
         let room = area.w.saturating_sub(x);
         if filled && area.h > 1 {
             let w = (piece.text.width() as u16).min(room);
@@ -520,17 +654,11 @@ fn draw_which_key(f: &mut Frame, app: &App) {
     let surface = Style::default().fg(color(c.toast_fg)).bg(color(c.toast_bg));
     f.render_widget(Clear, area);
     let mut block = Block::default().style(surface);
-    let border_type = match app.config.theme.border.style {
-        BorderStyle::None => None,
-        BorderStyle::Rounded => Some(BorderType::Rounded),
-        BorderStyle::Plain => Some(BorderType::Plain),
-        BorderStyle::Thick => Some(BorderType::Thick),
-        BorderStyle::Double => Some(BorderType::Double),
-    };
-    if let Some(t) = border_type {
+    let b = &app.config.theme.border;
+    if let Some(set) = border_set(b, b.style) {
         block = block
             .borders(Borders::ALL)
-            .border_type(t)
+            .border_set(set)
             .border_style(surface.fg(color(c.mode_bg)));
     }
     f.render_widget(block, area);
@@ -552,8 +680,10 @@ fn draw_which_key(f: &mut Frame, app: &App) {
 }
 
 fn draw_toasts(f: &mut Frame, app: &App) {
-    let c = &app.config.theme.colors;
+    let theme = &app.config.theme;
+    let c = &theme.colors;
     let body = Style::default().fg(color(c.toast_fg)).bg(color(c.toast_bg));
+    let text = body.add_modifier(modifier(theme.styles.toast));
     for (toast, r, lines) in app.toast_layout() {
         let edge = match toast.level {
             crate::toast::Level::Normal => c.bar_accent,
@@ -562,7 +692,7 @@ fn draw_toasts(f: &mut Frame, app: &App) {
         f.render_widget(Clear, rrect(r));
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .border_set(frame_set(&theme.border))
             .border_style(body.fg(color(edge)))
             .style(body);
         f.render_widget(block, rrect(r));
@@ -573,7 +703,7 @@ fn draw_toasts(f: &mut Frame, app: &App) {
                 r.y + 1 + i as u16,
                 line,
                 r.w.saturating_sub(4) as usize,
-                body,
+                text,
             );
         }
     }
@@ -585,15 +715,9 @@ fn draw_toasts(f: &mut Frame, app: &App) {
 fn draw_sheet(f: &mut Frame, app: &App, p: &Picker, l: &crate::app::SheetLayout) {
     let c = app.colors();
     f.render_widget(Clear, rrect(l.outer));
-    let border_type = match app.config.theme.border.style {
-        BorderStyle::Rounded | BorderStyle::None => BorderType::Rounded,
-        BorderStyle::Plain => BorderType::Plain,
-        BorderStyle::Thick => BorderType::Thick,
-        BorderStyle::Double => BorderType::Double,
-    };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(border_type)
+        .border_set(frame_set(&app.config.theme.border))
         .border_style(Style::default().fg(color(c.mode_bg)))
         .title(Line::from(format!(" {} ", p.heading())));
     f.render_widget(block, rrect(l.outer));
@@ -630,7 +754,10 @@ fn draw_sheet(f: &mut Frame, app: &App, p: &Picker, l: &crate::app::SheetLayout)
         } else {
             (c.button_fg(), c.button_bg())
         };
-        let face = Style::default().fg(color(fg)).bg(color(bg));
+        let mut face = Style::default().fg(color(fg)).bg(color(bg));
+        if selected {
+            face = face.add_modifier(modifier(app.config.theme.styles.picker_selected));
+        }
         buf.set_style(rrect(*r), face);
         let mid = r.y + r.h / 2;
         let detail = if l.details { item.detail.as_str() } else { "" };
@@ -684,15 +811,9 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
     };
     let c = &app.config.theme.colors;
     f.render_widget(Clear, rrect(l.outer));
-    let border_type = match app.config.theme.border.style {
-        BorderStyle::Rounded | BorderStyle::None => BorderType::Rounded,
-        BorderStyle::Plain => BorderType::Plain,
-        BorderStyle::Thick => BorderType::Thick,
-        BorderStyle::Double => BorderType::Double,
-    };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(border_type)
+        .border_set(frame_set(&app.config.theme.border))
         .border_style(Style::default().fg(color(c.mode_bg)))
         .title(Line::from(format!(" {} ", p.heading())));
     f.render_widget(block, rrect(l.outer));
@@ -746,7 +867,10 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
         } else {
             (color(c.bar_fg), Color::Reset)
         };
-        let base = Style::default().fg(fg).bg(bg);
+        let mut base = Style::default().fg(fg).bg(bg);
+        if selected {
+            base = base.add_modifier(modifier(app.config.theme.styles.picker_selected));
+        }
         buf.set_style(RRect::new(l.list.x, y, l.list.w, 1), base);
         // Where you are is marked, not only described in the dim detail: the
         // selection can sit elsewhere, and then nothing else says it.
@@ -777,37 +901,38 @@ fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
     f.set_cursor_position(Position::new(cx, q.y));
 }
 
-fn piece_style(c: &Colors, s: bar::Style) -> Style {
-    let fg = |col| Style::default().fg(color(col));
+fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
+    let fg = |col, a| Style::default().fg(color(col)).add_modifier(modifier(a));
+    let filled = |f, b, a| {
+        Style::default()
+            .fg(color(f))
+            .bg(color(b))
+            .add_modifier(modifier(a))
+    };
     match s {
-        bar::Style::Normal => fg(c.bar_fg),
-        bar::Style::Dim => fg(c.bar_dim),
-        bar::Style::Accent => fg(c.bar_accent),
-        bar::Style::Urgent => fg(c.bar_urgent).add_modifier(Modifier::BOLD),
-        bar::Style::Mode => Style::default()
-            .fg(color(c.mode_fg))
-            .bg(color(c.mode_bg))
-            .add_modifier(Modifier::BOLD),
-        bar::Style::WsActive => Style::default()
-            .fg(color(c.ws_active_fg))
-            .bg(color(c.ws_active_bg))
-            .add_modifier(Modifier::BOLD),
-        bar::Style::WsOccupied => fg(c.ws_occupied),
-        bar::Style::WsEmpty => fg(c.ws_empty),
-        bar::Style::WsUrgent => fg(c.ws_urgent).add_modifier(Modifier::BOLD),
-        bar::Style::WsHolder => fg(c.ws_occupied).add_modifier(Modifier::BOLD),
-        bar::Style::TabActive => Style::default()
-            .fg(color(c.tab_active_fg))
-            .bg(color(c.tab_active_bg))
-            .add_modifier(Modifier::BOLD),
-        bar::Style::TabInactive => Style::default()
-            .fg(color(c.tab_inactive_fg))
-            .bg(color(c.tab_inactive_bg)),
+        bar::Style::Normal => fg(c.bar_fg, st.bar),
+        bar::Style::Dim => fg(c.bar_dim, st.dim),
+        bar::Style::Accent => fg(c.bar_accent, st.accent),
+        bar::Style::Urgent => fg(c.bar_urgent, st.urgent),
+        bar::Style::Mode => filled(c.mode_fg, c.mode_bg, st.mode),
+        bar::Style::WsActive => filled(c.ws_active_fg, c.ws_active_bg, st.ws_active),
+        bar::Style::WsOccupied => fg(c.ws_occupied, st.ws_occupied),
+        bar::Style::WsEmpty => fg(c.ws_empty, st.ws_empty),
+        bar::Style::WsUrgent => fg(c.ws_urgent, st.ws_urgent),
+        // A current workspace that is not the end of the path: bold, occupied.
+        bar::Style::WsHolder => fg(c.ws_occupied, st.ws_occupied).add_modifier(Modifier::BOLD),
+        bar::Style::TabActive => filled(c.tab_active_fg, c.tab_active_bg, st.tab_active),
+        bar::Style::TabInactive => filled(c.tab_inactive_fg, c.tab_inactive_bg, st.tab_inactive),
         bar::Style::WsInner(accent) => match accent {
-            Some([r, g, b]) => Style::default().fg(Color::Rgb(r, g, b)),
-            None => fg(c.ws_active_bg),
-        }
-        .add_modifier(Modifier::BOLD),
+            Some([r, g, b]) => Style::default()
+                .fg(Color::Rgb(r, g, b))
+                .add_modifier(modifier(st.ws_active)),
+            None => fg(c.ws_active_bg, st.ws_active),
+        },
+        // A module's edge: its ground's colour on the bar's.
+        bar::Style::Cap => Style::default()
+            .fg(color(c.module_bg.unwrap_or(c.bar_bg)))
+            .bg(color(c.bar_bg)),
     }
 }
 
@@ -848,6 +973,9 @@ fn modifiers(flags: Flags) -> Modifier {
 struct Dim<'a> {
     amount: f32,
     host: &'a crate::hostcolors::HostColors,
+    /// The pane's ground (`panes.inactive_bg`), where the program left the
+    /// default background: text fades toward it, not toward the host's.
+    ground: Option<theme::Color>,
 }
 
 impl Dim<'_> {
@@ -866,9 +994,18 @@ impl Dim<'_> {
         } else {
             (cell.fg, cell.bg)
         };
+        let ground = |c: AColor| -> Option<crate::hostcolors::Rgb> {
+            let default_bg = matches!(c, AColor::Named(NamedColor::Background))
+                && overrides[NamedColor::Background].is_none();
+            match self.ground.filter(|_| default_bg)? {
+                theme::Color::Rgb(r, g, b) => Some(crate::hostcolors::Rgb { r, g, b }),
+                theme::Color::Indexed(i) => self.host.get(i as usize),
+                theme::Color::Default => None,
+            }
+        };
         match (
             rgb_of(fg, overrides, self.host),
-            rgb_of(bg, overrides, self.host),
+            ground(bg).or_else(|| rgb_of(bg, overrides, self.host)),
         ) {
             (Some(f), Some(b)) => {
                 let mix =

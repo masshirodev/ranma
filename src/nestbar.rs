@@ -431,11 +431,13 @@ pub fn fit_nested(
     sep: &str,
     cols: u16,
     expand_all: bool,
+    wrap: &dyn Fn(Segment) -> Segment,
     floor: usize,
 ) -> Vec<(u16, Piece)> {
     let build = |o: &Opts| -> Vec<Segment> {
         let mut left: Vec<Segment> = before.to_vec();
-        left.push(pieces(set, 0, true, o, &[]));
+        // The nested workspaces are one module: one pair of caps around them.
+        left.push(wrap(pieces(set, 0, true, o, &[])));
         left.extend(after.iter().cloned());
         left
     };
@@ -740,6 +742,7 @@ mod tests {
             "  ",
             cols,
             expand_all,
+            &|s| s,
             TITLE_FLOOR,
         );
         let mut row = vec![' '; cols as usize];

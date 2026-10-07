@@ -178,6 +178,26 @@ echo 'ranma.bind("x", "fly")' > "$CFG/init.lua"
 wait_for 'config error, kept the old one' 8 || fail "reload error not shown"
 rm "$CFG/init.lua"
 
+# Looks from a theme: an ascii border, the title on the bottom edge from its
+# format (the program is read after the next keypress, not by a frame), and
+# arrows on the focused pane. Without the theme, the defaults come back.
+mkdir -p "$CFG/themes"
+cat > "$CFG/themes/smoke.toml" <<'TOML'
+[border]
+style = "ascii"
+title = "bottom"
+title_align = "right"
+title_format = " #{index}[ {program}] "
+indicator = "arrows"
+TOML
+echo 'ranma.set { theme = "smoke" }' > "$CFG/init.lua"
+wait_for '^+-' 8 || fail "the theme's ascii border was not drawn"
+T send-keys -t s 'true' Enter
+wait_for '#1 bash +' 8 || fail "the border title did not follow its format and position"
+wait_for '▶' 2 || fail "no arrows on the focused pane"
+rm "$CFG/init.lua"
+wait_for '╭' 8 || fail "the default border did not come back"
+
 # Idle: zero CPU over five seconds.
 PID=$(server_pid)
 [ -n "$PID" ] || fail "no ranma server process found"

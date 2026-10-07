@@ -35,6 +35,8 @@ pub enum Style {
     /// A pane chip in the `pane_strip` module, drawn as a tab.
     TabActive,
     TabInactive,
+    /// `bar.module_left` or `module_right`: the edge of a module's ground.
+    Cap,
 }
 
 impl Style {
@@ -83,6 +85,8 @@ pub struct Piece {
     pub text: String,
     pub style: Style,
     pub click: Option<Click>,
+    /// Inside a module's caps: drawn on `colors.module_bg`.
+    pub boxed: bool,
 }
 
 impl Piece {
@@ -91,6 +95,7 @@ impl Piece {
             text: text.into(),
             style,
             click: None,
+            boxed: false,
         }
     }
     pub fn on_click(mut self, click: Click) -> Piece {
@@ -155,6 +160,24 @@ pub fn stretch(seg: Segment, spare: usize) -> Segment {
             p
         })
         .collect()
+}
+
+/// A module between its caps (`bar.module_left` / `module_right`), its pieces
+/// on the module's ground. An empty module stays empty: it takes no room.
+pub fn boxed(seg: Segment, left: &str, right: &str) -> Segment {
+    if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
+        return seg;
+    }
+    let cap = |t: &str| Piece::new(t, Style::Cap);
+    let mut out = Vec::with_capacity(seg.len() + 2);
+    if !left.is_empty() {
+        out.push(cap(left));
+    }
+    out.extend(seg.into_iter().map(|p| Piece { boxed: true, ..p }));
+    if !right.is_empty() {
+        out.push(cap(right));
+    }
+    out
 }
 
 /// Join a side's modules with the separator, skipping empty ones.
@@ -444,6 +467,28 @@ mod tests {
     fn wide_characters_count_as_two() {
         let placed = fit(&[], &[], &[seg("日本")], " ", 6);
         assert_eq!(placed[0].0, 2);
+    }
+
+    #[test]
+    fn a_boxed_module_is_its_caps_around_its_ground() {
+        let b = boxed(seg("cpu 3%"), "(", ")");
+        let texts: Vec<(&str, Style, bool)> = b
+            .iter()
+            .map(|p| (p.text.as_str(), p.style, p.boxed))
+            .collect();
+        assert_eq!(
+            texts,
+            vec![
+                ("(", Style::Cap, false),
+                ("cpu 3%", Style::Normal, true),
+                (")", Style::Cap, false)
+            ]
+        );
+        assert!(
+            boxed(Vec::new(), "(", ")").is_empty(),
+            "an empty module takes no room"
+        );
+        assert_eq!(boxed(seg("x"), "", ""), seg("x"), "no caps, no ground");
     }
 
     #[test]

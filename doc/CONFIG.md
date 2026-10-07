@@ -962,16 +962,56 @@ The toolbar keys are optional: each follows the role it names when unset, so
 a theme that only sets the older roles (one rendered from the wallpaper's
 palette, say) styles toolbars too.
 | `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
+| `colors.selection_fg`, `selection_bg` | copy mode's selection; unset, the cells are reversed |
 | `colors.toast_fg`, `toast_bg` | toasts (their border is `bar_accent`, or `bar_urgent` when urgent) |
-| `border.style` | `rounded`, `plain`, `thick`, `double`, `none` |
+| `colors.module_bg`, `module_fg` | a bar module's ground, between `bar.module_left` and `module_right`, and its `normal` text there; unset, modules sit on `bar_bg` |
+| `border.style` | `rounded`, `plain`, `thick`, `double`, `ascii` (`+ - \|`), `custom`, `none` |
+| `border.chars` | with `custom`: six one-cell characters, top-left, top-right, bottom-left, bottom-right, horizontal, vertical (`"┏┓┗┛━┃"`) |
+| `border.floating_style` | floats and popups (`ranma popup`); unset, `style` |
+| `border.title` | where a pane's title goes: `top`, `bottom`, `off` |
+| `border.title_align` | `left`, `center`, `right` |
+| `border.title_format` | the title's text (see [Formats](#formats)): `{title}` (its name, else what its program set), `{index}` (its place in the workspace, from 1), `{program}` (the program in its foreground), `{cwd}` (its directory, `~` for home). `" {title} "` by default. |
+| `border.indicator` | `none`, or `arrows`: arrows on the focused pane's edges, pointing in (not on the edge its title is on) |
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
 | `bar.position` | `top`, `bottom`, `hidden` |
 | `bar.separator` | text drawn between two modules on the same side |
+| `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |
+| `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
+| `panes.active_bg`, `inactive_bg` | the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's `window-active-style` and `window-style`); unset, the terminal's own. Unfocused text fades toward `inactive_bg`. |
+| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected`, `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
 
 A cell is about twice as tall as it is wide, so outer gaps look even at
 `outer_horizontal = 2 * outer_vertical`.
 
-That is the whole theming surface: colours, a border style, gaps, a separator
-and how much unfocused panes fade.
-There is no stylesheet on purpose — see `DESIGN.md`, "The bar".
+### Formats
+
+A format is text with `{placeholders}`, and a part in `[...]` that shows only
+when every placeholder in it has a value: `" {n}[:{name}] "` is ` 3:nvim `
+for a named workspace and ` 3 ` for one without. `[[`, `]]`, `{{` and `}}`
+are the characters themselves. That is all: there are no conditionals, and an
+unknown placeholder is an error at load. For logic, write a Lua module.
+
+### From tmux
+
+What a `.tmux.conf` styles, and where it lives here:
+
+| tmux | ranma theme |
+| --- | --- |
+| `pane-border-style`, `pane-active-border-style` | `colors.border_inactive`, `border_active` |
+| `pane-border-lines` | `border.style`, `border.chars` |
+| `pane-border-status`, `pane-border-format` | `border.title`, `border.title_format` |
+| `pane-border-indicators` | `border.indicator` |
+| `popup-border-lines` | `border.floating_style` |
+| `window-style`, `window-active-style` | `panes.inactive_bg`, `active_bg` |
+| `mode-style` | `colors.selection_fg`, `selection_bg` |
+| `status-style` | `colors.bar_bg`, `bar_fg`, `styles.bar` |
+| `window-status-format`, `-current-format` | `bar.workspace_format`, `workspace_current_format` |
+| `window-status-current-style` | `colors.ws_active_fg`, `ws_active_bg`, `styles.ws_active` |
+| `window-status-separator` | `bar.separator` |
+| `status-position` | `bar.position` |
+| `status-justify`, `status-left`, `status-right` | `ranma.bar { left, center, right }` in `init.lua` |
+| `message-style` | `colors.toast_fg`, `toast_bg`, `styles.toast` |
+
+Colours, attributes and shapes are the theme; what the bar shows is
+`init.lua`. There is no stylesheet on purpose — see `DESIGN.md`, "Looks".
