@@ -167,6 +167,8 @@ does not matter; it is ignored.
 | `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
 | `select_layout <preset>` | Rebuild the workspace's tiles, in tree order, into one of tmux's presets: `even-horizontal` (side by side), `even-vertical` (stacked), `main-vertical` (the first pane on the left, the rest stacked on the right), `main-horizontal` (the first on top, the rest side by side below) or `tiled` (a grid). The main pane takes `master_ratio`. Groups are flattened, floats stay where they are, fullscreen ends. Applied once: the next pane opened is placed by `layout` as usual. Under `layout = "master"` only `main-vertical` is accepted, since the master shape would undo the others. |
 | `next_layout` | The preset after the one this workspace showed last, in tmux's order (`leader space`, tmux's `Space`). |
+| `save_layout [name]` | Save the workspace's tiles as a [layout](#layouts--ranmalayoutname-def): splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered). A name `init.lua` declares is refused. |
+| `load_layout [name]` | Apply a [layout](#layouts--ranmalayoutname-def) to the workspace. Without a name, pick one from every layout, declared and saved. |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |
 | `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). |
@@ -297,6 +299,49 @@ ranma.session("wayfarer", { accent = "bright-green" })
 So two projects look different at a glance. `session_accent` sets one for the
 current session at run time, and `ranma open --accent` for the session it
 opens in; either wins over the config until `session_accent none`.
+
+## Layouts — `ranma.layout(name, def)`
+
+A layout is a workspace's tree with what runs in each pane, brought back with
+`load_layout NAME` (tmuxinator's job, built in). Declare one in `init.lua`:
+
+```lua
+ranma.layout("kumiko", {
+  split = "horizontal",
+  { cwd = "~/projects/kumiko", command = "nvim", size = 2 },
+  { split = "vertical",
+    { cwd = "~/projects/kumiko", command = "yarn run dev" },
+    { cwd = "~/projects/kumiko" } },
+})
+```
+
+or arrange a workspace by hand and run `save_layout kumiko`, which writes
+`$XDG_STATE_HOME/ranma/layouts/kumiko.toml` (`~/.local/state/...`).
+
+| Key | On | Meaning |
+| --- | --- | --- |
+| `split` | a container | `"horizontal"` (side by side) or `"vertical"` (stacked). |
+| `group` | a container | `true`: a group, one pane shown at a time under tabs. `split` may be left out then. |
+| `size` | anything | Its share among its siblings, as a weight: `2` beside two `1`s is half. Left out, 1. |
+| `cwd` | a pane | Where its shell starts; `~` is your home. Left out: where `new_pane` would start it. A directory that is gone: home. |
+| `command` | a pane | Typed into its shell once it starts, as if you had typed it: when it ends, the shell stays, and the command is in its history. |
+
+A container's children are its list part in Lua, and `[[children]]` tables
+in a saved file; nothing else differs, so a saved file reads as the Lua it
+would be. Unknown keys are errors naming where they are
+(`ranma.layout("kumiko")[2][1]: unknown key `comand``).
+
+`load_layout` on an **empty workspace** opens every pane. On one with
+**panes**, they take the layout's places in order and keep running; places
+left over are opened, and panes left over are placed after the layout. It
+never closes anything. Floats are not part of a layout, and under
+`layout = "master"` the master shape is put back over it.
+
+`save_layout` records a pane's command only when something other than its
+shell is in the foreground (`nvim`, `yarn run dev`), quoted for the shell.
+A layout declared in `init.lua` wins over a saved file of the same name, and
+`save_layout` refuses that name rather than write a file that would never
+load.
 
 ## ranma inside ranma
 

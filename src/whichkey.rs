@@ -175,12 +175,14 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::Quit { now: false } => (39, 0),
         Action::ExitMode => (40, 0),
         Action::NextLayout => (41, 0),
+        Action::LoadLayout(None) => (42, 0),
+        Action::SaveLayout(None) => (43, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 42] = [
+const KINDS: [Kind; 44] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -223,6 +225,8 @@ const KINDS: [Kind; 42] = [
     k("ranma", "quit", Shape::Single),
     k("ranma", "leave WM", Shape::Single),
     k("layout", "next layout", Shape::Single),
+    k("layout", "load layout", Shape::Single),
+    k("layout", "save layout", Shape::Single),
 ];
 
 /// Binds of one kind under the same modifiers: the kind, the modifiers, and

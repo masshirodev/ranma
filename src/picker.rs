@@ -84,6 +84,10 @@ pub enum Kind {
     ToolbarMore,
     /// The workspaces of the shown session (`workspace_switcher`).
     Workspaces,
+    /// The layouts, declared and saved (`load_layout`).
+    Layouts,
+    /// A one-line prompt naming the layout `save_layout` writes.
+    SaveLayout,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,6 +198,7 @@ impl Picker {
             self.kind,
             Kind::RenameSession(_)
                 | Kind::RenameWorkspace(_)
+                | Kind::SaveLayout
                 | Kind::RenamePane(_)
                 | Kind::ConfirmQuit
                 | Kind::ConfirmUpdate

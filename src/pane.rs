@@ -508,6 +508,28 @@ impl Pane {
         workspace_label(self.program(), || self.ssh_host(), self.inner_host())
     }
 
+    /// The command line in the pane's foreground, as words, unless that is
+    /// a shell named `shell` (the pane's own at its prompt, or one started in
+    /// it): what a saved layout types back in.
+    pub fn foreground_command(&self, shell: &str) -> Option<Vec<String>> {
+        let fg = foreground_pid(self.pid);
+        let comm = std::fs::read_to_string(format!("/proc/{fg}/comm")).ok()?;
+        let shell = std::path::Path::new(shell)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(shell);
+        if comm.trim() == shell {
+            return None;
+        }
+        let raw = std::fs::read(format!("/proc/{fg}/cmdline")).ok()?;
+        let argv: Vec<String> = raw
+            .split(|b| *b == 0)
+            .filter(|a| !a.is_empty())
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect();
+        (!argv.is_empty()).then_some(argv)
+    }
+
     /// The directory the pane's child is in now: where `cd` last took the shell.
     /// Read from /proc, so it follows the shell without any shell integration.
     pub fn cwd(&self) -> Option<std::path::PathBuf> {

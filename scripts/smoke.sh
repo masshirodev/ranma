@@ -25,8 +25,10 @@ CFG=$(mktemp -d)
 # sockets and logs, and can never be found by (or attach to) the user's.
 RT=$(mktemp -d)
 CACHE=$(mktemp -d)
+# Saved layouts are state: the test's go here, never into the user's.
+STATE=$(mktemp -d)
 # No SSH variables: the title names the host only where a step asks for it.
-ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
 # The server process of this test (the client is a separate, thinner process).
 server_pid() {
   for p in $(pgrep -x ranma); do
@@ -200,6 +202,26 @@ T send-keys -t s C-b t; sleep 0.8
 T send-keys -t s 'pwd' Enter
 wait_for '│/usr/share *│' || fail "new pane did not start in the focused pane's directory"
 T send-keys -t s 'exit' Enter; sleep 0.5
+
+# A saved layout: loaded on an empty workspace, its panes start in their
+# directories with their commands typed in; saved back, it keeps the shape.
+mkdir -p "$STATE/ranma/layouts"
+cat > "$STATE/ranma/layouts/smoke.toml" <<'TOML'
+split = "horizontal"
+[[children]]
+cwd = "/usr/share"
+command = "echo layout-$((40 + 2))-ok"
+[[children]]
+cwd = "/nonexistent-dir"
+TOML
+T send-keys -t s "$BIN action 'workspace 4' && $BIN action 'load_layout smoke'" Enter
+wait_for 'layout-42-ok' || fail "load_layout did not type the saved command"
+wait_for 'layout smoke: 2 panes opened' || fail "load_layout did not say what it opened"
+T send-keys -t s "$BIN action 'save_layout smoke-back'; sleep 0.5; grep -c '^cwd = \"/usr/share\"' $STATE/ranma/layouts/smoke-back.toml" Enter
+wait_for '│1 *│' || fail "save_layout did not write the pane's directory"
+T send-keys -t s 'exit' Enter; sleep 0.4
+T send-keys -t s 'exit' Enter; sleep 0.6
+T send-keys -t s C-b 1 Escape; sleep 0.3
 
 # `ranma notify` in a pane reaches this ranma and shows a toast.
 T send-keys -t s "$BIN notify smoke-toast-ok" Enter

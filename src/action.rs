@@ -90,6 +90,10 @@ pub enum Action {
     SelectLayout(crate::layout::Preset),
     /// The preset after the one the workspace showed last (tmux's `Space`).
     NextLayout,
+    /// Save the workspace's tiles as a layout; without a name, ask for one.
+    SaveLayout(Option<String>),
+    /// Apply a layout to the workspace; without a name, pick one.
+    LoadLayout(Option<String>),
     ToggleFloating,
     /// Size the focused pane as a float, in percent of the workspace (width,
     /// height), keeping its centre. A tile is floated first.
@@ -195,6 +199,8 @@ impl Action {
                 | Action::PasteImage
                 | Action::PaneSwitcher
                 | Action::WorkspaceSwitcher
+                | Action::SaveLayout(_)
+                | Action::LoadLayout(_)
                 | Action::PaneMenu
                 | Action::SessionSwitcher
                 | Action::Help
@@ -269,6 +275,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
         "<even-horizontal|even-vertical|main-horizontal|main-vertical|tiled>",
     ),
     ("next_layout", ""),
+    ("save_layout", "[name]"),
+    ("load_layout", "[name]"),
     ("swap_master", ""),
     ("sync_toggle", ""),
     ("sync_clear", ""),
@@ -446,6 +454,24 @@ impl FromStr for Action {
                 }
             }
             "next_layout" => no_arg(Action::NextLayout),
+            "save_layout" | "load_layout" => {
+                let named = match (first, second) {
+                    (None, _) => None,
+                    (Some(n), None) if crate::layouts::valid_name(n) => Some(n.to_string()),
+                    _ => {
+                        return Err(ActionError::BadArg {
+                            action: name.into(),
+                            arg: rest.unwrap_or_default().into(),
+                            expected: "one layout name, without slashes or spaces",
+                        });
+                    }
+                };
+                Ok(if name == "save_layout" {
+                    Action::SaveLayout(named)
+                } else {
+                    Action::LoadLayout(named)
+                })
+            }
             "swap_master" => no_arg(Action::SwapMaster),
             "sync_toggle" => no_arg(Action::SyncToggle),
             "sync_clear" => no_arg(Action::SyncClear),
@@ -705,6 +731,10 @@ impl fmt::Display for Action {
             Action::Equalize => f.write_str("equalize"),
             Action::SelectLayout(p) => write!(f, "select_layout {}", p.name()),
             Action::NextLayout => f.write_str("next_layout"),
+            Action::SaveLayout(None) => f.write_str("save_layout"),
+            Action::SaveLayout(Some(n)) => write!(f, "save_layout {n}"),
+            Action::LoadLayout(None) => f.write_str("load_layout"),
+            Action::LoadLayout(Some(n)) => write!(f, "load_layout {n}"),
             Action::SwapMaster => f.write_str("swap_master"),
             Action::SyncToggle => f.write_str("sync_toggle"),
             Action::SyncClear => f.write_str("sync_clear"),
@@ -804,6 +834,16 @@ mod tests {
             Action::SelectLayout(Preset::MainVertical)
         );
         assert_eq!(a("next_layout"), Action::NextLayout);
+        assert_eq!(a("load_layout"), Action::LoadLayout(None));
+        assert_eq!(a("save_layout dev"), Action::SaveLayout(Some("dev".into())));
+        assert!(matches!(
+            "load_layout a/b".parse::<Action>(),
+            Err(ActionError::BadArg { .. })
+        ));
+        assert!(matches!(
+            "save_layout two words".parse::<Action>(),
+            Err(ActionError::BadArg { .. })
+        ));
         assert!(matches!(
             "select_layout".parse::<Action>(),
             Err(ActionError::MissingArg { .. })

@@ -15,6 +15,7 @@ pub mod input;
 pub mod ipc;
 pub mod keys;
 pub mod layout;
+pub mod layouts;
 pub mod nestbar;
 pub mod osc;
 pub mod pane;

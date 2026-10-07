@@ -29,6 +29,7 @@ use crate::workspace::Workspace;
 mod copy;
 mod drag;
 mod hints;
+mod layouts;
 mod nested;
 pub use nested::NestLabel;
 mod paste;
@@ -269,6 +270,8 @@ pub struct App {
     last_report: Option<crate::nestbar::Report>,
     /// The pane drawn without a border last time (see `frameless`).
     frameless_was: Option<PaneId>,
+    /// Where `save_layout` writes and `load_layout` reads (see `layouts`).
+    layouts_dir: Option<std::path::PathBuf>,
 }
 
 impl App {
@@ -318,6 +321,7 @@ impl App {
             toasts: Default::default(),
             drop_preview: None,
             update_available: None,
+            layouts_dir: crate::layouts::dir(),
             selection_pane: None,
             last_click: None,
             mouse_capture: None,
@@ -2079,6 +2083,10 @@ impl App {
             }
             Action::SelectLayout(p) => self.select_layout(p),
             Action::NextLayout => self.select_layout(Preset::after(self.active().preset)),
+            Action::SaveLayout(Some(name)) => self.save_layout(&name),
+            Action::SaveLayout(None) => self.open_save_layout_prompt(),
+            Action::LoadLayout(Some(name)) => self.load_layout(&name),
+            Action::LoadLayout(None) => self.open_layout_picker(),
             Action::ToggleFloating => self.toggle_floating(),
             Action::FloatSize(pw, ph) => self.place_float(|r| r.resized_in(area, pw, ph)),
             Action::Snap(to) => self.place_float(|r| r.snapped(area, to)),

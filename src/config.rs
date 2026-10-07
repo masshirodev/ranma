@@ -618,6 +618,7 @@ struct Builder {
     profiles: HashMap<String, Profile>,
     toolbars: Vec<(String, ToolbarDef)>,
     toolbars_shown: Vec<String>,
+    layouts: std::collections::BTreeMap<String, crate::layouts::Spec>,
 }
 
 pub struct Config {
@@ -640,6 +641,8 @@ pub struct Config {
     pub rules: Vec<Rule>,
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
     pub session_accents: HashMap<String, theme::Color>,
+    /// `ranma.layout` definitions, by name (DESIGN.md, "Layouts").
+    pub layouts: std::collections::BTreeMap<String, crate::layouts::Spec>,
     pub theme: Theme,
     /// `ranma.profile` definitions, by name.
     pub profiles: HashMap<String, Profile>,
@@ -1230,6 +1233,26 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
     )?;
 
     ranma.set(
+        "layout",
+        lua.create_function(|lua, (name, def): (String, Table)| {
+            let who = format!("ranma.layout(\"{name}\")");
+            if !crate::layouts::valid_name(&name) {
+                return Err(rt_err(format!(
+                    "{who}: a layout name has no slashes or spaces"
+                )));
+            }
+            let spec = crate::layouts::Spec::from_lua(&def, &who)
+                .and_then(|s| s.check().map(|()| s).map_err(|e| format!("{who}: {e}")))
+                .map_err(rt_err)?;
+            lua.app_data_mut::<Builder>()
+                .expect("builder installed")
+                .layouts
+                .insert(name, spec);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "rule",
         lua.create_function(|lua, value: Value| {
             let spec: RuleSpec = lua
@@ -1505,6 +1528,7 @@ pub fn load_from(
         workspaces_nested: builder.workspaces_nested,
         rules: builder.rules,
         session_accents: builder.session_accents,
+        layouts: builder.layouts,
         theme,
         source: user_file,
         lua,
@@ -1922,6 +1946,36 @@ mod tests {
             with_user("ranma.set { master_ratio = 0.95 }").unwrap_err()
         );
         assert!(e.contains("master_ratio"), "{e}");
+    }
+
+    #[test]
+    fn layouts_are_declared_in_lua_and_checked() {
+        use crate::layouts::SplitName;
+        let cfg = with_user(
+            r#"
+            ranma.layout("dev", {
+              split = "horizontal",
+              { cwd = "~/projects/kumiko", command = "nvim", size = 2 },
+              { split = "vertical", { command = "yarn run dev" }, {} },
+            })
+            "#,
+        )
+        .unwrap();
+        let dev = &cfg.layouts["dev"];
+        assert_eq!(dev.split, Some(SplitName::Horizontal));
+        assert_eq!(dev.children[0].command.as_deref(), Some("nvim"));
+        assert_eq!(dev.children[0].size, Some(2.0));
+        assert_eq!(dev.children[1].children.len(), 2);
+        assert_eq!(dev.panes().len(), 3);
+
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(
+            err(r#"ranma.layout("a", { split = "horizontal", { comand = "x" } })"#)
+                .contains("unknown key `comand`")
+        );
+        assert!(err(r#"ranma.layout("a", { split = "diagonal", {}, {} })"#).contains("diagonal"));
+        assert!(err(r#"ranma.layout("a", { {}, {} })"#).contains("needs split"));
+        assert!(err(r#"ranma.layout("two words", {})"#).contains("no slashes or spaces"));
     }
 
     #[test]

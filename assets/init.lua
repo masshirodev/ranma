@@ -120,6 +120,21 @@ ranma.bind("=", "equalize")
 -- even-horizontal, even-vertical, main-horizontal, main-vertical and tiled.
 -- Bind one directly with "select_layout tiled".
 ranma.bind("space", "next_layout")
+-- Saved layouts: a workspace's splits with each pane's directory and command.
+-- save_layout NAME writes the current workspace to ~/.local/state/ranma/layouts;
+-- load_layout NAME brings one back (on an empty workspace it opens the panes
+-- and types their commands in), and without a name picks from a list. Not
+-- bound by default (leader : has them); for example:
+--   ranma.bind("shift+l", "load_layout")
+--   ranma.bind("shift+w", "save_layout")
+-- Or declare one here, a container's panes in its list part:
+--   ranma.layout("kumiko", {
+--     split = "horizontal",
+--     { cwd = "~/projects/kumiko", command = "nvim", size = 2 },
+--     { split = "vertical",
+--       { cwd = "~/projects/kumiko", command = "yarn run dev" },
+--       { cwd = "~/projects/kumiko" } },
+--   })
 ranma.bind("alt+return", "fullscreen")
 ranma.bind("shift+m", "swap_master")
 -- Synchronized input: a marks the focused pane (⇉ on its border); typing in a

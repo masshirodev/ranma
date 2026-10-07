@@ -179,7 +179,7 @@ lets you style".
 
 - [x] Design agreed
 - [x] `select_layout` and `next_layout`: tmux's five presets
-- [ ] Saved layouts: `ranma.layout`, `save_layout`, `load_layout` and its picker
+- [x] Saved layouts: `ranma.layout`, `save_layout`, `load_layout` and its picker
 - [ ] `[styles]`: text attributes per role
 - [ ] Border titles (`title`, `title_align`, `title_format`), `indicator`,
   `ascii` and `custom` line sets, `floating_style`
