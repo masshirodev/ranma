@@ -1,5 +1,5 @@
-//! The window manager's side of pasting images into a pane that runs ssh
-//! (DESIGN.md, "Pasting images into a pane that runs ssh"): when a paste
+//! The window manager's side of pasting files into a pane that runs ssh
+//! (DESIGN.md, "Pasting files into a pane that runs ssh"): when a paste
 //! uploads, the input held meanwhile, cancelling, and typing the answer. The
 //! reading and uploading are `crate::paste`, on a thread of their own.
 
@@ -35,21 +35,23 @@ pub(super) struct PendingPaste {
 }
 
 impl App {
-    /// A paste from the terminal. One that is a single image path, into a
-    /// pane running ssh and nothing else, goes over first; the rest is typed.
+    /// A paste from the terminal. One that is nothing but paths of files
+    /// here (a file dragged onto the terminal arrives this way), into a pane
+    /// running ssh and nothing else, goes over first; the rest is typed.
     pub(super) fn paste(&mut self, text: String) {
         if self.config.settings.paste_upload
             && self.typing_targets().len() == 1
             && let Some(pane) = self.focused()
             && let Some(ssh) = self.focused_pane().and_then(|p| p.ssh_argv())
-            && let Some(named) = paste::image_path(&text, paste::wsl())
+            && let Some(named) = paste::paths(&text, paste::wsl(), |p| p.is_file())
         {
-            return self.start_paste(pane, Source::File(named), Some(ssh), text);
+            return self.start_paste(pane, Source::Files(named), Some(ssh), text);
         }
         self.typed(|modes| Some(input::encode_paste(&text, modes)));
     }
 
-    /// `paste_image`: the clipboard's image, uploaded when the pane runs ssh.
+    /// `paste_image`: the files copied on the clipboard, else its image,
+    /// uploaded when the pane runs ssh.
     /// Inside another ranma it is that one's to do, since the clipboard is on
     /// the machine at the keyboard: the path comes back as a paste.
     pub(super) fn paste_image(&mut self) {
@@ -66,7 +68,7 @@ impl App {
 
     /// A ranma in pane `id` asked for `paste_image`. Heard only from a pane
     /// that runs a ranma and was typed into a moment ago: anything printing
-    /// the sequence otherwise would be sent the clipboard's image.
+    /// the sequence otherwise would be sent the clipboard's files.
     pub(super) fn paste_image_asked(&mut self, id: PaneId) {
         let recent = self
             .passed_key

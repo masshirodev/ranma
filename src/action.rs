@@ -163,8 +163,9 @@ pub enum Action {
     Leader,
     /// Send the leader chord itself to the focused program.
     SendLeader,
-    /// Type the path of the clipboard's image into the focused pane, uploaded
-    /// first when the pane runs ssh (DESIGN.md, "Pasting images").
+    /// Type the paths of the clipboard's copied files, else of its image, into
+    /// the focused pane, uploaded first when the pane runs ssh (DESIGN.md,
+    /// "Pasting files").
     PasteImage,
     ReloadConfig,
     /// Quit ranma, closing every pane. Asks first unless `now` (`quit now`).

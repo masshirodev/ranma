@@ -3793,7 +3793,7 @@ mod tests {
         assert!(a.pending_paste.is_none(), "a key to another pane");
     }
 
-    /// A pasted image path into a pane that runs no ssh is only text.
+    /// Pasted paths into a pane that runs no ssh are only text.
     #[test]
     fn an_image_path_into_a_local_pane_is_typed() {
         let mut a = app(None);

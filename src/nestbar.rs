@@ -135,7 +135,7 @@ pub const HELLO: &str = "\x1b]51377;?\x07";
 
 /// An inner ranma asks the one around it to run `paste_image` for it: the
 /// clipboard is on the machine at the keyboard, which the outermost ranma is
-/// on (DESIGN.md, "Pasting images into a pane that runs ssh").
+/// on (DESIGN.md, "Pasting files into a pane that runs ssh").
 pub const PASTE_IMAGE: &str = "\x1b]51377;paste-image\x07";
 
 /// An outer ranma's answer to `HELLO`: `ranma;1;<newest>`. The first number

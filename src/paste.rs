@@ -1,7 +1,7 @@
-//! Pasting images into a pane that runs ssh (DESIGN.md, "Pasting images into
+//! Pasting files into a pane that runs ssh (DESIGN.md, "Pasting files into
 //! a pane that runs ssh"). The parsing is pure and tested; [`work`] is the
 //! body of the thread that reads the clipboard, uploads and answers with the
-//! path to type. Nothing here runs on the render or PTY path.
+//! paths to type. Nothing here runs on the render or PTY path.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -10,13 +10,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-/// What a pasted path may name to be uploaded: images, which is what a
-/// program across ssh cannot get any other way.
-pub const EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
 pub const MAX_BYTES: u64 = 50 * 1024 * 1024;
 pub const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// A paste whose whole text is one image file.
+/// A file a paste or the clipboard names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Named {
     Local(PathBuf),
@@ -24,14 +21,32 @@ pub enum Named {
     Windows(String),
 }
 
-/// The image file a paste names, when that is all it is: one line, one path
-/// (plain, quoted, backslash-escaped, or a `file://` URI) with an image's
-/// extension. Text that merely contains a path is not one.
-pub fn image_path(text: &str, wsl: bool) -> Option<Named> {
-    let t = text.trim();
-    if t.is_empty() || t.contains(['\n', '\r']) {
-        return None;
+/// The files a paste names, when that is all it is: every word or line one
+/// absolute path (plain, quoted, backslash-escaped, or a `file://` URI) of a
+/// file that `is_file` says is there. A line that is one path with spaces in
+/// it counts as one, as a file manager copies it. Text that merely contains a
+/// path is not one. A Windows path cannot be looked at before `wslpath`, so it
+/// counts as there.
+pub fn paths(text: &str, wsl: bool, is_file: impl Fn(&Path) -> bool) -> Option<Vec<Named>> {
+    let there = |n: &Named| match n {
+        Named::Local(p) => is_file(p),
+        Named::Windows(_) => true,
+    };
+    let mut out = Vec::new();
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if let Some(n) = one_path(line, wsl).filter(there) {
+            out.push(n);
+            continue;
+        }
+        for w in words(line)? {
+            out.push(one_path(&w, wsl).filter(there)?);
+        }
     }
+    (!out.is_empty()).then_some(out)
+}
+
+/// One path, the whole of `t`.
+fn one_path(t: &str, wsl: bool) -> Option<Named> {
     let t = unquote(t);
     let named = if let Some(rest) = t.strip_prefix("file://") {
         let path = rest.strip_prefix("localhost").unwrap_or(rest);
@@ -41,22 +56,58 @@ pub fn image_path(text: &str, wsl: bool) -> Option<Named> {
         Named::Local(PathBuf::from(percent_decode(path)?))
     } else if t.starts_with('/') {
         Named::Local(PathBuf::from(unescape(t)))
-    } else if wsl && is_windows_path(t) {
+    } else if wsl && is_windows_path(t) && !t.contains('"') {
+        // No Windows name has a `"` in it, so one means several quoted paths.
         Named::Windows(t.to_string())
     } else {
         return None;
     };
-    let name = match &named {
-        Named::Local(p) => p.file_name()?.to_str()?.to_string(),
-        Named::Windows(w) => w.rsplit('\\').next()?.to_string(),
+    let named_something = match &named {
+        Named::Local(p) => p.file_name().is_some(),
+        Named::Windows(w) => !w.ends_with('\\'),
     };
-    has_image_extension(&name).then_some(named)
+    named_something.then_some(named)
 }
 
-fn has_image_extension(name: &str) -> bool {
-    name.rsplit_once('.').is_some_and(|(stem, ext)| {
-        !stem.is_empty() && EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str())
-    })
+/// A line split where a shell would split it, each word kept as it was
+/// written (its quotes and backslashes are [`one_path`]'s to read). `None`
+/// for a quote left open.
+fn words(line: &str) -> Option<Vec<String>> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut quote = None;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) => {
+                cur.push(c);
+                if c == q {
+                    quote = None;
+                }
+            }
+            None if c == '\'' || c == '"' => {
+                quote = Some(c);
+                cur.push(c);
+            }
+            None if c == '\\' => {
+                cur.push(c);
+                cur.extend(chars.next());
+            }
+            None if c.is_whitespace() => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            None => cur.push(c),
+        }
+    }
+    if quote.is_some() {
+        return None;
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    Some(out)
 }
 
 fn unquote(t: &str) -> &str {
@@ -109,15 +160,18 @@ pub fn wsl() -> bool {
     std::env::var_os("WSL_DISTRO_NAME").is_some_and(|v| !v.is_empty())
 }
 
-/// How the clipboard's image is read.
+/// How the clipboard is read: files copied in a file manager, else an image.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Clipboard {
-    /// `powershell.exe`, saving to a file: WSLg's Wayland bridge carries text
-    /// reliably and images not.
+    /// `powershell.exe`, saving an image to a file: WSLg's Wayland bridge
+    /// carries text reliably and images not.
     Wsl,
-    /// A program writing PNG to stdout.
-    Argv(Vec<String>),
-    /// `paste.image_command`, through `sh -c`, writing PNG to stdout.
+    /// `wl-paste`.
+    Wayland,
+    /// `xclip`.
+    X11,
+    /// `paste.image_command`, through `sh -c`, writing PNG to stdout. Images
+    /// only.
     Shell(String),
 }
 
@@ -125,25 +179,36 @@ pub enum Clipboard {
 /// server started in.
 pub fn clipboard(custom: Option<&str>, env: impl Fn(&str) -> Option<String>) -> Option<Clipboard> {
     let set = |v: &str| env(v).is_some_and(|s| !s.is_empty());
-    let argv = |a: &[&str]| Clipboard::Argv(a.iter().map(|s| s.to_string()).collect());
     if let Some(c) = custom {
         Some(Clipboard::Shell(c.to_string()))
     } else if set("WSL_DISTRO_NAME") {
         Some(Clipboard::Wsl)
     } else if set("WAYLAND_DISPLAY") {
-        Some(argv(&["wl-paste", "--no-newline", "--type", "image/png"]))
+        Some(Clipboard::Wayland)
     } else if set("DISPLAY") {
-        Some(argv(&[
-            "xclip",
-            "-selection",
-            "clipboard",
-            "-t",
-            "image/png",
-            "-o",
-        ]))
+        Some(Clipboard::X11)
     } else {
         None
     }
+}
+
+/// The argv reading the clipboard as `mime` (`TARGETS` lists what it holds).
+fn read_argv(c: &Clipboard, mime: &str) -> Vec<String> {
+    let v: &[&str] = match (c, mime) {
+        (Clipboard::Wayland, "TARGETS") => &["wl-paste", "--list-types"],
+        (Clipboard::Wayland, m) => &["wl-paste", "--no-newline", "--type", m],
+        (_, m) => &["xclip", "-selection", "clipboard", "-t", m, "-o"],
+    };
+    v.iter().map(|s| s.to_string()).collect()
+}
+
+/// The local files a `text/uri-list` names; other schemes are left out.
+fn file_uris(list: &str) -> Vec<Named> {
+    list.lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("file://"))
+        .filter_map(|l| one_path(l, false))
+        .collect()
 }
 
 /// The ssh command that runs `remote` over the same connection as the `ssh`
@@ -210,19 +275,64 @@ fn strip_flags(flags: &str) -> (String, bool) {
 /// The far side's half: a directory only this user can use, the file from
 /// stdin, and its absolute path on stdout (the program across may not expand
 /// `~`). Through `sh -c`, since the login shell there may not be a POSIX one.
-pub fn remote_command(name: &str) -> String {
+/// `hash` and `name` come from [`hash_of`] and [`safe_name`], so they need no
+/// quoting.
+pub fn remote_command(hash: &str, name: &str) -> String {
     format!(
-        "sh -c 'd=\"${{TMPDIR:-/tmp}}/ranma-paste-$(id -u)\"; mkdir -p -m 700 \"$d\" && [ -O \"$d\" ] && cat > \"$d/{name}\" && printf %s \"$d/{name}\"'"
+        "sh -c 'd=\"${{TMPDIR:-/tmp}}/ranma-paste-$(id -u)\"; mkdir -p -m 700 \"$d\" && [ -O \"$d\" ] && mkdir -p \"$d/{hash}\" && cat > \"$d/{hash}/{name}\" && printf %s \"$d/{hash}/{name}\"'"
     )
 }
 
-/// The file name for these bytes: the same image is the same name, on every
-/// machine of a chain.
-pub fn file_name(bytes: &[u8], ext: &str) -> String {
+/// The directory these bytes go in: the same file is the same directory, on
+/// every machine of a chain, so pasting it again replaces the copy.
+pub fn hash_of(bytes: &[u8]) -> String {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     bytes.hash(&mut h);
-    format!("{:016x}.{}", h.finish(), ext.to_ascii_lowercase())
+    format!("{:016x}", h.finish())
+}
+
+/// A file's name as the far side gets it: letters (any script), digits and
+/// `._+-`, everything else `_`. It travels inside a shell command, and the
+/// program across reads it, so the name stays recognisable but inert.
+pub fn safe_name(name: &str) -> String {
+    let mut s: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, '.' | '_' | '+' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(150)
+        .collect();
+    if s.starts_with('-') {
+        s.insert(0, '_');
+    }
+    if s.is_empty() || s.chars().all(|c| c == '.') {
+        s = "file".into();
+    }
+    s
+}
+
+/// Paths as they are typed: one word each, quoted only when they need it.
+pub fn typed<S: AsRef<str>>(paths: &[S]) -> String {
+    let quote = |p: &str| {
+        let plain = !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_alphanumeric() || "/._+-:@%,=".contains(c));
+        if plain {
+            p.to_string()
+        } else {
+            format!("'{}'", p.replace('\'', r"'\''"))
+        }
+    };
+    paths
+        .iter()
+        .map(|p| quote(p.as_ref()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// This machine's paste directory, made if missing and refused unless it is
@@ -246,66 +356,89 @@ pub fn local_dir() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Where the image comes from.
+/// Where the files come from.
 #[derive(Debug, Clone)]
 pub enum Source {
     Clipboard(Clipboard),
-    File(Named),
+    Files(Vec<Named>),
 }
 
 /// One paste to carry out, on its own thread.
 pub struct Job {
     pub source: Source,
-    /// The pane's `ssh` argv; `None` leaves the file here and types its path.
+    /// The pane's `ssh` argv; `None` leaves the files here and types their
+    /// paths.
     pub ssh: Option<Vec<String>>,
     pub cancel: Arc<AtomicBool>,
 }
 
-/// The path to type, or why there is none.
+/// What to type, or why there is nothing.
 pub fn work(job: &Job) -> Result<String, String> {
     let deadline = Instant::now() + TIMEOUT;
-    let (path, bytes) = match &job.source {
+    let named = match &job.source {
         Source::Clipboard(c) => from_clipboard(c, &job.cancel, deadline)?,
-        Source::File(named) => {
-            let p = match named {
-                Named::Local(p) => p.clone(),
-                Named::Windows(w) => {
-                    let out = run(
-                        Command::new("wslpath").arg("-u").arg(w),
-                        None,
-                        &job.cancel,
-                        deadline,
-                    )?;
-                    PathBuf::from(String::from_utf8_lossy(&out).trim())
-                }
-            };
-            let bytes = read_image(&p)?;
-            (p, bytes)
-        }
+        Source::Files(named) => named.clone(),
     };
+    let mut files = Vec::with_capacity(named.len());
+    for n in named {
+        let p = match n {
+            Named::Local(p) => p,
+            Named::Windows(w) => {
+                let out = run(
+                    Command::new("wslpath").arg("-u").arg(&w),
+                    None,
+                    &job.cancel,
+                    deadline,
+                )?;
+                PathBuf::from(String::from_utf8_lossy(&out).trim())
+            }
+        };
+        check_file(&p)?;
+        files.push(p);
+    }
     let Some(ssh) = &job.ssh else {
-        return Ok(path.display().to_string());
+        let local: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+        return Ok(typed(&local));
     };
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
-    let argv = upload_argv(ssh, &remote_command(&file_name(&bytes, ext)))
-        .ok_or("cannot tell where the ssh in this pane goes")?;
     let host = crate::pane::ssh_destination(ssh.iter().skip(1).map(String::as_str))
         .unwrap_or_else(|| "the far side".into());
+    let mut far = Vec::with_capacity(files.len());
+    for p in &files {
+        far.push(upload(p, ssh, &host, &job.cancel, deadline)?);
+    }
+    Ok(typed(&far))
+}
+
+/// One file to the far side; its path there.
+fn upload(
+    path: &Path,
+    ssh: &[String],
+    host: &str,
+    cancel: &AtomicBool,
+    deadline: Instant,
+) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let name = path
+        .file_name()
+        .map(|n| safe_name(&n.to_string_lossy()))
+        .unwrap_or_else(|| "file".into());
+    let argv = upload_argv(ssh, &remote_command(&hash_of(&bytes), &name))
+        .ok_or("cannot tell where the ssh in this pane goes")?;
     let mut tries = 0;
     let out = loop {
         tries += 1;
-        let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
         match run_raw(
             Command::new(&argv[0]).args(&argv[1..]),
             Some(file),
-            &job.cancel,
+            cancel,
             deadline,
         ) {
             Ok(out) => break out,
             // 255 is ssh's own failure, not the command's: no connection. A
             // tunnel that is reconnecting is back a moment later, so once more.
             Err(Failed::Exit(Some(255), _))
-                if tries == 1 && wait(&job.cancel, RETRY_AFTER, deadline) => {}
+                if tries == 1 && wait(cancel, RETRY_AFTER, deadline) => {}
             Err(Failed::Exit(Some(255), err)) => {
                 return Err(format!("could not reach {host}: {}", ssh_reason(&err)));
             }
@@ -319,26 +452,35 @@ pub fn work(job: &Job) -> Result<String, String> {
     Ok(far)
 }
 
-fn read_image(p: &Path) -> Result<Vec<u8>, String> {
+/// A regular file, small enough to carry. A folder is refused, not packed.
+fn check_file(p: &Path) -> Result<(), String> {
     let m = std::fs::metadata(p).map_err(|e| format!("{}: {e}", p.display()))?;
+    if m.is_dir() {
+        return Err(format!(
+            "{} is a folder; only files are carried",
+            p.display()
+        ));
+    }
     if !m.is_file() {
         return Err(format!("{} is not a file", p.display()));
     }
     if m.len() > MAX_BYTES {
         return Err(format!("{} is over {} MB", p.display(), MAX_BYTES >> 20));
     }
-    std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))
+    Ok(())
 }
 
-/// The clipboard's image, saved under [`local_dir`] by its hash.
+/// What the clipboard holds: the files copied in a file manager when there
+/// are any, else its image, saved under [`local_dir`] by its hash.
 fn from_clipboard(
     c: &Clipboard,
     cancel: &AtomicBool,
     deadline: Instant,
-) -> Result<(PathBuf, Vec<u8>), String> {
-    let dir = local_dir()?;
+) -> Result<Vec<Named>, String> {
+    const NOTHING: &str = "the clipboard holds no image and no files";
     let bytes = match c {
         Clipboard::Wsl => {
+            let dir = local_dir()?;
             let tmp = dir.join(format!(".clipboard-{}.png", std::process::id()));
             let win = run(
                 Command::new("wslpath").arg("-w").arg(&tmp),
@@ -348,7 +490,9 @@ fn from_clipboard(
             )?;
             let win = String::from_utf8_lossy(&win).trim().replace('\'', "''");
             let script = format!(
-                "Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; \
+                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; \
+                 Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; \
+                 if ([Windows.Forms.Clipboard]::ContainsFileDropList()) {{ 'files'; [Windows.Forms.Clipboard]::GetFileDropList(); exit 0 }}; \
                  $i = [Windows.Forms.Clipboard]::GetImage(); if ($i -eq $null) {{ exit 3 }}; \
                  $i.Save('{win}', [System.Drawing.Imaging.ImageFormat]::Png)"
             );
@@ -364,15 +508,60 @@ fn from_clipboard(
                 cancel,
                 deadline,
             );
-            let bytes = r.and_then(|_| read_image(&tmp));
+            let out = match r {
+                Ok(out) => out,
+                Err(e) => {
+                    let _ = std::fs::remove_file(&tmp);
+                    return Err(e);
+                }
+            };
+            let out = String::from_utf8_lossy(&out);
+            let mut lines = out.lines().map(str::trim).filter(|l| !l.is_empty());
+            if lines.next() == Some("files") {
+                return Ok(lines.map(|w| Named::Windows(w.to_string())).collect());
+            }
+            let bytes = std::fs::read(&tmp).map_err(|_| NOTHING.to_string());
             let _ = std::fs::remove_file(&tmp);
             bytes?
         }
-        Clipboard::Argv(a) => run(Command::new(&a[0]).args(&a[1..]), None, cancel, deadline)?,
+        Clipboard::Wayland | Clipboard::X11 => {
+            let argv = read_argv(c, "TARGETS");
+            let types = run(
+                Command::new(&argv[0]).args(&argv[1..]),
+                None,
+                cancel,
+                deadline,
+            )?;
+            let types = String::from_utf8_lossy(&types);
+            let has = |t: &str| types.lines().any(|l| l.trim() == t);
+            if has("text/uri-list") {
+                let argv = read_argv(c, "text/uri-list");
+                let list = run(
+                    Command::new(&argv[0]).args(&argv[1..]),
+                    None,
+                    cancel,
+                    deadline,
+                )?;
+                let files = file_uris(&String::from_utf8_lossy(&list));
+                if !files.is_empty() {
+                    return Ok(files);
+                }
+            }
+            if !has("image/png") {
+                return Err(NOTHING.into());
+            }
+            let argv = read_argv(c, "image/png");
+            run(
+                Command::new(&argv[0]).args(&argv[1..]),
+                None,
+                cancel,
+                deadline,
+            )?
+        }
         Clipboard::Shell(s) => run(Command::new("sh").arg("-c").arg(s), None, cancel, deadline)?,
     };
     if bytes.is_empty() {
-        return Err("no image on the clipboard".into());
+        return Err(NOTHING.into());
     }
     if bytes.len() as u64 > MAX_BYTES {
         return Err(format!(
@@ -380,9 +569,11 @@ fn from_clipboard(
             MAX_BYTES >> 20
         ));
     }
-    let path = dir.join(file_name(&bytes, "png"));
+    let dir = local_dir()?.join(hash_of(&bytes));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join("clipboard.png");
     std::fs::write(&path, &bytes).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok((path, bytes))
+    Ok(vec![Named::Local(path)])
 }
 
 /// How long a failed connection waits before its one retry.
@@ -437,7 +628,7 @@ impl Failed {
             Failed::TimedOut => format!("{name} took over {}s", TIMEOUT.as_secs()),
             Failed::Spawn(e) => format!("{name}: {e}"),
             Failed::Exit(Some(3), _) if name == "powershell.exe" => {
-                "no image on the clipboard".into()
+                "the clipboard holds no image and no files".into()
             }
             Failed::Exit(code, err) => match err.lines().map(str::trim).rfind(|l| !l.is_empty()) {
                 Some(why) => format!("{name}: {why}"),
@@ -468,12 +659,22 @@ fn run_raw(
     cancel: &AtomicBool,
     deadline: Instant,
 ) -> Result<Vec<u8>, Failed> {
-    let mut child = cmd
-        .stdin(stdin.map_or(Stdio::null(), Stdio::from))
+    cmd.stdin(stdin.map_or(Stdio::null(), Stdio::from))
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| Failed::Spawn(e.to_string()))?;
+        .stderr(Stdio::piped());
+    // A program written a moment ago can be "busy" while a child forked
+    // meanwhile by another thread still holds the writer's descriptor, up to
+    // its exec. It clears in microseconds.
+    let mut tries = 0;
+    let mut child = loop {
+        match cmd.spawn() {
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < 50 => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            r => break r.map_err(|e| Failed::Spawn(e.to_string()))?,
+        }
+    };
     let mut out = child.stdout.take().expect("piped");
     let mut err = child.stderr.take().expect("piped");
     let reader = std::thread::spawn(move || {
@@ -519,54 +720,105 @@ mod tests {
     }
 
     #[test]
-    fn a_paste_is_an_image_path_only_when_that_is_all_it_is() {
-        let local = |p: &str| Some(Named::Local(PathBuf::from(p)));
-        assert_eq!(image_path("/tmp/a.png", false), local("/tmp/a.png"));
-        assert_eq!(image_path("  /tmp/a.PNG\n", false), local("/tmp/a.PNG"));
+    fn a_paste_names_files_only_when_that_is_all_it_is() {
+        let there = [
+            "/tmp/a.png",
+            "/tmp/my shot.jpg",
+            "/tmp/b.zip",
+            "/tmp/page.html",
+        ];
+        let is_file = |p: &Path| there.iter().any(|t| Path::new(t) == p);
+        let at = |t: &str, wsl| paths(t, wsl, is_file);
+        let local = |ps: &[&str]| Some(ps.iter().map(|p| Named::Local(p.into())).collect());
+        assert_eq!(at("/tmp/a.png", false), local(&["/tmp/a.png"]));
+        assert_eq!(at("  /tmp/b.zip\n", false), local(&["/tmp/b.zip"]));
         assert_eq!(
-            image_path("'/tmp/my shot.jpg'", false),
-            local("/tmp/my shot.jpg")
+            at("/tmp/page.html", false),
+            local(&["/tmp/page.html"]),
+            "any file"
         );
         assert_eq!(
-            image_path("/tmp/my\\ shot.webp", false),
-            local("/tmp/my shot.webp")
+            at("/tmp/my shot.jpg", false),
+            local(&["/tmp/my shot.jpg"]),
+            "a file manager's plain path, spaces and all"
         );
         assert_eq!(
-            image_path("file:///tmp/my%20shot.gif", false),
-            local("/tmp/my shot.gif")
+            at("'/tmp/my shot.jpg'", false),
+            local(&["/tmp/my shot.jpg"])
         );
         assert_eq!(
-            image_path("file://localhost/tmp/a.jpeg", false),
-            local("/tmp/a.jpeg")
-        );
-        assert_eq!(image_path("/tmp/a.txt", false), None, "not an image");
-        assert_eq!(image_path("/tmp/.png", false), None, "no name");
-        assert_eq!(
-            image_path("see /tmp/a.png", false),
-            None,
-            "more than a path"
+            at("/tmp/my\\ shot.jpg", false),
+            local(&["/tmp/my shot.jpg"])
         );
         assert_eq!(
-            image_path("/tmp/a.png\n/tmp/b.png", false),
-            None,
-            "two lines"
-        );
-        assert_eq!(image_path("a.png", false), None, "relative");
-        assert_eq!(
-            image_path("file://box/tmp/a.png", false),
-            None,
-            "another host"
+            at("file:///tmp/my%20shot.jpg", false),
+            local(&["/tmp/my shot.jpg"])
         );
         assert_eq!(
-            image_path(r"C:\Users\me\a.png", false),
-            None,
-            "not under WSL"
+            at("file://localhost/tmp/b.zip", false),
+            local(&["/tmp/b.zip"])
         );
         assert_eq!(
-            image_path(r"C:\Users\me\a.png", true),
-            Some(Named::Windows(r"C:\Users\me\a.png".into()))
+            at("/tmp/b.zip '/tmp/my shot.jpg' /tmp/a.png", false),
+            local(&["/tmp/b.zip", "/tmp/my shot.jpg", "/tmp/a.png"]),
+            "several dropped at once"
         );
-        assert_eq!(image_path(r"C:\Users\me\a.exe", true), None);
+        assert_eq!(
+            at("/tmp/a.png\n/tmp/b.zip", false),
+            local(&["/tmp/a.png", "/tmp/b.zip"]),
+            "one a line"
+        );
+        assert_eq!(at("/tmp/gone.png", false), None, "not there");
+        assert_eq!(at("/tmp", false), None, "a folder is not a file");
+        assert_eq!(at("see /tmp/a.png", false), None, "more than paths");
+        assert_eq!(at("/tmp/a.png /tmp/gone.png", false), None, "one not there");
+        assert_eq!(at("'/tmp/a.png", false), None, "a quote left open");
+        assert_eq!(at("a.png", false), None, "relative");
+        assert_eq!(at("", false), None);
+        assert_eq!(at("file://box/tmp/a.png", false), None, "another host");
+        assert_eq!(at(r"C:\Users\me\a.zip", false), None, "not under WSL");
+        assert_eq!(
+            at(r"C:\Users\me\My Files\a.zip", true),
+            Some(vec![Named::Windows(r"C:\Users\me\My Files\a.zip".into())])
+        );
+        assert_eq!(
+            at(r#""C:\a b.zip" C:\c.html"#, true),
+            Some(vec![
+                Named::Windows(r"C:\a b.zip".into()),
+                Named::Windows(r"C:\c.html".into())
+            ]),
+            "Windows Terminal quotes the ones with spaces"
+        );
+    }
+
+    #[test]
+    fn a_uri_list_names_only_local_files() {
+        assert_eq!(
+            file_uris(
+                "# copied\r\nfile:///home/me/a%20b.zip\r\nhttps://x.org/c\r\nfile:///home/me/d.html\n"
+            ),
+            vec![
+                Named::Local("/home/me/a b.zip".into()),
+                Named::Local("/home/me/d.html".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn names_travel_inert_and_paths_are_typed_as_words() {
+        assert_eq!(
+            safe_name("report v2 (final).html"),
+            "report_v2__final_.html"
+        );
+        assert_eq!(safe_name("日本語.txt"), "日本語.txt");
+        assert_eq!(safe_name("a'b;$(x).zip"), "a_b___x_.zip");
+        assert_eq!(safe_name("-rf"), "_-rf");
+        assert_eq!(safe_name(".."), "file");
+        assert_eq!(safe_name(".env"), ".env");
+        assert_eq!(
+            typed(&["/tmp/a.zip", "/tmp/my shot.png", "/tmp/it's"]),
+            r"/tmp/a.zip '/tmp/my shot.png' '/tmp/it'\''s'"
+        );
     }
 
     #[test]
@@ -632,12 +884,24 @@ mod tests {
             Some(Clipboard::Wsl),
             "WSLg sets WAYLAND_DISPLAY too"
         );
-        assert!(matches!(
-            clipboard(None, env(&[("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0")])),
-            Some(Clipboard::Argv(a)) if a[0] == "wl-paste"
-        ));
-        assert!(
-            matches!(clipboard(None, env(&[("DISPLAY", ":0")])), Some(Clipboard::Argv(a)) if a[0] == "xclip")
+        assert_eq!(
+            clipboard(
+                None,
+                env(&[("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0")])
+            ),
+            Some(Clipboard::Wayland)
+        );
+        assert_eq!(
+            clipboard(None, env(&[("DISPLAY", ":0")])),
+            Some(Clipboard::X11)
+        );
+        assert_eq!(
+            read_argv(&Clipboard::Wayland, "text/uri-list"),
+            s(&["wl-paste", "--no-newline", "--type", "text/uri-list"])
+        );
+        assert_eq!(
+            read_argv(&Clipboard::X11, "TARGETS"),
+            s(&["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"])
         );
         assert_eq!(clipboard(None, env(&[])), None);
         assert_eq!(
@@ -680,7 +944,7 @@ mod tests {
         let img = dir.join("shot.png");
         std::fs::write(&img, b"png").unwrap();
         let job = Job {
-            source: Source::File(Named::Local(img)),
+            source: Source::Files(vec![Named::Local(img)]),
             ssh: Some(vec![ssh.display().to_string(), "work".into()]),
             cancel: Arc::new(AtomicBool::new(false)),
         };
@@ -694,15 +958,16 @@ mod tests {
     }
 
     #[test]
-    fn one_image_is_one_name() {
-        assert_eq!(file_name(b"abc", "PNG"), file_name(b"abc", "png"));
-        assert_ne!(file_name(b"abc", "png"), file_name(b"abd", "png"));
+    fn one_file_is_one_place() {
+        assert_eq!(hash_of(b"abc"), hash_of(b"abc"));
+        assert_ne!(hash_of(b"abc"), hash_of(b"abd"));
+        assert_eq!(hash_of(b"abc").len(), 16);
     }
 
     /// The whole upload, with a stand-in for ssh that runs the remote command
     /// here: the far side's half is real shell, so its quoting is tested.
     #[test]
-    fn an_upload_types_the_far_path() {
+    fn an_upload_types_the_far_paths() {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("ranma-paste-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -713,21 +978,36 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let img = dir.join("shot.png");
-        std::fs::write(&img, b"\x89PNG not really").unwrap();
+        let zip = dir.join("build (1).zip");
+        std::fs::write(&zip, b"PK not really").unwrap();
+        let html = dir.join("page.html");
+        std::fs::write(&html, b"<p>hi</p>").unwrap();
         let job = Job {
-            source: Source::File(Named::Local(img)),
+            source: Source::Files(vec![Named::Local(zip), Named::Local(html)]),
             ssh: Some(vec![ssh.display().to_string(), "-t".into(), "vps".into()]),
             cancel: Arc::new(AtomicBool::new(false)),
         };
-        let far = work(&job).unwrap();
+        let typed = work(&job).unwrap();
+        let far: Vec<&str> = typed.split(' ').collect();
+        assert_eq!(far.len(), 2, "{typed}");
         assert!(
-            far.ends_with(&file_name(b"\x89PNG not really", "png")),
-            "{far}"
+            far[0].ends_with(&format!("/{}/build__1_.zip", hash_of(b"PK not really"))),
+            "{typed}"
         );
-        assert!(far.contains("/ranma-paste-"), "{far}");
-        assert_eq!(std::fs::read(&far).unwrap(), b"\x89PNG not really");
-        let _ = std::fs::remove_file(&far);
+        assert!(far[0].contains("/ranma-paste-"), "{typed}");
+        assert_eq!(std::fs::read(far[0]).unwrap(), b"PK not really");
+        assert_eq!(std::fs::read(far[1]).unwrap(), b"<p>hi</p>");
+        for f in far {
+            let _ = std::fs::remove_dir_all(Path::new(f).parent().unwrap());
+        }
+
+        // A folder is refused before anything is sent.
+        let job = Job {
+            source: Source::Files(vec![Named::Local(dir.clone())]),
+            ssh: Some(vec![ssh.display().to_string(), "vps".into()]),
+            cancel: Arc::new(AtomicBool::new(false)),
+        };
+        assert!(work(&job).unwrap_err().contains("is a folder"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

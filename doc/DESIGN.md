@@ -1055,12 +1055,13 @@ drop crossterm's `Resize`. Several signals before the thread wakes are one
 resize at the size by then. smoke.sh stops the client while a resize and a
 focus report arrive, which puts them in one wakeup.
 
-### Pasting images into a pane that runs ssh
+### Pasting files into a pane that runs ssh
 
-**Decided 2026-10-05.** A program on the far side of an `ssh` (an AI
+**Decided 2026-10-05; widened from images to any file 2026-10-06.** A program on the far side of an `ssh` (an AI
 coding agent on the PC or the VPS, say) cannot see an image on this
-machine. Its own image paste reads the clipboard of the machine it runs on,
-which has none, and a pasted path names a file that is not there. With ranma
+machine, nor a zip or an HTML page on it. Its own image paste reads the
+clipboard of the machine it runs on, which has none, and a pasted path names
+a file that is not there. With ranma
 started from every interactive shell, every way of reaching it goes through a
 ranma on the machine with the clipboard:
 
@@ -1071,28 +1072,39 @@ work (WSL2)                   PC (kitty)              VPS
 
 The ranma holding the clipboard knows when the focused pane's foreground
 program is `ssh`, and where it connects (`Pane::ssh_host`, already used for
-workspace names). So it copies the image over first and types the far path, and
+workspace names). So it copies the file over first and types the far path, and
 the far program receives a path, which it already handles.
 
 **The two triggers:**
 
 1. **`paste_image`**, an action (`leader v` by default; no key outside WM mode
-   by default, since `alt+v` would be taken from every program). ranma reads an image off
-   the clipboard itself. It has to be an action, not the terminal's paste:
+   by default, since `alt+v` would be taken from every program). ranma reads the
+   clipboard itself: the files copied in a file manager (`text/uri-list`, or
+   Windows' file drop list) when it holds any, else its image. The name stays
+   for the configs that bind it. It has to be an action, not the terminal's paste:
    Windows Terminal takes `Ctrl+V` and `Ctrl+Shift+V` for itself, and a
    terminal's paste carries text, so a clipboard holding only an image (a
-   screenshot) gives ranma no paste event to work with. With an `ssh` pane focused, the image is uploaded
-   and the far path typed. With anything else, the local file's path is typed,
-   so the action is useful without ssh too.
-2. **A bracketed paste whose whole text is one path to an image file**, into a
-   pane running `ssh`: a file copied in a file manager, or dragged onto the
-   terminal. Only `png jpg jpeg gif webp`, only an existing regular file, and
-   only a single path with nothing else, so pasting text that merely contains a
-   path is untouched. Under WSL a Windows path (`C:\Users\...`) counts too, after
-   `wslpath`. This is how the chain works: the work ranma types
-   `/tmp/ranma-paste-1000/…png` into `ssh pc`, the PC ranma receives it as a
+   screenshot) gives ranma no paste event to work with. With an `ssh` pane focused, each file is uploaded
+   and the far paths typed, separated by spaces. With anything else, the local
+   paths are typed, so the action is useful without ssh too.
+2. **A bracketed paste whose whole text is paths of files on this machine**,
+   into a pane running `ssh`: a file dragged onto the terminal (which arrives
+   as a paste, the same event as `Ctrl+V`), or a path copied as text. Every
+   word, or every line, must be one absolute path (plain, quoted, escaped or
+   `file://`) of an existing regular file; a line that is one path with spaces
+   in it, as a file manager copies it, counts as one. Text that merely contains
+   a path is untouched. Under WSL a Windows path (`C:\Users\...`) counts too,
+   after `wslpath`. This is how the chain works: the work ranma types
+   `/tmp/ranma-paste-1000/HASH/NAME` into `ssh pc`, the PC ranma receives it as a
    paste into `ssh vps` and uploads again. Nothing on the PC needs to know it
    came from Windows.
+
+   Until 2026-10-06 only image extensions counted, to leave a path meant for
+   the far side alone. That guard cost more than it saved: a path pasted into
+   an ssh pane is uploaded only when this machine has that exact file, and a
+   dragged zip or HTML page is exactly what the program across needs and
+   cannot otherwise get. Copy a far path from the far side's own screen, or
+   turn `paste.upload` off.
 
 **Nested, `paste_image` belongs to the outermost ranma.** With
 `nested = "auto"` every key goes to the innermost ranma, so `leader v` typed
@@ -1115,18 +1127,22 @@ it changes nothing a program across ssh could have used: the path it would
 have received names nothing there. It is also skipped when the pane is
 marked for synchronized input, where the paste would go to several panes.
 
-**Reading the clipboard** is one command that writes PNG to stdout, picked
-when the action runs:
+**Reading the clipboard** is picked when the action runs. Files come first:
+a file manager's copy can carry a thumbnail as well, and the file is what was
+meant. A `text/uri-list` of only `http` links (a browser's "copy image") is
+not files, and its image is read instead.
 
-| Where the server runs | Command |
-| --- | --- |
-| WSL (`WSL_DISTRO_NAME` set) | `powershell.exe -NoProfile -Command` with `[Windows.Forms.Clipboard]::GetImage()`, saved as PNG. WSLg's Wayland clipboard bridge carries text reliably and images not, so it is not used. |
-| Wayland (`WAYLAND_DISPLAY`) | `wl-paste --no-newline --type image/png` |
-| X11 (`DISPLAY`) | `xclip -selection clipboard -t image/png -o` |
-| anything else | `paste.image_command`, or an error naming that setting |
+| Where the server runs | Files | Image |
+| --- | --- | --- |
+| WSL (`WSL_DISTRO_NAME` set) | `[Windows.Forms.Clipboard]::GetFileDropList()`, each path through `wslpath` | `GetImage()`, saved as PNG |
+| Wayland (`WAYLAND_DISPLAY`) | `wl-paste --list-types`, then `--type text/uri-list` | `wl-paste --no-newline --type image/png` |
+| X11 (`DISPLAY`) | `xclip -selection clipboard -t TARGETS -o`, then `-t text/uri-list` | `xclip ... -t image/png -o` |
+| anything else | none | `paste.image_command`, or an error naming that setting |
 
-`paste.image_command` overrides the table (macOS's `pngpaste -` is the obvious
-use). The server takes the variables from the environment of the terminal that
+Under WSL both go through one `powershell.exe -NoProfile -STA -Command`;
+WSLg's Wayland clipboard bridge carries text reliably and images not, so it
+is not used. `paste.image_command` overrides the table and reads only an
+image (macOS's `pngpaste -` is the obvious use). The server takes the variables from the environment of the terminal that
 started it, which is the desktop's, since that is where shells start.
 
 **Uploading with the pane's own ssh, not scp.** `ssh_host` strips the user, port
@@ -1141,7 +1157,8 @@ nothing), and `-T` is added. The forwards are cleared because the session
 already holds their ports:
 
 ```sh
-d="${TMPDIR:-/tmp}/ranma-paste-$(id -u)"; mkdir -p -m 700 "$d" && cat > "$d/NAME" && printf %s "$d/NAME"
+d="${TMPDIR:-/tmp}/ranma-paste-$(id -u)"; mkdir -p -m 700 "$d" && [ -O "$d" ] \
+  && mkdir -p "$d/HASH" && cat > "$d/HASH/NAME" && printf %s "$d/HASH/NAME"
 ```
 
 Its stdout is the path to type, absolute because the far program may not
@@ -1150,10 +1167,15 @@ not be a POSIX one, and `[ -O "$d" ]` refuses a directory somebody else made
 first under that predictable name. A `ControlMaster` in the user's ssh config
 makes it reuse the open connection; without one it is a fresh login, which
 `BatchMode` makes fail fast instead of asking for a password on a screen
-ranma owns. `NAME` is the image's hash, so pasting the same image twice
-replaces one copy instead of adding another, and every machine of a chain
-calls it the same. The local copy goes in
-the same kind of directory, so the chain's paths look alike on every machine.
+ranma owns. `HASH` is the file's contents hashed, so pasting the same file
+twice replaces one copy instead of adding another, and every machine of a
+chain calls it the same. `NAME` is the file's own name, so the program across
+sees `report.html`, not a number; letters of any script, digits and `._+-`
+are kept and anything else becomes `_`, which makes it safe inside the
+remote command and a plain word when typed (a clipboard image is
+`clipboard.png`). A clipboard image's local copy goes in the same kind of
+directory, so the chain's paths look alike on every machine. Local paths
+typed as they are get quoted only when they need it.
 
 The upload is a second connection beside the pane's, so it can fail where
 the pane's session did not, for example when a ProxyJump's tunnel is
@@ -1167,7 +1189,8 @@ PTY path, with a toast while it runs (`uploading to vps…`). Keys typed into
 that pane meanwhile are held and sent after the path, so they cannot land
 before it. Esc cancels; 30 seconds times out. Either way, and on any failure,
 the original paste text is typed (nothing, for `paste_image`) and a toast
-says why. Over 50 MB is refused before uploading. An upgrade does not carry an
+says why. A file over 50 MB, or a folder (it would need packing, and the
+far side unpacking), fails the whole paste before anything is sent. An upgrade does not carry an
 upload in flight: the original text is typed before the handover.
 
 The which-key hint lists `v paste image` under history. Its tests pin the

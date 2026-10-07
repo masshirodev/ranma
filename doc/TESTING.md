@@ -30,7 +30,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `app::copy` | base64 for OSC 52 |
 | `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer |
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
-| `paste` | which pastes are one image path (quoted, escaped, `file://`, Windows under WSL) and which are text; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload through a stand-in ssh that runs the far side's real shell |
+| `paste` | which pastes are nothing but paths of files that exist (one or several; quoted, escaped, `file://`, a plain path with spaces, Windows under WSL) and which are text; a `text/uri-list` read for its local files; names made inert and paths quoted as words; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload of two files through a stand-in ssh that runs the far side's real shell, and a folder refused |
 
 Seconds to run. Run them on every change.
 

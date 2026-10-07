@@ -81,14 +81,15 @@ ranma.set {
   -- ranma sets no title at all.)
   title_host = "ssh",
 
-  -- Pasting into a pane whose program is ssh. upload: a paste that is the path
-  -- of one image file (png, jpg, gif, webp; copied or dragged from a file
-  -- manager, or a C:\ path under WSL) is copied to the far side first and its
-  -- path there typed instead, so the program across can open it. A chain of
-  -- ranmas over ssh passes it along, each one uploading to the next.
-  -- image_command: what paste_image (leader v) reads the clipboard with, a
-  -- shell command writing PNG to stdout ("pngpaste -" on macOS). Unset, it is
-  -- powershell.exe under WSL, wl-paste on Wayland, xclip on X11.
+  -- Pasting into a pane whose program is ssh. upload: a paste that is nothing
+  -- but paths of files on this machine (a file dragged onto the terminal, a
+  -- path copied as text, a C:\ path under WSL) is copied to the far side
+  -- first and the paths there typed instead, so the program across can open
+  -- them. A chain of ranmas over ssh passes them along, each one uploading to
+  -- the next. image_command: what paste_image (leader v) reads an image off
+  -- the clipboard with, a shell command writing PNG to stdout ("pngpaste -"
+  -- on macOS), instead of the platform's: powershell.exe under WSL, wl-paste
+  -- on Wayland, xclip on X11, which read copied files first.
   paste = {
     upload = true,
   },
@@ -201,9 +202,10 @@ ranma.bind("[", "copy_mode")
 -- and OSC 8 links); type a label to copy that link, or type it in capitals
 -- to open it with xdg-open. Esc cancels.
 ranma.bind("o", "hints")
--- v pastes the clipboard's image as a path: into a pane running ssh it is
--- uploaded to the far side first (to $TMPDIR/ranma-paste-UID there), so a
--- program across ssh, like Claude Code, gets a path it can open. Esc cancels
+-- v pastes the files copied on the clipboard (in a file manager), else its
+-- image, as paths: into a pane running ssh they are uploaded to the far side
+-- first (to $TMPDIR/ranma-paste-UID there), so a program across ssh, like
+-- Claude Code, gets paths it can open. Esc cancels
 -- an upload. Not bound outside WM mode by default; one key for it:
 --   ranma.bind("alt+v", "paste_image", { global = true })
 ranma.bind("v", "paste_image")

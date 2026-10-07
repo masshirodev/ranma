@@ -35,7 +35,7 @@ source). Optional, at run time:
 - `wl-paste` (wl-clipboard) or `xclip` for `paste_image` on Wayland or X11;
   under WSL it uses `powershell.exe`. Any other command can be set with
   `paste.image_command`.
-- OpenSSH (`ssh`) on both ends for pasting images into a pane that runs ssh.
+- OpenSSH (`ssh`) on both ends for pasting files into a pane that runs ssh.
 - `xdg-open` for opening links from hint mode.
 - `tmux`, only for the smoke test (`scripts/smoke.sh`).
 

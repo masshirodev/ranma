@@ -111,7 +111,8 @@ pub struct Settings {
     /// again in WM mode, it goes one level down.
     pub outer_leader: Chord,
     pub title_host: TitleHost,
-    /// A pasted image path into a pane running ssh is uploaded first.
+    /// A paste that is nothing but paths of local files, into a pane running
+    /// ssh, is uploaded first.
     pub paste_upload: bool,
     /// Writes the clipboard's image as PNG to stdout; `None` is the platform's.
     pub paste_image_command: Option<String>,

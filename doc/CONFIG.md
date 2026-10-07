@@ -110,8 +110,8 @@ Each call changes only the fields it names; call it as often as you like.
 | `scrollback_lines` | `10000` | Scrollback per pane. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
-| `paste.upload` | `true` | A paste that is the path of one image file, into a pane running `ssh`, is uploaded and the far path typed instead. See [Pasting images over ssh](#pasting-images-over-ssh). |
-| `paste.image_command` | unset | What `paste_image` reads the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11. |
+| `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
+| `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). It reads images only. Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -197,7 +197,7 @@ does not matter; it is ignored.
 | `exit_mode` | Leave WM mode. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
-| `paste_image` | Type the path of the clipboard's image into the focused pane (`leader v`), uploading it first when the pane runs `ssh`. See [Pasting images over ssh](#pasting-images-over-ssh). |
+| `paste_image` | Type the paths of the files copied on the clipboard, else of its image, into the focused pane (`leader v`), uploading them first when the pane runs `ssh`. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
 | `toolbar <name> [on\|off\|toggle]` | Show, hide or flip a toolbar (see [Toolbars](#toolbars--ranmatoolbarname-def)); toggle without a word. Until the next profile switch, which shows the profile's. |
 | `send <chord>` | Type the chord into the focused pane as if pressed there (`send ctrl+c`, `send esc`, `send alt+.`), with any latched modifier; binds are not looked up. For a toolbar button. |
@@ -476,28 +476,34 @@ Give exactly one of `render` or `exec`. A module that fails shows its error in t
 `urgent` style instead of its text. Modules never run while a frame is drawn; the
 bar shows their last result.
 
-## Pasting images over ssh
+## Pasting files over ssh
 
-A program across `ssh` (Claude Code on another machine) cannot see an image
-on this one: its own image paste reads the clipboard of the machine it runs
-on, and a pasted path names a file that is not there. The ranma on the
-machine with the image does the carrying:
+A program across `ssh` (Claude Code on another machine) cannot see a file
+on this one, whether a screenshot, a zip or an HTML page: its own image paste
+reads the clipboard of the machine it runs on, and a pasted path names a file
+that is not there. The ranma on the machine with the file does the carrying:
 
-- **`paste_image`** (`leader v`) reads the clipboard's image itself, saves it
-  under `$TMPDIR/ranma-paste-UID/`, and types its path. When the focused
-  pane's program is `ssh`, the image goes to the same directory on the far
-  side first and that path is typed instead. It is an action because a
+- **`paste_image`** (`leader v`) reads the clipboard itself. Files copied in a
+  file manager come first, any kind and several at once; otherwise its image
+  is saved under `$TMPDIR/ranma-paste-UID/`. It types their paths. When the
+  focused pane's program is `ssh`, each file goes to
+  `$TMPDIR/ranma-paste-UID/HASH/NAME` on the far side first and those paths
+  are typed instead, separated by spaces. The name stays the file's own
+  (`report.html`), with anything but letters, digits and `._+-` made `_`. It is an action because a
   terminal's own paste carries text (and Windows Terminal keeps `Ctrl+V` for
   itself). Inside another ranma it is the outermost one's to do, since that
   one is on the machine at the keyboard: the inner one asks it, and the path
   comes back down as a paste. For one key without the leader:
   `ranma.bind("alt+v", "paste_image", { global = true })`.
-- **A paste that is one image path** (`png jpg jpeg gif webp`; plain, quoted,
-  backslash-escaped or a `file://` URI; a `C:\` path under WSL) into a pane
-  running `ssh` is uploaded the same way (`paste.upload`). Anything else
-  about the paste, a second line or other words, and it is typed as it came.
-  This is how a chain works: work → PC → VPS, each ranma uploading to the
-  next.
+- **A paste that is nothing but paths of files here** into a pane running
+  `ssh` is uploaded the same way (`paste.upload`). A file dragged onto the
+  terminal arrives as such a paste, so dragging works; so does `Ctrl+V` of a
+  path copied as text. Each word or line must be an absolute path (plain,
+  quoted, backslash-escaped or a `file://` URI; a `C:\` path under WSL) of a
+  file that exists on this machine. Anything else in the paste and it is
+  typed as it came. This is how a chain works: work → PC → VPS, each ranma
+  uploading to the next. Meant a path on the far side that also exists here?
+  Copy it from the far side's screen instead, or set `paste.upload = false`.
 
 The upload is the pane's own `ssh` command line, its remote command dropped,
 with `BatchMode=yes` (it never asks for a password: use keys, an agent, or a
@@ -506,9 +512,10 @@ runs off the screen's thread: a toast says where it goes, keys typed into the
 pane meanwhile are sent after the path, and Esc cancels. A failure, a cancel or
 30 seconds types the paste as it came and says why in a toast. A connection
 that cannot be made (a tunnel reconnecting) is tried once more a second
-later, then reported as `could not reach HOST:` with ssh's own reason. Images over
-50 MB are refused. The same image always has the same name, so pasting it
-again replaces the copy instead of adding one.
+later, then reported as `could not reach HOST:` with ssh's own reason. A file over
+50 MB, or a folder, fails the paste before anything is sent. The same file
+always lands in the same place, so pasting it again replaces the copy instead
+of adding one. The 30 seconds are for the whole paste, all its files.
 
 **Reusing the pane's connection.** Each upload is a second ssh connection
 beside the pane's: another login, and another trip through any `ProxyJump`,
