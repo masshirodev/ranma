@@ -81,6 +81,15 @@ ranma.set {
   -- ranma sets no title at all.)
   title_host = "ssh",
 
+  -- A server keeps a snapshot of its sessions, layouts, directories and
+  -- commands in ~/.local/state/ranma/servers, written a few seconds after
+  -- you do something and as it ends. After a reboot, a new server of the same
+  -- name (the first terminal gets server 1) asks whether to bring it back:
+  -- Enter types each pane's command and leaves it on the prompt, r runs them,
+  -- Esc declines; the restore action brings it back later. "off": no
+  -- snapshots, no question. Processes never survive; new ones start.
+  restore = "ask",
+
   -- Pasting into a pane whose program is ssh. upload: a paste that is nothing
   -- but paths of files on this machine (a file dragged onto the terminal, a
   -- path copied as text, a C:\ path under WSL) is copied to the far side

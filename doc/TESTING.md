@@ -53,6 +53,10 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - two panes marked for synchronized input both get a typed line, and the bar
   says so; unmarked, the next line reaches only the focused one
 - workspace 2 shows in the bar while current and disappears once left empty
+- after a "reboot" (a snapshot planted for a server name), a fresh server of
+  that name sets it aside and asks; Enter lays the panes out again, the new
+  server's first shell taking the first place, with the saved command typed
+  on the other's prompt and not run
 - a saved layout loaded on an empty workspace opens its panes, types the saved
   command into the first, falls back to home for a directory that is gone,
   and `save_layout` writes the pane's directory back (the test's own

@@ -24,6 +24,7 @@ pub mod picker;
 pub mod proto;
 pub mod pty;
 pub mod render;
+pub mod restore;
 pub mod snapshot;
 pub mod sysstat;
 pub mod theme;

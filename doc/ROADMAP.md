@@ -186,8 +186,9 @@ lets you style".
 - [x] `panes.active_bg` / `inactive_bg`, selection colours
 - [x] Workspace formats, module grounds and caps
 
+- [x] A server's snapshot, written after activity and on exit, offered by a
+  fresh server (`Enter` typed, `r` run), and the `restore` action
+
 ## Later, maybe
 
-- Restoring saved layouts after a reboot: save on exit, offer on launch
-  (processes cannot survive one; the layout can).
 - Bar widgets in Lua, on a throttled tick.

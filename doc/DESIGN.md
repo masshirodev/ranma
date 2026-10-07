@@ -325,9 +325,31 @@ layout are placed after it by the policy. Nothing is ever closed by loading.
 Without a name, `load_layout` opens a picker of every layout, declared and
 saved.
 
-This is also the groundwork for respawning after a reboot (see Non-goals): a
-saved layout is exactly what a restore would read. Doing that on exit and
-offering it on launch is a separate step.
+**A server keeps a snapshot of itself, and a fresh one offers the last**
+(2026-10-07). A reboot ends a server without a clean exit, so saving on exit
+alone would save nothing that matters. Instead a server writes
+`$XDG_STATE_HOME/ranma/servers/NAME.toml` a few seconds after a key or a
+change of layout, at most that often, only when it differs from the last
+write, and once more as it ends (deleting it when it ends empty). Events
+schedule the write, never the write itself, so an idle server stays at zero
+wakeups. It holds every session (name, accent, current workspace), every
+workspace (name, the saved-layout tree, the focused pane, its floats as
+fractions of the area, so they come back proportionate at any size) and the
+scratchpad's floats.
+
+A **fresh** server, one started rather than upgraded in place, moves its
+name's snapshot aside to `NAME.last.toml` before writing its own, and offers
+it: `Enter` restores with each pane's command typed and waiting at its
+prompt, `r` restores and runs them, `Esc` declines. Nothing runs that was
+not asked for, which is the surprise the first sketch of this guarded with
+rules; one key says yes to all of it instead. The `restore` action brings
+`NAME.last.toml` back later, until the next fresh start replaces it. Names
+line up after a reboot because servers are numbered from 1: the first
+terminal opened gets server 1, and server 1's snapshot. Restoring fills
+sessions and workspaces by name and number the way `load_layout` fills a
+workspace, so the shell a new server opens first becomes one of the
+restored panes instead of an extra. `restore = "off"` neither writes nor
+offers.
 
 **The tmux shim still ignores `select-layout`.** A program driving tmux (an
 agent team opening panes) reshaping the workspace you are working in is the
@@ -1441,9 +1463,9 @@ Rust, for predictable latency without a GC, and for the emulator:
 
 ## Non-goals
 
-- Keeping sessions across a reboot. Processes cannot survive one. Saved
-  layouts respawn their panes (see "Layouts"), and restoring them on launch is
-  a later idea (see ROADMAP); the processes themselves are never kept.
+- Keeping processes across a reboot. Nothing survives one. A server's
+  snapshot brings back its sessions, layouts, directories and commands as new
+  processes (see "Layouts"); the old ones are gone.
 - Remote hosts, SSH or web servers, multi-client tree sync (clients keeping
   copies of the layout in step). Several terminals showing one server's screen is
   not that; see "Several terminals on one server".

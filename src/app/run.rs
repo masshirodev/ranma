@@ -297,14 +297,19 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
     }
     start_background(&app, &tx);
     let _watcher = watch_config(tx);
-    event_loop(
+    // A server started, not upgraded: it offers what the last one of its
+    // name left (after a reboot, say).
+    app.start_snapshots(name, true);
+    let result = event_loop(
         &mut app,
         &rx,
         &mut term,
         Some(name),
         Some(&buffer),
         Vec::new(),
-    )
+    );
+    app.write_snapshot();
+    result
 }
 
 /// The binary a server was started from. After `install.sh` replaces it, this
@@ -426,7 +431,11 @@ pub fn run_server_resume(
     app.after_event();
     start_background(&app, &tx);
     let _watcher = watch_config(tx);
-    event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), clients)
+    // Taking a new build keeps the snapshots going and asks nothing.
+    app.start_snapshots(name, false);
+    let result = event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), clients);
+    app.write_snapshot();
+    result
 }
 
 /// Clear close-on-exec on everything a new build takes over: the PTY masters,

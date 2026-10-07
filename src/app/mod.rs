@@ -37,6 +37,7 @@ mod query;
 mod rules;
 mod run;
 mod session;
+mod snapshots;
 mod switch;
 mod touch;
 
@@ -275,6 +276,11 @@ pub struct App {
     frameless_was: Option<PaneId>,
     /// Where `save_layout` writes and `load_layout` reads (see `layouts`).
     layouts_dir: Option<std::path::PathBuf>,
+    /// This server's snapshot of itself (see `snapshots`); `None` standalone.
+    snapshots: Option<snapshots::Snapshots>,
+    snapshot_due: Option<Instant>,
+    /// The snapshot a fresh server set aside, while its question is open.
+    restore_offer: Option<crate::restore::Server>,
 }
 
 impl App {
@@ -325,6 +331,9 @@ impl App {
             drop_preview: None,
             update_available: None,
             layouts_dir: crate::layouts::dir(),
+            snapshots: None,
+            snapshot_due: None,
+            restore_offer: None,
             selection_pane: None,
             last_click: None,
             mouse_capture: None,
@@ -604,6 +613,7 @@ impl App {
 
     /// Push the current layout down to every PTY and note what is visible.
     fn relayout(&mut self) {
+        self.note_snapshot(Instant::now());
         // The master layout is a shape kept by policy: whatever changed the tree
         // (a pane opened, closed or moved in) is put back into it here.
         if self.config.settings.layout == Layout::Master {
@@ -1062,7 +1072,11 @@ impl App {
     pub fn handle(&mut self, ev: AppEvent) {
         match ev {
             AppEvent::Pane(..) => self.note_programs(Instant::now(), false),
-            AppEvent::Input(_) => self.note_programs(Instant::now(), true),
+            AppEvent::Input(_) => {
+                let now = Instant::now();
+                self.note_programs(now, true);
+                self.note_snapshot(now);
+            }
             _ => {}
         }
         match ev {
@@ -2091,6 +2105,7 @@ impl App {
             Action::SaveLayout(None) => self.open_save_layout_prompt(),
             Action::LoadLayout(Some(name)) => self.load_layout(&name),
             Action::LoadLayout(None) => self.open_layout_picker(),
+            Action::Restore { run } => self.restore_last(run),
             Action::ToggleFloating => self.toggle_floating(),
             Action::FloatSize(pw, ph) => self.place_float(|r| r.resized_in(area, pw, ph)),
             Action::Snap(to) => self.place_float(|r| r.snapped(area, to)),
@@ -2466,6 +2481,7 @@ impl App {
             .copied()
             .chain(self.reload_at)
             .chain(self.programs_due)
+            .chain(self.snapshot_due)
             .chain(self.toasts.next_expiry())
             .chain(self.hint_due)
             .chain(self.press_due())
@@ -2674,6 +2690,9 @@ impl App {
         }
         if self.programs_due.is_some_and(|t| t <= now) {
             self.read_programs(now);
+        }
+        if self.snapshot_due.is_some_and(|t| t <= now) {
+            self.write_snapshot();
         }
         if self.toasts.expire(now) {
             self.dirty = true;

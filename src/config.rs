@@ -77,6 +77,17 @@ pub enum TitleHost {
     Never,
 }
 
+/// Whether a server keeps a snapshot of itself and offers it after a reboot
+/// (DESIGN.md, "Layouts").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RestoreMode {
+    /// Write snapshots; a fresh server asks whether to bring the last back.
+    Ask,
+    /// Neither write nor ask.
+    Off,
+}
+
 /// What ranma does when its source has moved on (see `update`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -111,6 +122,7 @@ pub struct Settings {
     /// again in WM mode, it goes one level down.
     pub outer_leader: Chord,
     pub title_host: TitleHost,
+    pub restore: RestoreMode,
     /// A paste that is nothing but paths of local files, into a pane running
     /// ssh, is uploaded first.
     pub paste_upload: bool,
@@ -138,6 +150,7 @@ impl Default for Settings {
             nested: NestedMode::Auto,
             outer_leader: "ctrl+alt+b".parse().unwrap(),
             title_host: TitleHost::Ssh,
+            restore: RestoreMode::Ask,
             paste_upload: true,
             paste_image_command: None,
         }
@@ -163,6 +176,7 @@ struct SettingsPatch {
     nested: Option<NestedMode>,
     outer_leader: Option<String>,
     title_host: Option<TitleHost>,
+    restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
 }
 
@@ -810,6 +824,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(h) = patch.title_host {
         s.title_host = h;
+    }
+    if let Some(r) = patch.restore {
+        s.restore = r;
     }
     if let Some(p) = patch.paste {
         if let Some(u) = p.upload {
@@ -2114,6 +2131,10 @@ mod tests {
         let cfg = with_user("ranma.set { title_host = 'always' }").unwrap();
         assert_eq!(cfg.settings.title_host, TitleHost::Always);
         assert!(with_user("ranma.set { title_host = 'sometimes' }").is_err());
+        assert_eq!(with_user("").unwrap().settings.restore, RestoreMode::Ask);
+        let cfg = with_user("ranma.set { restore = 'off' }").unwrap();
+        assert_eq!(cfg.settings.restore, RestoreMode::Off);
+        assert!(with_user("ranma.set { restore = 'always' }").is_err());
         let cfg = with_user("ranma.set { nested = 'off', outer_leader = 'ctrl+alt+a' }").unwrap();
         assert_eq!(cfg.settings.nested, NestedMode::Off);
         let err = format!(

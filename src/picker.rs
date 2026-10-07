@@ -76,6 +76,9 @@ pub enum Kind {
     ConfirmUpdate,
     /// The ranma servers: Enter moves this terminal to one, Ctrl+X kills one.
     Servers,
+    /// "Bring back the last session?": Enter or y restores with commands
+    /// waiting, r restores and runs them, anything else declines.
+    ConfirmRestore,
     /// "Kill server NAME?", answered as ConfirmQuit.
     ConfirmKill(String),
     /// A pane's right-click menu: entries that run an action on it.
@@ -201,6 +204,7 @@ impl Picker {
                 | Kind::SaveLayout
                 | Kind::RenamePane(_)
                 | Kind::ConfirmQuit
+                | Kind::ConfirmRestore
                 | Kind::ConfirmUpdate
                 | Kind::ConfirmKill(_)
         )
@@ -331,9 +335,12 @@ impl Picker {
         // A yes/no question: one key answers it, and only yes is yes.
         if matches!(
             self.kind,
-            Kind::ConfirmQuit | Kind::ConfirmUpdate | Kind::ConfirmKill(_)
+            Kind::ConfirmQuit | Kind::ConfirmUpdate | Kind::ConfirmKill(_) | Kind::ConfirmRestore
         ) {
             return match key.code {
+                KeyCode::Char('r') if !ctrl && self.kind == Kind::ConfirmRestore => {
+                    Outcome::Submit("run".into())
+                }
                 KeyCode::Enter | KeyCode::Char('y' | 'Y') if !ctrl => Outcome::Submit("y".into()),
                 _ => Outcome::Cancel,
             };

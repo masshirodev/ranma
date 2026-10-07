@@ -652,6 +652,7 @@ impl App {
                     Some(Kind::RenameWorkspace(n)) => self.rename_workspace(n, &text),
                     Some(Kind::RenamePane(id)) => self.rename_pane(id, &text),
                     Some(Kind::SaveLayout) => self.save_layout(&text),
+                    Some(Kind::ConfirmRestore) => self.accept_restore(text == "run"),
                     Some(Kind::ConfirmQuit) => self.quit = true,
                     Some(Kind::ConfirmUpdate) => self.run_action(crate::action::Action::Update),
                     Some(Kind::ConfirmKill(name)) => self.kill_server(name),

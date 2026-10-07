@@ -112,6 +112,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). It reads images only. Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
+| `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -168,6 +169,7 @@ does not matter; it is ignored.
 | `select_layout <preset>` | Rebuild the workspace's tiles, in tree order, into one of tmux's presets: `even-horizontal` (side by side), `even-vertical` (stacked), `main-vertical` (the first pane on the left, the rest stacked on the right), `main-horizontal` (the first on top, the rest side by side below) or `tiled` (a grid). The main pane takes `master_ratio`. Groups are flattened, floats stay where they are, fullscreen ends. Applied once: the next pane opened is placed by `layout` as usual. Under `layout = "master"` only `main-vertical` is accepted, since the master shape would undo the others. |
 | `next_layout` | The preset after the one this workspace showed last, in tmux's order (`leader space`, tmux's `Space`). |
 | `save_layout [name]` | Save the workspace's tiles as a [layout](#layouts--ranmalayoutname-def): splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered). A name `init.lua` declares is refused. |
+| `restore [run]` | Bring back the snapshot this server set aside when it started (see [After a reboot](#after-a-reboot)): each pane's command typed and waiting on its prompt, or run with `restore run`. |
 | `load_layout [name]` | Apply a [layout](#layouts--ranmalayoutname-def) to the workspace. Without a name, pick one from every layout, declared and saved. |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |
@@ -342,6 +344,31 @@ shell is in the foreground (`nvim`, `yarn run dev`), quoted for the shell.
 A layout declared in `init.lua` wins over a saved file of the same name, and
 `save_layout` refuses that name rather than write a file that would never
 load.
+
+### After a reboot
+
+A server keeps a snapshot of itself in
+`$XDG_STATE_HOME/ranma/servers/NAME.toml` (`~/.local/state/...`): every
+session, workspace name and layout, each pane's directory and command, floats
+in proportion, the scratchpad. It is written a few seconds after you do
+something, only when something changed, and as the server ends; a server that
+ends with no panes leaves none. An idle server writes nothing.
+
+A **fresh** server (started, not upgraded in place by `install.sh`) moves its
+name's snapshot to `NAME.last.toml` and asks whether to bring it back:
+
+- `Enter` (or `y`): every pane comes back with its command typed and waiting
+  on its prompt; one Enter in each runs it.
+- `r`: the same, and the commands run.
+- `Esc`, anything else: not now. The `restore` action (`leader :`) brings it
+  back later, until the next fresh server of that name replaces it.
+
+Servers are numbered from 1, so after a reboot the first terminal opened gets
+server 1 and server 1's snapshot. Restoring fills sessions by name and
+workspaces by number, as `load_layout` fills one: the shell the new server
+opened first takes the first place. Processes do not survive a reboot; these
+are new ones, started where the old ones were. `ranma.set { restore = "off" }`
+turns all of it off.
 
 ## ranma inside ranma
 

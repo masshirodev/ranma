@@ -94,6 +94,11 @@ pub enum Action {
     SaveLayout(Option<String>),
     /// Apply a layout to the workspace; without a name, pick one.
     LoadLayout(Option<String>),
+    /// Bring back the snapshot this server set aside when it started: each
+    /// command typed and waiting, or run (`restore run`).
+    Restore {
+        run: bool,
+    },
     ToggleFloating,
     /// Size the focused pane as a float, in percent of the workspace (width,
     /// height), keeping its centre. A tile is floated first.
@@ -277,6 +282,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("next_layout", ""),
     ("save_layout", "[name]"),
     ("load_layout", "[name]"),
+    ("restore", "[run]"),
     ("swap_master", ""),
     ("sync_toggle", ""),
     ("sync_clear", ""),
@@ -454,6 +460,15 @@ impl FromStr for Action {
                 }
             }
             "next_layout" => no_arg(Action::NextLayout),
+            "restore" => match rest {
+                None => Ok(Action::Restore { run: false }),
+                Some("run") => Ok(Action::Restore { run: true }),
+                Some(other) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: other.into(),
+                    expected: "nothing (commands wait on the prompt), or `run`",
+                }),
+            },
             "save_layout" | "load_layout" => {
                 let named = match (first, second) {
                     (None, _) => None,
@@ -735,6 +750,8 @@ impl fmt::Display for Action {
             Action::SaveLayout(Some(n)) => write!(f, "save_layout {n}"),
             Action::LoadLayout(None) => f.write_str("load_layout"),
             Action::LoadLayout(Some(n)) => write!(f, "load_layout {n}"),
+            Action::Restore { run: false } => f.write_str("restore"),
+            Action::Restore { run: true } => f.write_str("restore run"),
             Action::SwapMaster => f.write_str("swap_master"),
             Action::SyncToggle => f.write_str("sync_toggle"),
             Action::SyncClear => f.write_str("sync_clear"),
@@ -835,6 +852,9 @@ mod tests {
         );
         assert_eq!(a("next_layout"), Action::NextLayout);
         assert_eq!(a("load_layout"), Action::LoadLayout(None));
+        assert_eq!(a("restore"), Action::Restore { run: false });
+        assert_eq!(a("restore run"), Action::Restore { run: true });
+        assert!("restore now".parse::<Action>().is_err());
         assert_eq!(a("save_layout dev"), Action::SaveLayout(Some("dev".into())));
         assert!(matches!(
             "load_layout a/b".parse::<Action>(),

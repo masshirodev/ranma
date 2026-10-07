@@ -120,18 +120,7 @@ impl App {
             return;
         };
         let home = dirs::home_dir();
-        let shell = self.shell_name();
-        let about = |id: PaneId| {
-            let Some(p) = self.panes.get(&id) else {
-                return (None, None);
-            };
-            (
-                p.cwd().map(|c| layouts::tilde(&c, home.as_deref())),
-                p.foreground_command(&shell)
-                    .map(|argv| layouts::shell_join(&argv)),
-            )
-        };
-        let spec = Spec::from_node(&root, &about);
+        let spec = Spec::from_node(&root, &self.pane_about());
         let n = spec.panes().len();
         self.status = Some(match layouts::save(&dir, name, &spec) {
             Ok(path) => format!(
@@ -159,6 +148,39 @@ impl App {
                 return;
             }
         };
+        let (opened, failed) = self.apply_spec(&spec, Typing::Run);
+        self.relayout();
+        self.status = Some(match failed {
+            Some(e) => format!("layout {name}: a pane failed to start: {e}"),
+            None if opened > 0 => format!(
+                "layout {name}: {opened} pane{} opened",
+                if opened == 1 { "" } else { "s" }
+            ),
+            None => format!("layout {name}"),
+        });
+    }
+
+    /// What a pane is doing, as a layout keeps it: its directory, and the
+    /// command in its foreground when that is not its shell.
+    pub(super) fn pane_about(&self) -> impl Fn(PaneId) -> (Option<String>, Option<String>) + '_ {
+        let home = dirs::home_dir();
+        let shell = self.shell_name();
+        move |id| {
+            let Some(p) = self.panes.get(&id) else {
+                return (None, None);
+            };
+            (
+                p.cwd().map(|c| layouts::tilde(&c, home.as_deref())),
+                p.foreground_command(&shell)
+                    .map(|argv| layouts::shell_join(&argv)),
+            )
+        }
+    }
+
+    /// Put `spec` on the shown workspace (not the scratchpad): its panes fill
+    /// the layout in tree order, the rest is spawned. Returns how many were
+    /// opened and the first failure. The caller relayouts.
+    pub(super) fn apply_spec(&mut self, spec: &Spec, typing: Typing) -> (usize, Option<String>) {
         let existing = self.active().tree.panes();
         let leaves = spec.panes();
         let mut ids = Vec::with_capacity(leaves.len());
@@ -174,12 +196,6 @@ impl App {
                 }
             }
         }
-        // A pane with no directory of its own starts where new_pane would.
-        let here = self
-            .focused()
-            .or(self.last_focused)
-            .and_then(|f| self.panes.get(&f))
-            .and_then(|p| p.cwd());
         let ws = self.active_mut();
         ws.tree.root = Some(spec.to_node(&mut ids.into_iter()));
         ws.fullscreen = false;
@@ -188,56 +204,14 @@ impl App {
             let last = ws.tree.panes().last().copied();
             ws.tree.insert(*extra, last, None, Placement::Dwindle);
         }
-
-        let frame = self.frame();
-        let size_of = |id: PaneId| {
-            frame
-                .views
-                .iter()
-                .find(|v| v.id == id)
-                .map(|v| v.inner)
-                .or_else(|| frame.hidden.iter().find(|(h, _)| *h == id).map(|(_, r)| *r))
-                .map_or(Size { cols: 80, rows: 24 }, |r| Size {
-                    cols: r.w,
-                    rows: r.h,
-                })
-        };
-        let home = dirs::home_dir();
-        let mut failed: Option<String> = None;
+        let mut failed = None;
         let mut opened = 0;
         for (id, leaf) in fresh {
-            let cwd = match &leaf.cwd {
-                Some(c) => Some(layouts::expand(c, home.as_deref()))
-                    .filter(|p| p.is_dir())
-                    .or_else(|| home.clone()),
-                None => here.clone(),
-            };
-            let s = &self.config.settings;
-            let opts = SpawnOptions {
-                shell: s.shell.as_deref(),
-                command: None,
-                scrollback_lines: s.scrollback_lines,
-                cwd,
-                env: &[],
-            };
-            match Pane::spawn(id, size_of(id), &opts, self.tx.clone()) {
-                Ok(pane) => {
-                    // Typed, not run in the shell's place: a command that ends
-                    // leaves its shell, and is in its history to run again.
-                    if let Some(cmd) = &leaf.command {
-                        pane.write(format!("{cmd}\r").into_bytes());
-                    }
-                    self.panes.insert(id, pane);
-                    opened += 1;
-                    let ws = self.current;
-                    self.emit(HookEvent::PaneOpen, |t| {
-                        t.set("pane", id)?;
-                        t.set("workspace", ws)
-                    });
-                }
+            match self.spawn_into(id, leaf.cwd.as_deref(), leaf.command.as_deref(), typing) {
+                Ok(()) => opened += 1,
                 Err(e) => {
                     self.active_mut().tree.remove(id);
-                    failed.get_or_insert_with(|| format!("{e:#}"));
+                    failed.get_or_insert(e);
                 }
             }
         }
@@ -249,16 +223,81 @@ impl App {
         if let Some(f) = focus {
             self.focus(f);
         }
-        self.relayout();
-        self.status = Some(match failed {
-            Some(e) => format!("layout {name}: a pane failed to start: {e}"),
-            None if opened > 0 => format!(
-                "layout {name}: {opened} pane{} opened",
-                if opened == 1 { "" } else { "s" }
-            ),
-            None => format!("layout {name}"),
-        });
+        (opened, failed)
     }
+
+    /// Spawn pane `id`, already placed in the shown workspace, at the size it
+    /// is laid out at: a shell in `cwd` (where new_pane would start one when
+    /// `None`, home when it is gone), `command` typed into it.
+    pub(super) fn spawn_into(
+        &mut self,
+        id: PaneId,
+        cwd: Option<&str>,
+        command: Option<&str>,
+        typing: Typing,
+    ) -> Result<(), String> {
+        let home = dirs::home_dir();
+        let cwd = match cwd {
+            Some(c) => Some(layouts::expand(c, home.as_deref()))
+                .filter(|p| p.is_dir())
+                .or(home),
+            None => self
+                .focused()
+                .or(self.last_focused)
+                .and_then(|f| self.panes.get(&f))
+                .and_then(|p| p.cwd()),
+        };
+        let frame = self.frame();
+        let size = frame
+            .views
+            .iter()
+            .find(|v| v.id == id)
+            .map(|v| v.inner)
+            .or_else(|| frame.hidden.iter().find(|(h, _)| *h == id).map(|(_, r)| *r))
+            .map_or(Size { cols: 80, rows: 24 }, |r| Size {
+                cols: r.w,
+                rows: r.h,
+            });
+        let s = &self.config.settings;
+        let opts = SpawnOptions {
+            shell: s.shell.as_deref(),
+            command: None,
+            scrollback_lines: s.scrollback_lines,
+            cwd,
+            env: &[],
+        };
+        let pane = Pane::spawn(id, size, &opts, self.tx.clone()).map_err(|e| format!("{e:#}"))?;
+        // Typed, not run in the shell's place: a command that ends leaves its
+        // shell, and is in its history to run again. Waiting, it is on the
+        // prompt for one Enter.
+        if let Some(cmd) = command {
+            let line = match typing {
+                Typing::Run => format!("{cmd}\r"),
+                Typing::Wait => cmd.to_string(),
+            };
+            pane.write(line.into_bytes());
+        }
+        self.panes.insert(id, pane);
+        let ws = if self.scratch_shown {
+            SCRATCHPAD
+        } else {
+            self.current
+        };
+        self.emit(HookEvent::PaneOpen, |t| {
+            t.set("pane", id)?;
+            t.set("workspace", ws)
+        });
+        Ok(())
+    }
+}
+
+/// What a respawned pane does with its command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Typing {
+    /// Typed and run, as if Enter followed.
+    Run,
+    /// Typed and left on the prompt.
+    Wait,
 }
 
 #[cfg(test)]

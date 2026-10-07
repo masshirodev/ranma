@@ -403,6 +403,49 @@ $ENV $BIN kill 3; sleep 0.5
 T kill-session -t d; sleep 0.8
 $ENV $BIN ls | grep -q '^2 *detached' || fail "server 2 did not survive its terminal closing ($($ENV $BIN ls))"
 
+# After a reboot: a fresh server finds the snapshot a server of its name left,
+# sets it aside, and asks. Enter brings the panes back with each command typed
+# and waiting on its prompt, not run; the new server's first shell takes the
+# first place.
+mkdir -p "$STATE/ranma/servers"
+cat > "$STATE/ranma/servers/rs.toml" <<'TOML'
+version = 1
+saved = 0
+active = "main"
+
+[[sessions]]
+name = "main"
+current = 1
+
+[[sessions.workspaces]]
+n = 1
+
+[sessions.workspaces.layout]
+split = "horizontal"
+
+[[sessions.workspaces.layout.children]]
+cwd = "/usr/share"
+
+[[sessions.workspaces.layout.children]]
+cwd = "/tmp"
+command = "echo restored-$((6 * 7))"
+TOML
+T new-session -d -s r -x 100 -y 20 "bash --norc"
+sleep 0.3
+rscreen() { T capture-pane -p -t r; }
+T send-keys -t r "$ENV $BIN attach rs" Enter
+for _ in $(seq 1 40); do rscreen | grep -q 'bring back the last session' && break; sleep 0.25; done
+rscreen | grep -q '2 panes in 1 session' || fail "a fresh server did not offer its snapshot ($(rscreen | tail -4))"
+[ -f "$STATE/ranma/servers/rs.last.toml" ] || fail "the snapshot was not set aside"
+T send-keys -t r Enter
+for _ in $(seq 1 40); do rscreen | grep -q 'echo restored-\$((6 \* 7))' && break; sleep 0.25; done
+rscreen | grep -q 'echo restored-\$((6 \* 7))' || fail "the restored command is not waiting on its prompt ($(rscreen | tail -4))"
+rscreen | grep -q 'restored-42' && fail "a restored command ran without being asked"
+[ "$(rscreen | grep -c '╭')" -ge 1 ] && [ "$(rscreen | head -1 | grep -o '╭' | wc -l)" -eq 2 ] ||
+  fail "the restore did not lay out two panes side by side ($(rscreen | head -1))"
+$ENV $BIN kill rs; sleep 0.5
+T kill-session -t r; sleep 0.3
+
 # Two terminals on one server: attaching by name shares it. Both are sent the
 # screen, either one types into it, the screen takes the size of the one last
 # typed in, and one detaching leaves the other; --steal sends the other away.
