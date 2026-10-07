@@ -1457,6 +1457,12 @@ Rust, for predictable latency without a GC, and for the emulator:
   cell of an unfocused pane *when that pane is drawn*, and drawing still
   happens only on change: two million lines flooding an unfocused pane took
   71-83 ticks of server CPU with it on or off, which is noise. Off by default.
+- **A symbol ranma pads is not followed by a plain space** (2026-10-07). kitty
+  draws a symbol or dingbat followed by spaces across those cells
+  (`narrow_symbols`), so ` ⧉ ` showed its squares half a cell right of the
+  middle of a module's pill. The blank after ranma's own sign is a no-break
+  space, which every terminal shows as a blank and none spreads a glyph over.
+  Module text from Lua or a command is the user's, and is left as written.
 - Borders and gaps are cells; they are cheap and stay. Animations are not planned:
   a cell grid cannot animate smoothly, and they would spend the speed this project
   exists for.

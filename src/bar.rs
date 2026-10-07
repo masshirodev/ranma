@@ -52,6 +52,13 @@ impl Style {
     }
 }
 
+/// The mode module's sign that keys go to a ranma inside the focused pane.
+/// A no-break space after the ⧉, not a plain one: kitty draws a symbol
+/// followed by a space across both cells (its `narrow_symbols`), which put
+/// the squares half a cell right of the middle of their module's pill.
+/// Every terminal shows a no-break space as a blank, and none widens over it.
+pub const NESTED_SIGN: &str = " ⧉\u{a0}";
+
 /// What clicking a piece of the bar does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Click {
@@ -489,6 +496,15 @@ mod tests {
             "an empty module takes no room"
         );
         assert_eq!(boxed(seg("x"), "", ""), seg("x"), "no caps, no ground");
+    }
+
+    #[test]
+    fn the_nested_sign_is_centred_in_its_cells() {
+        // One blank either side, and the right one is no plain space for a
+        // terminal to spread the glyph over.
+        assert_eq!(NESTED_SIGN.width(), 3);
+        assert!(NESTED_SIGN.starts_with(' ') && !NESTED_SIGN.ends_with(' '));
+        assert!(NESTED_SIGN.ends_with('\u{a0}'));
     }
 
     #[test]

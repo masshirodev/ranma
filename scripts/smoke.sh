@@ -333,10 +333,10 @@ for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q "^⧉ ranma
 OUTER=$(T display -p -t s '#{pane_title}')
 case "$OUTER" in "⧉ ranma@$HOST · "*) ;; *) fail "the outer title does not carry the inner host ($OUTER)" ;; esac
 [ "$(printf '%s' "$OUTER" | grep -o 'ranma@' | wc -l)" -eq 1 ] || fail "hosts nested in the title ($OUTER)"
-bar | grep -q ' ⧉ ' || fail "the outer ranma does not show the passthrough hint"
+bar | grep -q ' ⧉' || fail "the outer ranma does not show the passthrough hint"
 T send-keys -t s C-b; sleep 0.4
 # The inner's mode shows after ⧉ in the outer bar; a bare WM would be the outer's.
-bar | grep -q '⧉  WM ' || fail "the leader did not reach the inner ranma ($(bar))"
+bar | grep -q '⧉. WM ' || fail "the leader did not reach the inner ranma ($(bar))"
 bar | grep -q '^ WM ' && fail "the outer ranma took the leader"
 T send-keys -t s Escape; sleep 0.3
 # A pane beside the inner one takes the outer's focus: the outer bar no longer
@@ -366,7 +366,7 @@ for _ in $(seq 1 20); do bar | grep -q ' \[1' && break; sleep 0.25; done
 bar | grep -q ' \[1' || fail "closing the pane beside it did not give the inner its workspaces back ($(bar))"
 label >/dev/null && fail "the inner ranma alone again still carries the label"
 T send-keys -t s C-b; sleep 0.2; T send-keys -t s DC; sleep 0.3; T send-keys -t s y; sleep 1
-bar | grep -q ' ⧉ ' && fail "the inner ranma did not quit"
+bar | grep -q ' ⧉' && fail "the inner ranma did not quit"
 
 # The daemon: a second terminal gets its own server (the first one is shown),
 # detaching and closing the terminal both leave it running, and the next

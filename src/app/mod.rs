@@ -2825,7 +2825,7 @@ impl App {
                         .map(|r| r.mode.as_str())
                         .find(|m| *m != "normal" && !m.is_empty())
                         .map(|m| Piece::new(format!(" {} ", m.to_uppercase()), Style::Mode));
-                    std::iter::once(Piece::new(" ⧉ ", Style::Dim))
+                    std::iter::once(Piece::new(bar::NESTED_SIGN, Style::Dim))
                         .chain(inner)
                         .collect()
                 }
