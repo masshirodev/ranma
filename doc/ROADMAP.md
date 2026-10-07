@@ -172,7 +172,22 @@ DESIGN.md, "Pasting files into a pane that runs ssh".
   (`text/uri-list`, Windows' file drop list), several at once, a dragged
   file's path uploaded, names kept
 
+## 10. Layouts and looks from tmux
+
+DESIGN.md, "Layouts: tmux's presets, and saved ones" and "Looks: what tmux
+lets you style".
+
+- [x] Design agreed
+- [x] `select_layout` and `next_layout`: tmux's five presets
+- [ ] Saved layouts: `ranma.layout`, `save_layout`, `load_layout` and its picker
+- [ ] `[styles]`: text attributes per role
+- [ ] Border titles (`title`, `title_align`, `title_format`), `indicator`,
+  `ascii` and `custom` line sets, `floating_style`
+- [ ] `panes.active_bg` / `inactive_bg`, selection colours
+- [ ] Workspace formats, module grounds and caps
+
 ## Later, maybe
 
-- Saving layouts to respawn them after a reboot (processes cannot survive one).
+- Restoring saved layouts after a reboot: save on exit, offer on launch
+  (processes cannot survive one; the layout can).
 - Bar widgets in Lua, on a throttled tick.

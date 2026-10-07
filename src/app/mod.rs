@@ -20,7 +20,7 @@ use crate::action::{Action, Dir, WorkspaceTarget};
 use crate::bar::{self, Click, Piece, Segment, Style};
 use crate::config::{self, BindAction, Config, Event as HookEvent, Layout, ModuleKind};
 use crate::input;
-use crate::layout::{self, PaneId, Placement, Rect, Split, TabBar};
+use crate::layout::{self, PaneId, Placement, Preset, Rect, Split, TabBar};
 use crate::pane::{AppEvent, Pane, Size, SpawnOptions};
 use crate::render::CursorState;
 use crate::theme::{BarPosition, BorderStyle};
@@ -627,6 +627,28 @@ impl App {
             }
         }
         self.visible = frame.views.iter().map(|v| v.id).collect();
+        self.dirty = true;
+    }
+
+    /// Rebuild the current workspace's tiles into a preset (DESIGN.md,
+    /// "Layouts"). Refused where it could not last: the scratchpad has no
+    /// tiles, and `layout = "master"` puts its own shape back.
+    fn select_layout(&mut self, p: Preset) {
+        if self.scratch_shown {
+            self.status = Some("scratchpad panes always float".into());
+        } else if self.config.settings.layout == Layout::Master && p != Preset::MainVertical {
+            self.status = Some(format!(
+                "{}: layout \"master\" keeps its own shape",
+                p.name()
+            ));
+        } else {
+            let ratio = self.config.settings.master_ratio;
+            let ws = self.active_mut();
+            ws.preset = Some(p);
+            ws.fullscreen = false;
+            ws.tree.apply_preset(p, ratio);
+            self.relayout();
+        }
         self.dirty = true;
     }
 
@@ -2055,6 +2077,8 @@ impl App {
                     self.relayout();
                 }
             }
+            Action::SelectLayout(p) => self.select_layout(p),
+            Action::NextLayout => self.select_layout(Preset::after(self.active().preset)),
             Action::ToggleFloating => self.toggle_floating(),
             Action::FloatSize(pw, ph) => self.place_float(|r| r.resized_in(area, pw, ph)),
             Action::Snap(to) => self.place_float(|r| r.snapped(area, to)),
@@ -3177,6 +3201,39 @@ mod tests {
         a.scratch.focused = Some(2);
         a.detach(2);
         assert_eq!(a.scratch.focused, Some(4));
+    }
+
+    #[test]
+    fn next_layout_steps_through_tmuxs_presets() {
+        let mut a = app(None);
+        for id in 1..=3 {
+            with_pane(&mut a, id);
+        }
+        a.active_mut().fullscreen = true;
+        a.run_action(Action::NextLayout);
+        assert_eq!(a.active().preset, Some(Preset::EvenHorizontal));
+        assert!(!a.active().fullscreen, "a layout is for seeing every tile");
+        let rows: Vec<u16> = a.frame().views.iter().map(|v| v.outer.y).collect();
+        assert!(rows.iter().all(|y| *y == rows[0]), "side by side: {rows:?}");
+        a.run_action(Action::NextLayout);
+        assert_eq!(a.active().preset, Some(Preset::EvenVertical));
+        a.run_action("select_layout tiled".parse().unwrap());
+        a.run_action(Action::NextLayout);
+        assert_eq!(a.active().preset, Some(Preset::EvenHorizontal), "wraps");
+        assert_eq!(a.active().tree.panes(), vec![1, 2, 3], "every pane kept");
+    }
+
+    #[test]
+    fn master_refuses_a_preset_it_would_undo() {
+        let mut a = app(Some(r#"ranma.set { layout = "master" }"#));
+        for id in 1..=3 {
+            with_pane(&mut a, id);
+        }
+        a.run_action("select_layout even-vertical".parse().unwrap());
+        assert_eq!(a.active().preset, None);
+        assert!(a.status.as_deref().is_some_and(|s| s.contains("master")));
+        a.run_action("select_layout main-vertical".parse().unwrap());
+        assert_eq!(a.active().preset, Some(Preset::MainVertical));
     }
 
     #[test]

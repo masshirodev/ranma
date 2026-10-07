@@ -20,6 +20,10 @@ pub struct Workspace {
     /// has the focus. Defaulted, so an upgrade from a build without it reads.
     #[serde(default)]
     pub last_tile: Option<PaneId>,
+    /// The preset `select_layout` last applied here, which `next_layout`
+    /// steps on from.
+    #[serde(default)]
+    pub preset: Option<crate::layout::Preset>,
 }
 
 impl Workspace {

@@ -275,6 +275,64 @@ nothing, and a global bind on Enter or Ctrl+J is checked first and wins.
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 
+### Layouts: tmux's presets, and saved ones
+
+(2026-10-07.) The `layout` setting is a *policy*: it decides where each new
+pane goes, every time. tmux users also expect the opposite kind of layout, a
+*shape* applied once to what is already there, and a shape kept under a name
+to bring back later. Both fit the tree without changing it.
+
+**Presets are tmux's five, applied once.** `select_layout NAME` rebuilds the
+current workspace's tiles, in tree order, into `even-horizontal` (side by
+side), `even-vertical` (stacked), `main-vertical` (the first pane on the left,
+the rest stacked on the right), `main-horizontal` (the first on top, the rest
+side by side below) or `tiled` (a grid, as square as the count allows, the last
+row sharing its width among fewer panes). The main pane takes `master_ratio`.
+`next_layout` steps through them in tmux's order, tmux's `Space`; the
+workspace remembers which one it showed last. Groups are flattened, floats and
+focus are left alone, fullscreen ends. After that the tree is an ordinary tree:
+the next pane opened is placed by the policy, resizing sticks. The one
+exception is `layout = "master"`, which keeps its own shape by definition: a
+preset other than `main-vertical` would be put back at once, so it is refused
+with a message saying why rather than appearing to do nothing.
+
+**A saved layout is a tree with each pane's directory and command.** Splits,
+groups and shares are the tree's own; for each pane, the directory its shell
+is in and, when something other than the shell is in the foreground, that
+program's command line. Floats are not saved: they are placed by hand, and a
+rectangle saved at one terminal size is wrong at the next. Two sources, one
+schema:
+
+- `ranma.layout(name, def)` in `init.lua`, written by hand: a container is
+  `{ split = "horizontal" | "vertical", group = bool, size = n, child, child,
+  ... }`, a pane `{ cwd = "...", command = "...", size = n }`. `size` is a
+  weight, like the tree's, not a fraction.
+- `save_layout NAME` writes the current workspace to
+  `$XDG_STATE_HOME/ranma/layouts/NAME.toml` (`~/.local/state`), the same
+  schema with the children under `children`. It is state, not configuration:
+  a file ranma writes does not belong in the directory the user edits and the
+  config watcher reloads. A name `init.lua` declares is refused, so a saved
+  file never shadows a declared one.
+
+`load_layout NAME` applies one to the current workspace. On an empty
+workspace every pane is spawned: the shell in the saved directory (the home
+directory when that is gone), and the command **typed into it**, as tmuxinator
+does, rather than run in its place. A dev server that exits leaves its shell
+and its scrollback, and the command is in the shell's history to run again.
+On a workspace with panes, they fill the layout's panes in tree order and keep
+their programs; panes the layout has beyond them are spawned, panes beyond the
+layout are placed after it by the policy. Nothing is ever closed by loading.
+Without a name, `load_layout` opens a picker of every layout, declared and
+saved.
+
+This is also the groundwork for respawning after a reboot (see Non-goals): a
+saved layout is exactly what a restore would read. Doing that on exit and
+offering it on launch is a separate step.
+
+**The tmux shim still ignores `select-layout`.** A program driving tmux (an
+agent team opening panes) reshaping the workspace you are working in is the
+behaviour the shim exists to prevent; its log has one such call, ignored.
+
 ### Input: leader, then WM mode
 
 Super belongs to Hyprland and never reaches a terminal program, and Alt collides
@@ -435,10 +493,12 @@ the two kept in sync by hand. So:
   `ranma.bar { left = {...}, center = {...}, right = {...} }` and
   `ranma.module(name, { render | exec, interval, format })`. A module is a
   function or a command; there is no module type system to learn.
-- **Looks are a handful of theme colours**, not a stylesheet. A module picks one of
-  four named styles (`normal`, `dim`, `accent`, `urgent`); the workspaces module
-  and the mode indicator have their own keys. That limits what a bar can look
-  like, on purpose: every theme styles every module, and nothing needs a selector.
+- **Looks are theme roles**, not a stylesheet. A module picks one of four named
+  styles (`normal`, `dim`, `accent`, `urgent`); the workspaces module and the mode
+  indicator have their own keys. That limits what a bar can look like, on
+  purpose: every theme styles every module, and nothing needs a selector. Roles
+  carry colours and text attributes, and modules can sit on a background between
+  two caps (see "Looks: what tmux lets you style").
 - **Built-ins are configured, not replaced.** `ranma.module("workspaces", {...})`
   takes the built-in's few options; anything else is an error naming what it does
   take.
@@ -482,6 +542,47 @@ the two kept in sync by hand. So:
   process group, one run at a time per module, and a 5-second timeout kills the
   whole group, so a grandchild holding the output pipe open cannot wedge the read
   (tuios #141).
+
+### Looks: what tmux lets you style
+
+(2026-10-07.) A theme used to be colours, a border style, gaps and a
+separator, on the grounds that a stylesheet is configuration nobody can keep
+in sync. tmux shows what people actually reach for, and nearly all of it is
+not a stylesheet: an attribute on a role, a line set, where a title goes. So
+the theme takes those, still as **roles**, never selectors, and every new key
+is optional or has a default in the built-in theme, so a theme written before
+(one rendered by matugen, say) loads unchanged and looks the same.
+
+| tmux | ranma |
+| --- | --- |
+| `*-style` attributes | `[styles]`: a list of attributes per role (`bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`). Colours stay in `[colors]`, so a palette template never has to know about them. |
+| `pane-border-lines` | `border.style` gains `ascii`, and `custom` with six `border.chars` |
+| `popup-border-lines` | `border.floating_style`, for floats and popups; unset, `border.style` |
+| `pane-border-status`, `pane-border-format` | `border.title` (`top`, `bottom`, `off`), `border.title_align`, `border.title_format` with `{title}`, `{index}`, `{program}`, `{cwd}` |
+| `pane-border-indicators` | `border.indicator = "arrows"`: arrows on the focused pane's edges, pointing in |
+| `window-style`, `window-active-style` | `panes.inactive_bg`, `panes.active_bg`: the ground a program leaves as the default background |
+| `mode-style` | `colors.selection_fg`, `selection_bg`; unset, reversed as before |
+| `window-status-format`, `-current-format` | `bar.workspace_format`, `bar.workspace_current_format`, with `{n}` and `{name}` |
+| powerline status lines | `colors.module_bg` / `module_fg` and `bar.module_left` / `module_right`: each module on its own ground between two caps |
+
+**Formats have placeholders and optional groups, and nothing else.** A part in
+`[...]` shows only when every placeholder in it has a value, which is all a
+workspace label needs (` {n}[:{name}] `, so an unnamed workspace is ` 3 `);
+`[[` and `]]` are literal brackets. tmux's `#{?...}` conditionals and its
+format language are left out: logic belongs in Lua modules, and a second
+language inside the theme is exactly the stylesheet this section avoids. An
+unknown placeholder is an error at load, as an unknown key is.
+
+**`status-justify` is not a key**: where the workspaces sit is already where
+`ranma.bar` puts the module (`left`, `center`, `right`). Multi-line status
+bars, tmux's `status 2`, are not planned: the bar is one row on a desktop, and
+the three-row large bar exists for touch.
+
+**The caps are drawn by ranma, not typed into module text**, so a module's
+text stays plain and clickable, the ground is filled under each module's whole
+width, and filled pieces inside it (the current workspace, ` WM `) keep their
+own background. The nested workspaces an outer bar expands are one module, so
+they sit between one pair of caps.
 
 ### Floating panes and the scratchpad
 
@@ -1333,12 +1434,15 @@ Rust, for predictable latency without a GC, and for the emulator:
 
 ## Non-goals
 
-- Keeping sessions across a reboot. Processes cannot survive one; saving
-  layouts to respawn is a separate, later idea (see ROADMAP).
+- Keeping sessions across a reboot. Processes cannot survive one. Saved
+  layouts respawn their panes (see "Layouts"), and restoring them on launch is
+  a later idea (see ROADMAP); the processes themselves are never kept.
 - Remote hosts, SSH or web servers, multi-client tree sync (clients keeping
   copies of the layout in step). Several terminals showing one server's screen is
   not that; see "Several terminals on one server".
 - An agent inbox or any AI integration in the core. A Lua hook can do that for
   someone who wants it.
 - Matching tmux feature for feature. The tmux shim is a stated subset for
-  programs that drive tmux, grown only from its log (see above).
+  programs that drive tmux, grown only from its log (see above). What ranma
+  took from tmux's styling and layouts it took in its own terms ("Looks",
+  "Layouts"), not as tmux's options.

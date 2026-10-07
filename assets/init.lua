@@ -116,6 +116,10 @@ ranma.bind("f", "cycle_floats")
 ranma.bind("j", "toggle_split")
 -- Every split in the workspace back to equal shares, however it was resized.
 ranma.bind("=", "equalize")
+-- tmux's preset layouts, applied once to the tiles here: space steps through
+-- even-horizontal, even-vertical, main-horizontal, main-vertical and tiled.
+-- Bind one directly with "select_layout tiled".
+ranma.bind("space", "next_layout")
 ranma.bind("alt+return", "fullscreen")
 ranma.bind("shift+m", "swap_master")
 -- Synchronized input: a marks the focused pane (⇉ on its border); typing in a

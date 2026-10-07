@@ -165,6 +165,8 @@ does not matter; it is ignored.
 | `sync_clear` | Unmark every pane (`leader A`). |
 | `swap_master` | Trade places with the master, the first pane of the tree (the one on the left in `layout = "master"`); on the master itself, trade with the next one (`leader M`). |
 | `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
+| `select_layout <preset>` | Rebuild the workspace's tiles, in tree order, into one of tmux's presets: `even-horizontal` (side by side), `even-vertical` (stacked), `main-vertical` (the first pane on the left, the rest stacked on the right), `main-horizontal` (the first on top, the rest side by side below) or `tiled` (a grid). The main pane takes `master_ratio`. Groups are flattened, floats stay where they are, fullscreen ends. Applied once: the next pane opened is placed by `layout` as usual. Under `layout = "master"` only `main-vertical` is accepted, since the master shape would undo the others. |
+| `next_layout` | The preset after the one this workspace showed last, in tmux's order (`leader space`, tmux's `Space`). |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |
 | `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). |

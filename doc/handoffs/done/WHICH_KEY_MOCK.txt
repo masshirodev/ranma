@@ -12,7 +12,7 @@
 │               = equalize     ctrl+h/l prev/next tab        s scratchpad    │
 │           alt+⏎ fullscreen          , rename           alt+s to scratchpad │
 │               M swap master         a sync input                           │
-│                                     A unsync all                           │
+│             spc next layout         A unsync all                           │
 ╰ +sessions · history · ranma ────────────────────────────────── ? all keys ─╯
 ## 80x24 none
   ctrl+b                                                                      
@@ -25,7 +25,7 @@
                 = equalize     ctrl+h/l prev/next tab        s scratchpad     
             alt+⏎ fullscreen          , rename           alt+s to scratchpad  
                 M swap master         a sync input                            
-                                      A unsync all                            
+              spc next layout         A unsync all                            
   +sessions · history · ranma                                    ? all keys   
 ## 120x35 rounded
 ╭ ctrl+b ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -38,7 +38,7 @@
 │               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace  Del quit          │
 │           alt+⏎ fullscreen          , rename           alt+s to scratchpad                       esc leave WM      │
 │               M swap master         a sync input                            history                                │
-│                                     A unsync all                               / search                            │
+│             spc next layout         A unsync all                               / search                            │
 │                                                                                [ copy mode                         │
 │                                                                                o links                             │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
@@ -53,7 +53,7 @@
 │               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace               Del quit          │
 │           alt+⏎ fullscreen          , rename           alt+s to scratchpad                                    esc leave WM      │
 │               M swap master         a sync input                                                                                │
-│                                     A unsync all                                                                                │
+│             spc next layout         A unsync all                                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
 ## 40x15 flowed
 ╭ ctrl+b ──────────────────────────────╮

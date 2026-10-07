@@ -169,6 +169,116 @@ pub enum Placement {
     Manual(Split),
 }
 
+/// tmux's preset layouts: a shape applied once to the tiles a workspace has,
+/// not a policy kept as panes open (that is the `layout` setting).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Preset {
+    /// Side by side, equal widths.
+    EvenHorizontal,
+    /// Stacked, equal heights.
+    EvenVertical,
+    /// The first pane on top, the rest side by side below it.
+    MainHorizontal,
+    /// The first pane on the left, the rest stacked on the right.
+    MainVertical,
+    /// A grid, as square as the count allows.
+    Tiled,
+}
+
+impl Preset {
+    /// In tmux's order, which `next_layout` steps through.
+    pub const ALL: [Preset; 5] = [
+        Preset::EvenHorizontal,
+        Preset::EvenVertical,
+        Preset::MainHorizontal,
+        Preset::MainVertical,
+        Preset::Tiled,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Preset::EvenHorizontal => "even-horizontal",
+            Preset::EvenVertical => "even-vertical",
+            Preset::MainHorizontal => "main-horizontal",
+            Preset::MainVertical => "main-vertical",
+            Preset::Tiled => "tiled",
+        }
+    }
+
+    pub fn from_name(s: &str) -> Option<Preset> {
+        Preset::ALL.into_iter().find(|p| p.name() == s)
+    }
+
+    /// The one after this in tmux's order, wrapping; the first after none.
+    pub fn after(this: Option<Preset>) -> Preset {
+        match this {
+            None => Preset::ALL[0],
+            Some(p) => {
+                let i = Preset::ALL.iter().position(|q| *q == p).unwrap_or(0);
+                Preset::ALL[(i + 1) % Preset::ALL.len()]
+            }
+        }
+    }
+
+    /// The tree for these panes, in this order. `ratio` is the main pane's
+    /// share in the two main layouts.
+    pub fn build(self, panes: &[PaneId], ratio: f32) -> Option<Node> {
+        let leaves = |ids: &[PaneId]| -> Vec<(Node, f32)> {
+            ids.iter().map(|p| (Node::Pane(*p), 1.0)).collect()
+        };
+        // One pane needs no container; a row or column of one is that pane.
+        let line = |split: Split, ids: &[PaneId]| -> Node {
+            match ids {
+                [one] => Node::Pane(*one),
+                many => Node::split(split, leaves(many)),
+            }
+        };
+        match panes {
+            [] => return None,
+            [one] => return Some(Node::Pane(*one)),
+            _ => {}
+        }
+        Some(match self {
+            Preset::EvenHorizontal => line(Split::Horizontal, panes),
+            Preset::EvenVertical => line(Split::Vertical, panes),
+            Preset::MainVertical | Preset::MainHorizontal => {
+                let (outer, inner) = if self == Preset::MainVertical {
+                    (Split::Horizontal, Split::Vertical)
+                } else {
+                    (Split::Vertical, Split::Horizontal)
+                };
+                Node::split(
+                    outer,
+                    vec![
+                        (Node::Pane(panes[0]), ratio),
+                        (line(inner, &panes[1..]), 1.0 - ratio),
+                    ],
+                )
+            }
+            Preset::Tiled => {
+                // tmux's count: rows grow first, then columns, until they hold
+                // every pane. The last row shares its width among what is left.
+                let n = panes.len();
+                let (mut rows, mut cols) = (1, 1);
+                while rows * cols < n {
+                    rows += 1;
+                    if rows * cols < n {
+                        cols += 1;
+                    }
+                }
+                let rows: Vec<(Node, f32)> = panes
+                    .chunks(cols)
+                    .map(|row| (line(Split::Horizontal, row), 1.0))
+                    .collect();
+                match rows.len() {
+                    1 => rows.into_iter().next().unwrap().0,
+                    _ => Node::split(Split::Vertical, rows),
+                }
+            }
+        })
+    }
+}
+
 /// One tab bar to draw: the row it takes and a pane standing for each tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TabBar {
@@ -405,6 +515,17 @@ impl Tree {
             },
             _ => false,
         }
+    }
+
+    /// Rebuild the tiles, in tree order, into a preset's shape. Groups are
+    /// flattened. Returns whether the tree changed.
+    pub fn apply_preset(&mut self, preset: Preset, ratio: f32) -> bool {
+        let next = preset.build(&self.panes(), ratio);
+        if next == self.root {
+            return false;
+        }
+        self.root = next;
+        true
     }
 
     /// The pane `swap_master` trades places with `id`: the tree's first pane
@@ -1309,5 +1430,86 @@ mod tests {
         let edge = Rect::new(90, 30, 10, 10).resized_in(area, 50, 50);
         assert!(edge.right() <= area.right() && edge.bottom() <= area.bottom());
         assert_eq!((edge.w, edge.h), (50, 20));
+    }
+
+    /// The panes of each row, top to bottom, by where they are drawn.
+    fn rows_of(t: &Tree) -> Vec<Vec<PaneId>> {
+        let mut placed = t.layout(AREA, 0);
+        placed.sort_by_key(|(_, r)| (r.y, r.x));
+        let mut rows: Vec<(u16, Vec<PaneId>)> = Vec::new();
+        for (id, r) in placed {
+            match rows.iter_mut().find(|(y, _)| *y == r.y) {
+                Some((_, row)) => row.push(id),
+                None => rows.push((r.y, vec![id])),
+            }
+        }
+        rows.into_iter().map(|(_, r)| r).collect()
+    }
+
+    #[test]
+    fn presets_by_name_and_in_tmux_order() {
+        for p in Preset::ALL {
+            assert_eq!(Preset::from_name(p.name()), Some(p));
+        }
+        assert_eq!(Preset::from_name("main"), None);
+        assert_eq!(Preset::after(None), Preset::EvenHorizontal);
+        assert_eq!(
+            Preset::after(Some(Preset::EvenHorizontal)),
+            Preset::EvenVertical
+        );
+        assert_eq!(Preset::after(Some(Preset::Tiled)), Preset::EvenHorizontal);
+    }
+
+    #[test]
+    fn even_presets_line_every_pane_up_equally() {
+        let mut t = dwindle(4);
+        assert!(t.apply_preset(Preset::EvenHorizontal, 0.5));
+        assert_eq!(rows_of(&t), vec![vec![1, 2, 3, 4]]);
+        assert!(t.layout(AREA, 0).iter().all(|(_, r)| r.w == 50));
+        assert!(t.apply_preset(Preset::EvenVertical, 0.5));
+        assert_eq!(rows_of(&t), vec![vec![1], vec![2], vec![3], vec![4]]);
+        // Applied twice, nothing changes the second time.
+        assert!(!t.apply_preset(Preset::EvenVertical, 0.5));
+    }
+
+    #[test]
+    fn main_presets_give_the_first_pane_the_ratio() {
+        let mut t = dwindle(3);
+        t.apply_preset(Preset::MainVertical, 0.75);
+        assert_eq!(rect_of(&t, 1), Rect::new(0, 0, 150, 50));
+        assert_eq!(rect_of(&t, 2), Rect::new(150, 0, 50, 25));
+        assert_eq!(rect_of(&t, 3), Rect::new(150, 25, 50, 25));
+        t.apply_preset(Preset::MainHorizontal, 0.75);
+        assert_eq!(rect_of(&t, 1).h, 38);
+        assert_eq!(rows_of(&t), vec![vec![1], vec![2, 3]]);
+    }
+
+    #[test]
+    fn tiled_counts_rows_first_as_tmux_does() {
+        let grid = |n: PaneId| {
+            let mut t = dwindle(n);
+            t.apply_preset(Preset::Tiled, 0.5);
+            rows_of(&t)
+        };
+        assert_eq!(grid(1), vec![vec![1]]);
+        assert_eq!(grid(2), vec![vec![1], vec![2]]);
+        assert_eq!(grid(3), vec![vec![1, 2], vec![3]]);
+        assert_eq!(grid(4), vec![vec![1, 2], vec![3, 4]]);
+        assert_eq!(grid(5), vec![vec![1, 2], vec![3, 4], vec![5]]);
+        assert_eq!(grid(7), vec![vec![1, 2, 3], vec![4, 5, 6], vec![7]]);
+        // A short last row stretches across the width.
+        let mut t = dwindle(3);
+        t.apply_preset(Preset::Tiled, 0.5);
+        assert_eq!(rect_of(&t, 3).w, 200);
+    }
+
+    #[test]
+    fn presets_flatten_groups() {
+        let mut t = dwindle(3);
+        t.toggle_group(3);
+        assert!(t.is_grouped(3));
+        t.apply_preset(Preset::EvenHorizontal, 0.5);
+        assert!(!t.is_grouped(3));
+        assert_eq!(rows_of(&t), vec![vec![1, 2, 3]]);
     }
 }

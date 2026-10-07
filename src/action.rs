@@ -86,6 +86,10 @@ pub enum Action {
     SyncClear,
     /// Give every split in the workspace equal shares.
     Equalize,
+    /// Rebuild the workspace's tiles into one of tmux's preset layouts.
+    SelectLayout(crate::layout::Preset),
+    /// The preset after the one the workspace showed last (tmux's `Space`).
+    NextLayout,
     ToggleFloating,
     /// Size the focused pane as a float, in percent of the workspace (width,
     /// height), keeping its centre. A tile is floated first.
@@ -260,6 +264,11 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
     ("equalize", ""),
+    (
+        "select_layout",
+        "<even-horizontal|even-vertical|main-horizontal|main-vertical|tiled>",
+    ),
+    ("next_layout", ""),
     ("swap_master", ""),
     ("sync_toggle", ""),
     ("sync_clear", ""),
@@ -414,6 +423,29 @@ impl FromStr for Action {
             }
             "toggle_split" => no_arg(Action::ToggleSplit),
             "equalize" => no_arg(Action::Equalize),
+            "select_layout" => {
+                const PRESETS: &str =
+                    "even-horizontal, even-vertical, main-horizontal, main-vertical or tiled";
+                match (first, second) {
+                    (None, _) => Err(ActionError::MissingArg {
+                        action: name.into(),
+                        expected: PRESETS,
+                    }),
+                    (Some(p), None) => crate::layout::Preset::from_name(p)
+                        .map(Action::SelectLayout)
+                        .ok_or(ActionError::BadArg {
+                            action: name.into(),
+                            arg: p.into(),
+                            expected: PRESETS,
+                        }),
+                    (Some(_), Some(_)) => Err(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: PRESETS,
+                    }),
+                }
+            }
+            "next_layout" => no_arg(Action::NextLayout),
             "swap_master" => no_arg(Action::SwapMaster),
             "sync_toggle" => no_arg(Action::SyncToggle),
             "sync_clear" => no_arg(Action::SyncClear),
@@ -671,6 +703,8 @@ impl fmt::Display for Action {
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
             Action::Equalize => f.write_str("equalize"),
+            Action::SelectLayout(p) => write!(f, "select_layout {}", p.name()),
+            Action::NextLayout => f.write_str("next_layout"),
             Action::SwapMaster => f.write_str("swap_master"),
             Action::SyncToggle => f.write_str("sync_toggle"),
             Action::SyncClear => f.write_str("sync_clear"),
@@ -760,6 +794,28 @@ mod tests {
             a("exec nvim  -c 'set nu'"),
             Action::Exec("nvim  -c 'set nu'".into())
         );
+    }
+
+    #[test]
+    fn layouts_are_tmuxs_presets_by_name() {
+        use crate::layout::Preset;
+        assert_eq!(
+            a("select_layout main-vertical"),
+            Action::SelectLayout(Preset::MainVertical)
+        );
+        assert_eq!(a("next_layout"), Action::NextLayout);
+        assert!(matches!(
+            "select_layout".parse::<Action>(),
+            Err(ActionError::MissingArg { .. })
+        ));
+        assert!(matches!(
+            "select_layout main".parse::<Action>(),
+            Err(ActionError::BadArg { .. })
+        ));
+        for p in Preset::ALL {
+            let act = Action::SelectLayout(p);
+            assert_eq!(a(&act.to_string()), act);
+        }
     }
 
     #[test]
