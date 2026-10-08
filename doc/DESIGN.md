@@ -703,7 +703,7 @@ What it does not do yet:
   and reopening shows the truth.
 - Toasts are drawn under the panel while it is open.
 
-**Plugin screens, as built** (2026-10-09, from `doc/handoffs/PLUGIN_PANEL.md`):
+**Plugin screens, as built** (2026-10-09, from `doc/handoffs/done/PLUGIN_PANEL.md`):
 
 - `src/screen.rs` ports the handoff's script function by function, drawing
   theme roles into the settings panel's grid. Tests compare it with
@@ -730,6 +730,22 @@ Where it departs from the handoff:
 - The tooltip mocks' key line (`ctrl+click open`) names keys ranma does not
   have. Links open from hints (`leader o`). A tooltip shows whatever the
   plugin passes, and the link plugin will pass the real keys.
+- A badge names its owner: `pane:badge("agents", "?", "waiting", "urgent")`.
+  ranma cannot reliably tell which plugin is calling, because a helper in
+  `lua/` blurs it. Badges keep the order owners first set one, which is
+  stable as states change, as the handoff wants. They are cleared on a
+  reload, since the plugins that set them start over.
+- The badge ladder cuts ranma's title as a whole. The handoff's step "the
+  title's name goes, its index stays" assumes a title made of an index and a
+  name. ranma's title is the user's `title_format`, so there is no index to
+  keep apart from it, and that step drops the title.
+- `pane:link_at` reuses hints' link finder, now also reporting how many cells
+  each link covers. It looks two rows either side, so a URL wrapped across
+  rows is found from either half.
+
+Not done yet: the handoff's rule that the nested-ranma label gives way to
+badges when both share the title's edge (bar on top, title on top). Each still
+lays itself out on its own there. The two only meet in that configuration.
 
 **Pickers and prompts** (2026-10-08) are ranma's own `Picker` with a kind of
 their own and an item target that is an index. The Lua items table is kept in

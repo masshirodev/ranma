@@ -101,6 +101,40 @@ pub fn search<T>(term: &Term<T>, pattern: &str, limit: usize) -> Result<Vec<Hit>
         .collect())
 }
 
+/// The link under (`line`, `col`): its target, the line and column it starts
+/// at, and how many cells it covers. URLs in the text and OSC 8 links, as
+/// hints finds them, looked for in the rows around the line so a URL wrapped
+/// across rows is found from either half.
+pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<(String, i32, usize, usize)> {
+    let (top, bottom) = line_range(term);
+    if line < top || line > bottom {
+        return None;
+    }
+    let (from, to) = ((line - 2).max(top), (line + 2).min(bottom));
+    let cols = term.columns();
+    let rows: Vec<crate::hints::Row> = (from..=to)
+        .map(|l| {
+            let row = &term.grid()[Line(l)];
+            crate::hints::Row {
+                cells: (0..cols)
+                    .map(|c| {
+                        let cell = &row[Column(c)];
+                        let ch = if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+                            '\0'
+                        } else {
+                            cell.c
+                        };
+                        (ch, cell.hyperlink().map(|h| h.uri().to_string()))
+                    })
+                    .collect(),
+                wrapped: row[Column(cols - 1)].flags.contains(Flags::WRAPLINE),
+            }
+        })
+        .collect();
+    let (link, n) = crate::hints::link_at(&rows, (line - from) as usize, col)?;
+    Some((link.target, from + link.at.0 as i32, link.at.1, n))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +196,20 @@ mod tests {
         assert_eq!(newest[0].line, 0, "the limit keeps the newest");
         assert!(search(&t, "nope", 10).unwrap().is_empty());
         assert!(search(&t, "(", 10).unwrap_err().contains("bad pattern"));
+    }
+
+    #[test]
+    fn the_link_under_a_cell_is_found_whole() {
+        let t = term("see https://ranma.dev/doc ok");
+        assert_eq!(
+            link_at(&t, 0, 10),
+            Some(("https://ranma.dev/doc".into(), 0, 4, 21))
+        );
+        assert_eq!(link_at(&t, 0, 2), None, "not on the link");
+        let t = term("0123456789 https://example.com/x");
+        let want = Some(("https://example.com/x".into(), 0, 11, 21));
+        assert_eq!(link_at(&t, 1, 3), want, "from the wrapped half");
+        assert_eq!(link_at(&t, 0, 12), want);
     }
 
     #[test]

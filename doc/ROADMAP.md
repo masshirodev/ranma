@@ -213,7 +213,8 @@ features below the line live outside the repository.
 - [x] `option_change`, fired by the settings panel
 - [x] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
-- [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
+- [x] `pane:link_at(line, col)`
+- [ ] `pane:marks()` (OSC 133 prompt positions)
 - [x] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
   `pane_idle`, `hover`, `user:<name>`
 - [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
@@ -222,8 +223,8 @@ features below the line live outside the repository.
 - [x] Drawing: `picker` and `input`
 - [x] Design: `doc/briefs/PLUGIN_PANEL.md`, handoff in `doc/handoffs/`
 - [x] Plugin screens: `ranma.screen` (designed from the handoff)
-- [ ] Tooltips: `ranma.tooltip`, `pane:link_at`
-- [ ] Badges: `pane:badge` on borders
+- [x] Tooltips: `ranma.tooltip`, `pane:link_at`
+- [x] Badges: `pane:badge` on borders
 - [ ] `pane:watch`, measured first
 - [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)

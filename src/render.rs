@@ -172,6 +172,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     if app.which_key_shown() {
         draw_which_key(f, app);
     }
+    draw_tooltip(f, app, &frame);
     draw_toasts(f, app);
     if app.settings_panel().is_some() {
         draw_settings(f, app);
@@ -419,7 +420,63 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         .border_set(set)
         .border_style(edge);
     let mark = if app.is_synced(view.id) { "⇉ " } else { "" };
-    if b.title != TitlePosition::Off && (!title.trim().is_empty() || !mark.is_empty()) {
+    let badges = app.badges_of(view.id);
+    if !badges.is_empty() {
+        // Plugins' badges sit after the title, each an island, and give way
+        // by the handoff's ladder as the pane narrows (`screen::title_run`).
+        use crate::screen::{EdgeStyle, Role};
+        let shown = if b.title == TitlePosition::Off {
+            ""
+        } else {
+            title.trim()
+        };
+        let (pieces, _) = crate::screen::title_run(
+            !mark.is_empty(),
+            "",
+            shown,
+            &badges,
+            view.outer.w as i32 - 3,
+            set.horizontal_top.chars().next().unwrap_or('─'),
+        );
+        let attrs = if view.focused {
+            theme.styles.title_active
+        } else {
+            theme.styles.title
+        };
+        let spans: Vec<ratatui::text::Span> = pieces
+            .into_iter()
+            .map(|(t, st)| {
+                let style = match st {
+                    EdgeStyle::Title => edge.add_modifier(modifier(attrs)),
+                    EdgeStyle::Border => edge,
+                    EdgeStyle::Badge(role) => {
+                        let fg = match role {
+                            Role::Normal => c.toast_fg,
+                            Role::Dim => c.bar_dim,
+                            Role::Accent => c.bar_accent,
+                            Role::Urgent => c.bar_urgent,
+                        };
+                        let s = Style::default().fg(color(fg));
+                        if role == Role::Urgent {
+                            s.add_modifier(Modifier::BOLD)
+                        } else {
+                            s
+                        }
+                    }
+                };
+                ratatui::text::Span::styled(t, style)
+            })
+            .collect();
+        let line = Line::from(spans).alignment(match b.title_align {
+            theme::Align::Left => Alignment::Left,
+            theme::Align::Center => Alignment::Center,
+            theme::Align::Right => Alignment::Right,
+        });
+        block = match b.title {
+            TitlePosition::Bottom => block.title_bottom(line),
+            _ => block.title_top(line),
+        };
+    } else if b.title != TitlePosition::Off && (!title.trim().is_empty() || !mark.is_empty()) {
         // The sync mark goes in front of the text, inside the format's padding.
         let text = if title.trim().is_empty() {
             format!(" {mark}")
@@ -753,6 +810,50 @@ fn draw_settings(f: &mut Frame, app: &App) {
         b.style,
     );
     paint_grid(f, app, &grid, &st.colors);
+}
+
+/// A plugin's tooltip, anchored to its cell, never over the bar. One whose
+/// pane has scrolled since is gone: its anchor moved.
+fn draw_tooltip(f: &mut Frame, app: &App, frame: &crate::app::Frame) {
+    use crate::settings::Lines;
+    let Some((t, offset)) = &app.tooltip else {
+        return;
+    };
+    let Some(v) = frame.views.iter().find(|v| v.id == t.pane) else {
+        return;
+    };
+    let Some(pane) = app.panes.get(&t.pane) else {
+        return;
+    };
+    let now = pane.term.lock().grid().display_offset();
+    if now != *offset {
+        return;
+    }
+    let y = v.inner.y as i32 + t.line + now as i32;
+    let x = v.inner.x as i32 + t.col as i32;
+    if y < v.inner.y as i32 || y >= v.inner.bottom() as i32 || x >= v.inner.right() as i32 {
+        return;
+    }
+    let screen = f.area();
+    let (top, h): (u16, u16) = match app.bar_rect() {
+        Some(b) if b.y == 0 => (1, screen.height.saturating_sub(1)),
+        Some(_) => (0, screen.height.saturating_sub(1)),
+        None => (0, screen.height),
+    };
+    let b = &app.config.theme.border;
+    let lines = Lines::of(b.style, b.chars.as_deref());
+    let mut grid = crate::settings::Grid::new(screen.width, screen.height);
+    crate::screen::draw_tooltip(
+        &mut grid,
+        x,
+        y,
+        t.title.as_deref(),
+        &t.lines,
+        (0, top as i32, screen.width as i32, h as i32),
+        &lines,
+        b.style,
+    );
+    paint_grid(f, app, &grid, &app.colors());
 }
 
 /// A plugin's screen (`ranma.screen`), floated where settings sits.

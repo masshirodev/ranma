@@ -211,6 +211,14 @@ pub struct App {
     picker: Option<crate::picker::Picker>,
     /// The settings panel, while open (`settings`).
     settings: Option<settings::SettingsState>,
+    /// Plugins' badges on panes' borders, by pane: (owner, badge).
+    badges: HashMap<PaneId, Vec<(String, crate::screen::Badge)>>,
+    /// Badge owners in the order first seen: badges keep their places as
+    /// their states change.
+    badge_owners: Vec<String>,
+    /// A plugin's tooltip, and its pane's scroll when it was set: it goes
+    /// once the pane scrolls.
+    pub tooltip: Option<(crate::luaui::TooltipSpec, usize)>,
     /// A plugin's screen, in the same slot (`ranma.screen`).
     plugin_screen: Option<screen::PluginScreen>,
     /// The screen `o` left for its options, back on `esc`.
@@ -375,6 +383,9 @@ impl App {
             picker: None,
             settings: None,
             plugin_screen: None,
+            tooltip: None,
+            badges: HashMap::new(),
+            badge_owners: Vec::new(),
             stashed_screen: None,
             pending_screen: None,
             screen_drawn: None,
@@ -485,6 +496,16 @@ impl App {
                 .get_mut(&self.current)
                 .expect("current workspace exists")
         }
+    }
+
+    /// A pane's badges, in the order their owners first set one.
+    pub fn badges_of(&self, id: PaneId) -> Vec<crate::screen::Badge> {
+        let Some(list) = self.badges.get(&id) else {
+            return Vec::new();
+        };
+        let mut out: Vec<&(String, crate::screen::Badge)> = list.iter().collect();
+        out.sort_by_key(|(o, _)| self.badge_owners.iter().position(|x| x == o));
+        out.into_iter().map(|(_, b)| b.clone()).collect()
     }
 
     pub fn focused(&self) -> Option<PaneId> {
@@ -1561,6 +1582,11 @@ impl App {
     }
 
     fn handle_input(&mut self, ev: Event) {
+        // A tooltip goes on any key; the key still does what it does. It
+        // takes no keys: hovering over a shell must never swallow one.
+        if matches!(ev, Event::Key(_)) && self.tooltip.take().is_some() {
+            self.dirty = true;
+        }
         // The settings panel has the keyboard while it is open.
         if self.settings.is_some() {
             self.settings_input(ev);
@@ -1709,6 +1735,7 @@ impl App {
 
     fn handle_mouse(&mut self, m: MouseEvent) {
         if m.kind == MouseEventKind::Moved {
+            self.leave_tooltip(m.column, m.row);
             self.track_hover(m.column, m.row);
         }
         // A click on a toast dismisses it, in any mode; it never reaches a pane.
@@ -2531,6 +2558,9 @@ impl App {
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
+                // The plugins that set them start over too.
+                self.badges.clear();
+                self.badge_owners.clear();
                 self.refresh_settings_panel();
                 self.report_plugin_failures();
                 self.relayout();
@@ -2667,6 +2697,14 @@ impl App {
                         config::Op::Screen(spec) => self.open_plugin_screen(*spec),
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
+                        config::Op::Tooltip(spec) => {
+                            self.tooltip = spec.and_then(|t| {
+                                let offset =
+                                    self.panes.get(&t.pane)?.term.lock().grid().display_offset();
+                                Some((t, offset))
+                            });
+                            self.dirty = true;
+                        }
                         config::Op::Input(spec) => self.open_lua_input(spec),
                     }
                 }
@@ -2765,6 +2803,41 @@ impl App {
             t.set("previous", previous)?;
             t.set("host", host)
         });
+    }
+
+    /// The pointer moved off the tooltip's anchor (the whole span, a wrapped
+    /// link's second row too): the tooltip goes.
+    fn leave_tooltip(&mut self, x: u16, y: u16) {
+        let Some((t, _)) = &self.tooltip else {
+            return;
+        };
+        let frame = self.frame();
+        let on = frame
+            .views
+            .iter()
+            .find(|v| v.id == t.pane)
+            .is_some_and(|v| {
+                if !v.inner.contains(x, y) {
+                    return false;
+                }
+                let offset = self
+                    .panes
+                    .get(&v.id)
+                    .map(|p| p.term.lock().grid().display_offset() as i32)
+                    .unwrap_or(0);
+                let w = v.inner.w.max(1) as i64;
+                let at = |line: i32, col: usize| line as i64 * w + col as i64;
+                let here = at(
+                    i32::from(y - v.inner.y) - offset,
+                    usize::from(x - v.inner.x),
+                );
+                let start = at(t.line, t.col);
+                here >= start && here < start + t.span as i64
+            });
+        if !on {
+            self.tooltip = None;
+            self.dirty = true;
+        }
     }
 
     /// The pointer moved: note the pane cell under it, and fire `hover` once it

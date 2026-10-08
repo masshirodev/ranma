@@ -699,6 +699,7 @@ pub enum Op {
     Screen(Box<crate::luascreen::ScreenSpec>),
     ScreenSet(u64, Box<crate::luascreen::Update>),
     ScreenClose(u64),
+    Tooltip(Option<crate::luaui::TooltipSpec>),
 }
 
 /// What the `ranma` global writes into while the config runs.

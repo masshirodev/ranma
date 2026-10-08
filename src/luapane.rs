@@ -74,6 +74,8 @@ pub enum PaneRequest {
         line: i32,
         col: usize,
     },
+    /// Set (or, with `None`, take off) this owner's badge on its border.
+    Badge(String, Option<crate::screen::Badge>),
 }
 
 struct Handle(PaneEntry);
@@ -131,6 +133,22 @@ impl UserData for Handle {
             Ok(other.borrow::<Handle>().is_ok_and(|o| o.0.id == h.0.id))
         });
         m.add_method("alive", |_, h, ()| Ok(h.0.term.strong_count() > 0));
+        m.add_method("link_at", |lua, h, (line, col): (i32, usize)| {
+            let term = h.term()?;
+            let found = {
+                let term = term.lock();
+                panetext::link_at(&term, line, col)
+            };
+            let Some((url, l, c, span)) = found else {
+                return Ok(None);
+            };
+            let t = lua.create_table()?;
+            t.set("url", url)?;
+            t.set("line", l)?;
+            t.set("col", c)?;
+            t.set("span", span)?;
+            Ok(Some(t))
+        });
         m.add_method("range", |_, h, ()| {
             let term = h.term()?;
             let term = term.lock();
@@ -220,6 +238,38 @@ impl UserData for Handle {
                 .collect::<mlua::Result<Vec<_>>>()?;
             h.request(lua, PaneRequest::Send(SendInput::Keys(chords)))
         });
+        m.add_method(
+            "badge",
+            |lua, h, (owner, glyph, word, role): (String, Option<String>, Option<String>, Option<String>)| {
+                let ident = !owner.is_empty()
+                    && owner.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+                if !ident {
+                    return Err(err(format!(
+                        "pane:badge: the owner is the plugin's name (letters, digits, _ - .), not `{owner}`"
+                    )));
+                }
+                let badge = match glyph {
+                    None => None,
+                    Some(g) => {
+                        if g.is_empty() || g.chars().count() > 2 {
+                            return Err(err(format!("pane:badge: the glyph is one or two characters, not `{g}`")));
+                        }
+                        let word = word.unwrap_or_default();
+                        if word.chars().count() > 12 {
+                            return Err(err(format!("pane:badge: the word is 12 characters at most, not `{word}`")));
+                        }
+                        let role = match role.as_deref() {
+                            None => crate::screen::Role::Normal,
+                            Some(r) => crate::screen::Role::parse(r).ok_or_else(|| {
+                                err(format!("pane:badge: no role `{r}` (normal, dim, accent, urgent)"))
+                            })?,
+                        };
+                        Some(crate::screen::Badge { glyph: g, word, role })
+                    }
+                };
+                h.request(lua, PaneRequest::Badge(owner, badge))
+            },
+        );
         m.add_method("scroll_to", |lua, h, line: i32| {
             h.request(lua, PaneRequest::ScrollTo(line))
         });
@@ -466,6 +516,35 @@ mod tests {
         forget(&cfg.lua, 1);
         let (out, _) = call(&cfg, &[(1, &a)], "return ranma.pane(1).vars.seen");
         assert!(out.unwrap().is_nil());
+    }
+
+    #[test]
+    fn a_badge_is_queued_and_checked() {
+        let cfg = load_from(None, None, None).unwrap();
+        let a = pane(1, "x");
+        let (out, ops) = call(
+            &cfg,
+            &[(1, &a)],
+            "local p = ranma.pane() p:badge('agents', '?', 'waiting', 'urgent') p:badge('agents')",
+        );
+        out.unwrap();
+        let b = crate::screen::Badge {
+            glyph: "?".into(),
+            word: "waiting".into(),
+            role: crate::screen::Role::Urgent,
+        };
+        assert_eq!(
+            ops,
+            [
+                Op::Pane(1, PaneRequest::Badge("agents".into(), Some(b))),
+                Op::Pane(1, PaneRequest::Badge("agents".into(), None)),
+            ]
+        );
+        let e = |src: &str| call(&cfg, &[(1, &a)], src).0.unwrap_err().to_string();
+        assert!(e("ranma.pane():badge('my plugin', '?')").contains("the owner is"));
+        assert!(e("ranma.pane():badge('a', 'abc')").contains("one or two characters"));
+        assert!(e("ranma.pane():badge('a', '?', 'x', 'loud')").contains("no role `loud`"));
+        assert!(e("ranma.pane():badge('a', '?', 'a very long word')").contains("12 characters"));
     }
 
     #[test]

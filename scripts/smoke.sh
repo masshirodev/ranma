@@ -312,6 +312,13 @@ ranma.bind("f5", function()
       keys = { { "a", "answer", function(id) ranma.notify("answered " .. id) end } } },
   } }
 end, { global = true })
+ranma.bind("f6", function() ranma.pane():badge("agents", "?", "waiting", "urgent") end, { global = true })
+ranma.bind("f7", function()
+  local p = ranma.pane()
+  local h = p:search("https://smoke[.]example/[a-z]+")[1]
+  local l = p:link_at(h.line, h.col + 3)
+  ranma.tooltip({ line = l.line, col = l.col, span = l.span }, { title = "smoke-tip", lines = { l.url } })
+end, { global = true })
 LUA
 sleep 1
 T send-keys -t s 'clear; stty size' Enter; sleep 0.3
@@ -325,6 +332,18 @@ T send-keys -t s Escape; sleep 0.3
 screen | grep -q '─ agents ─' && fail "Esc did not close the plugin's screen"
 T send-keys -t s 'clear; stty size' Enter; sleep 0.3
 [ "$(screen | grep -oE '^│[0-9]+ [0-9]+' | head -1)" = "$before" ] || fail "the pane under a plugin's screen was resized"
+# A tooltip on a link pane:link_at found whole, gone on the next key.
+T send-keys -t s 'echo see https://smoke.example/page here' Enter; sleep 0.3
+T send-keys -t s F7
+wait_for 'smoke-tip' 4 || fail "the tooltip did not show"
+screen | grep -q '│ https://smoke.example/page *│' || fail "the tooltip does not carry the whole link"
+T send-keys -t s ' '; sleep 0.3
+screen | grep -q 'smoke-tip' && fail "a key did not take the tooltip down"
+T send-keys -t s BSpace
+
+# A badge on the focused pane's border, after its title.
+T send-keys -t s F6
+wait_for '─ ? waiting ─' 4 || fail "a plugin's badge did not show on the border"
 rm "$CFG/plugin/screen.lua"; sleep 0.5
 
 # Scripting over the socket: open a pane in the background and get its id,

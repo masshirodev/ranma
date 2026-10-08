@@ -1,5 +1,5 @@
 //! Screens for plugins, their tooltips and their badges (DESIGN.md, "Plugins:
-//! Neovim's shape, in Lua"; the design is `doc/handoffs/PLUGIN_PANEL.md` and
+//! Neovim's shape, in Lua"; the design is `doc/handoffs/done/PLUGIN_PANEL.md` and
 //! its script `PLUGIN_PANEL_screen.js`, rendered in `PLUGIN_PANEL_MOCK.txt`).
 //!
 //! A plugin describes a screen in blocks (headings, rows, text, facts,
@@ -1481,10 +1481,12 @@ pub fn title_run(
         let mut pcs = vec![(
             format!(
                 " {mark}{idx}{} ",
-                if name.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {name}")
+                match (idx.is_empty(), name.is_empty()) {
+                    (_, true) => String::new(),
+                    // ranma's title is the user's format, passed whole as
+                    // the name: no index in front of it.
+                    (true, false) => name.to_string(),
+                    (false, false) => format!(" {name}"),
                 }
             ),
             EdgeStyle::Title,
@@ -1642,7 +1644,7 @@ pub fn key_line(pairs: &[(&str, &str)]) -> TipLine {
 mod tests {
     use super::*;
 
-    const MOCK: &str = include_str!("../doc/handoffs/PLUGIN_PANEL_MOCK.txt");
+    const MOCK: &str = include_str!("../doc/handoffs/done/PLUGIN_PANEL_MOCK.txt");
 
     fn mock(title: &str) -> Vec<String> {
         let mut lines = MOCK.lines().skip_while(|l| *l != format!("## {title}"));
@@ -2331,6 +2333,26 @@ mod tests {
                 "row {y}"
             );
         }
+    }
+
+    #[test]
+    fn a_title_in_the_users_format_is_cut_as_a_whole() {
+        let badges = vec![badge("?", "waiting", Role::Urgent)];
+        let text = |p: Vec<(String, EdgeStyle)>| p.into_iter().map(|(t, _)| t).collect::<String>();
+        let (p, step) = title_run(false, "", "1 api", &badges, 40, '─');
+        assert_eq!((text(p), step), (" 1 api ─ ? waiting ".to_string(), 0));
+        let (p, _) = title_run(true, "", "nvim layout.rs", &badges, 14, '─');
+        assert_eq!(
+            text(p),
+            " ⇉ nvim … ─ ? ",
+            "the handoff's cut keeps the space before …"
+        );
+        let (p, _) = title_run(false, "", "", &badges, 40, '─');
+        assert_eq!(
+            text(p),
+            "  ─ ? waiting ",
+            "a pane with no title still shows its badge"
+        );
     }
 
     #[test]

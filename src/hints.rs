@@ -28,6 +28,11 @@ const SCHEMES: [&str; 5] = ["https://", "http://", "file://", "ftp://", "mailto:
 /// Every link in the rows, top to bottom, left to right. A URL wrapped onto
 /// the next row is one link. An OSC 8 link wins over a URL in the same cells.
 pub fn find_links(rows: &[Row]) -> Vec<Link> {
+    find_spans(rows).into_iter().map(|(l, _)| l).collect()
+}
+
+/// [`find_links`], with how many cells each link covers (across wrapped rows).
+pub fn find_spans(rows: &[Row]) -> Vec<(Link, usize)> {
     let mut links = Vec::new();
     // Logical lines: rows joined while they wrap, each char with its cell.
     let mut line: Vec<(char, Option<&str>, (usize, usize))> = Vec::new();
@@ -43,7 +48,7 @@ pub fn find_links(rows: &[Row]) -> Vec<Link> {
     links
 }
 
-fn scan_line(line: &[(char, Option<&str>, (usize, usize))], out: &mut Vec<Link>) {
+fn scan_line(line: &[(char, Option<&str>, (usize, usize))], out: &mut Vec<(Link, usize)>) {
     let mut taken = vec![false; line.len()];
     // OSC 8 first: a run of cells with the same target is one link.
     let mut i = 0;
@@ -57,10 +62,13 @@ fn scan_line(line: &[(char, Option<&str>, (usize, usize))], out: &mut Vec<Link>)
             taken[i] = true;
             i += 1;
         }
-        out.push(Link {
-            target: uri.to_string(),
-            at: line[start].2,
-        });
+        out.push((
+            Link {
+                target: uri.to_string(),
+                at: line[start].2,
+            },
+            i - start,
+        ));
     }
     // Then URLs in the text, outside those.
     let chars: Vec<char> = line.iter().map(|(c, _, _)| *c).collect();
@@ -82,14 +90,17 @@ fn scan_line(line: &[(char, Option<&str>, (usize, usize))], out: &mut Vec<Link>)
         }
         let end = trim_url_end(&chars[i..end]) + i;
         if end > i + scheme.len() && !taken[i..end].iter().any(|t| *t) {
-            out.push(Link {
-                target: chars[i..end].iter().collect(),
-                at: line[i].2,
-            });
+            out.push((
+                Link {
+                    target: chars[i..end].iter().collect(),
+                    at: line[i].2,
+                },
+                end - i,
+            ));
         }
         i = end.max(i + 1);
     }
-    out.sort_by_key(|l| l.at);
+    out.sort_by_key(|(l, _)| l.at);
 }
 
 fn url_char(c: char) -> bool {
@@ -119,6 +130,26 @@ fn trim_url_end(url: &[char]) -> usize {
             return end;
         }
     }
+}
+
+/// The link covering cell (`r`, `c`) of the rows: its target, where it
+/// starts, and how many cells it covers (a wrapped one runs on into the next
+/// row, each row as wide as its cells).
+pub fn link_at(rows: &[Row], r: usize, c: usize) -> Option<(Link, usize)> {
+    find_spans(rows).into_iter().find(|(l, n)| {
+        let (mut row, mut col) = l.at;
+        for _ in 0..*n {
+            if (row, col) == (r, c) {
+                return true;
+            }
+            col += 1;
+            if col >= rows.get(row).map(|x| x.cells.len()).unwrap_or(0) {
+                row += 1;
+                col = 0;
+            }
+        }
+        false
+    })
 }
 
 /// The letters labels are made of, easiest to reach first.

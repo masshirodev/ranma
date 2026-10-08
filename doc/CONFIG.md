@@ -861,6 +861,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 
 | `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
 | `ranma.screen { ... }` | A screen of the plugin's own; see [Screens](#screens--ranmascreen--). |
+| `ranma.tooltip(anchor, content)` | A tooltip on a span of a pane's cells; see [Tooltips](#tooltips--ranmatooltipanchor-content). |
 | `ranma.picker { ... }` | A filtered list of your own; see [Pickers and prompts](#pickers-and-prompts). |
 | `ranma.input { ... }` | A one-line prompt of your own. |
 | `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
@@ -905,6 +906,7 @@ line's number, so a number is good for the moment it was read in.
 | `:cwd()` | The directory its process is in, or `nil`. |
 | `:program()` | The program in its foreground, or `nil`. |
 | `:alive()` | Whether the pane still exists. |
+| `:link_at(line, col)` | The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): `{ url, line, col, span }`, or `nil`. |
 
 Acting is queued, like `ranma.action`, and done when your function returns, in
 the order written, actions and pane methods together:
@@ -918,6 +920,7 @@ the order written, actions and pane methods together:
 | `:paste(text)` | Paste it, bracketed if the program asked for that. |
 | `:keys(chord, ...)` | Press keys, spelled as in binds: `p:keys("ctrl+c")`. |
 | `:scroll_to(line)` | Scroll so the line is on screen: a scrollback line lands mid-view. |
+| `:badge(owner, glyph, word, role)` | Your plugin's mark on the pane's border, after its title: `p:badge("agents", "?", "waiting", "urgent")`. `owner` is your plugin's name; one badge per owner per pane, replaced by the next call, taken off with no glyph (`p:badge("agents")`). The glyph (one or two characters) carries the meaning without colour; the word (12 at most) goes first on a narrow pane; then the title is cut, calm badges go (dim, normal, accent), the title goes, and urgent badges last. Badges keep the order their owners first set one, and are cleared on a reload. |
 | `:copy_mode(line, col)` | Focus it and enter copy mode with the cursor there, scrolled into view. |
 
 A handle kept past the call (in a variable of your plugin) keeps its fields as
@@ -1153,6 +1156,29 @@ before it, and `on_close` tells the plugin it was closed by the user or by
 another screen (`s:close()` does not call it). With `filter = "plugin"`,
 `on_query(text)` runs 150 ms after typing stops. Only from a bind, hook,
 module or timer.
+
+## Tooltips — `ranma.tooltip(anchor, content)`
+
+```lua
+ranma.on("hover", function(e)
+  local p = ranma.pane(e.pane)
+  local l = p and p:link_at(e.line, e.col)
+  if not l then return ranma.tooltip(nil) end
+  ranma.tooltip({ pane = e.pane, line = l.line, col = l.col, span = l.span },
+                { lines = { l.url }, keys = { { "leader o", "open from hints" } } })
+end)
+```
+
+A small box under a span of a pane's cells (above it when there is no room
+below, pushed in from the right edge, never over the bar or the anchor's row),
+with a tick on its border in the anchor's column. `anchor` is `{ pane, line,
+col, span }`, numbered as [pane handles](#pane-handles) number lines (`pane`
+defaults to the focused one, `span` to 1). `content` is a `title`, up to three
+`lines` (text, or segments `{ text, role, strong = }`), and `keys`, drawn as
+the footer draws keys. It goes on any key (which still does what it does), when
+the pointer leaves the span, or when the pane scrolls. `ranma.tooltip(nil)`
+takes it down. One at a time; a tooltip takes no keys, so hovering over a
+shell never swallows one. Only from a bind, hook, module or timer.
 
 ## Timers and processes
 

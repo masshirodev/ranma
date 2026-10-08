@@ -292,6 +292,20 @@ function Pane:keys(...) end
 ---@param line integer
 function Pane:scroll_to(line) end
 
+---The link under a cell (a URL in the text, or an OSC 8 link), whole.
+---@param line integer
+---@param col integer
+---@return { url: string, line: integer, col: integer, span: integer }?
+function Pane:link_at(line, col) end
+
+---This plugin's badge on the pane's border, after its title; no glyph takes
+---it off. One per owner per pane, in the order owners first set one.
+---@param owner string The plugin's name.
+---@param glyph? string One or two characters: the meaning without colour (? ● ✓ ✗).
+---@param word? string Up to 12 characters; the first thing to go on a narrow pane.
+---@param role? ranma.Role
+function Pane:badge(owner, glyph, word, role) end
+
 ---Focus it and enter copy mode with the cursor there.
 ---@param line? integer
 ---@param col? integer
@@ -382,6 +396,13 @@ function Screen:close() end
 ---@param spec ranma.ScreenSpec
 ---@return ranma.Screen
 function ranma.screen(spec) end
+
+---A tooltip anchored to a span of a pane's cells (a link, as pane:link_at
+---gives it), or nil to take it down. It goes on any key, when the pointer
+---leaves the span, or when the pane scrolls; it takes no keys.
+---@param anchor { pane?: integer, line: integer, col: integer, span?: integer }?
+---@param content? { title?: string, lines?: (string|{ [1]: string, [2]: ranma.Role?, strong?: boolean }[])[], keys?: { [1]: string, [2]: string }[] }
+function ranma.tooltip(anchor, content) end
 
 ---Call every ranma.on("user:<name>") listener with `data`, there and then.
 ---@param name string

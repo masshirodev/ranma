@@ -1,5 +1,5 @@
 //! `ranma.screen { ... }`: a plugin's screen, from Lua (DESIGN.md, "Screens
-//! for plugins"; the design is `doc/handoffs/PLUGIN_PANEL.md`).
+//! for plugins"; the design is `doc/handoffs/done/PLUGIN_PANEL.md`).
 //!
 //! The spec is read as strictly as a config: an unknown field, block, role or
 //! value shape is an error naming it, and so is a key ranma keeps for itself.

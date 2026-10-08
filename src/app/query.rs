@@ -53,6 +53,10 @@ impl App {
     pub(super) fn pane_ended(&mut self, id: PaneId) {
         self.cwds.remove(&id);
         self.activity.remove(&id);
+        self.badges.remove(&id);
+        if self.tooltip.as_ref().is_some_and(|(t, _)| t.pane == id) {
+            self.tooltip = None;
+        }
         crate::luapane::forget(&self.config.lua, id);
         let code = self.exit_codes.remove(&id);
         self.ended.push_back((id, code));
@@ -239,6 +243,24 @@ impl App {
                 let history = term.grid().history_size() as i32;
                 let now = term.grid().display_offset() as i32;
                 term.scroll_display(Scroll::Delta(want.clamp(0, history) - now));
+                self.dirty = true;
+                Ok(())
+            }
+            PaneRequest::Badge(owner, badge) => {
+                if !self.panes.contains_key(&id) {
+                    return Err(no_pane(id));
+                }
+                if !self.badge_owners.contains(&owner) {
+                    self.badge_owners.push(owner.clone());
+                }
+                let list = self.badges.entry(id).or_default();
+                list.retain(|(o, _)| *o != owner);
+                if let Some(b) = badge {
+                    list.push((owner, b));
+                }
+                if list.is_empty() {
+                    self.badges.remove(&id);
+                }
                 self.dirty = true;
                 Ok(())
             }
