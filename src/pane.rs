@@ -96,6 +96,17 @@ pub struct Proxy {
 }
 
 impl Proxy {
+    /// One whose events go nowhere, for a terminal made in a test.
+    #[cfg(test)]
+    pub fn for_test(id: PaneId) -> Proxy {
+        Proxy {
+            id,
+            tx: std::sync::mpsc::channel().0,
+            wakeup_pending: Arc::default(),
+            live: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
     /// A mark from the PTY reader, unless the pane's process was replaced.
     fn mark(&self, m: crate::osc::Mark) {
         if self.live.load(Ordering::Acquire) {

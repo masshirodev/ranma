@@ -4,14 +4,14 @@
 
 use std::sync::mpsc::Sender;
 
-use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::index::{Column, Line};
-use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::grid::{Dimensions, Scroll};
+use alacritty_terminal::index::{Column, Line, Point};
 
 use super::{App, SCRATCHPAD, chord_bytes};
 use crate::input;
 use crate::ipc::{PaneInfo, PaneOp, Query, SendInput};
 use crate::layout::PaneId;
+use crate::luapane::{PaneEntry, PaneRequest};
 use crate::workspace::Workspace;
 
 pub type Reply = Sender<Result<String, String>>;
@@ -117,6 +117,64 @@ impl App {
             .collect()
     }
 
+    /// Every pane as Lua's pane handles see it. Cheap: nothing read from
+    /// /proc, since this runs before every call into Lua.
+    pub(super) fn lua_panes(&self) -> Vec<PaneEntry> {
+        let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
+        ids.sort_unstable();
+        ids.into_iter()
+            .filter_map(|id| {
+                let p = self.panes.get(&id)?;
+                let (session, workspace, ws) = self.place_of(id)?;
+                Some(PaneEntry {
+                    session,
+                    workspace,
+                    focused: ws.focused == Some(id),
+                    visible: self.visible.contains(&id),
+                    floating: ws.is_floating(id),
+                    title: p.label().to_string(),
+                    cols: p.size.cols,
+                    rows: p.size.rows,
+                    ..PaneEntry::new(id, p.pid, &p.term)
+                })
+            })
+            .collect()
+    }
+
+    /// What a Lua pane handle asked for (`crate::luapane`).
+    pub(super) fn pane_request(&mut self, id: PaneId, req: PaneRequest) -> Result<(), String> {
+        match req {
+            PaneRequest::Focus => self.pane_op(id, PaneOp::Focus),
+            PaneRequest::Close => self.pane_op(id, PaneOp::Close),
+            PaneRequest::Rename(name) => self.pane_op(id, PaneOp::Rename(name)),
+            PaneRequest::Send(input) => self.send_input(id, &input),
+            PaneRequest::ScrollTo(line) => {
+                let p = self.panes.get(&id).ok_or_else(|| no_pane(id))?;
+                let mut term = p.term.lock();
+                let rows = term.screen_lines() as i32;
+                // A line above the screen lands in the middle of the view; one
+                // on the screen needs no scrolling.
+                let want = if line < 0 { rows / 2 - line } else { 0 };
+                let history = term.grid().history_size() as i32;
+                let now = term.grid().display_offset() as i32;
+                term.scroll_display(Scroll::Delta(want.clamp(0, history) - now));
+                self.dirty = true;
+                Ok(())
+            }
+            PaneRequest::CopyMode { line, col } => {
+                self.pane_op(id, PaneOp::Focus)?;
+                self.enter_copy_mode(None);
+                let p = self.panes.get(&id).ok_or_else(|| no_pane(id))?;
+                let mut term = p.term.lock();
+                let (top, bottom) = crate::panetext::line_range(&term);
+                let col = col.min(term.columns().saturating_sub(1));
+                term.vi_goto_point(Point::new(Line(line.clamp(top, bottom)), Column(col)));
+                self.dirty = true;
+                Ok(())
+            }
+        }
+    }
+
     pub(super) fn pane_op(&mut self, id: PaneId, op: PaneOp) -> Result<(), String> {
         if !self.panes.contains_key(&id) {
             return Err(no_pane(id));
@@ -210,27 +268,9 @@ impl App {
     pub(super) fn capture(&self, id: PaneId, history: usize) -> Result<String, String> {
         let p = self.panes.get(&id).ok_or_else(|| no_pane(id))?;
         let term = p.term.lock();
-        let grid = term.grid();
-        let hist = grid.history_size().min(history) as i32;
-        let (rows, cols) = (term.screen_lines() as i32, term.columns());
-        let mut lines: Vec<String> = (-hist..rows)
-            .map(|l| {
-                let row = &grid[Line(l)];
-                let mut s = String::with_capacity(cols);
-                for c in 0..cols {
-                    let cell = &row[Column(c)];
-                    if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                        continue;
-                    }
-                    s.push(if cell.c.is_control() { ' ' } else { cell.c });
-                    if let Some(extra) = cell.zerowidth() {
-                        s.extend(extra);
-                    }
-                }
-                s.truncate(s.trim_end().len());
-                s
-            })
-            .collect();
+        let hist = term.grid().history_size().min(history) as i32;
+        let rows = term.screen_lines() as i32;
+        let mut lines = crate::panetext::lines(&term, -hist, rows - 1);
         while lines.last().is_some_and(String::is_empty) {
             lines.pop();
         }

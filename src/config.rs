@@ -635,11 +635,21 @@ impl ClientFacts {
 /// what `ranma.action`, `ranma.notify` and `ranma.state` read and write.
 #[derive(Debug, Default)]
 pub struct Runtime {
-    pub actions: Vec<Action>,
+    /// What the call asked ranma to do, in the order asked.
+    pub ops: Vec<Op>,
+    /// Every pane, for `ranma.pane` and `ranma.panes`.
+    pub panes: Vec<crate::luapane::PaneEntry>,
     pub notify: Option<String>,
     /// `ranma.toast` calls: text, urgent, timeout in seconds.
     pub toasts: Vec<(String, bool, Option<f64>)>,
     pub state: StateSnapshot,
+}
+
+/// One thing a Lua call asked for, done after it returns.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Op {
+    Action(Action),
+    Pane(crate::layout::PaneId, crate::luapane::PaneRequest),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1114,7 +1124,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
                 rt_err("ranma.use_profile only works inside binds and hooks, not at config load")
             })?;
-            rt.actions.push(Action::Profile(name));
+            rt.ops.push(Op::Action(Action::Profile(name)));
             Ok(())
         })?,
     )?;
@@ -1364,7 +1374,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                     "ranma.action only works inside binds, hooks and modules, not at config load",
                 )
             })?;
-            rt.actions.push(action);
+            rt.ops.push(Op::Action(action));
             Ok(())
         })?,
     )?;
@@ -1455,6 +1465,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
         })?,
     )?;
 
+    crate::luapane::install(lua, &ranma)?;
     lua.globals().set("ranma", ranma)
 }
 

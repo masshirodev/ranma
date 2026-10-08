@@ -617,6 +617,19 @@ asked for it as its first user:
 | Keys | which-key groups (`ranma.bind("g", { group = "git" })`, nested), user modes (`ranma.mode(name, { binds, label, on_enter, on_exit })`), user commands in the `:` palette (`ranma.command(name, fn, { desc, complete })`) | which-key folders, plugin keymaps |
 | Develop | `ranma --dump-types` (LuaLS annotations for every function, event and option), `ranma lua 'expr'` (evaluate in the running server, print the result), `ranma health` (each plugin: loaded, failed and why, timings) | writing plugins in nvim |
 
+**Pane handles** (2026-10-08) are a snapshot plus a `Weak` to the pane's
+terminal: fields are what ranma knew when the call began (filling them reads
+nothing from `/proc`, since it happens before every call), and text is read live
+under the terminal's lock, which the app thread never holds across a Lua call.
+`cwd()` and `program()` read `/proc` only when asked. Lines use alacritty's
+numbering (0 is the screen's top row, scrollback negative) rather than an
+invented absolute one: alacritty keeps no count of lines ever written, so any
+"absolute" number would be this one under another name. Acting goes into the
+same ordered queue as `ranma.action`. A search is bounded (1000 hits) because it
+runs on ranma's thread. It scans rightward and keeps the newest hits: scanning
+leftward reports every shorter match that ends inside a longer one. `link_at`
+and `marks` wait for the cards that need them (tooltips and OSC 133 positions).
+
 `pane:watch` is the one primitive that comes close to the PTY path, so it is
 built to stay off it. The regex runs in Rust on completed lines only, matching
 is coalesced into a 100 ms window, a pane with no watchers pays nothing, and the

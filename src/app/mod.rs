@@ -2484,6 +2484,7 @@ impl App {
     fn call_lua<R>(&mut self, f: impl FnOnce(&Lua) -> mlua::Result<R>) -> Option<R> {
         let rt = config::Runtime {
             state: self.snapshot(),
+            panes: self.lua_panes(),
             ..Default::default()
         };
         self.config.lua.set_app_data(rt);
@@ -2515,13 +2516,20 @@ impl App {
                 None
             }
         };
-        if !rt.actions.is_empty() {
+        if !rt.ops.is_empty() {
             if self.lua_depth >= MAX_LUA_DEPTH {
                 self.status = Some("lua: actions nested too deep; stopped".into());
             } else {
                 self.lua_depth += 1;
-                for a in rt.actions {
-                    self.run_action(a);
+                for op in rt.ops {
+                    match op {
+                        config::Op::Action(a) => self.run_action(a),
+                        config::Op::Pane(id, req) => {
+                            if let Err(e) = self.pane_request(id, req) {
+                                self.status = Some(format!("lua: {e}"));
+                            }
+                        }
+                    }
                 }
                 self.lua_depth -= 1;
             }

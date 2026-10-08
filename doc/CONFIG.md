@@ -831,9 +831,72 @@ Inside a bind function, a hook, or a module's `render`:
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
+| `ranma.pane(id)` | A handle on pane `id`, or on the focused pane when `id` is left out; `nil` if there is none. See [Pane handles](#pane-handles). |
+| `ranma.panes()` | A handle on every pane, in every session, by id. |
+
 These refuse to run while the config itself is loading; there is nothing to act on
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
 Actions that fire hooks that run actions stop after four levels.
+
+### Pane handles
+
+A handle is what ranma knew of the pane when the handle was taken, plus a live
+look at its text:
+
+| Field | |
+| --- | --- |
+| `id` | The pane's id, as `ranma panes` prints it. |
+| `session`, `workspace` | Where it is; workspace 0 is the scratchpad. |
+| `focused` | It is the pane keys go to in its workspace. |
+| `visible`, `floating` | On screen now; in the floating layer. |
+| `title` | Its name if it has one, else its title. |
+| `cols`, `rows` | Its size. |
+
+Reading is live, from the pane's terminal. **Lines are numbered from the top of
+the screen**: `0` to `rows - 1` are the screen, and the scrollback goes up from
+`-1` (the line just above it). Output that scrolls the screen moves every
+line's number, so a number is good for the moment it was read in.
+
+| Method | |
+| --- | --- |
+| `:range()` | The first and last line that exist now: `-history, rows - 1`. |
+| `:lines(first, last)` | The text of those lines, both included (default: the screen), clamped to what exists, each trimmed on the right. |
+| `:search(pattern, { limit })` | Every match of the regex (copy mode's syntax), newest first, at most `limit` (default 100, never more than 1000), over the screen and the whole scrollback. Each is `{ line, col, end_line, end_col, text }`, columns from 0. A match running onto a wrapped row ends on the next line. |
+| `:cwd()` | The directory its process is in, or `nil`. |
+| `:program()` | The program in its foreground, or `nil`. |
+| `:alive()` | Whether the pane still exists. |
+
+Acting is queued, like `ranma.action`, and done when your function returns, in
+the order written, actions and pane methods together:
+
+| Method | |
+| --- | --- |
+| `:focus()` | Show its session and workspace and focus it. |
+| `:close()` | Close it. |
+| `:rename(name)` | As `rename_pane`; no name clears it. |
+| `:send(text)` | Type the text; a newline is Enter. |
+| `:paste(text)` | Paste it, bracketed if the program asked for that. |
+| `:keys(chord, ...)` | Press keys, spelled as in binds: `p:keys("ctrl+c")`. |
+| `:scroll_to(line)` | Scroll so the line is on screen: a scrollback line lands mid-view. |
+| `:copy_mode(line, col)` | Focus it and enter copy mode with the cursor there, scrolled into view. |
+
+A handle kept past the call (in a variable of your plugin) keeps its fields as
+they were. Its text methods still work while the pane exists, and every method
+is an error (`pane 3 is gone`) once it does not. The handles of one pane compare
+equal.
+
+A search over the scrollback, picked from and jumped to:
+
+```lua
+ranma.bind("f5", function()
+  local p = ranma.pane()
+  local hits = p:search("https?://\\S+")
+  if #hits > 0 then
+    ranma.toast(#hits .. " links; newest: " .. hits[1].text)
+    p:copy_mode(hits[1].line, hits[1].col)
+  end
+end, { desc = "last link" })
+```
 
 ## Toolbars — `ranma.toolbar(name, def)`
 

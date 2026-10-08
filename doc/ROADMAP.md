@@ -211,7 +211,8 @@ features below the line live outside the repository.
 - [ ] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `option_change`
 - [ ] `ranma --dump-types`, `ranma lua`, `ranma health`
-- [ ] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
+- [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
+- [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
 - [ ] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
   `pane_idle`, `hover`, `user:<name>`
 - [ ] Time and processes: `defer`, `every`, `spawn`
