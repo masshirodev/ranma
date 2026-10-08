@@ -78,6 +78,19 @@ pub struct Report {
     pub sticky: bool,
     #[serde(default)]
     pub ws: Vec<Ws>,
+    /// The panes of the workspace on its screen, in the order its
+    /// `pane_strip` draws them: with no bar of its own, the outer's strip
+    /// shows them. An outer that does not know the field ignores it.
+    #[serde(default)]
+    pub panes: Vec<Chip>,
+}
+
+/// A pane as a `pane_strip` chip names it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Chip {
+    pub label: String,
+    #[serde(default)]
+    pub focused: bool,
 }
 
 fn one() -> usize {
@@ -137,6 +150,15 @@ impl Report {
     pub fn on_path(&self) -> Option<&Report> {
         self.nest_of(self.current)
     }
+}
+
+/// The panes `pane_strip` shows for a nested `path` (outermost first): the
+/// innermost ranma's with two panes or more, if one has them.
+pub fn strip_of<'a>(path: &[&'a Report]) -> Option<&'a [Chip]> {
+    path.iter()
+        .rev()
+        .find(|r| r.panes.len() >= 2)
+        .map(|r| r.panes.as_slice())
 }
 
 /// The report as it goes out: `ESC ] 51377 ; report ; <json> BEL`.
@@ -776,6 +798,7 @@ mod tests {
             outer_leader: Some("ctrl+alt+b".into()),
             sticky: true,
             ws,
+            panes: Vec::new(),
         }
     }
 
@@ -1356,6 +1379,47 @@ mod tests {
         r.scratch_shown = shown;
         r.scratch_nest = Some(Box::new(report(1, vec![ws(1, "claude"), ws(2, "zsh")])));
         r
+    }
+
+    fn chips(labels: &[&str], focused: usize) -> Vec<Chip> {
+        labels
+            .iter()
+            .enumerate()
+            .map(|(i, l)| Chip {
+                label: (*l).into(),
+                focused: i == focused,
+            })
+            .collect()
+    }
+
+    /// The strip follows focus inward: the innermost ranma with two panes
+    /// or more, skipping one with a single pane, and none when no level
+    /// below has two (the outer then draws its own).
+    #[test]
+    fn the_strip_shows_the_innermost_ranma_with_two_panes() {
+        let mut work = report(1, vec![ws(1, "zsh")]);
+        work.panes = chips(&["claude", "zsh"], 1);
+        let mut vps = report(1, vec![ws(1, "htop")]);
+        vps.panes = chips(&["htop"], 0);
+        assert_eq!(strip_of(&[&work]).map(<[Chip]>::len), Some(2));
+        assert_eq!(
+            strip_of(&[&work, &vps]).map(|c| c[0].label.as_str()),
+            Some("claude")
+        );
+        vps.panes = chips(&["htop", "logs"], 0);
+        assert_eq!(
+            strip_of(&[&work, &vps]).map(|c| c[1].label.as_str()),
+            Some("logs")
+        );
+        assert!(strip_of(&[&report(1, vec![])]).is_none());
+        assert!(strip_of(&[]).is_none());
+    }
+
+    /// A report from a build without `panes` still parses, with none.
+    #[test]
+    fn a_report_without_panes_parses() {
+        let r = Report::parse(r#"{"v":2,"ws":[]}"#).unwrap();
+        assert!(r.panes.is_empty());
     }
 
     /// The scratchpad holds a ranma like a workspace does: shown, `S`

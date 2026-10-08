@@ -2999,29 +2999,43 @@ impl App {
                 .unwrap_or_default(),
             "panes" => vec![Piece::new(self.panes.len().to_string(), Style::Dim)],
             "pane_strip" => {
-                let ws = self.active();
-                let order = ws.panes();
-                if order.len() < 2 {
-                    Vec::new()
-                } else {
-                    let mut seg = Vec::new();
-                    for id in order {
-                        // Filled chips, a column apart, so each reads as one.
-                        if !seg.is_empty() {
-                            seg.push(Piece::new(" ", Style::Normal));
-                        }
-                        let style = if Some(id) == ws.focused {
-                            Style::TabActive
-                        } else {
-                            Style::TabInactive
-                        };
-                        seg.push(
-                            Piece::new(format!(" {} ", self.chip_label(id)), style)
-                                .on_click(Click::Pane(id)),
-                        );
-                    }
-                    seg
+                // The innermost ranma on the focused path with two panes or
+                // more: its bar is this one, so its panes are what focus is
+                // among. Its chips focus the pane that holds it.
+                let holder = self.focused();
+                let chips: Vec<(Option<PaneId>, String, bool)> =
+                    match crate::nestbar::strip_of(&self.nested_path()) {
+                        Some(inner) => inner
+                            .iter()
+                            .map(|c| (holder, c.label.clone(), c.focused))
+                            .collect(),
+                        None => self
+                            .strip_panes()
+                            .into_iter()
+                            .map(|(id, label, focused)| (Some(id), label, focused))
+                            .collect(),
+                    };
+                if chips.len() < 2 {
+                    return Vec::new();
                 }
+                let mut seg = Vec::new();
+                for (id, label, focused) in chips {
+                    // Filled chips, a column apart, so each reads as one.
+                    if !seg.is_empty() {
+                        seg.push(Piece::new(" ", Style::Normal));
+                    }
+                    let style = if focused {
+                        Style::TabActive
+                    } else {
+                        Style::TabInactive
+                    };
+                    let chip = Piece::new(format!(" {label} "), style);
+                    seg.push(match id {
+                        Some(id) => chip.on_click(Click::Pane(id)),
+                        None => chip,
+                    });
+                }
+                seg
             }
             "update" => match self.update_available {
                 Some(b) => vec![
@@ -3135,6 +3149,16 @@ impl App {
 
     /// The folded strip's one chip: ` 2/4 nvim `, where the focused pane is
     /// among the workspace's and what it is called.
+    /// The current workspace's panes as `pane_strip` draws them: each with
+    /// its chip label and whether it has focus.
+    pub(super) fn strip_panes(&self) -> Vec<(PaneId, String, bool)> {
+        let ws = self.active();
+        ws.panes()
+            .into_iter()
+            .map(|id| (id, self.chip_label(id), Some(id) == ws.focused))
+            .collect()
+    }
+
     fn strip_count(&self) -> Option<String> {
         let ws = self.active();
         let panes = ws.panes();
@@ -4027,6 +4051,22 @@ mod tests {
         });
         assert!(a.pending_paste.is_none());
         assert!(a.toasts.is_empty(), "nothing to say when it worked");
+    }
+
+    /// The report carries the current workspace's panes, as the strip
+    /// names them, for an outer's `pane_strip`.
+    #[test]
+    fn the_report_carries_the_strip() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        let r = a.own_report();
+        let got: Vec<_> = r
+            .panes
+            .iter()
+            .map(|c| (c.label.as_str(), c.focused))
+            .collect();
+        assert_eq!(got, [("shell", false), ("shell", true)]);
     }
 
     /// Esc cancels an upload: the thread is told, and the paste is typed as

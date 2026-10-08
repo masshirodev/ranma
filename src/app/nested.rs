@@ -180,6 +180,11 @@ impl App {
             outer_leader: Some(self.config.settings.outer_leader.to_string()),
             sticky: self.config.settings.wm_mode_sticky,
             ws,
+            panes: self
+                .strip_panes()
+                .into_iter()
+                .map(|(_, label, focused)| nestbar::Chip { label, focused })
+                .collect(),
         }
     }
 

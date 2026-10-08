@@ -1048,6 +1048,18 @@ further), that level's key for the workspace, and Esc when its WM mode is
 sticky. The report carries each workspace's key and the outer leader, so a
 user's own binds work.
 
+*The pane strip* (2026-10-08): the report carries the panes of the inner's
+workspace on screen (`panes`: each chip's label, and which has focus), and
+the outer's `pane_strip` shows those of the innermost ranma on the path with
+two or more, falling back to its own. The strip says what focus is among, and
+behind a holder focus is among the inner's panes; without this an `ssh` pane
+alone in the outer's workspace left the strip empty however many panes the
+ranma inside had. Two levels' strips are not merged: the innermost with
+something to choose between wins, as the deepest message does. Its chips are
+not click targets inside: there is no key per pane to type, so a click
+focuses the holder. A field with a default, so no protocol bump: an older
+outer ignores it, and a report without it has none.
+
 Where it departs from the handoff, and why:
 
 - "Shown" is told back through focus events rather than a message of its

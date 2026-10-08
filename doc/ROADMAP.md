@@ -130,6 +130,8 @@ an outer shows it.
   `S` as a workspace holds one: expanded while shown, counted while hidden
 - [x] `theme_colors = "outer"`: an inner ranma draws with the outer's
   `[colors]`, sent with the answer at attach and laid over its own leniently
+- [x] `pane_strip` shows the panes of the innermost ranma on the path with
+  two or more, from the report's `panes`
 
 ## 7. Upgrading without closing anything
 
