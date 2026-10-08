@@ -1,6 +1,6 @@
 # ranma
 
-![ranma inside ranma: a desktop ranma with an ssh pane running a second ranma beside a local shell, the outer bar showing the inner's workspaces in brackets](doc/screenshot.png)
+![ranma: nvim in a large pane beside a shell running tests and a tail of pacman.log, the bar on top with workspaces, the focused workspace's panes and system modules, and a toast for a finished build](doc/screenshot.png)
 
 A tiling window manager for the terminal: i3's container tree and Hyprland's
 dwindle placement, where every window is a PTY. Sessions, workspaces, a floating
