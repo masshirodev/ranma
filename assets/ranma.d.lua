@@ -72,7 +72,7 @@ function ranma.option(key, spec) end
 function ranma.get(key) end
 
 ---@class ranma.BindOpts
----@field exit? boolean Whether WM mode ends after the bind fires.
+---@field exit? boolean Whether WM mode ends after the bind fires; given, it overrides wm_mode.sticky both ways.
 ---@field global? boolean Looked up outside WM mode, before the program sees the key.
 ---@field desc? string A short name for the which-key hint.
 

@@ -129,7 +129,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `splash` | `true` | An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to `help` lists every bind. It is drawn in `bar_accent` (the logo), `bar_fg` (the keys) and `bar_dim`; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. `false` leaves an empty workspace blank. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
-| `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot). |
+| `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot, except one bound with `{ exit = false }`). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). It reads images only. Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
@@ -154,7 +154,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 
 | Option | Meaning |
 | --- | --- |
-| `exit` | Whether WM mode ends after the bind fires. Left out, it follows the action: `new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it. |
+| `exit` | Whether WM mode ends after the bind fires. Given, it decides alone, over `wm_mode.sticky` too: `{ exit = false }` keeps WM mode after a resize even with `sticky = false`, and `{ exit = true }` ends a sticky one. Left out, it follows the action (`new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it), and `sticky = false` ends the mode after any bind. |
 | `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+s` to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used `M-s` spell-word), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
 | `desc` | A short name for the bind in the which-key hint (up to 16 cells show). A Lua function has no action to be named by, so without it the hint calls it `lua`. |
 

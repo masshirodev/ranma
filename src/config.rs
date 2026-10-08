@@ -241,6 +241,10 @@ pub struct Bind {
     pub action: BindAction,
     /// Whether WM mode ends after this bind fires.
     pub exits_mode: bool,
+    /// `{ exit = ... }` as written: when given, it decides alone, over
+    /// `wm_mode.sticky` too (a resize that stays in WM mode while every other
+    /// bind is one-shot).
+    pub exit: Option<bool>,
     /// The action as written, for `--check-config` and error messages.
     pub label: String,
     /// A short name for the which-key hint (`{ desc = "..." }`); a Lua bind
@@ -1112,6 +1116,7 @@ fn install_api(
                             .map_err(|e| rt_err(format!("ranma.bind(\"{keys}\"): {e}")))?;
                         Bind {
                             exits_mode: exit_override.unwrap_or(parsed.exits_mode_by_default()),
+                            exit: exit_override,
                             action: BindAction::Builtin(parsed),
                             label: s,
                             desc,
@@ -1120,6 +1125,7 @@ fn install_api(
                     Value::Function(f) => Bind {
                         action: BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
                         exits_mode: exit_override.unwrap_or(false),
+                        exit: exit_override,
                         label: "<lua function>".into(),
                         desc,
                     },
@@ -2477,6 +2483,29 @@ mod tests {
         let x = &cfg.binds[&"x".parse().unwrap()];
         assert!(matches!(x.action, BindAction::Lua(_)) && x.exits_mode);
         assert_eq!(cfg.hooks[&Event::PaneOpen].len(), 1);
+    }
+
+    #[test]
+    fn an_explicit_exit_is_kept_apart_from_the_default() {
+        let cfg = with_user(
+            r#"
+            ranma.set { wm_mode = { sticky = false } }
+            ranma.bind("shift+left", "resize left", { exit = false })
+            ranma.bind("t", "new_pane", { exit = true })
+            "#,
+        )
+        .unwrap();
+        let b = |k: &str| &cfg.binds[&k.parse().unwrap()];
+        assert_eq!(
+            (b("shift+left").exit, b("shift+left").exits_mode),
+            (Some(false), false)
+        );
+        assert_eq!(b("t").exit, Some(true));
+        assert_eq!(
+            b("q").exit,
+            None,
+            "unset: the action's default and sticky decide"
+        );
     }
 
     #[test]

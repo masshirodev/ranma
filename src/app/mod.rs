@@ -2072,6 +2072,9 @@ impl App {
             self.status = Some(format!("{chord} is not bound"));
             return;
         }
+        // An explicit `exit` decides alone; unset, the action's default and
+        // `wm_mode.sticky` do.
+        let explicit = self.config.binds.get(&chord).and_then(|b| b.exit);
         let exits = if chord == leader && !self.config.binds.contains_key(&chord) {
             // The leader pressed again goes through to the program, tmux style.
             self.run_action(Action::SendLeader);
@@ -2080,7 +2083,8 @@ impl App {
             self.run_bind(chord, false)
         };
         // Only from WM mode: the bind may have entered copy mode or opened a picker.
-        if (exits || !self.config.settings.wm_mode_sticky) && self.mode == Mode::Wm {
+        let ends = explicit.unwrap_or(exits || !self.config.settings.wm_mode_sticky);
+        if ends && self.mode == Mode::Wm {
             self.set_mode(Mode::Normal);
         }
     }
@@ -5168,5 +5172,37 @@ mod tests {
         a.run_action(crate::action::Action::Settings);
         assert!(a.plugin_screen().is_none() && a.settings_panel().is_some());
         assert_eq!(ran(&a).last().unwrap(), "closed");
+    }
+
+    #[test]
+    fn an_explicit_exit_false_keeps_wm_mode_when_sticky_is_off() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(Some(
+            r#"
+            ranma.set { wm_mode = { sticky = false } }
+            ranma.bind("shift+left", "resize left", { exit = false })
+            ranma.bind("x", function() end)
+            ranma.bind("y", "equalize", { exit = true })
+            "#,
+        ));
+        let press = |a: &mut App, code: KeyCode, m: KeyModifiers| {
+            a.handle(AppEvent::Input(Event::Key(KeyEvent::new(code, m))));
+        };
+        a.set_mode(Mode::Wm);
+        press(&mut a, KeyCode::Left, KeyModifiers::SHIFT);
+        assert_eq!(a.mode, Mode::Wm, "exit = false stays, sticky or not");
+        press(&mut a, KeyCode::Left, KeyModifiers::SHIFT);
+        assert_eq!(a.mode, Mode::Wm);
+        press(&mut a, KeyCode::Char('x'), KeyModifiers::NONE);
+        assert_eq!(
+            a.mode,
+            Mode::Normal,
+            "unset: one-shot, as sticky = false says"
+        );
+        // And the other way: exit = true ends a sticky mode.
+        let mut a = app(Some(r#"ranma.bind("y", "equalize", { exit = true })"#));
+        a.set_mode(Mode::Wm);
+        press(&mut a, KeyCode::Char('y'), KeyModifiers::NONE);
+        assert_eq!(a.mode, Mode::Normal);
     }
 }
