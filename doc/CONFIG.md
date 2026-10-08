@@ -17,8 +17,8 @@ Every mistake is an error at load, with the file and line: unknown settings, key
 actions, events, bind options, modules, theme keys and colours. Nothing is
 silently ignored.
 
-**Symlinks are fine.** Dotfile setups often make `init.lua` or `themes/` a
-link into a repository; ranma watches the real files behind the links, so saving
+**Symlinks are fine.** Dotfile setups often make `init.lua`, `themes/` or a
+plugin directory a link into a repository; ranma watches the real files behind the links, so saving
 through them reloads as well.
 
 **Reloading is automatic.** ranma watches the config directory (inotify, so it
@@ -772,6 +772,51 @@ All of these find the ranma they run in through `RANMA_SOCKET`, which ranma
 sets in every pane; outside ranma they say so and exit 1. A server's socket is
 `$XDG_RUNTIME_DIR/ranma/<name>.sock` (a `--standalone` ranma's is
 `$XDG_RUNTIME_DIR/ranma-<pid>.sock`), mode 0600, removed when it exits.
+
+## Plugins
+
+ranma loads Lua plugins laid out the way Neovim's are, from the config
+directory. Installing one is a `git clone`, and a plugin is just Lua using the
+same `ranma.*` API as `init.lua`.
+
+```
+~/.config/ranma/
+├── init.lua               runs last: your word is final
+├── lua/                   on require's path: require("history") finds
+│   └── history.lua        lua/history.lua or lua/history/init.lua
+├── plugin/                every *.lua here is sourced, in name order
+│   └── agents.lua
+└── pack/
+    └── github/start/      each directory here is a package carrying its own
+        └── some-plugin/   lua/ and plugin/ (pack/*/opt/ is not loaded)
+```
+
+The order is the built-in defaults, then each package's `plugin/*.lua`
+(packages in name order), then your own `plugin/*.lua`, then `init.lua`. So a
+plugin's binds and settings are defaults that `init.lua` can override.
+`require` looks in your own `lua/` first, then in each package's, then in
+Lua's usual places. `require` returns two values in Lua 5.4 (the module and its
+path), so wrap it in parentheses where a second argument would be taken:
+`ranma.bind("f5", (require("history")).open)`.
+
+**A failing plugin is dropped whole.** A plugin that errors while it loads
+(a Lua error, or anything ranma refuses, like an unknown setting) is left out
+with everything it bound or set, and the rest load without it. ranma names it
+in a toast (`plugin agents.lua not loaded: ...`), and `ranma --check-config`
+lists every plugin, with the failures on stderr. A failed plugin does not fail
+the check, since ranma runs fine without it. A failing `init.lua` is still
+fatal on start, and on a reload keeps the old configuration, as before.
+
+**A plugin cannot hang ranma.** A file may run for 1 second while loading, and
+a bind, hook or module may run for 200 ms. Past that it is stopped with an
+error (`stopped: ran longer than 200 ms`), shown in the bar. Hooks a bind
+fires share its 200 ms. Once a call is past its time, `pcall`, `xpcall` and
+`coroutine.resume` pass the error on instead of catching it, so a loop cannot
+keep itself alive by catching it.
+
+Saving any `.lua` file under the config directory reloads, plugins included,
+and linked `lua/`, `plugin/`, `pack/` or package directories are watched behind
+their links.
 
 ## Lua at run time
 

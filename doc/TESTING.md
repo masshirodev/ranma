@@ -10,7 +10,7 @@ Everything that can be pure is, and is tested without a terminal:
 | --- | --- |
 | `keys` | chord parsing, strictness, round trips |
 | `action` | dispatcher parsing, argument errors |
-| `config` | defaults, user overrides, global binds, the bar and modules, the run-time API refusing at load, error messages carrying file and line |
+| `config` | defaults, user overrides, global binds, the bar and modules, the run-time API refusing at load, error messages carrying file and line; plugins: `require` finding `lua/` (`?.lua` and `?/init.lua`, the user's shadowing a package's), `plugin/` and `pack/*/start/*` sourced in order before `init.lua` (and `opt/` not), a failing plugin dropped with everything it bound while the rest load, a plugin that never returns stopped at load, and a callback stopped at its budget, under `pcall` and inside a coroutine too |
 | `theme` | inheritance, strict keys, colour forms, cycles, `dim_unfocused` range; an outer ranma's colours laid over key by key (a whole set round-trips, an unknown role, a missing one and a bad value cost nothing else, an unset role stays unset); a side's outer gap over its axis's |
 | `layout` | dwindle and manual placement, removal, geometry-based neighbours, Hyprland-style resize, swap, toggle split, groups (tab bars, new tabs, cycling, closing), exact tiling; an inset by each side's own amount |
 | `input` | host key → chord, key/paste/focus/mouse encoding per pane mode |

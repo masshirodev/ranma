@@ -12,6 +12,9 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use mlua::{Function, Lua, LuaSerdeExt, RegistryKey, Table, Value};
 use serde::Deserialize;
+use std::cell::Cell;
+use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use crate::action::Action;
 use crate::keys::Chord;
@@ -221,13 +224,15 @@ enum HintSetting {
     After(f64),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BindAction {
     Builtin(Action),
-    Lua(RegistryKey),
+    /// Shared, so the builder can be copied before a plugin runs and the
+    /// copy put back if the plugin fails.
+    Lua(Rc<RegistryKey>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Bind {
     pub action: BindAction,
     /// Whether WM mode ends after this bind fires.
@@ -306,10 +311,10 @@ impl BarLayout {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ModuleKind {
     /// A Lua function returning a string or `{ text = ..., style = ... }`.
-    Lua(RegistryKey),
+    Lua(Rc<RegistryKey>),
     /// A shell command; its first line of output is the text.
     Exec {
         command: String,
@@ -342,7 +347,7 @@ fn system_module(name: &str, interval: Option<f64>, format: Option<String>) -> O
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleDef {
     /// How often to refresh. `None` for a Lua module means "when ranma's state
     /// changes" (focus, workspace, title, mode) instead of on a timer.
@@ -384,14 +389,14 @@ impl Profile {
 }
 
 /// `ranma.toolbar(name, def)`: a row of buttons (DESIGN.md, "A mobile view").
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ToolbarDef {
     pub position: crate::toolbar::Position,
     pub size: crate::toolbar::Size,
     pub buttons: Vec<Button>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Button {
     pub label: crate::toolbar::Label,
     pub action: BindAction,
@@ -482,7 +487,7 @@ fn parse_toolbar(lua: &Lua, name: &str, def: &Table) -> mlua::Result<(ToolbarDef
                     action = Some(BindAction::Builtin(a));
                 }
                 (Value::Integer(2), Value::Function(f)) => {
-                    action = Some(BindAction::Lua(lua.create_registry_value(f)?));
+                    action = Some(BindAction::Lua(Rc::new(lua.create_registry_value(f)?)));
                 }
                 (Value::String(s), Value::String(t)) if s.to_str()? == "text" => {
                     text = Some(t.to_str()?.to_string());
@@ -638,12 +643,12 @@ pub struct Runtime {
 }
 
 /// What the `ranma` global writes into while the config runs.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Builder {
     settings: Settings,
     binds: HashMap<Chord, Bind>,
     global_binds: HashMap<Chord, Bind>,
-    hooks: HashMap<Event, Vec<RegistryKey>>,
+    hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
     bar: BarLayout,
     modules: HashMap<String, ModuleDef>,
     workspaces_show_all: bool,
@@ -663,7 +668,7 @@ pub struct Config {
     pub binds: HashMap<Chord, Bind>,
     /// Keys looked up outside WM mode, before the program sees them.
     pub global_binds: HashMap<Chord, Bind>,
-    pub hooks: HashMap<Event, Vec<RegistryKey>>,
+    pub hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
     pub bar: BarLayout,
     pub modules: HashMap<String, ModuleDef>,
     /// The workspaces module shows 1-10 even when empty.
@@ -693,6 +698,10 @@ pub struct Config {
     pub toolbars_shown: Vec<String>,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
+    /// Every plugin file found, in the order sourced, failed ones included.
+    pub plugins: Vec<PluginLoad>,
+    /// Stops a Lua call that runs too long; armed by every call into `lua`.
+    pub watchdog: Watchdog,
     /// Owns every Lua function referenced by `binds` and `hooks`.
     pub lua: Lua,
 }
@@ -985,7 +994,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                         }
                     }
                     Value::Function(f) => Bind {
-                        action: BindAction::Lua(lua.create_registry_value(f)?),
+                        action: BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
                         exits_mode: exit_override.unwrap_or(false),
                         label: "<lua function>".into(),
                         desc,
@@ -1037,7 +1046,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
             let ev: Event = event
                 .parse()
                 .map_err(|e| rt_err(format!("ranma.on: {e}")))?;
-            let key = lua.create_registry_value(f)?;
+            let key = Rc::new(lua.create_registry_value(f)?);
             lua.app_data_mut::<Builder>()
                 .expect("builder installed")
                 .hooks
@@ -1224,7 +1233,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
                             "ranma.module(\"{name}\"): format only applies to exec modules"
                         )));
                     }
-                    ModuleKind::Lua(lua.create_registry_value(f)?)
+                    ModuleKind::Lua(Rc::new(lua.create_registry_value(f)?))
                 }
                 (None, Some(command)) => {
                     if interval.is_none() {
@@ -1471,17 +1480,34 @@ pub fn load_from(
 ) -> Result<Config> {
     let lua = Lua::new();
     lua.set_app_data(Builder::default());
+    let watchdog = Watchdog::default();
     // mlua's error is not Send without its `send` feature, so it cannot go through
     // anyhow's `.context` directly; its Display is all we need from it anyway.
     install_api(&lua, config_dir)
+        .and_then(|()| watchdog.install(&lua))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("installing the ranma Lua API")?;
 
-    lua.load(DEFAULT_INIT_LUA)
-        .set_name("@<built-in init.lua>")
-        .exec()
+    watchdog
+        .run(LOAD_BUDGET, || {
+            lua.load(DEFAULT_INIT_LUA)
+                .set_name("@<built-in init.lua>")
+                .exec()
+        })
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("the built-in default config failed (this is a ranma bug)")?;
+
+    let mut plugins = Vec::new();
+    if let Some(dir) = config_dir {
+        let found = PluginDirs::find(dir);
+        found
+            .put_on_path(&lua)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .context("setting `require`'s path")?;
+        for file in &found.files {
+            plugins.push(source_plugin(&lua, &watchdog, file));
+        }
+    }
 
     if let Some(src) = user_src {
         let name = user_file
@@ -1490,9 +1516,10 @@ pub fn load_from(
             .unwrap_or_else(|| "init.lua".into());
         // Lua errors carry their own "file:line:" prefix and traceback, which anyhow's
         // chain would otherwise bury under a generic "callback error".
-        lua.load(src)
-            .set_name(format!("@{name}"))
-            .exec()
+        watchdog
+            .run(LOAD_BUDGET, || {
+                lua.load(src).set_name(format!("@{name}")).exec()
+            })
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
@@ -1576,8 +1603,189 @@ pub fn load_from(
         layouts: builder.layouts,
         theme,
         source: user_file,
+        plugins,
+        watchdog,
         lua,
     })
+}
+
+/// How long the built-in defaults, one plugin file, or `init.lua` may run
+/// while loading. Generous: a load is rare and may `require` a lot.
+pub const LOAD_BUDGET: Duration = Duration::from_secs(1);
+/// How long one call into Lua may run once ranma is up: a bind, a hook, a
+/// module's `render`. Past it the callback is stopped with an error.
+pub const CALL_BUDGET: Duration = Duration::from_millis(200);
+
+/// A deadline that Lua's instruction hook checks, so a loop in a plugin costs
+/// an error instead of the terminal (DESIGN.md, "Plugins: Neovim's shape").
+#[derive(Debug, Clone, Default)]
+pub struct Watchdog(Rc<Cell<Option<(Instant, Duration)>>>);
+
+impl Watchdog {
+    fn install(&self, lua: &Lua) -> mlua::Result<()> {
+        let w = self.clone();
+        let hook = move |_: &Lua, _: &mlua::debug::Debug| match w.0.get() {
+            Some((_, budget)) if w.overdue() => Err(rt_err(format!(
+                "stopped: ran longer than {} ms",
+                budget.as_millis()
+            ))),
+            _ => Ok(mlua::VmState::Continue),
+        };
+        // Often enough to stop a loop within a few ms of its budget, rarely
+        // enough that the clock read is lost in the noise.
+        let every = mlua::HookTriggers::new().every_nth_instruction(10_000);
+        // The global hook, not `set_hook`: it is set on the main thread, and
+        // Lua's own `coroutine.create` copies the hook of the thread that made
+        // it. A per-thread hook would be copied too, but mlua finds its
+        // callback by thread, and a coroutine it did not make has none.
+        lua.set_global_hook(every, hook)?;
+        // The hook's error can be caught, and a loop around a `pcall` would
+        // catch it forever: the hook nearly always fires inside the call. So
+        // past the deadline, whatever catches errors passes them on.
+        let w = self.clone();
+        let overdue = lua.create_function(move |_, ()| Ok(w.overdue()))?;
+        lua.load(
+            r#"
+            local overdue = ...
+            local error, pcall, xpcall, resume = error, pcall, xpcall, coroutine.resume
+            local function pass(ok, ...)
+              if not ok and overdue() then error((...), 0) end
+              return ok, ...
+            end
+            _G.pcall = function(...) return pass(pcall(...)) end
+            _G.xpcall = function(...) return pass(xpcall(...)) end
+            coroutine.resume = function(...) return pass(resume(...)) end
+            "#,
+        )
+        .set_name("@<ranma watchdog>")
+        .call::<()>(overdue)
+    }
+
+    fn overdue(&self) -> bool {
+        self.0
+            .get()
+            .is_some_and(|(start, budget)| start.elapsed() > budget)
+    }
+
+    /// Run `f` with `budget` to spend. A run inside another (a hook fired by
+    /// an action a bind ran) shares the outer deadline instead of resetting it.
+    pub fn run<R>(&self, budget: Duration, f: impl FnOnce() -> R) -> R {
+        let outer = self.0.get();
+        if outer.is_none() {
+            self.0.set(Some((Instant::now(), budget)));
+        }
+        let out = f();
+        if outer.is_none() {
+            self.0.set(None);
+        }
+        out
+    }
+}
+
+/// One plugin file sourced at load, for the bar and `--check-config`.
+#[derive(Debug, Clone)]
+pub struct PluginLoad {
+    pub path: PathBuf,
+    pub took: Duration,
+    /// Why it was dropped; `None` when it loaded.
+    pub error: Option<String>,
+}
+
+/// Neovim's layout under the config directory (DESIGN.md, "Plugins: Neovim's
+/// shape"): `lua/` on `require`'s path, `plugin/*.lua` sourced, and each
+/// `pack/*/start/*/` a package carrying its own `lua/` and `plugin/`.
+#[derive(Debug, Default, PartialEq)]
+struct PluginDirs {
+    /// Searched by `require` in this order: the user's own `lua/` first, so a
+    /// module of theirs shadows a package's.
+    lua: Vec<PathBuf>,
+    /// Sourced in this order: packages first, then the user's own
+    /// `plugin/`, so their own plugins run last and win.
+    files: Vec<PathBuf>,
+}
+
+impl PluginDirs {
+    fn find(config_dir: &Path) -> PluginDirs {
+        let mut packages: Vec<PathBuf> = sorted_entries(&config_dir.join("pack"))
+            .into_iter()
+            .flat_map(|pack| sorted_entries(&pack.join("start")))
+            .filter(|p| p.is_dir())
+            .collect();
+        packages.push(config_dir.to_path_buf());
+        let mut out = PluginDirs::default();
+        for root in packages.iter().rev() {
+            let lua = root.join("lua");
+            if lua.is_dir() {
+                out.lua.push(lua);
+            }
+        }
+        for root in &packages {
+            out.files.extend(
+                sorted_entries(&root.join("plugin"))
+                    .into_iter()
+                    .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "lua")),
+            );
+        }
+        out
+    }
+
+    /// Put the `lua/` directories in front of `package.path`, keeping the
+    /// system's after them.
+    fn put_on_path(&self, lua: &Lua) -> mlua::Result<()> {
+        if self.lua.is_empty() {
+            return Ok(());
+        }
+        let package: Table = lua.globals().get("package")?;
+        let rest: String = package.get("path")?;
+        let mut path = String::new();
+        for d in &self.lua {
+            let d = d.display();
+            path.push_str(&format!("{d}/?.lua;{d}/?/init.lua;"));
+        }
+        path.push_str(&rest);
+        package.set("path", path)
+    }
+}
+
+/// A directory's entries, sorted by name; nothing if it does not exist.
+fn sorted_entries(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .collect();
+    out.sort();
+    out
+}
+
+/// Source one plugin file against a copy of the configuration built so far,
+/// keeping its effects only if it finishes: a failing plugin is dropped
+/// whole, never half-applied, and the others still load.
+fn source_plugin(lua: &Lua, watchdog: &Watchdog, path: &Path) -> PluginLoad {
+    let before = lua
+        .app_data_ref::<Builder>()
+        .expect("builder installed")
+        .clone();
+    let start = Instant::now();
+    let result = std::fs::read_to_string(path)
+        .map_err(|e| e.to_string())
+        .and_then(|src| {
+            watchdog
+                .run(LOAD_BUDGET, || {
+                    lua.load(src)
+                        .set_name(format!("@{}", path.display()))
+                        .exec()
+                })
+                .map_err(|e| e.to_string())
+        });
+    if result.is_err() {
+        lua.set_app_data(before);
+    }
+    PluginLoad {
+        path: path.to_path_buf(),
+        took: start.elapsed(),
+        error: result.err(),
+    }
 }
 
 #[cfg(test)]
@@ -2231,5 +2439,164 @@ mod tests {
     #[test]
     fn lua_syntax_errors_surface() {
         assert!(with_user("ranma.bind(").is_err());
+    }
+
+    /// A config directory with these files, fresh for each test.
+    fn config_tree(tag: &str, files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ranma-plugins-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for (path, src) in files {
+            let p = dir.join(path);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, src).unwrap();
+        }
+        dir
+    }
+
+    fn bound(cfg: &Config, keys: &str) -> Option<String> {
+        Some(cfg.binds.get(&keys.parse().unwrap())?.label.clone())
+    }
+
+    #[test]
+    fn plugins_load_before_init_lua_and_require_finds_lua_dir() {
+        let dir = config_tree(
+            "order",
+            &[
+                ("lua/util.lua", "return { action = 'equalize' }"),
+                ("lua/deep/init.lua", "return { action = 'help' }"),
+                (
+                    "plugin/a.lua",
+                    "ranma.bind('f5', require('util').action)\n\
+                     ranma.bind('f6', require('deep').action)\n\
+                     ranma.bind('f7', 'help')",
+                ),
+                ("init.lua", "ranma.bind('f7', 'equalize')"),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(bound(&cfg, "f5").as_deref(), Some("equalize"));
+        assert_eq!(bound(&cfg, "f6").as_deref(), Some("help"), "?/init.lua");
+        assert_eq!(
+            bound(&cfg, "f7").as_deref(),
+            Some("equalize"),
+            "init.lua runs after plugins and has the last word"
+        );
+        assert_eq!(cfg.plugins.len(), 1);
+        assert!(cfg.plugins[0].error.is_none());
+    }
+
+    #[test]
+    fn a_failing_plugin_is_dropped_whole_and_the_rest_load() {
+        let dir = config_tree(
+            "drop",
+            &[
+                (
+                    "plugin/a_bad.lua",
+                    "ranma.bind('f5', 'help')\nerror('boom')",
+                ),
+                ("plugin/b_good.lua", "ranma.bind('f6', 'help')"),
+                ("plugin/c_typo.lua", "ranma.set { no_such_setting = 1 }"),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(bound(&cfg, "f5"), None, "its bind went with it");
+        assert_eq!(bound(&cfg, "f6").as_deref(), Some("help"));
+        let errors: Vec<_> = cfg.plugins.iter().map(|p| p.error.is_some()).collect();
+        assert_eq!(errors, [true, false, true], "sourced in name order");
+        assert!(cfg.plugins[0].error.as_ref().unwrap().contains("boom"));
+        assert!(
+            cfg.plugins[2]
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("no_such_setting"),
+            "a plugin is parsed as strictly as init.lua"
+        );
+    }
+
+    #[test]
+    fn packages_carry_their_own_lua_and_plugin_dirs() {
+        let dir = config_tree(
+            "pack",
+            &[
+                ("pack/ext/start/hist/lua/hist.lua", "return 'help'"),
+                (
+                    "pack/ext/start/hist/plugin/hist.lua",
+                    "ranma.bind('f5', (require('hist')))\nranma.bind('f6', 'help')",
+                ),
+                (
+                    "pack/ext/opt/lazy/plugin/lazy.lua",
+                    "error('opt/ is not sourced')",
+                ),
+                ("plugin/mine.lua", "ranma.bind('f6', 'equalize')"),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(bound(&cfg, "f5").as_deref(), Some("help"));
+        assert_eq!(
+            bound(&cfg, "f6").as_deref(),
+            Some("equalize"),
+            "the user's own plugin/ runs after packages"
+        );
+        assert_eq!(cfg.plugins.len(), 2);
+        assert!(cfg.plugins.iter().all(|p| p.error.is_none()));
+    }
+
+    #[test]
+    fn the_users_lua_dir_shadows_a_packages() {
+        let dir = config_tree(
+            "shadow",
+            &[
+                ("pack/ext/start/p/lua/m.lua", "return 'help'"),
+                ("lua/m.lua", "return 'equalize'"),
+                ("init.lua", "ranma.bind('f5', (require('m')))"),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(bound(&cfg, "f5").as_deref(), Some("equalize"));
+    }
+
+    #[test]
+    fn a_plugin_that_never_returns_is_stopped() {
+        let dir = config_tree(
+            "hang",
+            &[
+                (
+                    "plugin/a_loop.lua",
+                    "ranma.bind('f5', 'help')\nwhile true do end",
+                ),
+                ("plugin/b_ok.lua", "ranma.bind('f6', 'help')"),
+            ],
+        );
+        let start = Instant::now();
+        let cfg = load(Some(&dir)).unwrap();
+        assert!(start.elapsed() < LOAD_BUDGET * 3, "{:?}", start.elapsed());
+        assert!(cfg.plugins[0].error.as_ref().unwrap().contains("stopped"));
+        assert_eq!(bound(&cfg, "f5"), None);
+        assert_eq!(bound(&cfg, "f6").as_deref(), Some("help"));
+    }
+
+    #[test]
+    fn a_callback_is_stopped_at_its_budget_even_under_pcall() {
+        let cfg = load_from(None, None, None).unwrap();
+        let run = |src: &str| {
+            let start = Instant::now();
+            let r = cfg.watchdog.run(CALL_BUDGET, || cfg.lua.load(src).exec());
+            (r, start.elapsed())
+        };
+        let (r, took) = run("while true do end");
+        assert!(r.unwrap_err().to_string().contains("stopped"));
+        assert!(took < CALL_BUDGET * 3, "{took:?}");
+        // pcall catches the hook's error, but the loop around it runs on and
+        // trips the hook again outside any pcall.
+        let (r, _) = run("while true do pcall(function() while true do end end) end");
+        assert!(r.is_err());
+        let (r, _) = run(
+            "local co = coroutine.create(function() while true do end end)\n\
+             assert(coroutine.resume(co))",
+        );
+        assert!(r.is_err(), "a coroutine inherits the hook");
+        // Disarmed after a run: quick code afterwards is untouched.
+        assert!(cfg.lua.load("for i = 1, 1e6 do end").exec().is_ok());
     }
 }

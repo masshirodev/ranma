@@ -650,6 +650,15 @@ fn main() -> ExitCode {
             "hooks:  {}",
             cfg.hooks.values().map(Vec::len).sum::<usize>()
         );
+        // A failing plugin is dropped, not fatal: ranma runs without it, so
+        // the check still passes (install.sh must not refuse a binary over
+        // one plugin), but says so on stderr.
+        for p in &cfg.plugins {
+            match &p.error {
+                None => println!("plugin: {} ({} ms)", p.path.display(), p.took.as_millis()),
+                Some(e) => eprintln!("plugin: {} not loaded: {e}", p.path.display()),
+            }
+        }
         println!("ok");
         return ExitCode::SUCCESS;
     }

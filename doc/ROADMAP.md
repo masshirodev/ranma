@@ -206,7 +206,7 @@ DESIGN.md, "Plugins: Neovim's shape, in Lua". The core grows primitives; the
 features below the line live outside the repository.
 
 - [x] Design agreed
-- [ ] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
+- [x] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
   watched; a failing plugin dropped whole; the 200 ms watchdog
 - [ ] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `option_change`
@@ -219,7 +219,7 @@ features below the line live outside the repository.
 - [ ] Keys: which-key groups, user modes, user commands
 - [ ] Drawing: `picker`, `panel`, `tooltip`, `badge`
 - [ ] `pane:watch`, measured first
-- [ ] Design: `doc/briefs/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
+- [ ] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [ ] The settings panel and `settings.toml`
 
 Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with

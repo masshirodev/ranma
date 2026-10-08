@@ -5,6 +5,10 @@
 -- re-bind a key to override it, ranma.unbind() it to drop it, or
 -- ranma.unbind_all() to start from nothing.
 --
+-- Plugins sit between the two: ~/.config/ranma/plugin/*.lua and
+-- pack/*/start/*/plugin/*.lua run after this file and before yours, and
+-- lua/ is on require's path. See "Plugins" in doc/CONFIG.md.
+--
 -- Print this file with `ranma --dump-config`. Check yours with `ranma --check-config`.
 
 ranma.set {

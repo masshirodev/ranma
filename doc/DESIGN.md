@@ -562,8 +562,16 @@ three-function run-time API.
   (`plugin agents.lua: ...`) and the rest still load. `init.lua` keeps its
   stricter rule: if it fails, the old configuration stays.
 - **A plugin cannot hang the window manager.** Lua runs with an instruction
-  hook, and a callback still running after 200 ms is aborted with an error
-  naming it. A loop in a plugin costs a toast, not the terminal.
+  hook (every 10 000 instructions, a clock read). A callback still running
+  after 200 ms is aborted with an error, and a file still loading after 1 s.
+  A loop in a plugin costs a toast, not the terminal. The hook's error is an
+  ordinary Lua error, which `pcall` would catch, and a loop around a `pcall`
+  would catch it forever, because the hook nearly always fires inside the
+  call. So past the deadline, `pcall`, `xpcall` and `coroutine.resume` pass
+  the error on. Rollback is a copy of the builder taken before each plugin:
+  the Lua functions it holds are shared (`Rc<RegistryKey>`), so the copy is
+  cheap. A failed plugin's Lua globals and `package.loaded` entries are not
+  rolled back. Only what it gave ranma is.
 
 **Options: one registry, read by everything.** `ranma.option(name, spec)`
 declares a typed setting (`bool`, `int` and `float` with a range and a step,

@@ -386,7 +386,30 @@ impl App {
             frameless_was: None,
         };
         app.schedule_modules(Instant::now());
+        app.report_plugin_failures();
         app
+    }
+
+    /// A plugin that failed to load was dropped and the rest run without it;
+    /// say which, and why, so the drop is never silent. Longer than a usual
+    /// toast: it may land while nobody is looking yet.
+    fn report_plugin_failures(&mut self) {
+        let failed: Vec<(String, String)> = self
+            .config
+            .plugins
+            .iter()
+            .filter_map(|p| {
+                let name = p.path.file_name()?.to_string_lossy().into_owned();
+                Some((name, p.error.as_ref()?.lines().next()?.to_string()))
+            })
+            .collect();
+        for (name, why) in failed {
+            self.toast(
+                format!("plugin {name} not loaded: {why}"),
+                crate::toast::Level::Urgent,
+                Some(Duration::from_secs(15)),
+            );
+        }
     }
 
     // ---- where things are ------------------------------------------------------
@@ -2379,6 +2402,7 @@ impl App {
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
+                self.report_plugin_failures();
                 self.relayout();
                 self.render_state_modules();
                 self.emit(HookEvent::ConfigReload, |_| Ok(()));
@@ -2463,7 +2487,10 @@ impl App {
             ..Default::default()
         };
         self.config.lua.set_app_data(rt);
-        let result = f(&self.config.lua);
+        let result = self
+            .config
+            .watchdog
+            .run(config::CALL_BUDGET, || f(&self.config.lua));
         let rt = self
             .config
             .lua
@@ -3346,7 +3373,8 @@ pub(super) fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWa
 }
 
 /// Directories behind symlinks in the config dir that need their own watch:
-/// the parent of a linked `init.lua`, and a linked `themes/` itself.
+/// the parent of a linked `init.lua`, and a linked `themes/`, `lua/`,
+/// `plugin/`, `pack/` or package itself.
 fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify::RecursiveMode)> {
     let mut out = Vec::new();
     let init = dir.join("init.lua");
@@ -3358,11 +3386,29 @@ fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify
     {
         out.push((parent, notify::RecursiveMode::NonRecursive));
     }
-    let themes = dir.join("themes");
-    if themes.is_symlink()
-        && let Ok(t) = themes.canonicalize()
-    {
-        out.push((t, notify::RecursiveMode::Recursive));
+    // Directories a dotfiles repo or a cloned plugin is linked in as: the
+    // plugin layout's three, and each package under `pack/*/start/`.
+    let packages = std::fs::read_dir(dir.join("pack"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .flat_map(|pack| {
+            std::fs::read_dir(pack.path().join("start"))
+                .into_iter()
+                .flatten()
+        })
+        .flatten()
+        .map(|e| e.path());
+    let linked = ["themes", "lua", "plugin", "pack"]
+        .into_iter()
+        .map(|d| dir.join(d))
+        .chain(packages);
+    for d in linked {
+        if d.is_symlink()
+            && let Ok(t) = d.canonicalize()
+        {
+            out.push((t, notify::RecursiveMode::Recursive));
+        }
     }
     out
 }
