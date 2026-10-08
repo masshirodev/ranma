@@ -287,6 +287,30 @@ wait_for 'finished exit=3 long=true' 16 || fail "command_finished did not fire w
 rm "$CFG/init.lua"
 wait_for 'config reloaded' 8 || true
 
+# A ranma reached from the scratchpad (an ssh started there): `S` holds it as
+# a workspace holds one, its workspaces in brackets while it is shown and a
+# count while it is hidden, and the inner draws no bar of its own.
+T send-keys -t s C-b; sleep 0.3; T send-keys -t s s; sleep 0.6
+T send-keys -t s "$BIN" Enter
+for _ in $(seq 1 40); do bar | grep -q ' S \[1' && break; sleep 0.25; done
+bar | grep -q ' S \[1' || fail "the outer bar does not show the scratchpad's ranma's workspaces ($(bar))"
+screen | head -n -1 | grep -q '│ 1[: ]' && fail "the ranma in the scratchpad draws its own bar"
+# Hidden (the outer leader: keys go to the inner now), S counts what is inside.
+T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s s
+for _ in $(seq 1 20); do bar | grep -q ' S\[1\] ' && break; sleep 0.25; done
+bar | grep -q ' S\[1\] ' || fail "a hidden scratchpad does not count its ranma's workspaces ($(bar))"
+T send-keys -t s C-b; sleep 0.3; T send-keys -t s s
+for _ in $(seq 1 20); do bar | grep -q ' S \[1' && break; sleep 0.25; done
+bar | grep -q ' S \[1' || fail "showing the scratchpad again did not expand its S ($(bar))"
+# Its shell's exit ends it empty: killed with a pane alive, it would leave a
+# snapshot for the nested ranma below to offer back.
+T send-keys -t s exit Enter
+for _ in $(seq 1 20); do bar | grep -q ' S \[' || break; sleep 0.25; done
+bar | grep -q ' S \[' && fail "the ranma in the scratchpad did not quit ($(bar))"
+T send-keys -t s exit Enter
+for _ in $(seq 1 20); do bar | grep -q ' S ' || break; sleep 0.25; done
+bar | grep -q ' S ' && fail "the scratchpad did not empty ($(bar))"
+
 # ranma inside ranma: the outer one shows the passthrough hint and passes the
 # leader down, so the inner one's WM mode opens and the outer one's does not.
 # The inner one as if reached over SSH: its host reaches the outer terminal's

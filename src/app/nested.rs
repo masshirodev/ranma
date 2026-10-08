@@ -58,6 +58,15 @@ impl App {
         nestbar::in_use(self.report_of(focused)?)
     }
 
+    /// The same for the scratchpad, whose `S` holds a ranma when an `ssh`
+    /// started there reaches one.
+    pub(super) fn scratch_in_use(&self) -> Option<usize> {
+        if self.config.workspaces_nested == crate::config::NestedWorkspaces::Off {
+            return None;
+        }
+        nestbar::in_use(self.report_of(self.scratch.focused?)?)
+    }
+
     /// Whether the ranma in this pane reports: its border then carries no
     /// title, since the ranma inside draws its own.
     pub fn reports_from(&self, id: PaneId) -> bool {
@@ -139,6 +148,12 @@ impl App {
             scratch,
             scratch_shown,
             scratch_key: self.bound_key(|a| *a == Action::ScratchpadToggle),
+            scratch_nest: self
+                .scratch
+                .focused
+                .and_then(|f| self.report_of(f))
+                .cloned()
+                .map(Box::new),
             mode: match (self.mode, self.hints.is_some()) {
                 (Mode::Wm, _) => "wm",
                 (Mode::Copy, _) => {
@@ -369,9 +384,18 @@ impl App {
     /// type what reaches it. The outer leader once puts the ranma in the pane
     /// in WM mode; each time more goes one level down (DESIGN.md, "ranma
     /// inside ranma"); then that level's key for the workspace, then Esc.
+    /// The holder may be the scratchpad (0): it is shown, never toggled away.
     pub(super) fn click_nested(&mut self, holder: u8, path: &[u8]) {
-        self.run_action(Action::Workspace(WorkspaceTarget::Index(holder)));
-        let Some(pane) = self.workspaces.get(&holder).and_then(|w| w.focused) else {
+        let pane = if holder == SCRATCHPAD {
+            if !self.scratch_shown {
+                self.run_action(Action::ScratchpadToggle);
+            }
+            self.scratch.focused
+        } else {
+            self.run_action(Action::Workspace(WorkspaceTarget::Index(holder)));
+            self.workspaces.get(&holder).and_then(|w| w.focused)
+        };
+        let Some(pane) = pane else {
             return;
         };
         self.reach_nested(pane, path);
@@ -408,10 +432,7 @@ impl App {
             if r.sticky {
                 bytes.extend(crate::input::encode_key(&esc, modes).unwrap_or_default());
             }
-            level =
-                r.ws.iter()
-                    .find(|w| w.n == *n)
-                    .and_then(|w| w.nest.as_deref().cloned());
+            level = r.nest_of(*n).cloned();
         }
         if let Some(p) = self.panes.get(&pane)
             && !bytes.is_empty()

@@ -1076,6 +1076,31 @@ The outer's own `S` had the active background, but nothing marked where the
 inner was. The inner `S` now takes the colour that ranma's current workspace
 would: its accent on the path, the holder's colour off it.
 
+**A ranma reached from the scratchpad is held by `S`** (2026-10-08). An
+`ssh` started in the scratchpad reaches a ranma like one started in any
+workspace: it asks, the outer answers, and it draws no bar. But a report
+carried a nested report only per workspace (`Ws::nest`), so the outer had
+nowhere to put this one: its workspaces showed nowhere at all, neither in
+the outer bar nor on its own. The report now also carries `scratch_nest`,
+what the ranma in the scratchpad's focused pane reported, and `S` holds it
+the way a workspace holds one:
+
+- shown, the scratchpad is the current workspace (`current` 0), so its ranma
+  is on the path (`Report::on_path`, through `nest_of`) and `S` expands:
+  ` 1:zsh  S [1:claude 2:zsh] `; with `nested = "all"` it expands hidden too;
+- hidden, `S` collapses and counts what is in use inside, ` S[2] `, in both
+  renderers (nestbar's and the plain workspaces module's), the count going
+  when the ladder drops names at that level, as a workspace's goes with its
+  name; urgency inside colours it urgent;
+- in the compact label, `S` counts the same way at the label's first step,
+  and an urgent one outlives the ladder as an urgent workspace does;
+- a click inside an expanded `S` is a nested click with holder 0: the outer
+  shows the scratchpad (never toggles it away) and types into its focused
+  pane; a click on `S` itself still toggles it, as before.
+
+No protocol bump: the field defaults to none, so an outer that predates it
+reads the report as before and draws a plain `S`, which is what it did.
+
 What it does not do yet: the title is still shown twice when the focused pane
 is a nested ranma (the outer's centre and the inner's own border); the handoff
 suggests a setting to leave the centre empty then. The host an inner ranma runs

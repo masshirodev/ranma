@@ -126,6 +126,8 @@ an outer shows it.
 - [x] An unfocused nested ranma is a label on its pane's border, not a second
   bar (design: `doc/briefs/done/UNFOCUSED_BAR.md`, handoff in
   `doc/handoffs/done/`); protocol 2, with 1 still understood
+- [x] A ranma reached from the scratchpad (an `ssh` started there) is held by
+  `S` as a workspace holds one: expanded while shown, counted while hidden
 
 ## 7. Upgrading without closing anything
 

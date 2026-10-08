@@ -2894,7 +2894,16 @@ impl App {
                     } else {
                         Style::WsOccupied
                     };
-                    seg.push(Piece::new(" S ", style).on_click(Click::Workspace(SCRATCHPAD)));
+                    // A ranma reached from the scratchpad: drawn here, it
+                    // is collapsed, so `S` says how many are inside.
+                    let at = Click::Workspace(SCRATCHPAD);
+                    match self.scratch_in_use() {
+                        Some(k) => {
+                            seg.push(Piece::new(" S", style).on_click(at));
+                            seg.push(Piece::new(format!("[{k}] "), Style::Dim).on_click(at));
+                        }
+                        None => seg.push(Piece::new(" S ", style).on_click(at)),
+                    }
                 }
                 seg
             }

@@ -58,6 +58,11 @@ pub struct Report {
     /// The key that shows its scratchpad, as a bind spells it.
     #[serde(default)]
     pub scratch_key: Option<String>,
+    /// What the ranma in its scratchpad's focused pane reported, if one did:
+    /// an `ssh` started there reaches a ranma like one in any workspace.
+    /// An outer that does not know the field draws `S` as before.
+    #[serde(default)]
+    pub scratch_nest: Option<Box<Report>>,
     /// Its mode: `normal`, `wm`, `copy`, `search`, `link`. With no bar of its
     /// own, the outer's bar says it.
     #[serde(default)]
@@ -112,15 +117,25 @@ impl Report {
         self.ws
             .iter()
             .any(|w| w.urgent || w.nest.as_ref().is_some_and(|n| n.any_urgent()))
+            || self.scratch_nest.as_ref().is_some_and(|n| n.any_urgent())
+    }
+
+    /// The report of the ranma in workspace `n`'s focused pane (0 is the
+    /// scratchpad), if it reported.
+    pub fn nest_of(&self, n: u8) -> Option<&Report> {
+        if n == 0 {
+            return self.scratch_nest.as_deref();
+        }
+        self.ws
+            .iter()
+            .find(|w| w.n == n)
+            .and_then(|w| w.nest.as_deref())
     }
 
     /// The report of the ranma on the path: the one in this ranma's current
-    /// workspace's focused pane, if it reported.
+    /// workspace's focused pane (or its shown scratchpad's), if it reported.
     pub fn on_path(&self) -> Option<&Report> {
-        self.ws
-            .iter()
-            .find(|w| w.n == self.current)
-            .and_then(|w| w.nest.as_deref())
+        self.nest_of(self.current)
     }
 }
 
@@ -284,36 +299,13 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
             o.drop_from.is_none_or(|d| level < d)
         };
         if let (true, Some(n)) = (expand, nest) {
-            let sess = if n.sessions > 1 {
-                format!(":{}", n.session)
-            } else {
-                String::new()
+            let at = Holder {
+                label: &w.n.to_string(),
+                n: w.n,
+                cur,
+                here,
             };
-            let hold = click(w.n);
-            if pad {
-                let style = if cur {
-                    Style::WsActive
-                } else {
-                    Style::WsOccupied
-                };
-                out.push(with(Piece::new(format!(" {}{sess} ", w.n), style), hold));
-            } else {
-                let style = if here {
-                    Style::WsHolder
-                } else {
-                    Style::WsOccupied
-                };
-                out.push(with(Piece::new(format!("{}{sess}", w.n), style), hold));
-                out.push(Piece::new(" ", Style::Normal));
-            }
-            out.push(with(Piece::new("[", Style::Dim), hold));
-            let mut p = path.to_vec();
-            p.push(w.n);
-            out.extend(pieces(n, level + 1, here, o, &p));
-            out.push(with(Piece::new("]", Style::Dim), hold));
-            if pad {
-                out.push(Piece::new(" ", Style::Normal));
-            }
+            expanded(&mut out, &at, n, level, o, path);
             continue;
         }
         let label = match (&w.name, keep_name) {
@@ -360,18 +352,102 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
         if !pad {
             out.push(Piece::new(" ", Style::Normal));
         }
-        // Shown, the scratchpad is where that ranma is (its `current` is 0),
-        // so it takes the colour its current workspace would.
-        let style = match (set.scratch_shown, pad, on_path) {
-            (false, _, _) => Style::WsOccupied,
-            (true, true, _) => Style::WsActive,
-            (true, false, true) => Style::WsInner(set.accent),
-            (true, false, false) => Style::WsHolder,
-        };
-        let text = if pad { " S " } else { "S" };
-        out.push(with(Piece::new(text, style), click(0)));
+        // An ssh started in the scratchpad reaches a ranma like any pane: `S`
+        // holds it as a workspace would.
+        let here = on_path && set.scratch_shown;
+        let nest = set.scratch_nest.as_deref();
+        match nest {
+            Some(n) if here || (o.expand_all && !o.collapse) => {
+                let at = Holder {
+                    label: "S",
+                    n: 0,
+                    cur: set.scratch_shown,
+                    here,
+                };
+                expanded(&mut out, &at, n, level, o, path);
+            }
+            _ => {
+                // Shown, the scratchpad is where that ranma is (its `current`
+                // is 0), so it takes the colour its current workspace would.
+                let style = match (set.scratch_shown, pad, on_path) {
+                    (false, _, _) if nest.is_some_and(Report::any_urgent) => Style::WsUrgent,
+                    (false, _, _) => Style::WsOccupied,
+                    (true, true, _) => Style::WsActive,
+                    (true, false, true) => Style::WsInner(set.accent),
+                    (true, false, false) => Style::WsHolder,
+                };
+                // `S` is its own name: the count goes when names at this
+                // level do, as a workspace's goes with its name.
+                let keep = o.drop_from.is_none_or(|d| level < d);
+                match nest.filter(|_| keep).and_then(in_use) {
+                    Some(k) => {
+                        out.push(with(
+                            Piece::new(if pad { " S" } else { "S" }, style),
+                            click(0),
+                        ));
+                        let count = format!("[{k}]");
+                        out.push(with(
+                            Piece::new(if pad { format!("{count} ") } else { count }, Style::Dim),
+                            click(0),
+                        ));
+                    }
+                    None => {
+                        let text = if pad { " S " } else { "S" };
+                        out.push(with(Piece::new(text, style), click(0)));
+                    }
+                }
+            }
+        }
     }
     out
+}
+
+/// A workspace (or `S`) whose ranma's workspaces are drawn after it.
+struct Holder<'a> {
+    label: &'a str,
+    /// Its number, 0 for the scratchpad: where a click on it goes.
+    n: u8,
+    /// The current one of its set.
+    cur: bool,
+    /// On the path: current, in a set that is.
+    here: bool,
+}
+
+/// A holder expanded: its label, then the workspaces of the ranma inside it
+/// (`n`) in brackets.
+fn expanded(out: &mut Segment, at: &Holder, n: &Report, level: usize, o: &Opts, path: &[u8]) {
+    let pad = level == 0;
+    let mut p = path.to_vec();
+    p.push(at.n);
+    let hold = click_for(&p);
+    let sess = if n.sessions > 1 {
+        format!(":{}", n.session)
+    } else {
+        String::new()
+    };
+    let label = at.label;
+    if pad {
+        let style = if at.cur {
+            Style::WsActive
+        } else {
+            Style::WsOccupied
+        };
+        out.push(with(Piece::new(format!(" {label}{sess} "), style), hold));
+    } else {
+        let style = if at.here {
+            Style::WsHolder
+        } else {
+            Style::WsOccupied
+        };
+        out.push(with(Piece::new(format!("{label}{sess}"), style), hold));
+        out.push(Piece::new(" ", Style::Normal));
+    }
+    out.push(with(Piece::new("[", Style::Dim), hold));
+    out.extend(pieces(n, level + 1, at.here, o, &p));
+    out.push(with(Piece::new("]", Style::Dim), hold));
+    if pad {
+        out.push(Piece::new(" ", Style::Normal));
+    }
 }
 
 fn with(p: Piece, c: Option<Click>) -> Piece {
@@ -414,6 +490,7 @@ pub fn expands(set: &Report, expand_all: bool) -> bool {
     set.ws
         .iter()
         .any(|w| w.nest.is_some() && (expand_all || w.n == set.current))
+        || (set.scratch_nest.is_some() && (expand_all || set.scratch_shown))
 }
 
 /// The bar with nested workspaces: the left side is `before`, the workspaces
@@ -493,7 +570,7 @@ pub fn label(r: &Report, host: &str, step: usize, pane: PaneId) -> Segment {
         out.push(Piece::new(format!(" {} ", r.mode.to_uppercase()), Style::Mode).on_click(focus));
         out.push(Piece::new(" ", Style::Normal));
     }
-    let any_urgent = r.ws.iter().any(urgent_ws);
+    let any_urgent = r.any_urgent();
     let host_style = if k >= 5 && any_urgent {
         Style::WsUrgent
     } else {
@@ -540,13 +617,22 @@ pub fn label(r: &Report, host: &str, step: usize, pane: PaneId) -> Segment {
     }
     // Shown, the scratchpad is where that ranma is: it stays as the current
     // workspace would.
-    if r.scratch && (k < 3 || (r.scratch_shown && k < 5)) {
-        let style = if r.scratch_shown {
+    let scratch_urgent = r.scratch_nest.as_ref().is_some_and(|n| n.any_urgent());
+    if r.scratch && (k < 3 || ((r.scratch_shown || scratch_urgent) && k < 5)) {
+        let style = if scratch_urgent {
+            Style::WsUrgent
+        } else if r.scratch_shown {
             Style::WsHolder
         } else {
             Style::Dim
         };
-        items.push(vec![Piece::new("S", style).on_click(go(0))]);
+        let mut it = vec![Piece::new("S", style).on_click(go(0))];
+        if k < 1
+            && let Some(c) = r.scratch_nest.as_deref().and_then(in_use)
+        {
+            it.push(Piece::new(format!("[{c}]"), Style::Dim).on_click(go(0)));
+        }
+        items.push(it);
     }
     if items.is_empty() {
         return out;
@@ -658,6 +744,7 @@ mod tests {
             scratch: false,
             scratch_shown: false,
             scratch_key: None,
+            scratch_nest: None,
             mode: "normal".into(),
             status: None,
             outer_leader: Some("ctrl+alt+b".into()),
@@ -1208,5 +1295,100 @@ mod tests {
         );
         assert_eq!(text(&label(&idle, "pc", 0, PANE)), "pc [1:zsh]");
         assert_eq!(text(&label(&report(9, vec![]), "pc", 0, PANE)), "pc");
+    }
+
+    /// An outer on `1:zsh` with a ranma reached by ssh from its scratchpad
+    /// (`1:claude 2:zsh`).
+    fn ssh_in_scratchpad(shown: bool) -> Report {
+        let mut r = report(if shown { 0 } else { 1 }, vec![ws(1, "zsh")]);
+        r.scratch = true;
+        r.scratch_shown = shown;
+        r.scratch_nest = Some(Box::new(report(1, vec![ws(1, "claude"), ws(2, "zsh")])));
+        r
+    }
+
+    /// The scratchpad holds a ranma like a workspace does: shown, `S`
+    /// expands and the ranma there is on the path; hidden, it collapses
+    /// to a count.
+    #[test]
+    fn a_ranma_in_the_scratchpad_expands_its_s() {
+        let shown = ssh_in_scratchpad(true);
+        assert!(expands(&shown, false));
+        assert_eq!(
+            text(&pieces(&shown, 0, true, &Opts::default(), &[])),
+            " 1:zsh  S [1:claude 2:zsh] "
+        );
+        assert_eq!(shown.on_path().map(|r| r.ws.len()), Some(2));
+
+        let hidden = ssh_in_scratchpad(false);
+        assert!(!expands(&hidden, false));
+        assert!(expands(&hidden, true), "nested = all expands it anyway");
+        assert!(hidden.on_path().is_none());
+        assert_eq!(
+            text(&pieces(&hidden, 0, true, &Opts::default(), &[])),
+            " 1:zsh  S[2] "
+        );
+    }
+
+    /// A click inside an expanded `S` reaches that ranma through the
+    /// scratchpad, holder 0; `S` itself still toggles it.
+    #[test]
+    fn clicks_in_an_expanded_s_go_through_the_scratchpad() {
+        let set = ssh_in_scratchpad(true);
+        let seg = pieces(&set, 0, true, &Opts::default(), &[]);
+        let click = |t: &str| seg.iter().find(|p| p.text == t).and_then(|p| p.click);
+        assert_eq!(
+            click("2:zsh"),
+            Some(Click::Nested {
+                holder: 0,
+                depth: 1,
+                path: [2, 0, 0, 0],
+            })
+        );
+        assert_eq!(click(" S "), Some(Click::Workspace(0)));
+    }
+
+    /// One level further in, the inner scratchpad's ranma is on the path
+    /// too, and its urgency reaches a collapsed `S`.
+    #[test]
+    fn a_ranma_in_an_inner_scratchpad_is_on_the_path() {
+        let mut inner = ssh_in_scratchpad(true);
+        let mut outer = report(2, vec![ws(1, "zsh"), ws(2, "ssh")]);
+        outer.ws[1].nest = Some(Box::new(inner.clone()));
+        assert_eq!(
+            text(&pieces(&outer, 0, true, &Opts::default(), &[])),
+            " 1:zsh  2 [1:zsh S [1:claude 2:zsh]] "
+        );
+        inner.scratch_shown = false;
+        inner.current = 1;
+        inner.scratch_nest.as_mut().unwrap().ws[1].urgent = true;
+        let s = pieces(&inner, 1, true, &Opts::default(), &[2])
+            .into_iter()
+            .find(|p| p.text == "S")
+            .map(|p| p.style);
+        assert_eq!(s, Some(Style::WsUrgent));
+    }
+
+    /// The compact label counts the scratchpad's ranma as it counts a
+    /// workspace's, and marks it urgent.
+    #[test]
+    fn the_label_counts_a_ranma_in_the_scratchpad() {
+        let mut r = ssh_in_scratchpad(false);
+        assert_eq!(text(&label(&r, "pc", 0, PANE)), "pc [1:zsh S[2]]");
+        assert_eq!(text(&label(&r, "pc", 1, PANE)), "pc [1:zsh S]");
+        r.scratch_nest.as_mut().unwrap().ws[0].urgent = true;
+        assert_eq!(text(&label(&r, "pc", 3, PANE)), "pc [1:zsh S]");
+    }
+
+    /// An outer that predates the field reads the report as before.
+    #[test]
+    fn a_report_without_scratch_nest_still_parses() {
+        let mut r = ssh_in_scratchpad(true);
+        r.scratch_nest = None;
+        let json = serde_json::to_string(&r)
+            .unwrap()
+            .replace(",\"scratch_nest\":null", "");
+        assert!(!json.contains("scratch_nest"));
+        assert_eq!(Report::parse(&json), Some(r));
     }
 }
