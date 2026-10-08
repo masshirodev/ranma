@@ -43,8 +43,17 @@ impl Behind {
     }
 }
 
+/// Variables that point git at a repository other than `-C`'s. Git sets them
+/// for its hooks (a push from a worktree carries GIT_DIR), so anything run
+/// from one, the pre-push tests included, would act on the wrong repository.
+const GIT_REDIRECTS: [&str; 3] = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"];
+
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
+    let mut cmd = Command::new("git");
+    for v in GIT_REDIRECTS {
+        cmd.env_remove(v);
+    }
+    let out = cmd
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -172,7 +181,11 @@ mod tests {
     use super::*;
 
     fn run(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let mut cmd = Command::new("git");
+        for v in GIT_REDIRECTS {
+            cmd.env_remove(v);
+        }
+        let ok = cmd
             .arg("-C")
             .arg(dir)
             .args(args)
