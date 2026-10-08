@@ -4267,9 +4267,9 @@ mod tests {
         let t = Instant::now();
         a.status = Some("paste_image: no clipboard here".into());
         a.run_timers(t);
-        assert_eq!(
-            a.next_deadline(),
-            Some(t + STATUS_FOR),
+        // Other timers (the bar's clock) may be due sooner; the loop wakes by then.
+        assert!(
+            a.next_deadline().is_some_and(|d| d <= t + STATUS_FOR),
             "the loop wakes for it"
         );
         a.run_timers(t + STATUS_FOR - Duration::from_millis(1));
