@@ -630,6 +630,18 @@ runs on ranma's thread. It scans rightward and keeps the newest hits: scanning
 leftward reports every shorter match that ends inside a longer one. `link_at`
 and `marks` wait for the cards that need them (tooltips and OSC 133 positions).
 
+**Timers and processes** (2026-10-08) live in a table the configuration owns
+(`jobs.rs`). A timer is a deadline in the loop's `next_deadline`, so none set
+means no wakeups. Timers made while loading go into the builder, so a failing
+plugin's go with its copy, and they start when the configuration swaps in. A
+spawned process is read on threads that send events, lines batched 50 ms at a
+time, so a chatty process costs a call per batch, not per line. Job and timer
+ids are one process-wide sequence: a job's exit can arrive after a reload, and
+an id the new configuration reused would reach the wrong callback. Dropping a
+configuration signals its jobs' process groups. `spawn` is refused at load,
+because `--check-config` loads the configuration too. An `every` that errors is
+stopped: at 50 ms, an error a tick would bury the bar.
+
 `pane:watch` is the one primitive that comes close to the PTY path, so it is
 built to stay off it. The regex runs in Rust on completed lines only, matching
 is coalesced into a 100 ms window, a pane with no watchers pays nothing, and the

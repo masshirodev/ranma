@@ -215,7 +215,7 @@ features below the line live outside the repository.
 - [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
 - [ ] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
   `pane_idle`, `hover`, `user:<name>`
-- [ ] Time and processes: `defer`, `every`, `spawn`
+- [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
 - [ ] State: `pane.vars`, `workspace.vars`, `ranma.store`
 - [ ] Keys: which-key groups, user modes, user commands
 - [ ] Drawing: `picker`, `panel`, `tooltip`, `badge`

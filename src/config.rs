@@ -650,6 +650,8 @@ pub struct Runtime {
 pub enum Op {
     Action(Action),
     Pane(crate::layout::PaneId, crate::luapane::PaneRequest),
+    Spawn(u64, crate::jobs::SpawnSpec),
+    Kill(u64),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -670,6 +672,8 @@ struct Builder {
     toolbars: Vec<(String, ToolbarDef)>,
     toolbars_shown: Vec<String>,
     layouts: std::collections::BTreeMap<String, crate::layouts::Spec>,
+    /// `ranma.defer` and `ranma.every` made while loading, started with it.
+    timers: crate::jobs::PendingTimers,
 }
 
 pub struct Config {
@@ -712,6 +716,8 @@ pub struct Config {
     pub plugins: Vec<PluginLoad>,
     /// Stops a Lua call that runs too long; armed by every call into `lua`.
     pub watchdog: Watchdog,
+    /// Its timers and the processes it spawned (`crate::jobs`).
+    pub jobs: crate::jobs::Jobs,
     /// Owns every Lua function referenced by `binds` and `hooks`.
     pub lua: Lua,
 }
@@ -923,7 +929,7 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
     }
 }
 
-fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
+fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -> mlua::Result<()> {
     let ranma = lua.create_table()?;
     ranma.set("version", env!("CARGO_PKG_VERSION"))?;
     if let Some(dir) = config_dir {
@@ -1466,6 +1472,15 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>) -> mlua::Result<()> {
     )?;
 
     crate::luapane::install(lua, &ranma)?;
+    crate::jobs::install(lua, &ranma, jobs, |lua, f| {
+        match lua.app_data_mut::<Builder>() {
+            Some(mut b) => {
+                f(&mut b.timers);
+                true
+            }
+            None => false,
+        }
+    })?;
     lua.globals().set("ranma", ranma)
 }
 
@@ -1492,9 +1507,10 @@ pub fn load_from(
     let lua = Lua::new();
     lua.set_app_data(Builder::default());
     let watchdog = Watchdog::default();
+    let jobs = crate::jobs::Jobs::default();
     // mlua's error is not Send without its `send` feature, so it cannot go through
     // anyhow's `.context` directly; its Display is all we need from it anyway.
-    install_api(&lua, config_dir)
+    install_api(&lua, config_dir, &jobs)
         .and_then(|()| watchdog.install(&lua))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("installing the ranma Lua API")?;
@@ -1589,6 +1605,7 @@ pub fn load_from(
         }
     }
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
+    jobs.adopt(std::mem::take(&mut builder.timers));
 
     Ok(Config {
         base: (
@@ -1616,6 +1633,7 @@ pub fn load_from(
         source: user_file,
         plugins,
         watchdog,
+        jobs,
         lua,
     })
 }
@@ -2609,5 +2627,46 @@ mod tests {
         assert!(r.is_err(), "a coroutine inherits the hook");
         // Disarmed after a run: quick code afterwards is untouched.
         assert!(cfg.lua.load("for i = 1, 1e6 do end").exec().is_ok());
+    }
+
+    #[test]
+    fn timers_made_at_load_start_with_the_config_and_go_with_a_failing_plugin() {
+        let dir = config_tree(
+            "timers",
+            &[
+                (
+                    "plugin/a_bad.lua",
+                    "ranma.every(100, function() end)\nerror('x')",
+                ),
+                ("plugin/b_ok.lua", "ranma.defer(10, function() end)"),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(
+            cfg.jobs.timer_count(),
+            1,
+            "the failed plugin's timer went with it"
+        );
+        let err = |src: &str| with_user(src).unwrap_err().to_string();
+        assert!(err("ranma.every(10, function() end)").contains("too often"));
+        assert!(err("ranma.defer(-1, function() end)").contains("0 or more"));
+        assert!(err("ranma.spawn('true')").contains("not at config load"));
+    }
+
+    #[test]
+    fn spawn_options_are_strict() {
+        let cfg = load_from(None, None, None).unwrap();
+        cfg.lua.set_app_data(Runtime::default());
+        let err = |src: &str| cfg.lua.load(src).exec().unwrap_err().to_string();
+        assert!(err("ranma.spawn('x', { on_exti = print })").contains("unknown option `on_exti`"));
+        assert!(err("ranma.spawn('x', { timeout = 'soon' })").contains("`timeout` must be"));
+        assert!(err("ranma.spawn({})").contains("empty command"));
+        assert!(err("ranma.spawn(3)").contains("string or a list"));
+        cfg.lua
+            .load("ranma.spawn({ 'ls', '-l' }, { cwd = '/' })")
+            .exec()
+            .unwrap();
+        let rt = cfg.lua.remove_app_data::<Runtime>().unwrap();
+        assert!(matches!(&rt.ops[..], [Op::Spawn(_, s)] if s.argv == ["ls", "-l"] && !s.lines));
     }
 }

@@ -820,7 +820,8 @@ their links.
 
 ## Lua at run time
 
-Inside a bind function, a hook, or a module's `render`:
+Inside a bind function, a hook, a module's `render`, a timer, or a
+`spawn` callback:
 
 | Function | Does |
 | --- | --- |
@@ -831,6 +832,8 @@ Inside a bind function, a hook, or a module's `render`:
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
+| `ranma.spawn(cmd, opts)` | Run a process in the background; see [Timers and processes](#timers-and-processes). |
+| `ranma.kill(id)` | Stop a process `spawn` started. |
 | `ranma.pane(id)` | A handle on pane `id`, or on the focused pane when `id` is left out; `nil` if there is none. See [Pane handles](#pane-handles). |
 | `ranma.panes()` | A handle on every pane, in every session, by id. |
 
@@ -897,6 +900,50 @@ ranma.bind("f5", function()
   end
 end, { desc = "last link" })
 ```
+
+## Timers and processes
+
+```lua
+ranma.defer(500, function() ... end)        -- once, in half a second
+local id = ranma.every(60000, function() ... end)   -- every minute
+ranma.cancel(id)
+```
+
+`ranma.defer(ms, fn)` and `ranma.every(ms, fn)` return an id for
+`ranma.cancel(id)`, which says whether there was such a timer. They work in
+`init.lua` and plugins as they load (the timer starts with the configuration)
+and inside any function ranma calls. A timer is only a deadline ranma's loop
+already waits on: none set, no wakeups. `every` takes 50 ms at the least; a
+tick that falls behind is not made up, the next one is an interval from late.
+An `every` whose function errors is stopped, and the bar says so; one error
+per tick would be all the bar ever said. A reload drops every timer with the
+old configuration, and a plugin that fails to load takes its timers with it.
+
+```lua
+ranma.spawn({ "git", "status", "--short" }, {
+  cwd = ranma.pane():cwd(),
+  on_exit = function(r)
+    if r.code == 0 then ranma.toast(r.stdout) end
+  end,
+})
+```
+
+`ranma.spawn(cmd, opts)` runs a process in the background and returns its id.
+`cmd` is a list of words, run directly, or a string, run by `/bin/sh -c`. Only
+from a bind, hook, module or timer: a config that started processes as it loaded
+would start them on every `--check-config` too.
+
+| Option | |
+| --- | --- |
+| `cwd` | The directory to run in; ranma's own when left out. |
+| `timeout` | Seconds before its whole process group is killed. None when left out: a `tail -f` may run as long as you like. |
+| `on_line` | Called with each line of its stdout as it prints, the lines of 50 ms at a time in one call. |
+| `on_exit` | Called once it ends, with `{ id, code, signal, stdout, stderr, error }`: the exit status, or the signal that ended it; all of stdout unless `on_line` read it; stderr; and why it could not start or that it timed out. stdout and stderr are kept up to 1 MiB each. |
+
+Its stdin is empty, and it runs in a process group of its own. `ranma.kill(id)`
+sends that group SIGTERM, and says whether the job was still running. A reload
+or ranma quitting does the same to every job the old configuration started,
+since nothing would hear them end. 64 may run at once.
 
 ## Toolbars — `ranma.toolbar(name, def)`
 

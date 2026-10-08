@@ -1158,6 +1158,7 @@ impl App {
             AppEvent::Input(ev) => self.handle_input(ev),
             AppEvent::InputClosed => self.quit = true,
             AppEvent::Pane(id, ev) => self.handle_pane_event(id, ev),
+            AppEvent::Job { id, event } => self.job_event(id, event),
             AppEvent::Module {
                 name,
                 generation,
@@ -2529,6 +2530,10 @@ impl App {
                                 self.status = Some(format!("lua: {e}"));
                             }
                         }
+                        config::Op::Spawn(id, spec) => {
+                            self.config.jobs.start(id, spec, self.tx.clone())
+                        }
+                        config::Op::Kill(id) => self.config.jobs.kill(id),
                     }
                 }
                 self.lua_depth -= 1;
@@ -2536,6 +2541,63 @@ impl App {
         }
         self.dirty = true;
         out
+    }
+
+    /// `ranma.defer` and `ranma.every` timers that came due. A repeating
+    /// timer whose function fails is stopped: at its rate, an error each
+    /// tick would be all the bar ever said.
+    fn run_lua_timers(&mut self, now: Instant) {
+        for due in self.config.jobs.take_due(now) {
+            let Ok(f) = self.config.lua.registry_value::<Function>(&due.f) else {
+                continue;
+            };
+            if self.call_lua(|_| f.call::<()>(())).is_none() && due.repeating {
+                self.config.jobs.cancel(due.id);
+                let why = self.status.take().unwrap_or_default();
+                self.status = Some(format!("{why} (timer {} stopped)", due.id));
+            }
+        }
+    }
+
+    /// What a spawned process did: its lines to `on_line`, one call for the
+    /// batch, and its end to `on_exit`. A job from before a reload is
+    /// unknown to this configuration, and dropped.
+    fn job_event(&mut self, id: u64, event: crate::jobs::JobEvent) {
+        use crate::jobs::JobEvent;
+        match event {
+            JobEvent::Lines(lines) => {
+                let Some(key) = self.config.jobs.on_line(id) else {
+                    return;
+                };
+                let Ok(f) = self.config.lua.registry_value::<Function>(&key) else {
+                    return;
+                };
+                self.call_lua(|_| {
+                    for line in lines {
+                        f.call::<()>(line)?;
+                    }
+                    Ok(())
+                });
+            }
+            JobEvent::Exit(exit) => {
+                let Some(Some(key)) = self.config.jobs.finish(id) else {
+                    return;
+                };
+                let Ok(f) = self.config.lua.registry_value::<Function>(&key) else {
+                    return;
+                };
+                self.call_lua(|lua| {
+                    let t = lua.create_table()?;
+                    t.set("id", id)?;
+                    t.set("code", exit.code)?;
+                    t.set("signal", exit.signal)?;
+                    t.set("stdout", exit.stdout)?;
+                    t.set("stderr", exit.stderr)?;
+                    t.set("error", exit.error)?;
+                    f.call::<()>(t)
+                });
+            }
+        }
     }
 
     /// Call every hook for `event` with a payload table filled in by `fill`.
@@ -2610,6 +2672,7 @@ impl App {
             .chain(self.status_seen.as_ref().map(|(_, at)| *at + STATUS_FOR))
             .chain(self.hint_due)
             .chain(self.press_due())
+            .chain(self.config.jobs.next_due())
             .min()
     }
 
@@ -2808,6 +2871,7 @@ impl App {
 
     fn run_timers(&mut self, now: Instant) {
         self.expire_press(now);
+        self.run_lua_timers(now);
         if self.hint_due.is_some_and(|t| t <= now) {
             self.hint_due = None;
             self.hint_on = self.mode == Mode::Wm;
@@ -4543,5 +4607,57 @@ mod tests {
         let mut a = app(Some("ranma.set { title_host = 'never' }"));
         a.client_remote = true;
         assert_eq!(title(&mut a), crate::pane::NESTED_MARKER);
+    }
+
+    #[test]
+    fn timers_fire_and_a_failing_repeating_one_stops() {
+        let mut a = app(Some(
+            r#"
+            ranma.defer(0, function() ranma.notify("deferred") end)
+            local dropped = ranma.defer(0, function() ranma.notify("cancelled ran") end)
+            ranma.cancel(dropped)
+            "#,
+        ));
+        a.run_timers(Instant::now() + Duration::from_millis(1));
+        assert_eq!(a.status.as_deref(), Some("deferred"));
+        assert_eq!(a.config.jobs.next_due(), None, "a deferred timer runs once");
+
+        let mut a = app(Some(r#"ranma.every(50, function() error("broken") end)"#));
+        a.run_timers(Instant::now() + Duration::from_millis(60));
+        let status = a.status.clone().unwrap();
+        assert!(
+            status.contains("broken") && status.contains("stopped"),
+            "{status}"
+        );
+        assert_eq!(a.config.jobs.next_due(), None);
+    }
+
+    #[test]
+    fn a_spawned_process_calls_back_with_its_lines_and_its_end() {
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        a.call_lua(|lua| {
+            lua.load(
+                r#"
+                got = {}
+                ranma.spawn({ "sh", "-c", "echo one; echo two; exit 4" }, {
+                  on_line = function(l) table.insert(got, l) end,
+                  on_exit = function(r)
+                    ranma.notify(table.concat(got, ",") .. " exit " .. r.code)
+                  end,
+                })
+                "#,
+            )
+            .exec()
+        })
+        .unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        while a.status.as_deref().is_none_or(|s| !s.contains("exit")) && Instant::now() < until {
+            if let Ok(ev) = rx.recv_timeout(Duration::from_millis(100)) {
+                a.handle(ev);
+            }
+        }
+        assert_eq!(a.status.as_deref(), Some("one,two exit 4"));
     }
 }

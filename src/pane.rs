@@ -34,6 +34,11 @@ pub enum AppEvent {
         generation: u64,
         text: Result<String, String>,
     },
+    /// A process `ranma.spawn` started printed lines or ended (`jobs`).
+    Job {
+        id: u64,
+        event: crate::jobs::JobEvent,
+    },
     /// Something in the config directory changed on disk.
     ConfigChanged,
     /// A toast from `ranma notify` (see `ipc`).
