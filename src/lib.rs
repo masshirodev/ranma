@@ -31,6 +31,7 @@ pub mod proto;
 pub mod pty;
 pub mod render;
 pub mod restore;
+pub mod screen;
 pub mod settings;
 pub mod snapshot;
 pub mod splash;

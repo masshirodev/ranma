@@ -40,16 +40,17 @@ pub struct Cell {
     pub fade: f32,
 }
 
+/// How a cell is drawn: what a `put` changes (`None` keeps the cell's colour).
 #[derive(Debug, Clone, Copy, Default)]
-struct St {
-    fg: Option<Paint>,
-    bg: Option<Paint>,
-    b: bool,
-    u: bool,
-    f: f32,
+pub(crate) struct St {
+    pub(crate) fg: Option<Paint>,
+    pub(crate) bg: Option<Paint>,
+    pub(crate) b: bool,
+    pub(crate) u: bool,
+    pub(crate) f: f32,
 }
 
-fn st(fg: &'static str) -> St {
+pub(crate) fn st(fg: &'static str) -> St {
     St {
         fg: Some(Paint::Role(fg)),
         ..St::default()
@@ -57,15 +58,15 @@ fn st(fg: &'static str) -> St {
 }
 
 impl St {
-    fn bg(mut self, bg: &'static str) -> St {
+    pub(crate) fn bg(mut self, bg: &'static str) -> St {
         self.bg = Some(Paint::Role(bg));
         self
     }
-    fn bold(mut self) -> St {
+    pub(crate) fn bold(mut self) -> St {
         self.b = true;
         self
     }
-    fn fade(mut self, f: f32) -> St {
+    pub(crate) fn fade(mut self, f: f32) -> St {
         self.f = f;
         self
     }
@@ -78,6 +79,8 @@ pub struct Grid {
     pub w: u16,
     pub h: u16,
     pub cells: Vec<Option<Cell>>,
+    /// While set, only cells inside it are drawn: (x, y, w, h).
+    pub(crate) clip: Option<(i32, i32, i32, i32)>,
 }
 
 impl Grid {
@@ -86,6 +89,7 @@ impl Grid {
             w,
             h,
             cells: vec![None; w as usize * h as usize],
+            clip: None,
         }
     }
 
@@ -95,8 +99,13 @@ impl Grid {
             .as_ref()
     }
 
-    fn set(&mut self, x: i32, y: i32, ch: char, s: St) {
+    pub(crate) fn set(&mut self, x: i32, y: i32, ch: char, s: St) {
         if x < 0 || y < 0 || x >= self.w as i32 || y >= self.h as i32 {
+            return;
+        }
+        if let Some((cx, cy, cw, ch_)) = self.clip
+            && (x < cx || x >= cx + cw || y < cy || y >= cy + ch_)
+        {
             return;
         }
         let i = y as usize * self.w as usize + x as usize;
@@ -120,7 +129,7 @@ impl Grid {
         c.fade = s.f;
     }
 
-    fn put(&mut self, x: i32, y: i32, s: &str, st: St) -> i32 {
+    pub(crate) fn put(&mut self, x: i32, y: i32, s: &str, st: St) -> i32 {
         let mut x = x;
         for ch in s.chars() {
             self.set(x, y, ch, st);
@@ -129,7 +138,7 @@ impl Grid {
         x
     }
 
-    fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, s: St) {
+    pub(crate) fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, s: St) {
         for yy in y..y + h {
             for xx in x..x + w {
                 self.set(xx, yy, ' ', s);
@@ -137,7 +146,7 @@ impl Grid {
         }
     }
 
-    fn boxed(&mut self, x: i32, y: i32, w: i32, h: i32, b: &Lines, s: St) {
+    pub(crate) fn boxed(&mut self, x: i32, y: i32, w: i32, h: i32, b: &Lines, s: St) {
         for i in 1..w - 1 {
             self.set(x + i, y, b.h, s);
             self.set(x + i, y + h - 1, b.h, s);
@@ -163,17 +172,17 @@ impl Grid {
 /// A border's characters, with the joints the panel's rules need.
 #[derive(Debug, Clone, Copy)]
 pub struct Lines {
-    tl: char,
-    tr: char,
-    bl: char,
-    br: char,
-    h: char,
-    v: char,
-    lt: char,
-    rt: char,
-    tt: char,
-    bt: char,
-    x: char,
+    pub(crate) tl: char,
+    pub(crate) tr: char,
+    pub(crate) bl: char,
+    pub(crate) br: char,
+    pub(crate) h: char,
+    pub(crate) v: char,
+    pub(crate) lt: char,
+    pub(crate) rt: char,
+    pub(crate) tt: char,
+    pub(crate) bt: char,
+    pub(crate) x: char,
 }
 
 impl Lines {
@@ -226,11 +235,11 @@ impl Lines {
     }
 }
 
-fn len(s: &str) -> i32 {
+pub(crate) fn len(s: &str) -> i32 {
     s.chars().count() as i32
 }
 
-fn trunc(s: &str, n: i32) -> String {
+pub(crate) fn trunc(s: &str, n: i32) -> String {
     let a: Vec<char> = s.chars().collect();
     if a.len() as i32 <= n {
         return s.to_string();
@@ -1826,7 +1835,7 @@ impl Panel {
     }
 }
 
-fn bst_bg(none: bool) -> &'static str {
+pub(crate) fn bst_bg(none: bool) -> &'static str {
     if none { "toast_bg" } else { "bg" }
 }
 

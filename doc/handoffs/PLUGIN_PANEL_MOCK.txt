@@ -1,0 +1,591 @@
+# Plugin screens, tooltips and badges, cell for cell, as this handoff draws them
+# (PLUGIN_PANEL_screen.js, default theme; colour roles are in the script, not here).
+# ranma's tests compare against these. Regenerate only from a new handoff.
+## agents · 80×24 · rounded
+╭ 1 api ─ ? waiting ────────────────╭─ agents ──────────────────── 2 need you ─╮
+│> the api returns 503 under load; r│ / filter                        5 agents │
+│                                   ├──────────────────────────────────────────┤
+│● Reading src/client.rs            │ Needs you ──────────────────────────── 2 │
+│● The client gives up on the first │ › api · claude                     ? 12m │
+│  I'll retry with backoff, at most │   infra · gemini                ✗ exit 1 │
+│                                   │ Working ────────────────────────────── 2 │
+│  ⎿ Edit src/handler.rs  +14 −3    │   web · codex                       ● 4m │
+│                                   │   ranma · claude                   ● 31m │
+│Do you want to proceed?            │ Done ───────────────────────────────── 1 │
+│❯ 1. Yes                           │   docs · aider                  ✓ 2m ago │
+│  2. Yes, and don't ask again      │                                          │
+│  3. No, tell it what to do        │                                          │
+│                                   │                                          │
+│                                   │                                          │
+│                                   ├──────────────────────────────────────────┤
+│                                   │   ⎿ Edit src/handler.rs  +14 −3          │
+│                                   │ Do you want to proceed?                  │
+│                                   │ ❯ 1. Yes                                 │
+│                                   │ ws 1:code · pane 1 · ~/src/api           │
+│                                   ├──────────────────────────────────────────┤
+│                                   │ enter jump  a answer  x stop  ? keys     │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## agents · 80×24 · ? keys · rounded
+╭ 1 api ─ ? waiting ────────────────╭─ agents ──────────────────── 2 need you ─╮
+│> the api returns 503 under load; r│ / filter                        5 agents │
+│                                   ├─╭─ keys ───────────────────────────────╮─┤
+│● Reading src/client.rs            │ │ enter    jump to its pane            │ │
+│● The client gives up on the first │ │ a        answer it           waiting │ │
+│  I'll retry with backoff, at most │ │ x        stop it: ctrl+c     working │ │
+│                                   │ │ r        run it again         failed │ │
+│  ⎿ Edit src/handler.rs  +14 −3    │ │ d        dismiss               ended │ │
+│                                   │ │ ranma ────────────────────────────── │ │
+│Do you want to proceed?            │ │ ↑↓ j k   move                        │ │
+│❯ 1. Yes                           │ │ tab      next group                  │ │
+│  2. Yes, and don't ask again      │ │ /        filter by name              │ │
+│  3. No, tell it what to do        │ │ space    peek at the panes           │ │
+│                                   │ │ o        agents options              │ │
+│                                   │ │ esc      close                       │ │
+│                                   ├─╰─ any key ────────────────────────────╯─┤
+│                                   │   ⎿ Edit src/handler.rs  +14 −3          │
+│                                   │ Do you want to proceed?                  │
+│                                   │ ❯ 1. Yes                                 │
+│                                   │ ws 1:code · pane 1 · ~/src/api           │
+│                                   ├──────────────────────────────────────────┤
+│                                   │ enter jump  a answer  x stop  ? keys     │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## agents · 80×24 · space: peek · rounded
+╭ 1 api ─ ? waiting ───────────────────╮╭ 2 nvim ──────────────────────────────╮
+│> the api returns 503 under load; retr││  1 //! Layouts: a tree of splits.    │
+│                                      ││  2                                   │
+│● Reading src/client.rs               ││  3 use crate::pane::PaneId;          │
+│● The client gives up on the first 503││  4                                   │
+│  I'll retry with backoff, at most 3 t││  5 pub fn dwindle(area: Rect, n: usiz│
+│                                      ││  6     let mut out = Vec::new();     │
+│  ⎿ Edit src/handler.rs  +14 −3       ││  7     let mut rest = area;          │
+│                                      ││  8     for i in 0..n {               │
+│Do you want to proceed?               ││ NORMAL  layout.rs                    │
+│❯ 1. Yes                              │╰──────────────────────────────────────╯
+│  2. Yes, and don't ask again         │╭ 3 web ─ ● working ───────────────────╮
+│  3. No, tell it what to do           ││> port the settings form to the new ap│
+│                                      ││                                      │
+│                                      ││• Updated src/settings/form.tsx       │
+│                                      ││• Running npm test -- settings        │
+│                                      ││  PASS form.test.tsx (12)             │
+│                                      ││  RUNS api.test.tsx                   │
+│                                      ││                                      │
+│                                      ││                                      │
+╭─ agents · peek ───────────────────────────────────────────────── 2 need you ─╮
+│ › api · claude              1:code  ~/src/api                          ? 12m │
+╰──────────────────────────────────────── space back · enter jump · esc close ─╯
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## agents · 200×50 · rounded
+╭ 1 api ─ ? waiting ────────────────────────────────────────────────────────────────────────────────────╭─ agents ─────────────┬────────────────────────────────────────────────────────── 2 need you ─╮
+│> the api returns 503 under load; retry it                                                             │ Groups               │ / filter                                                     5 agents │
+│                                                                                                       ├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│● Reading src/client.rs                                                                                │ › Needs you        2 │ Needs you ───────────────────────────────────────────────────────── 2 │
+│● The client gives up on the first 503.                                                                │   Working          2 │ › api · claude              1:code  ~/src/api                   ? 12m │
+│  I'll retry with backoff, at most 3 times.                                                            │   Done             1 │   infra · gemini            3  ~/src/infra                   ✗ exit 1 │
+│                                                                                                       │                      │ Working ─────────────────────────────────────────────────────────── 2 │
+│  ⎿ Edit src/handler.rs  +14 −3                                                                        │                      │   web · codex               1:code  ~/src/web                    ● 4m │
+│                                                                                                       │                      │   ranma · claude            2:web  ~/src/ranma                  ● 31m │
+│Do you want to proceed?                                                                                │                      │ Done ────────────────────────────────────────────────────────────── 1 │
+│❯ 1. Yes                                                                                               │                      │   docs · aider              2:web  ~/src/docs                ✓ 2m ago │
+│  2. Yes, and don't ask again                                                                          │                      │                                                                       │
+│  3. No, tell it what to do                                                                            │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       │                      │                                                                       │
+│                                                                                                       ├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│                                                                                                       │                        ● The client gives up on the first 503.                               │
+│                                                                                                       │                          I'll retry with backoff, at most 3 times.                           │
+│                                                                                                       │                          ⎿ Edit src/handler.rs  +14 −3                                       │
+│                                                                                                       │                        Do you want to proceed?                                               │
+│                                                                                                       │                        ❯ 1. Yes                                                              │
+│                                                                                                       │                          2. Yes, and don't ask again                                         │
+│                                                                                                       │                          3. No, tell it what to do                                           │
+│                                                                                                       │                        ws 1:code · pane 1 · ~/src/api · waiting 12m                          │
+│                                                                                                       ├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                       │                        enter jump  a answer  x stop  / filter  tab next group  ? keys        │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╰────────────────────────────────────────────────────────────────────── o options · esc close ─╯
+ AGENTS    1:code  2:web  3                                                                                                                                                     cpu 12%  mem 41%  16:36
+## agents · nested ranma, 40×15 · rounded
+╭─ agents ──────────────── 2 need you ─╮
+│ / filter                    5 agents │
+├──────────────────────────────────────┤
+│ Needs you ──────────────────────── 2 │
+│ › api · claude                 ? 12m │
+│   infra · gemini            ✗ exit 1 │
+│ Working ────────────────────────── 2 │
+│   web · codex                   ● 4m │
+│   ranma · claude               ● 31m │
+│ Done ───────────────────────────── 1 │
+│   docs · aider              ✓ 2m ago │
+├──────────────────────────────────────┤
+│ enter jump  a answer  x stop  ? keys │
+╰────────────── o options · esc close ─╯
+ AGENTS    1:code  2  3           16:36
+## history · 80×24 · rounded
+╭ 3 cargo ──────────────────────────╭─ history ────────────────────────────────╮
+│test paste::upload ... ok          │ / panic                        5 matches │
+│test toast::stack ... ok           ├──────────────────────────────────────────┤
+│thread 'main' panicked at src/layou│ 3 cargo scrollback ─────────────────── 5 │
+│attempt to subtract with overflow  │ › thread 'main' panicked at src/…  −1204 │
+│note: run with `RUST_BACKTRACE=1` e│   thread 'picker::filter' panicke…  −940 │
+│test layout::master ... FAILED     │   note: panic = "abort" in this p…  −611 │
+│                                   │   thread 'tokio-rt' panicked at s…  −388 │
+│failures:                          │   error: test failed (2 panics)      −12 │
+│    layout::master                 │                                          │
+│                                   │                                          │
+│test result: FAILED. 41 passed; 1 f│                                          │
+│error: test failed, to rerun pass `│                                          │
+│$ █                                ├──────────────────────────────────────────┤
+│                                   │ −1206  test paste::upload ... ok         │
+│                                   │ −1205  test toast::stack ... ok          │
+│                                   │ −1204  thread 'main' panicked at src/lay │
+│                                   │ −1203  attempt to subtract with overflow │
+│                                   │ −1202  note: run with `RUST_BACKTRACE=1` │
+│                                   │ pane 3 cargo · line −1204 · 1 of 5       │
+│                                   ├──────────────────────────────────────────┤
+│                                   │ enter jump  y copy  c copy mode  ? keys  │
+╰───────────────────────────────────╰────────────────────────────── esc close ─╯
+ HIST    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## media player · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ media ──────────────────────── playing ─╮
+│  1 //! Layouts: a tree of splits. │ spotify                   1 of 2 players │
+│  2                                ├──────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;       │ Now playing ──────────────────────────── │
+│  4                                │   Weightless                             │
+│  5 pub fn dwindle(area: Rect, n: u│   Marconi Union · Weightless (Ambient …  │
+│  6     let mut out = Vec::new();  │                                          │
+│  7     let mut rest = area;       │   1:42 ━━━━━━●───────────────────── 8:09 │
+│  8     for i in 0..n {            │                                          │
+│  9         if i + 1 == n {        │ Player ─────────────────────────────── 4 │
+│ 10             out.push(rest);    │ › Volume                ━━━━●──  ‹ 60% › │
+│ 11             break;             │   Player                     ‹ spotify › │
+│ 12         }                      │   Shuffle                        [ off ] │
+│ 13         let (a, b) = split(rest│   Repeat                        ‹ none › │
+│ 14         out.push(a);           │                                          │
+│ 15         rest = b;              │                                          │
+│ 16     }                          │                                          │
+│ 17     out                        │                                          │
+│ 18 }                              │                                          │
+│ 19                                │                                          │
+│ 20 pub fn master(area: Rect, n: us├──────────────────────────────────────────┤
+│ NORMAL  layout.rs                 │ ←→ step  space pause  n next  ? keys     │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ MEDIA    1:code  2:web  3                              cpu 12%  mem 41%  16:36
+## dashboard · 80×24 · nothing to select · rounded
+╭ 1 nvim ───────────────────────────╭─ build ──────────────────────── running ─╮
+│  1 //! Layouts: a tree of splits. │ cargo build --release          pid 48211 │
+│  2                                ├──────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;       │ Job ──────────────────────────────────── │
+│  4                                │   state running · elapsed 1:24 · jobs 8  │
+│  5 pub fn dwindle(area: Rect, n: u│   crates ━━━━━━━━━━━━━━━●─────── 212/318 │
+│  6     let mut out = Vec::new();  │ Output ──────────────────────── 6 of 412 │
+│  7     let mut rest = area;       │   Compiling serde v1.0.210               │
+│  8     for i in 0..n {            │   Compiling mlua v0.9.9                  │
+│  9         if i + 1 == n {        │   Compiling alacritty_terminal v0.24.1   │
+│ 10             out.push(rest);    │   Compiling ratatui v0.29.0              │
+│ 11             break;             │   warning: unused variable: `rest`       │
+│ 12         }                      │   Compiling ranma v0.9.0 (~/src/ranma)   │
+│ 13         let (a, b) = split(rest│ Last runs ──────────────────────────── 3 │
+│ 14         out.push(a);           │   release · 2h ago                ✓ 2:31 │
+│ 15         rest = b;              │   release · yesterday             ✗ 0:48 │
+│ 16     }                          │   debug · yesterday               ✓ 0:39 │
+│ 17     out                        │                                          │
+│ 18 }                              │                                          │
+│ 19                                │                                          │
+│ 20 pub fn master(area: Rect, n: us├──────────────────────────────────────────┤
+│ NORMAL  layout.rs                 │ c cancel  r restart  l full log  ? keys  │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ BUILD    1:code  2:web  3                              cpu 12%  mem 41%  16:36
+## agents → o: its options in settings · 80×24 · rounded
+╭ 1 api ─ ? waiting ────────────────╭─ settings ───────────────────────────────╮
+│> the api returns 503 under load; r│ / filter                 4 of 61 options │
+│                                   ├──────────────────────────────────────────┤
+│● Reading src/client.rs            │ agents plugin ──────────────────────── 4 │
+│● The client gives up on the first │ › Notify when waiting             [ on ] │
+│  I'll retry with backoff, at most │   Badge                        ‹ glyph › │
+│                                   │   Idle after •          ━━●────  ‹ 30s › │
+│  ⎿ Edit src/handler.rs  +14 −3    │   Agents          [ "claude codex aid… ] │
+│                                   │                                          │
+│Do you want to proceed?            │                                          │
+│❯ 1. Yes                           │                                          │
+│  2. Yes, and don't ask again      │                                          │
+│  3. No, tell it what to do        │                                          │
+│                                   │                                          │
+│                                   │                                          │
+│                                   │                                          │
+│                                   ├──────────────────────────────────────────┤
+│                                   │ A toast and an urgent badge when an      │
+│                                   │ agent stops to ask something.            │
+│                                   │ default on                               │
+│                                   ├──────────────────────────────────────────┤
+│                                   │ ←→ flip  r default  ? keys               │
+╰───────────────────────────────────╰──────────── w save · esc back to agents ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36
+## tooltip over a link, mid-pane · 80×24 · rounded
+╭ 1 glow README.md ────────────────────────────────────╮╭ 2 zsh ───────────────╮
+│                                                      ││~/src/ranma main      │
+│  ranma                                               ││❯ git log --oneline -6│
+│                                                      ││a3f91c2 plugin: screen│
+│  A tiling window manager that runs inside a          ││7d02e4b picker: headin│
+│  terminal: panes, workspaces, a bar on one row.      ││c11a9e0 theme: toast r│
+│                                                      ││58be7d1 bar: mode chip│
+│  It is extended by plugins written in Lua. See       ││9b2d6f8 doc: plugins i│
+│  the plugin guide for the events they hear           ││0de93b2 toast: urgent │
+│  and ╭──┴───────────────────────────────────────────╮││~/src/ranma main      │
+│      │ https://github.com/mas…doc/CONFIG.md#plugins │││❯ █                   │
+│  Inst│ ctrl+click open  ctrl+b y copy               │││                      │
+│      ╰──────────────────────────────────────────────╯││                      │
+│    ./install.sh                                      ││                      │
+│                                                      ││                      │
+│  It checks the new binary against your config        ││                      │
+│  and restores the previous one if it is refused.     ││                      │
+│                                                      ││                      │
+│                                                      ││                      │
+│                                                      ││                      │
+│                                                      ││                      │
+│                                                      ││                      │
+╰──────────────────────────────────────────────────────╯╰──────────────────────╯
+ 1:code  2:web  3                                       cpu 12%  mem 41%  16:36
+## tooltip at the bottom-right edge: above, pushed left · 80×24 · rounded
+╭ 1 nvim ──────────────────────────────────────────────╮╭ 2 cargo ─────────────╮
+│  1 //! Layouts: a tree of splits.                    ││                      │
+│  2                                                   ││                      │
+│  3 use crate::pane::PaneId;                          ││                      │
+│  4                                                   ││                      │
+│  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> ││                      │
+│  6     let mut out = Vec::new();                     ││                      │
+│  7     let mut rest = area;                          ││                      │
+│  8     for i in 0..n {                               ││                      │
+│  9         if i + 1 == n {                           ││                      │
+│ 10             out.push(rest);                       ││                      │
+│ 11             break;                                ││$ cargo build         │
+│ 12         }                                         ││   Compiling ranma    │
+│ 13         let (a, b) = split(rest, i);              ││error[E0308]:         │
+│ 14         out.push(a);                              ││mismatched types      │
+│ 15         rest = b;                                 ││   |                  │
+│ 16     }                                    ╭────────────────────────────────╮
+│ 17     out                                  │ src/layout.rs, line 88         │
+│ 18 }                                        │ opens in 1 nvim at line 88     │
+│ 19                                          │ ctrl+click open  ctrl+b y copy │
+│ 20 pub fn master(area: Rect, n: usize, ratio╰────────────────────────────┬───╯
+│ NORMAL  layout.rs                                    ││  --> src/layout.rs:88│
+╰──────────────────────────────────────────────────────╯╰──────────────────────╯
+ 1:code  2:web  3                                       cpu 12%  mem 41%  16:36
+## badges · 80×24 · rounded
+╭ 1 nvim ────────────╮╭ 2 api ─ ? waiting ─────────────────╮╭ 3 web ─ ● ───────╮
+│  1 //! Layouts: a t││● The client gives up on the first  ││• Running npm test│
+│  2                 ││  503. I'll retry with backoff.     ││  PASS form (12)  │
+│  3 use crate::pane:││                                    ││  RUNS api        │
+│  4                 ││Do you want to proceed?             ││                  │
+│  5 pub fn dwindle(a││❯ 1. Yes                            ││                  │
+│  6     let mut out ││  2. No, tell it what to do         ││                  │
+│  7     let mut rest││                                    ││                  │
+│  8     for i in 0..││                                    ││                  │
+│  9         if i + 1││                                    ││                  │
+│ NORMAL  layout.rs  ││                                    ││                  │
+╰────────────────────╯╰────────────────────────────────────╯╰──────────────────╯
+╭ 4 docs ─ ✓ done ───╮╭ ⇉ 5 ranma ─ ● working ─ ✗ build ───╮╭ 6 infra ─ ? ─ ✓ ─╮
+│Applied edit to     ││● Running cargo build               ││Apply this plan?  │
+│doc/CONFIG.md       ││  ⎿ error[E0308]: mismatched types  ││❯ Yes             │
+│>                   ││● Reading src/layout.rs             ││  No              │
+│                    ││                                    ││                  │
+│                    ││                                    ││                  │
+│                    ││                                    ││                  │
+│                    ││                                    ││                  │
+│                    ││                                    ││                  │
+│                    ││                                    ││                  │
+╰────────────────────╯╰────────────────────────────────────╯╰──────────────────╯
+ 1:code  2:web  3                                       cpu 12%  mem 41%  16:36
+## badges as a pane narrows · rounded
+
+  44 cells · everything
+  ╭ ⇉ 5 api-gateway ─ ● working ─ ✗ build ───╮
+  │                                          │
+  ╰──────────────────────────────────────────╯
+  36 cells · badge words go; glyphs stay
+  ╭ ⇉ 5 api-gateway ─ ● ─ ✗ ─────────╮
+  │                                  │
+  ╰──────────────────────────────────╯
+  26 cells · the title is cut, to 4 letters at least
+  ╭ ⇉ 5 api-gate… ─ ● ─ ✗ ─╮
+  │                        │
+  ╰────────────────────────╯
+  20 cells · calm badges go: dim, then normal, then accent
+  ╭ ⇉ 5 api-… ─ ✗ ───╮
+  │                  │
+  ╰──────────────────╯
+  14 cells · the title's name goes; its index stays
+  ╭ ⇉ 5 ─ ✗ ───╮
+  │            │
+  ╰────────────╯
+  9 cells · urgent badges go last
+  ╭ ⇉ 5 ──╮
+  │       │
+  ╰───────╯
+  6 cells · only the index
+  ╭ 5 ─╮
+  │    │
+  ╰────╯
+
+## what shrinks: each block by list width · rounded
+
+  69 cells · the 200×50 screen
+
+  heading         Working ─────────────────────────────────────────────────────────── 2
+  row, text       › web · codex               1:code  ~/src/web                    ● 4m
+  row, slider       Volume                                   ━━━━━━━━━━●──────  ‹ 60% ›
+  row, field        Title format •                          [ " {index}[ {program}] " ]
+  text              Pick an agent to jump to its pane; a answers it without leaving the
+                    list.
+  facts             ws 1:code · pane 1 · ~/src/api · waiting 12m
+  progress          1:42 ━━━━━━━━━━━━●──────────────────────────────────────────── 8:09
+  log               Compiling alacritty_terminal v0.24.1
+                    Compiling ranma v0.9.0 (/home/me/src/ranma)
+  separator         ───────────────────────────────────────────────────────────────────
+
+
+  40 cells · the 80×24 screen
+
+  heading         Working ────────────────────────────── 2
+  row, text       › web · codex                       ● 4m
+  row, slider       Volume                ━━━━●──  ‹ 60% ›
+  row, field        Title format •  [ " {index}[ {progr… ]
+  text              Pick an agent to jump to its pane; a
+                    answers it without leaving the list.
+  facts             ws 1:code · pane 1 · ~/src/api
+  progress          1:42 ━━━━━━●───────────────────── 8:09
+  log               Compiling alacritty_terminal v0.24.1
+                    Compiling ranma v0.9.0 (/home/me/src/r
+  separator         ──────────────────────────────────────
+
+
+  36 cells · a nested ranma at 40×15
+
+  heading         Working ────────────────────────── 2
+  row, text       › web · codex                   ● 4m
+  row, slider       Volume              ━━●──  ‹ 60% ›
+  row, field        Title format •  [ " {index}[ {p… ]
+  text              Pick an agent to jump to its pane;
+                    a answers it without leaving the
+                    list.
+  facts             ws 1:code · pane 1 · ~/src/api
+  progress          1:42 ━━━━━●────────────────── 8:09
+  log               Compiling alacritty_terminal v0.24
+                    Compiling ranma v0.9.0 (/home/me/s
+  separator         ──────────────────────────────────
+
+
+  24 cells · narrower than ranma draws, for the record
+
+  heading         Working ────────────── 2
+  row, text       › web · codex       ● 4m
+  row, slider       Volume           ‹60%›
+  row, field        Title format •  [" {…]
+  text              Pick an agent to jump
+                    to its pane; a answers
+                    it without leaving the
+                    list.
+  facts             ws 1:code · pane 1
+  progress          1:42 ━━●───────── 8:09
+  log               Compiling alacritty_te
+                    Compiling ranma v0.9.0
+  separator         ──────────────────────
+
+
+## agents · 80×24 · none
+  1 api   ? waiting                    agents                      2 need you
+ > the api returns 503 under load; r  / filter                        5 agents
+
+ ● Reading src/client.rs              Needs you ──────────────────────────── 2
+ ● The client gives up on the first   › api · claude                     ? 12m
+   I'll retry with backoff, at most     infra · gemini                ✗ exit 1
+                                      Working ────────────────────────────── 2
+   ⎿ Edit src/handler.rs  +14 −3        web · codex                       ● 4m
+                                        ranma · claude                   ● 31m
+ Do you want to proceed?              Done ───────────────────────────────── 1
+ ❯ 1. Yes                               docs · aider                  ✓ 2m ago
+   2. Yes, and don't ask again
+   3. No, tell it what to do
+
+
+
+                                        ⎿ Edit src/handler.rs  +14 −3
+                                      Do you want to proceed?
+                                      ❯ 1. Yes
+                                      ws 1:code · pane 1 · ~/src/api
+
+                                      enter jump  a answer  x stop  ? keys
+                                                        o options · esc close
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## agents · 80×24 · ? keys · none
+  1 api   ? waiting                    agents                      2 need you
+ > the api returns 503 under load; r  / filter                        5 agents
+                                         keys
+ ● Reading src/client.rs                enter    jump to its pane
+ ● The client gives up on the first     a        answer it           waiting
+   I'll retry with backoff, at most     x        stop it: ctrl+c     working
+                                        r        run it again         failed
+   ⎿ Edit src/handler.rs  +14 −3        d        dismiss               ended
+                                        ranma ──────────────────────────────
+ Do you want to proceed?                ↑↓ j k   move
+ ❯ 1. Yes                               tab      next group
+   2. Yes, and don't ask again          /        filter by name
+   3. No, tell it what to do            space    peek at the panes
+                                        o        agents options
+                                        esc      close
+                                         any key
+                                        ⎿ Edit src/handler.rs  +14 −3
+                                      Do you want to proceed?
+                                      ❯ 1. Yes
+                                      ws 1:code · pane 1 · ~/src/api
+
+                                      enter jump  a answer  x stop  ? keys
+                                                        o options · esc close
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## agents · 80×24 · space: peek · none
+  1 api   ? waiting                       2 nvim
+ > the api returns 503 under load; retr    1 //! Layouts: a tree of splits.
+                                           2
+ ● Reading src/client.rs                   3 use crate::pane::PaneId;
+ ● The client gives up on the first 503    4
+   I'll retry with backoff, at most 3 t    5 pub fn dwindle(area: Rect, n: usiz
+                                           6     let mut out = Vec::new();
+   ⎿ Edit src/handler.rs  +14 −3           7     let mut rest = area;
+                                           8     for i in 0..n {
+ Do you want to proceed?                  NORMAL  layout.rs
+ ❯ 1. Yes
+   2. Yes, and don't ask again            3 web   ● working
+   3. No, tell it what to do             > port the settings form to the new ap
+
+                                         • Updated src/settings/form.tsx
+                                         • Running npm test -- settings
+                                           PASS form.test.tsx (12)
+                                           RUNS api.test.tsx
+
+
+   agents · peek                                                   2 need you
+  › api · claude              1:code  ~/src/api                          ? 12m
+                                          space back · enter jump · esc close
+ AGENTS    1:code  2:web  3                             cpu 12%  mem 41%  16:36
+## history · 80×24 · none
+  3 cargo                              history
+ test paste::upload ... ok            / panic                        5 matches
+ test toast::stack ... ok
+ thread 'main' panicked at src/layou  3 cargo scrollback ─────────────────── 5
+ attempt to subtract with overflow    › thread 'main' panicked at src/…  −1204
+ note: run with `RUST_BACKTRACE=1` e    thread 'picker::filter' panicke…  −940
+ test layout::master ... FAILED         note: panic = "abort" in this p…  −611
+                                        thread 'tokio-rt' panicked at s…  −388
+ failures:                              error: test failed (2 panics)      −12
+     layout::master
+
+ test result: FAILED. 41 passed; 1 f
+ error: test failed, to rerun pass `
+ $ █
+                                      −1206  test paste::upload ... ok
+                                      −1205  test toast::stack ... ok
+                                      −1204  thread 'main' panicked at src/lay
+                                      −1203  attempt to subtract with overflow
+                                      −1202  note: run with `RUST_BACKTRACE=1`
+                                      pane 3 cargo · line −1204 · 1 of 5
+
+                                      enter jump  y copy  c copy mode  ? keys
+                                                                    esc close
+ HIST    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## media player · 80×24 · none
+  1 nvim                               media                          playing
+   1 //! Layouts: a tree of splits.   spotify                   1 of 2 players
+   2
+   3 use crate::pane::PaneId;         Now playing ────────────────────────────
+   4                                    Weightless
+   5 pub fn dwindle(area: Rect, n: u    Marconi Union · Weightless (Ambient …
+   6     let mut out = Vec::new();
+   7     let mut rest = area;           1:42 ━━━━━━●───────────────────── 8:09
+   8     for i in 0..n {
+   9         if i + 1 == n {          Player ─────────────────────────────── 4
+  10             out.push(rest);      › Volume                ━━━━●──  ‹ 60% ›
+  11             break;                 Player                     ‹ spotify ›
+  12         }                          Shuffle                        [ off ]
+  13         let (a, b) = split(rest    Repeat                        ‹ none ›
+  14         out.push(a);
+  15         rest = b;
+  16     }
+  17     out
+  18 }
+  19
+  20 pub fn master(area: Rect, n: us
+  NORMAL  layout.rs                   ←→ step  space pause  n next  ? keys
+                                                        o options · esc close
+ MEDIA    1:code  2:web  3                              cpu 12%  mem 41%  16:36
+## dashboard · 80×24 · nothing to select · none
+  1 nvim                               build                          running
+   1 //! Layouts: a tree of splits.   cargo build --release          pid 48211
+   2
+   3 use crate::pane::PaneId;         Job ────────────────────────────────────
+   4                                    state running · elapsed 1:24 · jobs 8
+   5 pub fn dwindle(area: Rect, n: u    crates ━━━━━━━━━━━━━━━●─────── 212/318
+   6     let mut out = Vec::new();    Output ──────────────────────── 6 of 412
+   7     let mut rest = area;           Compiling serde v1.0.210
+   8     for i in 0..n {                Compiling mlua v0.9.9
+   9         if i + 1 == n {            Compiling alacritty_terminal v0.24.1
+  10             out.push(rest);        Compiling ratatui v0.29.0
+  11             break;                 warning: unused variable: `rest`
+  12         }                          Compiling ranma v0.9.0 (~/src/ranma)
+  13         let (a, b) = split(rest  Last runs ──────────────────────────── 3
+  14         out.push(a);               release · 2h ago                ✓ 2:31
+  15         rest = b;                  release · yesterday             ✗ 0:48
+  16     }                              debug · yesterday               ✓ 0:39
+  17     out
+  18 }
+  19
+  20 pub fn master(area: Rect, n: us
+  NORMAL  layout.rs                   c cancel  r restart  l full log  ? keys
+                                                        o options · esc close
+ BUILD    1:code  2:web  3                              cpu 12%  mem 41%  16:36
+## agents → o: its options in settings · 80×24 · none
+  1 api   ? waiting                    settings
+ > the api returns 503 under load; r  / filter                 4 of 61 options
+
+ ● Reading src/client.rs              agents plugin ──────────────────────── 4
+ ● The client gives up on the first   › Notify when waiting             [ on ]
+   I'll retry with backoff, at most     Badge                        ‹ glyph ›
+                                        Idle after •          ━━●────  ‹ 30s ›
+   ⎿ Edit src/handler.rs  +14 −3        Agents          [ "claude codex aid… ]
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again
+   3. No, tell it what to do
+
+
+
+
+                                      A toast and an urgent badge when an
+                                      agent stops to ask something.
+                                      default on
+
+                                      ←→ flip  r default  ? keys
+                                                  w save · esc back to agents
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36
