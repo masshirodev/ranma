@@ -642,6 +642,17 @@ configuration signals its jobs' process groups. `spawn` is refused at load,
 because `--check-config` loads the configuration too. An `every` that errors is
 stopped: at 50 ms, an error a tick would bury the bar.
 
+**Events** (2026-10-08) cost nothing until a hook asks. `pane_idle` keeps an
+account of output only while a hook for it exists, and re-arms the wakeup of a
+pane printing out of sight once a second. Without that, a hidden pane's first
+wakeup is also its last until it is drawn, which is how hidden panes stay
+free. `cwd_change` comes from OSC 7 when the shell sends it, else from `/proc`
+when a marked command finishes (`cd` is a command). There is no polling for it.
+`hover` is debounced to 150 ms at rest on a new cell. `command_started` and OSC
+7 are two more marks in the PTY scanner, which already looks inside every OSC.
+A plugin's own events (`user:<name>`) run synchronously inside the emitting
+call, as Neovim's `User` autocommands do, with a depth limit for loops.
+
 `pane:watch` is the one primitive that comes close to the PTY path, so it is
 built to stay off it. The regex runs in Rust on completed lines only, matching
 is coalesced into a 100 ms window, a pane with no watchers pays nothing, and the

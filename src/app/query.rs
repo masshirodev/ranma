@@ -49,6 +49,8 @@ impl App {
     /// A pane is gone: whoever waits on it gets its exit status, and it is
     /// kept a while for whoever asks too late.
     pub(super) fn pane_ended(&mut self, id: PaneId) {
+        self.cwds.remove(&id);
+        self.activity.remove(&id);
         let code = self.exit_codes.remove(&id);
         self.ended.push_back((id, code));
         if self.ended.len() > ENDED_KEPT {

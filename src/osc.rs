@@ -1,5 +1,6 @@
 //! The few OSC sequences ranma wants that alacritty_terminal drops: shell
-//! marks (OSC 133) and desktop notifications (OSC 9, OSC 777).
+//! marks (OSC 133), the shell's directory (OSC 7) and desktop notifications
+//! (OSC 9, OSC 777).
 //!
 //! This sits on the PTY path, before the bytes reach the emulator, so it must
 //! cost next to nothing: a read with no ESC in it is one search for the byte
@@ -15,6 +16,11 @@ const MAX: usize = 16 * 1024;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mark {
+    /// A command started (133;C).
+    CommandStarted,
+    /// The shell said where it is (OSC 7, `file://host/path`): the host as
+    /// written (the far one in a pane running ssh) and the path, decoded.
+    Cwd { host: String, path: String },
     /// A command ran to its end (133;D after 133;C): its status if the shell
     /// said, and how long it ran.
     CommandFinished {
@@ -121,7 +127,10 @@ impl Scanner {
             "133" => {
                 let mut f = rest.split(';');
                 match f.next() {
-                    Some("C") => self.started = Some(now),
+                    Some("C") => {
+                        self.started = Some(now);
+                        out.push(Mark::CommandStarted);
+                    }
                     // D without a C before it is a prompt after nothing ran
                     // (the shell's first prompt, or an empty Enter).
                     Some("D") => {
@@ -133,6 +142,11 @@ impl Scanner {
                         }
                     }
                     _ => {}
+                }
+            }
+            "7" => {
+                if let Some((host, path)) = file_url(rest) {
+                    out.push(Mark::Cwd { host, path });
                 }
             }
             // OSC 9 is also ConEmu's family of `9;N;...` commands (progress
@@ -169,6 +183,32 @@ fn is_conemu(rest: &str) -> bool {
     c.next().is_some_and(|d| d.is_ascii_digit()) && matches!(c.next(), Some(';') | None)
 }
 
+/// `file://host/path` as OSC 7 carries it: the host (empty for `file:///`)
+/// and the path with its `%XX` escapes decoded. Anything else is not one.
+fn file_url(s: &str) -> Option<(String, String)> {
+    let rest = s.strip_prefix("file://")?;
+    let slash = rest.find('/')?;
+    let (host, path) = rest.split_at(slash);
+    let mut bytes = Vec::with_capacity(path.len());
+    let raw = path.as_bytes();
+    let mut i = 0;
+    while i < raw.len() {
+        match (raw[i], raw.get(i + 1..i + 3)) {
+            (b'%', Some(hex)) => match u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16) {
+                Ok(b) => {
+                    bytes.push(b);
+                    i += 3;
+                    continue;
+                }
+                Err(_) => bytes.push(b'%'),
+            },
+            (b, _) => bytes.push(b),
+        }
+        i += 1;
+    }
+    Some((host.to_string(), String::from_utf8(bytes).ok()?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,7 +221,10 @@ mod tests {
             s.feed(b"\x1b]133;D;0\x07\x1b]133;A\x07$ ", t0).is_empty(),
             "D with no C"
         );
-        assert!(s.feed(b"make\r\n\x1b]133;C\x07building...", t0).is_empty());
+        assert_eq!(
+            s.feed(b"make\r\n\x1b]133;C\x07building...", t0),
+            vec![Mark::CommandStarted]
+        );
         let later = t0 + Duration::from_secs(42);
         assert_eq!(
             s.feed(b"done\r\n\x1b]133;D;2\x1b\\\x1b]133;A\x07$ ", later),
@@ -205,10 +248,13 @@ mod tests {
         }
         assert_eq!(
             marks,
-            vec![Mark::CommandFinished {
-                exit: Some(7),
-                duration: Duration::ZERO
-            }]
+            vec![
+                Mark::CommandStarted,
+                Mark::CommandFinished {
+                    exit: Some(7),
+                    duration: Duration::ZERO
+                }
+            ]
         );
     }
 
@@ -270,5 +316,29 @@ mod tests {
             }]
         );
         assert!(s.payload.capacity() <= MAX * 2);
+    }
+
+    #[test]
+    fn osc_7_says_where_the_shell_is() {
+        let mut s = Scanner::default();
+        let t = Instant::now();
+        assert_eq!(
+            s.feed(b"\x1b]7;file://box/home/me/my%20dir\x07", t),
+            vec![Mark::Cwd {
+                host: "box".into(),
+                path: "/home/me/my dir".into()
+            }]
+        );
+        assert_eq!(
+            s.feed(b"\x1b]7;file:///tmp\x1b\\", t),
+            vec![Mark::Cwd {
+                host: String::new(),
+                path: "/tmp".into()
+            }]
+        );
+        assert!(
+            s.feed(b"\x1b]7;http://x/y\x07\x1b]7;file://nohost\x07", t)
+                .is_empty()
+        );
     }
 }

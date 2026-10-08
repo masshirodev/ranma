@@ -213,7 +213,7 @@ features below the line live outside the repository.
 - [ ] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
 - [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
-- [ ] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
+- [x] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
   `pane_idle`, `hover`, `user:<name>`
 - [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
 - [ ] State: `pane.vars`, `workspace.vars`, `ranma.store`

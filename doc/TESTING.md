@@ -10,7 +10,7 @@ Everything that can be pure is, and is tested without a terminal:
 | --- | --- |
 | `keys` | chord parsing, strictness, round trips |
 | `action` | dispatcher parsing, argument errors |
-| `config` | defaults, user overrides, global binds, the bar and modules, the run-time API refusing at load, error messages carrying file and line; plugins: `require` finding `lua/` (`?.lua` and `?/init.lua`, the user's shadowing a package's), `plugin/` and `pack/*/start/*` sourced in order before `init.lua` (and `opt/` not), a failing plugin dropped with everything it bound while the rest load, a plugin that never returns stopped at load, and a callback stopped at its budget, under `pcall` and inside a coroutine too; timers made at load kept, and dropped with a failing plugin; `every` and `defer` ranges, `spawn` refused at load and its options strict |
+| `config` | defaults, user overrides, global binds, the bar and modules, the run-time API refusing at load, error messages carrying file and line; plugins: `require` finding `lua/` (`?.lua` and `?/init.lua`, the user's shadowing a package's), `plugin/` and `pack/*/start/*` sourced in order before `init.lua` (and `opt/` not), a failing plugin dropped with everything it bound while the rest load, a plugin that never returns stopped at load, and a callback stopped at its budget, under `pcall` and inside a coroutine too; timers made at load kept, and dropped with a failing plugin; `every` and `defer` ranges, `spawn` refused at load and its options strict; every config-building function refused from a bind instead of crashing; `user:<name>` events delivered in order there and then, a loop of emits stopped, emit refused at load, a bad name and a misspelt event named; the new events parsing, `pane_idle`'s range |
 | `theme` | inheritance, strict keys, colour forms, cycles, `dim_unfocused` range; an outer ranma's colours laid over key by key (a whole set round-trips, an unknown role, a missing one and a bad value cost nothing else, an unset role stays unset); a side's outer gap over its axis's |
 | `layout` | dwindle and manual placement, removal, geometry-based neighbours, Hyprland-style resize, swap, toggle split, groups (tab bars, new tabs, cycling, closing), exact tiling; an inset by each side's own amount |
 | `input` | host key → chord, key/paste/focus/mouse encoding per pane mode |
@@ -19,7 +19,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `tmux` | the shim's global flags, tmux-style flag parsing (grouped, stuck values, unknown ones refused), `;` separators, targets resolved inside the caller's session, formats (`#{}`, aliases, conditionals, comparisons, unknown variables), key names |
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
-| `osc` | OSC 133 C/D timed into a finished command (once, and not for a D alone), sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), a nested ranma's hello, report and paste-image request, long and unrelated sequences passed without keeping state |
+| `osc` | OSC 133 C as a started command and C/D timed into a finished one (once, and not for a D alone); OSC 7 as a host and a decoded path (`file:///` with no host; other URLs and a path-less one ignored); sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), a nested ranma's hello, report and paste-image request, long and unrelated sequences passed without keeping state |
 | `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/done/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
 | `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; a shown inner scratchpad's `S` coloured as current; a ranma in a scratchpad expanding `S` while shown (and with expand-all), counted while hidden, on the path one level in, clicked through holder 0, counted and urgent in the compact label, and a report without the field still parsing; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC; the compact label on an unfocused pane's border at 100, 60 and 40 columns (urgent, WM, two sessions, two levels) and all 21 strips of its ladder, cell for cell against `doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt`, its colours and clicks, and the no-border fallback; the hello answer a version-1 build still reads; the outer's colours ahead of its answer, found, leaving no input behind, and none or a non-object read as none; the pane strip taken from the innermost ranma with two panes, skipping one with a single pane, and a report without `panes` parsing |
 | `snapshot` | a pane's screen as text and back: history, colours, wide characters and wrapped rows cell for cell, the cursor; the shell kept behind a full-screen program, and its modes; palette changes |
@@ -66,6 +66,10 @@ Builds the release binary and drives it inside a **private headless tmux server*
   command into the first, falls back to home for a directory that is gone,
   and `save_layout` writes the pane's directory back (the test's own
   `XDG_STATE_HOME`, never yours)
+- a plugin dropped into `plugin/` while running loads on the reload, and hears
+  a command start (OSC 133 C), a directory with its host (OSC 7, `%20`
+  decoded), a title, a bell, the pane going quiet (`pane_idle` set to 0.5 by
+  the plugin) and its own `user:` event emitted from a timer
 - an empty workspace shows the splash (the logo, Enter, and the help key), and
   Enter and the keypad's Enter (tmux sends it as LF) there open a shell
 - a broken config written while running is reported at once, and the old one kept
@@ -159,6 +163,11 @@ a hook cannot tell which a change touches. On a machine where CPU is scarce,
 `SKIP_SMOKE` is the one to reach for.
 
 ## By hand
+
+Not covered by any automated check: the `hover` event. tmux cannot send
+pointer motion, so it is checked by hand: a `hover` hook toasting
+`e.line .. ":" .. e.col` fires once per cell rested on, and not while the
+pointer moves.
 
 Milestone 3 was exercised by hand in the harness as well: the session switcher
 creating a session by name, `(`/`)`, the pane switcher across three sessions, the

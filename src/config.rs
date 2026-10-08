@@ -146,6 +146,8 @@ pub struct Settings {
     pub paste_image_command: Option<String>,
     /// An empty workspace shows the logo and how to start (Enter, help).
     pub splash: bool,
+    /// How long a pane that printed must stay quiet for `pane_idle`.
+    pub pane_idle: std::time::Duration,
 }
 
 impl Default for Settings {
@@ -173,6 +175,7 @@ impl Default for Settings {
             paste_upload: true,
             paste_image_command: None,
             splash: true,
+            pane_idle: std::time::Duration::from_secs(5),
         }
     }
 }
@@ -200,6 +203,7 @@ struct SettingsPatch {
     restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
     splash: Option<bool>,
+    pane_idle: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -258,6 +262,19 @@ pub enum Event {
     /// A terminal started driving the screen (DESIGN.md, "Several terminals on
     /// one server"): its size, and whether it is a phone.
     DriverChange,
+    /// A shell said a command started (OSC 133 C).
+    CommandStarted,
+    /// A pane's shell moved to another directory (OSC 7, or seen in /proc
+    /// when a command finished).
+    CwdChange,
+    /// A pane's program set a different title.
+    TitleChange,
+    /// A pane rang the bell.
+    Bell,
+    /// A pane that was printing has printed nothing for `pane_idle` seconds.
+    PaneIdle,
+    /// The pointer came to rest on another cell of a pane.
+    Hover,
 }
 
 impl FromStr for Event {
@@ -273,6 +290,12 @@ impl FromStr for Event {
             "config_reload" => Event::ConfigReload,
             "command_finished" => Event::CommandFinished,
             "driver_change" => Event::DriverChange,
+            "command_started" => Event::CommandStarted,
+            "cwd_change" => Event::CwdChange,
+            "title_change" => Event::TitleChange,
+            "bell" => Event::Bell,
+            "pane_idle" => Event::PaneIdle,
+            "hover" => Event::Hover,
             _ => return Err(format!("unknown event `{s}`")),
         })
     }
@@ -674,6 +697,8 @@ struct Builder {
     layouts: std::collections::BTreeMap<String, crate::layouts::Spec>,
     /// `ranma.defer` and `ranma.every` made while loading, started with it.
     timers: crate::jobs::PendingTimers,
+    /// `ranma.on("user:<name>", fn)`, by name.
+    user_hooks: HashMap<String, Vec<Rc<RegistryKey>>>,
 }
 
 pub struct Config {
@@ -846,6 +871,14 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     if let Some(on) = patch.splash {
         s.splash = on;
     }
+    if let Some(secs) = patch.pane_idle {
+        if !(0.5..=3600.0).contains(&secs) {
+            return Err(format!(
+                "{who}: pane_idle must be 0.5 to 3600 seconds, not {secs}"
+            ));
+        }
+        s.pane_idle = std::time::Duration::from_secs_f64(secs);
+    }
     if patch.shell.is_some() {
         s.shell = patch.shell;
     }
@@ -938,7 +971,12 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
     }
 }
 
-fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -> mlua::Result<()> {
+fn install_api(
+    lua: &Lua,
+    config_dir: Option<&Path>,
+    jobs: &crate::jobs::Jobs,
+    user: &UserEvents,
+) -> mlua::Result<()> {
     let ranma = lua.create_table()?;
     ranma.set("version", env!("CARGO_PKG_VERSION"))?;
     if let Some(dir) = config_dir {
@@ -1068,9 +1106,25 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
     ranma.set(
         "on",
         lua.create_function(|lua, (event, f): (String, Function)| {
-            let ev: Event = event
-                .parse()
-                .map_err(|e| rt_err(format!("ranma.on: {e}")))?;
+            // A plugin's own event: whatever name it likes, after `user:`.
+            if let Some(name) = event.strip_prefix("user:") {
+                if name.is_empty() {
+                    return Err(rt_err("ranma.on: `user:` needs a name after it"));
+                }
+                let key = Rc::new(lua.create_registry_value(f)?);
+                lua.app_data_mut::<Builder>()
+                    .ok_or_else(loading_only)?
+                    .user_hooks
+                    .entry(name.to_string())
+                    .or_default()
+                    .push(key);
+                return Ok(());
+            }
+            let ev: Event = event.parse().map_err(|e| {
+                rt_err(format!(
+                    "ranma.on: {e} (a plugin's own event is named `user:<name>`)"
+                ))
+            })?;
             let key = Rc::new(lua.create_registry_value(f)?);
             lua.app_data_mut::<Builder>()
                 .ok_or_else(loading_only)?
@@ -1481,6 +1535,21 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
     )?;
 
     crate::luapane::install(lua, &ranma)?;
+    {
+        let user = user.clone();
+        ranma.set(
+            "emit",
+            lua.create_function(move |lua, (name, data): (String, Value)| {
+                if lua.app_data_ref::<Runtime>().is_none() {
+                    return Err(rt_err(
+                        "ranma.emit only works inside binds, hooks, modules and timers, \
+                         not at config load",
+                    ));
+                }
+                user.emit(lua, &name, data)
+            })?,
+        )?;
+    }
     crate::jobs::install(lua, &ranma, jobs, |lua, f| {
         match lua.app_data_mut::<Builder>() {
             Some(mut b) => {
@@ -1517,9 +1586,10 @@ pub fn load_from(
     lua.set_app_data(Builder::default());
     let watchdog = Watchdog::default();
     let jobs = crate::jobs::Jobs::default();
+    let user_events = UserEvents::default();
     // mlua's error is not Send without its `send` feature, so it cannot go through
     // anyhow's `.context` directly; its Display is all we need from it anyway.
-    install_api(&lua, config_dir, &jobs)
+    install_api(&lua, config_dir, &jobs, &user_events)
         .and_then(|()| watchdog.install(&lua))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("installing the ranma Lua API")?;
@@ -1615,6 +1685,7 @@ pub fn load_from(
     }
     let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
     jobs.adopt(std::mem::take(&mut builder.timers));
+    *user_events.hooks.borrow_mut() = std::mem::take(&mut builder.user_hooks);
 
     Ok(Config {
         base: (
@@ -1645,6 +1716,39 @@ pub fn load_from(
         jobs,
         lua,
     })
+}
+
+/// How deep `ranma.emit` may nest (a handler emitting, whose handler emits,
+/// ...) before it is refused: past this it is a loop, not a design.
+const MAX_EMIT_DEPTH: usize = 8;
+
+/// Plugins' own events (`ranma.on("user:<name>")`, `ranma.emit`): handlers
+/// run there and then, inside the call that emitted, as Neovim's `User`
+/// autocommands do.
+#[derive(Debug, Clone, Default)]
+struct UserEvents {
+    hooks: Rc<std::cell::RefCell<HashMap<String, Vec<Rc<RegistryKey>>>>>,
+    depth: Rc<Cell<usize>>,
+}
+
+impl UserEvents {
+    fn emit(&self, lua: &Lua, name: &str, data: Value) -> mlua::Result<()> {
+        let keys = self.hooks.borrow().get(name).cloned().unwrap_or_default();
+        if keys.is_empty() {
+            return Ok(());
+        }
+        if self.depth.get() >= MAX_EMIT_DEPTH {
+            return Err(rt_err(format!(
+                "ranma.emit(\"{name}\"): events nested {MAX_EMIT_DEPTH} deep; stopped"
+            )));
+        }
+        self.depth.set(self.depth.get() + 1);
+        let result = keys
+            .iter()
+            .try_for_each(|k| lua.registry_value::<Function>(k)?.call::<()>(data.clone()));
+        self.depth.set(self.depth.get() - 1);
+        result
+    }
 }
 
 /// How long the built-in defaults, one plugin file, or `init.lua` may run
@@ -2703,5 +2807,78 @@ mod tests {
                 "{call}: {e}"
             );
         }
+    }
+
+    #[test]
+    fn plugins_have_events_of_their_own() {
+        let cfg = with_user(
+            r#"
+            got = {}
+            ranma.on("user:build", function(d) table.insert(got, "a" .. d.n) end)
+            ranma.on("user:build", function(d) table.insert(got, "b" .. d.n) end)
+            ranma.on("user:loop", function() ranma.emit("loop") end)
+            "#,
+        )
+        .unwrap();
+        cfg.lua.set_app_data(Runtime::default());
+        cfg.lua
+            .load("ranma.emit('build', { n = 1 }) ranma.emit('nobody', 2)")
+            .exec()
+            .unwrap();
+        let got: Vec<String> = cfg.lua.load("return got").eval().unwrap();
+        assert_eq!(got, ["a1", "b1"], "in order, there and then");
+        let e = cfg
+            .lua
+            .load("ranma.emit('loop')")
+            .exec()
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("nested 8 deep"), "{e}");
+        cfg.lua.remove_app_data::<Runtime>();
+        assert!(
+            cfg.lua
+                .load("ranma.emit('build', {})")
+                .exec()
+                .unwrap_err()
+                .to_string()
+                .contains("not at config load")
+        );
+
+        let err = |src: &str| with_user(src).unwrap_err().to_string();
+        assert!(err("ranma.on('user:', print)").contains("needs a name"));
+        assert!(err("ranma.on('buld', print)").contains("user:<name>"));
+    }
+
+    #[test]
+    fn the_new_events_parse_and_pane_idle_is_a_range() {
+        for e in [
+            "command_started",
+            "cwd_change",
+            "title_change",
+            "bell",
+            "pane_idle",
+            "hover",
+        ] {
+            assert!(e.parse::<Event>().is_ok(), "{e}");
+        }
+        let cfg = with_user("ranma.set { pane_idle = 2.5 }").unwrap();
+        assert_eq!(
+            cfg.settings.pane_idle,
+            std::time::Duration::from_millis(2500)
+        );
+        assert_eq!(
+            load_from(None, None, None)
+                .unwrap()
+                .settings
+                .pane_idle
+                .as_secs(),
+            5
+        );
+        assert!(
+            with_user("ranma.set { pane_idle = 0 }")
+                .unwrap_err()
+                .to_string()
+                .contains("0.5 to 3600")
+        );
     }
 }

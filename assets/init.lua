@@ -36,6 +36,9 @@ ranma.set {
   -- An empty workspace shows the ranma logo and how to start: Enter opens a
   -- shell, and the key that lists every bind. false leaves it blank.
   splash = true,
+  -- Seconds a pane that was printing must stay quiet before the pane_idle
+  -- hook hears it (an agent or a build that stopped). 0.5-3600.
+  pane_idle = 5,
 
   -- nil means $SHELL, then /bin/sh.
   shell = nil,

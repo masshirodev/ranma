@@ -251,6 +251,30 @@ T send-keys -t s C-b 1 Escape; sleep 0.3
 T send-keys -t s "$BIN notify smoke-toast-ok" Enter
 wait_for '│ smoke-toast-ok' || fail "ranma notify did not show a toast"
 
+# Plugins and events: a plugin dropped into plugin/ loads on its own, and
+# hears a command start, a directory, a title, a bell, a pane gone quiet, and
+# its own event, emitted from a timer.
+EVLOG="$STATE/events.log"
+mkdir -p "$CFG/plugin"
+cat > "$CFG/plugin/events.lua" <<LUA
+ranma.set { pane_idle = 0.5 }
+local function log(s) local f = io.open("$EVLOG", "a") f:write(s, "\\n") f:close() end
+ranma.on("command_started", function(e) log("started " .. e.pane) end)
+ranma.on("cwd_change", function(e) log("cwd " .. e.cwd .. " host=" .. tostring(e.host)) end)
+ranma.on("title_change", function(e) if e.title == "smoke-title" then log("title") end end)
+ranma.on("bell", function(e) log("bell visible=" .. tostring(e.visible)) end)
+ranma.on("pane_idle", function(e) log("idle") end)
+ranma.on("user:smoke", function(d) log("user " .. d.n) end)
+ranma.on("config_reload", function() ranma.defer(10, function() ranma.emit("smoke", { n = 7 }) end) end)
+LUA
+sleep 1
+T send-keys -t s "printf '\\033]133;C\\007\\033]7;file://smokehost/tmp/a%%20b\\007\\033]2;smoke-title\\007\\a'; for i in 1 2 3; do echo burst; done" Enter
+sleep 1.5
+for want in "started " "cwd /tmp/a b host=smokehost" "title" "bell visible=true" "idle" "user 7"; do
+  grep -qF "$want" "$EVLOG" 2>/dev/null || fail "plugin event missing: '$want' (log: $(tr '\n' '|' < "$EVLOG" 2>/dev/null))"
+done
+rm "$CFG/plugin/events.lua"; sleep 0.5
+
 # Scripting over the socket: open a pane in the background and get its id,
 # read its screen, type into it, and wait for it with its exit status.
 T send-keys -t s "P=\$($BIN open -P -d -- 'echo smoke-captured; read x; exit \$x'); sleep 0.5; $BIN capture -p \$P | grep -q smoke-captured && echo CAPTURE-OK; $BIN send -p \$P -e 7; $BIN wait -p \$P; echo WAIT=\$?; $BIN panes | head -1" Enter

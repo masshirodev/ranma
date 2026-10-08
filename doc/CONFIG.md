@@ -134,6 +134,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). It reads images only. Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
 | `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. See [ranma inside ranma](#ranma-inside-ranma). |
 | `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
+| `pane_idle` | `5` | Seconds a pane that was printing must stay quiet before the `pane_idle` hook hears of it, 0.5-3600. See [Hooks](#hooks--ranmaonevent-fn). |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -832,6 +833,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
+| `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
 | `ranma.spawn(cmd, opts)` | Run a process in the background; see [Timers and processes](#timers-and-processes). |
 | `ranma.kill(id)` | Stop a process `spawn` started. |
 | `ranma.pane(id)` | A handle on pane `id`, or on the focused pane when `id` is left out; `nil` if there is none. See [Pane handles](#pane-handles). |
@@ -1112,9 +1114,17 @@ end)
 | `session_switch` | `session`, `previous` (names) |
 | `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
 | `driver_change` | `cols`, `rows`, `mobile`, `remote`, `outer` (as `ranma.client()`), `previous_mobile` — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize. |
+| `command_started` | `pane`, `workspace`, `visible`, `title` — when a shell that marks its commands (below) starts one |
+| `cwd_change` | `pane`, `workspace`, `cwd`, `previous` (nil the first time), `host` — when a pane's shell is somewhere new. Heard from OSC 7 (`host` is the one it names, the far one over ssh), or read from `/proc` when a marked command finishes (`host` nil). |
+| `title_change` | `pane`, `workspace`, `visible`, `title`, `previous` — when a program sets a different title. Spinners set titles often: keep the function cheap. |
+| `bell` | `pane`, `workspace`, `visible`, `title` — every bell, seen or not (an unseen one also toasts, as before) |
+| `pane_idle` | `pane`, `workspace`, `visible`, `title`, `busy` (seconds it had been printing) — a pane that printed has printed nothing for `pane_idle` seconds. An agent or a build that stopped. Once per burst of output. |
+| `hover` | `pane`, `line`, `col` (as [pane handles](#pane-handles) number them), `x`, `y` — the pointer rested 150 ms on another cell of a pane's text. Needs the mouse on (`mouse` not `"off"`). |
+| `user:<name>` | whatever `ranma.emit(name, data)` passed — a plugin's own event; see below |
 
-`command_finished` needs the shell to say where commands start and end, with
-the OSC 133 marks most terminals understand. For zsh, in `.zshrc`:
+`command_finished` and `command_started` need the shell to say where commands
+start and end, with the OSC 133 marks most terminals understand. For zsh, in
+`.zshrc`:
 
 ```zsh
 _ranma_mark_end()   { local s=$?; print -n "\e]133;D;$s\a\e]133;A\a"; }
@@ -1140,6 +1150,30 @@ when they give no title. When the name and the message do not fit the box
 together, the name is cut in the middle to one line (`me@host:/tmp/…/project:`)
 and the message keeps the rest: a pane deep in a directory tree never pushes
 its own notification out of view.
+
+Watching costs nothing until a hook asks. Without a `pane_idle` hook ranma
+keeps no account of output, without `cwd_change` it reads no `/proc`, and
+without `hover` it tracks no pointer. With `pane_idle`, a pane printing out of
+sight costs at most one wakeup a second.
+
+**A plugin's own events.** `ranma.on("user:<name>", fn)` listens, and
+`ranma.emit(name, data)` calls every listener of that name there and then, in
+the order they were added, with `data` as it was given. An error in one stops
+the emit and reaches the code that emitted. Emitting is for binds, hooks,
+modules and timers, not config load. Events emitted from handlers of events
+stop at 8 deep.
+
+```lua
+-- plugin/agents.lua
+ranma.on("pane_idle", function(e)
+  if e.title:find("claude") then ranma.emit("agent_done", e) end
+end)
+
+-- init.lua: what you do about it is yours
+ranma.on("user:agent_done", function(e)
+  if not e.visible then ranma.toast("agent done: workspace " .. e.workspace) end
+end)
+```
 
 ## Globals
 

@@ -64,6 +64,11 @@ const PROGRAMS_EVERY: Duration = Duration::from_millis(500);
 const STATUS_FOR: Duration = Duration::from_secs(5);
 /// Hooks that run actions that fire hooks: stop before it becomes a loop.
 const MAX_LUA_DEPTH: u8 = 4;
+/// How often a pane printing out of sight is asked for its next wakeup
+/// while a `pane_idle` hook waits on it.
+const IDLE_REARM: Duration = Duration::from_secs(1);
+/// How long the pointer rests on a cell before `hover` fires.
+const HOVER_REST: Duration = Duration::from_millis(150);
 /// The workspace number the scratchpad reports in hook payloads and state.
 const SCRATCHPAD: u8 = 0;
 
@@ -182,6 +187,18 @@ pub struct App {
     /// Lua and exec module output, keyed by module name.
     module_values: HashMap<String, Segment>,
     module_due: HashMap<String, Instant>,
+    /// Panes that printed since they were last idle: when the burst began and
+    /// when they last printed. Kept only while a `pane_idle` hook exists.
+    activity: HashMap<PaneId, (Instant, Instant)>,
+    /// When to look for panes gone quiet.
+    idle_due: Option<Instant>,
+    /// The directory each pane's shell was last seen in, for `cwd_change`.
+    cwds: HashMap<PaneId, String>,
+    /// The cell the pointer is over (pane, line, column, x, y), and when it
+    /// has rested there long enough for `hover`.
+    hover_at: Option<(PaneId, i32, u16, u16, u16)>,
+    hover_due: Option<Instant>,
+    hover_sent: Option<(PaneId, i32, u16, u16, u16)>,
     module_running: HashSet<String>,
     /// Bumped on config reload so results of the old config's execs are dropped.
     module_generation: u64,
@@ -330,6 +347,12 @@ impl App {
             lua_depth: 0,
             module_values: HashMap::new(),
             module_due: HashMap::new(),
+            activity: HashMap::new(),
+            idle_due: None,
+            cwds: HashMap::new(),
+            hover_at: None,
+            hover_due: None,
+            hover_sent: None,
             module_running: HashSet::new(),
             module_generation: 0,
             reload_at: None,
@@ -1302,6 +1325,34 @@ impl App {
 
     fn handle_pane_event(&mut self, id: PaneId, ev: TermEvent) {
         let visible = self.visible.contains(&id);
+        match &ev {
+            TermEvent::Wakeup => self.note_activity(id),
+            TermEvent::Bell => {
+                let (workspace, title) = (self.workspace_of(id), self.label_of(id));
+                self.emit(HookEvent::Bell, |t| {
+                    t.set("pane", id)?;
+                    t.set("workspace", workspace)?;
+                    t.set("visible", visible)?;
+                    t.set("title", title)
+                });
+            }
+            TermEvent::Title(new) => {
+                let old = self.panes.get(&id).map(|p| p.title.clone());
+                if old.as_deref().is_some_and(|o| o != new) {
+                    let new = crate::pane::strip_nested_marker(new).to_string();
+                    let old = old.map(|o| crate::pane::strip_nested_marker(&o).to_string());
+                    let workspace = self.workspace_of(id);
+                    self.emit(HookEvent::TitleChange, |t| {
+                        t.set("pane", id)?;
+                        t.set("workspace", workspace)?;
+                        t.set("visible", visible)?;
+                        t.set("title", new)?;
+                        t.set("previous", old)
+                    });
+                }
+            }
+            _ => {}
+        }
         let Some(pane) = self.panes.get_mut(&id) else {
             return;
         };
@@ -1407,7 +1458,29 @@ impl App {
                 self.nested_mark(id, m);
             }
             crate::osc::Mark::RanmaPasteImage => self.paste_image_asked(id),
+            crate::osc::Mark::CommandStarted => {
+                let workspace = self.workspace_of(id);
+                let visible = self.visible.contains(&id);
+                let title = pane.label().to_string();
+                self.emit(HookEvent::CommandStarted, |t| {
+                    t.set("pane", id)?;
+                    t.set("workspace", workspace)?;
+                    t.set("visible", visible)?;
+                    t.set("title", title)
+                });
+            }
+            crate::osc::Mark::Cwd { host, path } => self.saw_cwd(id, path, Some(host)),
             crate::osc::Mark::CommandFinished { exit, duration } => {
+                // A shell that does not send OSC 7 still says when a command
+                // ended, and `cd` is a command: look where it is now.
+                if self.config.hooks.contains_key(&HookEvent::CwdChange)
+                    && let Some(cwd) = pane.cwd()
+                {
+                    self.saw_cwd(id, cwd.display().to_string(), None);
+                }
+                let Some(pane) = self.panes.get(&id) else {
+                    return;
+                };
                 let workspace = self
                     .locate(id)
                     .or_else(|| self.locate_hidden(id).map(|(_, n)| n));
@@ -1584,6 +1657,9 @@ impl App {
     }
 
     fn handle_mouse(&mut self, m: MouseEvent) {
+        if m.kind == MouseEventKind::Moved {
+            self.track_hover(m.column, m.row);
+        }
         // A click on a toast dismisses it, in any mode; it never reaches a pane.
         if let MouseEventKind::Down(_) = m.kind
             && let Some(id) = self
@@ -2543,6 +2619,138 @@ impl App {
         out
     }
 
+    fn workspace_of(&self, id: PaneId) -> Option<u8> {
+        self.locate(id)
+            .or_else(|| self.locate_hidden(id).map(|(_, n)| n))
+    }
+
+    fn label_of(&self, id: PaneId) -> String {
+        self.panes
+            .get(&id)
+            .map(|p| p.label().to_string())
+            .unwrap_or_default()
+    }
+
+    /// A pane printed. Tracked only for a `pane_idle` hook: a pane nobody
+    /// is looking at otherwise sends one wakeup and then none until shown.
+    fn note_activity(&mut self, id: PaneId) {
+        if !self.config.hooks.contains_key(&HookEvent::PaneIdle) {
+            return;
+        }
+        let now = Instant::now();
+        self.activity
+            .entry(id)
+            .and_modify(|(_, last)| *last = now)
+            .or_insert((now, now));
+        if self.idle_due.is_none() {
+            self.idle_due = Some(now + IDLE_REARM.min(self.config.settings.pane_idle));
+        }
+    }
+
+    /// Panes quiet for `pane_idle` fire the hook and are forgotten. Panes
+    /// still printing out of sight are asked for their next wakeup, at most
+    /// once per [`IDLE_REARM`]: without it, a hidden pane's first wakeup is
+    /// also its last until it is drawn.
+    fn check_idle(&mut self, now: Instant) {
+        let quiet = self.config.settings.pane_idle;
+        let idle: Vec<(PaneId, Duration)> = self
+            .activity
+            .iter()
+            .filter(|(_, (_, last))| now.saturating_duration_since(*last) >= quiet)
+            .map(|(id, (first, last))| (*id, last.saturating_duration_since(*first)))
+            .collect();
+        for (id, busy) in idle {
+            self.activity.remove(&id);
+            if !self.panes.contains_key(&id) {
+                continue;
+            }
+            let (workspace, title) = (self.workspace_of(id), self.label_of(id));
+            let visible = self.visible.contains(&id);
+            self.emit(HookEvent::PaneIdle, |t| {
+                t.set("pane", id)?;
+                t.set("workspace", workspace)?;
+                t.set("visible", visible)?;
+                t.set("title", title)?;
+                t.set("busy", busy.as_secs_f64())
+            });
+        }
+        self.activity.retain(|id, _| self.panes.contains_key(id));
+        for id in self.activity.keys() {
+            if !self.visible.contains(id)
+                && let Some(p) = self.panes.get(id)
+            {
+                p.drawn();
+            }
+        }
+        self.idle_due = self
+            .activity
+            .values()
+            .map(|(_, last)| *last + quiet)
+            .chain((!self.activity.is_empty()).then_some(now + IDLE_REARM))
+            .min();
+    }
+
+    /// The shell in a pane is in `path`: `cwd_change` if that is news.
+    fn saw_cwd(&mut self, id: PaneId, path: String, host: Option<String>) {
+        if !self.config.hooks.contains_key(&HookEvent::CwdChange) {
+            return;
+        }
+        let previous = self.cwds.insert(id, path.clone());
+        if previous.as_deref() == Some(path.as_str()) {
+            return;
+        }
+        let workspace = self.workspace_of(id);
+        self.emit(HookEvent::CwdChange, |t| {
+            t.set("pane", id)?;
+            t.set("workspace", workspace)?;
+            t.set("cwd", path)?;
+            t.set("previous", previous)?;
+            t.set("host", host)
+        });
+    }
+
+    /// The pointer moved: note the pane cell under it, and fire `hover` once it
+    /// rests there. Nothing is tracked without a `hover` hook.
+    fn track_hover(&mut self, x: u16, y: u16) {
+        if !self.config.hooks.contains_key(&HookEvent::Hover) {
+            return;
+        }
+        let frame = self.frame();
+        let at = self
+            .pane_at(&frame, x, y)
+            .filter(|v| v.inner.contains(x, y))
+            .and_then(|v| {
+                let offset = self.panes.get(&v.id)?.term.lock().grid().display_offset() as i32;
+                let line = i32::from(y - v.inner.y) - offset;
+                Some((v.id, line, x - v.inner.x, x, y))
+            });
+        let same_cell =
+            |a: Option<(PaneId, i32, u16, u16, u16)>| a.map(|(p, l, c, _, _)| (p, l, c));
+        if same_cell(at) != same_cell(self.hover_at) {
+            self.hover_at = at;
+            self.hover_due = at.map(|_| Instant::now() + HOVER_REST);
+        }
+    }
+
+    fn send_hover(&mut self) {
+        let same_cell =
+            |a: Option<(PaneId, i32, u16, u16, u16)>| a.map(|(p, l, c, _, _)| (p, l, c));
+        if same_cell(self.hover_at) == same_cell(self.hover_sent) {
+            return;
+        }
+        self.hover_sent = self.hover_at;
+        let Some((pane, line, col, x, y)) = self.hover_at else {
+            return;
+        };
+        self.emit(HookEvent::Hover, |t| {
+            t.set("pane", pane)?;
+            t.set("line", line)?;
+            t.set("col", col)?;
+            t.set("x", x)?;
+            t.set("y", y)
+        });
+    }
+
     /// `ranma.defer` and `ranma.every` timers that came due. A repeating
     /// timer whose function fails is stopped: at its rate, an error each
     /// tick would be all the bar ever said.
@@ -2673,6 +2881,8 @@ impl App {
             .chain(self.hint_due)
             .chain(self.press_due())
             .chain(self.config.jobs.next_due())
+            .chain(self.idle_due)
+            .chain(self.hover_due)
             .min()
     }
 
@@ -2872,6 +3082,13 @@ impl App {
     fn run_timers(&mut self, now: Instant) {
         self.expire_press(now);
         self.run_lua_timers(now);
+        if self.idle_due.is_some_and(|t| t <= now) {
+            self.check_idle(now);
+        }
+        if self.hover_due.is_some_and(|t| t <= now) {
+            self.hover_due = None;
+            self.send_hover();
+        }
         if self.hint_due.is_some_and(|t| t <= now) {
             self.hint_due = None;
             self.hint_on = self.mode == Mode::Wm;
