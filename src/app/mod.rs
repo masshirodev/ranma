@@ -2187,9 +2187,16 @@ impl App {
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
+                let source = match crate::update::Source::current() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        self.status = Some(format!("update failed: {e:#}"));
+                        return;
+                    }
+                };
                 let cmd = format!(
                     "{}; printf '\\npress a key to close'; read -rsn1 _",
-                    crate::update::install_command()
+                    crate::update::install_command(&source)
                 );
                 match self.open_pane_at(Some(&cmd), None, None) {
                     Ok(id) => {

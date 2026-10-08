@@ -146,6 +146,8 @@ client (DESIGN.md, "Upgrading a server in place").
 - [x] Restored at the size the terminal has now, not the one it attached with
 - [x] Safety: `--check-handover` before exec, the old binary kept to fall back to
 - [x] `ranma upgrade [NAME|--all]`; `install.sh` upgrades every server
+- [x] Updates from a managed clone (`$XDG_DATA_HOME/ranma/repo`), not the
+  path the binary was built at; `RANMA_SOURCE_DIR` for one run
 
 ## 8. A mobile view, from scriptable pieces
 

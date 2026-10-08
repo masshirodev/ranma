@@ -58,7 +58,7 @@ ranma.set {
   -- terminal instead (kitty, foot, alacritty, wezterm and xterm all do this).
   mouse = "click",
 
-  -- When ranma's source (the checkout it was installed from) has new commits:
+  -- When ranma's source (its own clone, ~/.local/share/ranma/repo) has new commits:
   --   "remind": a toast and a marker in the bar; leader U installs.
   --   "prompt": ask y/n, as oh-my-zsh does.
   --   "off":    never check.

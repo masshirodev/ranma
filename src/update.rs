@@ -1,15 +1,20 @@
 //! Knowing when the source has moved on, and installing it.
 //!
-//! ranma is installed from its own git checkout (`install.sh`). The binary
-//! remembers the commit it was built from and where that checkout is (build.rs),
-//! so it can ask git how far behind it is: commits upstream it has not pulled,
-//! and commits in the checkout that were never installed. It asks at most once
+//! ranma updates from a clone of its own, kept in the data directory
+//! (`~/.local/share/ranma/repo`) and cloned there the first time it is needed,
+//! whatever checkout the binary happened to be built in: a path remembered at
+//! build time broke as soon as that checkout moved, or the binary was built on
+//! one machine and copied to another. `RANMA_SOURCE_DIR` points it at another
+//! checkout instead, to try an update from a branch not pushed yet. The binary
+//! remembers the commit it was built from (build.rs), so it can ask git how far
+//! behind it is: commits upstream it has not pulled, and commits pulled into the
+//! clone that were never installed. It asks at most once
 //! per interval — the time of the last check is a file shared by every ranma, so
 //! ten terminals do not fetch ten times — on a thread of its own, and a fetch
 //! that cannot reach the remote (no network, no key) is a check that did not
 //! happen, never a hang or a prompt.
 //!
-//! Installing is the checkout's own `git pull --ff-only && ./install.sh`, with the
+//! Installing is the clone's own `git pull --ff-only && ./install.sh`, with the
 //! install script's safety net: a new binary that rejects the config is replaced
 //! by the old one again. A running ranma keeps its binary until it exits.
 
@@ -24,8 +29,77 @@ use crate::pane::AppEvent;
 
 /// The commit this binary was built from (`-dirty` if the tree had changes).
 pub const BUILD_SHA: &str = env!("RANMA_GIT_SHA");
-/// The checkout it was built in.
-pub const SOURCE_DIR: &str = env!("RANMA_SRC_DIR");
+/// Where the managed clone comes from. Public, over HTTPS: no key needed on
+/// any machine.
+pub const REPO_URL: &str = "https://github.com/masshirodev/ranma.git";
+/// Points updates at another checkout instead of the managed clone, to try
+/// one from a branch not pushed yet. A variable and not a saved path, so it
+/// cannot be set once and forgotten.
+pub const SOURCE_ENV: &str = "RANMA_SOURCE_DIR";
+
+/// Where updates come from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Source {
+    /// ranma's own clone, made on first use.
+    Managed(PathBuf),
+    /// A checkout named by `RANMA_SOURCE_DIR`; never cloned or moved.
+    Override(PathBuf),
+}
+
+impl Source {
+    pub fn dir(&self) -> &Path {
+        match self {
+            Source::Managed(d) | Source::Override(d) => d,
+        }
+    }
+
+    /// The source for this process: `RANMA_SOURCE_DIR`, else the managed
+    /// clone in the data directory.
+    pub fn current() -> Result<Source> {
+        Source::from(std::env::var_os(SOURCE_ENV), dirs::data_dir())
+    }
+
+    fn from(over: Option<std::ffi::OsString>, data: Option<PathBuf>) -> Result<Source> {
+        if let Some(o) = over.filter(|o| !o.is_empty()) {
+            let dir = PathBuf::from(o);
+            // The update pulls and builds in it: the wrong directory has to
+            // fail here, not halfway through.
+            for marker in ["Cargo.toml", ".git"] {
+                if !dir.join(marker).exists() {
+                    bail!(
+                        "{SOURCE_ENV}={} is not a ranma checkout (no {marker})",
+                        dir.display()
+                    );
+                }
+            }
+            return Ok(Source::Override(dir));
+        }
+        let data = data.context("no data directory (is HOME set?)")?;
+        Ok(Source::Managed(data.join("ranma").join("repo")))
+    }
+
+    /// Its directory, cloning the managed one first if it is not there yet.
+    /// A directory there that is not a checkout is someone's, never taken.
+    pub fn ensure(&self) -> Result<&Path> {
+        let dir = self.dir();
+        if let Source::Managed(d) = self
+            && !d.exists()
+        {
+            let parent = d.parent().context("the clone has no parent directory")?;
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+            let name = d.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
+            git(parent, &["clone", "--quiet", REPO_URL, name])?;
+        }
+        if !dir.join(".git").exists() {
+            bail!(
+                "{} is not a git checkout; move it aside and ranma clones it afresh",
+                dir.display()
+            );
+        }
+        Ok(dir)
+    }
+}
 
 /// How far the binary is behind its source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -95,6 +169,11 @@ pub fn behind(dir: &Path, sha: &str, fetch: bool) -> Result<Behind> {
     if fetch {
         git(dir, &["fetch", "--quiet"])?;
     }
+    // Built from commits the source has never seen (a development build,
+    // ahead of what is pushed): there is nothing it is behind.
+    if git(dir, &["cat-file", "-e", &format!("{sha}^{{commit}}")]).is_err() {
+        return Ok(Behind::default());
+    }
     let local = count(dir, sha, "HEAD")?;
     // No upstream configured is not an error: only local commits count then.
     let upstream = match git(dir, &["rev-parse", "--abbrev-ref", "@{upstream}"]) {
@@ -138,17 +217,18 @@ pub fn spawn_checker(tx: Sender<AppEvent>, interval: Duration) {
     if std::env::var_os("RANMA_NO_UPDATE_CHECK").is_some() {
         return;
     }
-    let dir = PathBuf::from(SOURCE_DIR);
-    if !dir.join(".git").exists() {
+    let Ok(source) = Source::current() else {
         return;
-    }
+    };
     let _ = std::thread::Builder::new()
         .name("update-check".into())
         .spawn(move || {
             loop {
                 if due(interval) {
                     mark_checked();
-                    if let Ok(b) = behind(&dir, BUILD_SHA, true)
+                    // The first check clones, here, off the event loop.
+                    if let Ok(dir) = source.ensure()
+                        && let Ok(b) = behind(dir, BUILD_SHA, true)
                         && b.commits() > 0
                         && tx.send(AppEvent::UpdateAvailable(b)).is_err()
                     {
@@ -161,11 +241,21 @@ pub fn spawn_checker(tx: Sender<AppEvent>, interval: Duration) {
 }
 
 /// The shell command line that updates and installs, run in a pane (or by
-/// `ranma update`): pull what is upstream, then the checkout's install script.
-pub fn install_command() -> String {
-    let dir = shell_quote(SOURCE_DIR);
+/// `ranma update`): clone the managed source if it is not there yet, pull what
+/// is upstream, then its install script. Cloned here rather than before, so a
+/// first update in a pane shows the clone too.
+pub fn install_command(source: &Source) -> String {
+    let dir = shell_quote(&source.dir().to_string_lossy());
+    let clone = match source {
+        Source::Managed(_) => format!(
+            "{{ [ -e {dir} ] || git clone {url} {dir}; }} && ",
+            url = shell_quote(REPO_URL)
+        ),
+        Source::Override(_) => String::new(),
+    };
     format!(
-        "cd {dir} && git pull --ff-only && ./install.sh; status=$?; echo; \
+        "{clone}{{ [ -d {dir}/.git ] || {{ echo {dir}' is not a git checkout; move it aside.'; false; }}; }} \
+         && cd {dir} && git pull --ff-only && ./install.sh; status=$?; echo; \
          if [ $status -eq 0 ]; then echo 'Updated. Running servers moved to the new build \
          in place (anything that could not is named above).'; \
          else echo \"Update failed (exit $status); nothing was replaced.\"; fi"
@@ -240,6 +330,71 @@ mod tests {
     #[test]
     fn the_install_command_quotes_the_directory() {
         assert_eq!(shell_quote("/a b/it's"), "'/a b/it'\\''s'");
-        assert!(install_command().contains("git pull --ff-only && ./install.sh"));
+        let managed = install_command(&Source::Managed("/d/ranma/repo".into()));
+        assert!(managed.contains("git pull --ff-only && ./install.sh"));
+        assert!(
+            managed
+                .contains("git clone 'https://github.com/masshirodev/ranma.git' '/d/ranma/repo'")
+        );
+        let over = install_command(&Source::Override("/src/ranma".into()));
+        assert!(over.contains("cd '/src/ranma' && git pull"));
+        assert!(
+            !over.contains("git clone"),
+            "a checkout of the user's is never cloned"
+        );
+    }
+
+    /// The managed clone lives in the data directory; `RANMA_SOURCE_DIR`
+    /// replaces it only with something that is a ranma checkout.
+    #[test]
+    fn the_source_is_the_managed_clone_unless_overridden() {
+        let data = PathBuf::from("/home/u/.local/share");
+        assert_eq!(
+            Source::from(None, Some(data.clone())).unwrap(),
+            Source::Managed(data.join("ranma/repo"))
+        );
+        assert_eq!(
+            Source::from(Some("".into()), Some(data.clone())).unwrap(),
+            Source::Managed(data.join("ranma/repo"))
+        );
+        let here = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        if here.join(".git").exists() {
+            assert_eq!(
+                Source::from(Some(here.clone().into()), None).unwrap(),
+                Source::Override(here)
+            );
+        }
+        let err = Source::from(Some("/nonexistent".into()), Some(data))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not a ranma checkout"), "{err}");
+    }
+
+    /// The first use clones the managed source; a directory there that is
+    /// not a checkout is refused, not taken over.
+    #[test]
+    fn ensure_refuses_a_directory_that_is_not_a_checkout() {
+        let root = std::env::temp_dir().join(format!("ranma-ensure-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let d = root.join("ranma").join("repo");
+        std::fs::create_dir_all(&d).unwrap();
+        let err = Source::Managed(d.clone()).ensure().unwrap_err().to_string();
+        assert!(err.contains("not a git checkout"), "{err}");
+        run(&d, &["init", "-q"]);
+        assert_eq!(Source::Managed(d.clone()).ensure().unwrap(), d.as_path());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A build from commits the source has never seen is behind nothing.
+    #[test]
+    fn a_build_the_source_has_not_seen_is_not_behind() {
+        let root = std::env::temp_dir().join(format!("ranma-unseen-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        run(&root, &["init", "-q", "-b", "main"]);
+        run(&root, &["commit", "-q", "--allow-empty", "-m", "one"]);
+        let b = behind(&root, "0123456789abcdef0123456789abcdef01234567", false).unwrap();
+        assert_eq!(b, Behind::default());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

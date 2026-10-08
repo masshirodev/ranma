@@ -235,18 +235,25 @@ fn commented(src: &str) -> String {
 /// `ranma update`: report how far behind the source is, and (without --check)
 /// run the same pull-and-install the in-ranma update does.
 fn update(check: bool) -> ExitCode {
-    use ranma::update::{BUILD_SHA, SOURCE_DIR, behind, install_command};
-    let dir = std::path::Path::new(SOURCE_DIR);
-    match behind(dir, BUILD_SHA, true) {
+    use ranma::update::{BUILD_SHA, Source, behind, install_command};
+    let source = match Source::current() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("ranma: cannot update: {e:#}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let shown = source.dir().display().to_string();
+    match source.ensure().and_then(|dir| behind(dir, BUILD_SHA, true)) {
         Ok(b) if b.commits() == 0 => {
-            println!("ranma is up to date ({BUILD_SHA}, from {SOURCE_DIR})");
+            println!("ranma is up to date ({BUILD_SHA}, source {shown})");
             if check {
                 return ExitCode::SUCCESS;
             }
         }
         Ok(b) => {
             println!(
-                "ranma is {} commit(s) behind its source: {} upstream, {} in the checkout ({SOURCE_DIR})",
+                "ranma is {} commit(s) behind its source: {} upstream, {} pulled but not installed ({shown})",
                 b.commits(),
                 b.upstream,
                 b.local
@@ -264,7 +271,7 @@ fn update(check: bool) -> ExitCode {
     }
     match std::process::Command::new("sh")
         .arg("-c")
-        .arg(install_command())
+        .arg(install_command(&source))
         .status()
     {
         Ok(s) if s.success() => ExitCode::SUCCESS,

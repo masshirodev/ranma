@@ -27,6 +27,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `workspace` | taking panes out of the tree or the floating layer |
 | `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
+| `update` | commits behind upstream and pulled but not installed, with and without fetching; a build the source has never seen behind nothing; the managed clone in the data directory unless `RANMA_SOURCE_DIR` names a ranma checkout (anything else refused); a directory in the clone's place that is not a checkout refused, not taken; the install command cloning only the managed source, and quoting |
 | `app::copy` | base64 for OSC 52 |
 | `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer; the outer's colours taken only with `theme_colors = "outer"`, passed on as drawn, and dropped when a terminal without them attaches; `outer` in `ranma.client()` and `driver_change`; the report carrying the current workspace's panes as the strip names them |
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |

@@ -1581,6 +1581,16 @@ Rust, for predictable latency without a GC, and for the emulator:
 - Borders and gaps are cells; they are cheap and stay. Animations are not planned:
   a cell grid cannot animate smoothly, and they would spend the speed this project
   exists for.
+- Updates come from a managed clone, not from where the binary was built
+  (2026-10-08). The binary used to remember its build checkout's path, which
+  broke silently when the checkout moved and loudly when a binary built on one
+  machine was copied to another (`cd: /home/<you>/projects/ranma: No such file
+  or directory` on a box with no such home). Now `ranma update` and `leader U`
+  pull and install in `$XDG_DATA_HOME/ranma/repo`, cloned over HTTPS on first
+  use, as `ai self-update` does with its own. Not under `~/.config`: that is
+  often a dotfiles repository, and a clone does not belong in one.
+  `RANMA_SOURCE_DIR` overrides it for one run; a variable, not a setting, so
+  it is never left pointing at a branch.
 - Gaps are whole cells, never fractions (2026-10-08): a terminal cannot start a
   pane's grid part of a cell over, so `0.5` could only be rounded to something
   the file does not say. What a fraction was usually wanted for is a side on its

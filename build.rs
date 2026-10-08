@@ -1,5 +1,6 @@
-//! Record which commit this binary was built from, and where its checkout is,
-//! so a running ranma can tell whether its source has moved on (see `update`).
+//! Record which commit this binary was built from, so a running ranma can tell
+//! whether its source has moved on (see `update`). Not where it was built: that
+//! path means nothing once the checkout moves or the binary is copied.
 
 use std::process::Command;
 
@@ -22,10 +23,6 @@ fn main() {
         } else {
             ""
         }
-    );
-    println!(
-        "cargo:rustc-env=RANMA_SRC_DIR={}",
-        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default()
     );
     // Re-stamp when the sources change (to catch "-dirty") and when the
     // checked-out commit moves.
