@@ -838,7 +838,10 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.panes()` | A handle on every pane, in every session, by id. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
-yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
+yet. The other way round too: the functions that build the configuration
+(`ranma.set`, `bind`, `on`, `bar`, `module`, `rule`, `layout` and the rest)
+are an error from a bind, hook, module or timer. Change the configuration in
+the file and it reloads. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
 Actions that fire hooks that run actions stop after four levels.
 
 ### Pane handles

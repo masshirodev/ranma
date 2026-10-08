@@ -810,6 +810,15 @@ fn rt_err(msg: impl Into<String>) -> mlua::Error {
     mlua::Error::RuntimeError(msg.into())
 }
 
+/// The error for a function that builds the configuration called once it has
+/// been built: from a bind, hook, module or timer. The traceback names which.
+fn loading_only() -> mlua::Error {
+    rt_err(
+        "this only works while the configuration loads (init.lua or a plugin), \
+         not from a bind, hook, module or timer",
+    )
+}
+
 /// Apply what `ranma.set` (or a profile's `set`, as `who`) names to `s`.
 fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(), String> {
     if let Some(leader) = patch.leader {
@@ -942,7 +951,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
             let patch: SettingsPatch = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.set: {e}")))?;
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             apply_settings(&mut b.settings, patch, "ranma.set").map_err(rt_err)
         })?,
     )?;
@@ -988,7 +997,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                     && chord
                         == lua
                             .app_data_ref::<Builder>()
-                            .expect("builder installed")
+                            .ok_or_else(loading_only)?
                             .settings
                             .leader
                 {
@@ -1022,7 +1031,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                         )));
                     }
                 };
-                let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+                let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
                 if global {
                     b.global_binds.insert(chord, bind);
                 } else {
@@ -1039,7 +1048,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
             let chord: Chord = keys
                 .parse()
                 .map_err(|e| rt_err(format!("ranma.unbind: key `{keys}`: {e}")))?;
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             b.binds.remove(&chord);
             b.global_binds.remove(&chord);
             Ok(())
@@ -1049,7 +1058,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
     ranma.set(
         "unbind_all",
         lua.create_function(|lua, ()| {
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             b.binds.clear();
             b.global_binds.clear();
             Ok(())
@@ -1064,7 +1073,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                 .map_err(|e| rt_err(format!("ranma.on: {e}")))?;
             let key = Rc::new(lua.create_registry_value(f)?);
             lua.app_data_mut::<Builder>()
-                .expect("builder installed")
+                .ok_or_else(loading_only)?
                 .hooks
                 .entry(ev)
                 .or_default()
@@ -1079,7 +1088,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
             let patch: BarPatch = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             apply_bar(&mut b.bar, patch);
             Ok(())
         })?,
@@ -1099,7 +1108,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                     "{who}: a profile cannot change the theme; the theme is read once at load"
                 )));
             }
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             // Checked now, against what init.lua has set so far, so a bad value
             // is an error at load and not when the profile is first used.
             let mut probe = b.settings.clone();
@@ -1113,7 +1122,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
         "toolbar",
         lua.create_function(|lua, (name, def): (String, Table)| {
             let (def, show) = parse_toolbar(lua, &name, &def)?;
-            let mut b = lua.app_data_mut::<Builder>().expect("builder installed");
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             b.toolbars.retain(|(n, _)| *n != name);
             b.toolbars_shown.retain(|n| *n != name);
             if show {
@@ -1165,7 +1174,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                         }
                     };
                     lua.app_data_mut::<Builder>()
-                        .expect("builder installed")
+                        .ok_or_else(loading_only)?
                         .workspaces_show_all = all;
                 }
                 if name == "workspaces"
@@ -1181,7 +1190,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                         }
                     };
                     lua.app_data_mut::<Builder>()
-                        .expect("builder installed")
+                        .ok_or_else(loading_only)?
                         .workspaces_numbers_only = numbers_only;
                 }
                 if name == "workspaces"
@@ -1198,7 +1207,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                         }
                     };
                     lua.app_data_mut::<Builder>()
-                        .expect("builder installed")
+                        .ok_or_else(loading_only)?
                         .workspaces_nested = n;
                 }
                 return Ok(());
@@ -1217,7 +1226,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                 }
                 let def = system_module(&name, interval, opts.get("format")?).expect("listed above");
                 lua.app_data_mut::<Builder>()
-                    .expect("builder installed")
+                    .ok_or_else(loading_only)?
                     .modules
                     .insert(name, def);
                 return Ok(());
@@ -1266,7 +1275,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                 }
             };
             lua.app_data_mut::<Builder>()
-                .expect("builder installed")
+                .ok_or_else(loading_only)?
                 .modules
                 .insert(name, ModuleDef { interval, kind });
             Ok(())
@@ -1286,7 +1295,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
             }
             let accent: Option<String> = opts.get("accent")?;
             let b = lua.app_data_mut::<Builder>();
-            let mut b = b.expect("builder installed");
+            let mut b = b.ok_or_else(loading_only)?;
             match accent {
                 Some(a) => {
                     let c = a
@@ -1315,7 +1324,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                 .and_then(|s| s.check().map(|()| s).map_err(|e| format!("{who}: {e}")))
                 .map_err(rt_err)?;
             lua.app_data_mut::<Builder>()
-                .expect("builder installed")
+                .ok_or_else(loading_only)?
                 .layouts
                 .insert(name, spec);
             Ok(())
@@ -1353,7 +1362,7 @@ fn install_api(lua: &Lua, config_dir: Option<&Path>, jobs: &crate::jobs::Jobs) -
                 return Err(rt_err("ranma.rule: silent only applies with workspace"));
             }
             lua.app_data_mut::<Builder>()
-                .expect("builder installed")
+                .ok_or_else(loading_only)?
                 .rules
                 .push(Rule {
                     command: spec.command,
@@ -2668,5 +2677,31 @@ mod tests {
             .unwrap();
         let rt = cfg.lua.remove_app_data::<Runtime>().unwrap();
         assert!(matches!(&rt.ops[..], [Op::Spawn(_, s)] if s.argv == ["ls", "-l"] && !s.lines));
+    }
+
+    #[test]
+    fn building_the_config_from_a_bind_is_an_error_not_a_crash() {
+        let cfg = load_from(None, None, None).unwrap();
+        cfg.lua.set_app_data(Runtime::default());
+        for call in [
+            "ranma.set { splash = false }",
+            "ranma.bind('f5', 'help')",
+            "ranma.unbind('t')",
+            "ranma.unbind_all()",
+            "ranma.on('pane_open', function() end)",
+            "ranma.bar { left = {} }",
+            "ranma.module('m', { render = function() return '' end })",
+            "ranma.rule { title = 'x', workspace = 2 }",
+            "ranma.session('s', { accent = '#ff0000' })",
+            "ranma.profile('p', {})",
+            "ranma.toolbar('t', { buttons = { { 'x', 'help' } } })",
+            "ranma.layout('l', { split = 'horizontal', {}, {} })",
+        ] {
+            let e = cfg.lua.load(call).exec().unwrap_err().to_string();
+            assert!(
+                e.contains("only works while the configuration loads"),
+                "{call}: {e}"
+            );
+        }
     }
 }
