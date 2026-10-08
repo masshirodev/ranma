@@ -1,7 +1,13 @@
 # Brief: screens for plugins (and their tooltips and badges)
 
-For Claude Design. Card c138 ("Drawing from Lua: picker, panel, tooltip,
-badge") on the `ranma` board. Nothing in this brief is built yet. The settings
+For Claude Design. Repository: <https://github.com/masshirodev/ranma>
+(public). Read `doc/DESIGN.md` ("Plugins: Neovim's shape, in Lua", "The
+settings panel, as built"), `doc/CONFIG.md` ("Plugins", "Pickers and prompts",
+"The settings panel"), `src/settings.rs` (the settings panel's drawing) and
+`doc/handoffs/done/SETTINGS_PANEL_MOCK.txt` (the settings panel cell for cell).
+
+Card c138 ("Drawing from Lua: picker, panel, tooltip, badge") on the `ranma`
+board. Nothing in this brief is built yet. The settings
 panel is built, from its own handoff (`doc/handoffs/done/SETTINGS_PANEL.html`;
 attach it when forwarding this), and this design should grow out of it.
 
