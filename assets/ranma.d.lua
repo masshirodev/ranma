@@ -47,6 +47,30 @@ ranma.config_dir = nil
 ---@param settings ranma.Settings
 function ranma.set(settings) end
 
+---@class ranma.OptionSpec
+---@field type "bool"|"int"|"float"|"enum"|"color"|"string"
+---@field default any Checked against the type.
+---@field name? string Shown in the settings panel; from the key when left out.
+---@field desc? string One or two sentences, shown under the list.
+---@field min? number For int and float.
+---@field max? number
+---@field step? number What ←→ in the panel steps by.
+---@field slider? boolean Drawn with a slider where there is room (default true).
+---@field choices? string[] For enum.
+
+---Declare a plugin's option: `<plugin>.<name>`. It is set with
+---`ranma.set { plugin = { name = ... } }`, read with ranma.get, and shown
+---in the settings panel under the plugin's name. While loading only.
+---@param key string
+---@param spec ranma.OptionSpec
+function ranma.option(key, spec) end
+
+---An option's value in force, by its dotted key: "wm_mode.hint",
+---"border.style", "history.max_results". Theme keys only once loaded.
+---@param key string
+---@return any
+function ranma.get(key) end
+
 ---@class ranma.BindOpts
 ---@field exit? boolean Whether WM mode ends after the bind fires.
 ---@field global? boolean Looked up outside WM mode, before the program sees the key.

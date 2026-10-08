@@ -687,6 +687,9 @@ fn main() -> ExitCode {
                 Some(e) => eprintln!("plugin: {} not loaded: {e}", p.path.display()),
             }
         }
+        for w in &cfg.warnings {
+            eprintln!("warning: {w}");
+        }
         println!("ok");
         return ExitCode::SUCCESS;
     }

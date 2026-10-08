@@ -208,8 +208,9 @@ features below the line live outside the repository.
 - [x] Design agreed
 - [x] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
   watched; a failing plugin dropped whole; the 200 ms watchdog
-- [ ] The options registry, with ranma's own settings declared through it;
-  `ranma.option`, `ranma.get`, `option_change`
+- [x] The options registry, with ranma's own settings declared through it;
+  `ranma.option`, `ranma.get`, `settings.toml` read and applied
+- [ ] `option_change`, fired by the settings panel
 - [x] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
 - [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)

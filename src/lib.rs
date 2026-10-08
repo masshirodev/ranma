@@ -21,6 +21,7 @@ pub mod layouts;
 pub mod luapane;
 pub mod luaui;
 pub mod nestbar;
+pub mod options;
 pub mod osc;
 pub mod pane;
 pub mod panetext;

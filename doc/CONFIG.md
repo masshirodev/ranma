@@ -858,6 +858,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
+| `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
 | `ranma.picker { ... }` | A filtered list of your own; see [Pickers and prompts](#pickers-and-prompts). |
 | `ranma.input { ... }` | A one-line prompt of your own. |
 | `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
@@ -934,6 +935,71 @@ ranma.bind("f5", function()
   end
 end, { desc = "last link" })
 ```
+
+## Options — `ranma.option(key, spec)`, `ranma.get(key)`
+
+Every setting ranma has, and every theme key the settings panel shows, is in
+one registry: its group, name, description, type and range. A plugin adds its
+own:
+
+```lua
+-- plugin/history.lua
+ranma.option("history.max_results", {
+  type = "int", min = 1, max = 500, default = 100,
+  desc = "The most matches the history picker lists.",
+})
+local max = ranma.get("history.max_results")
+```
+
+```lua
+-- init.lua
+ranma.set { history = { max_results = 50 } }
+```
+
+| Field | |
+| --- | --- |
+| `type` | `bool`, `int`, `float`, `enum`, `color` or `string`. |
+| `default` | Required, and checked against the type. |
+| `name`, `desc` | What the settings panel shows. The name comes from the key when left out. |
+| `min`, `max`, `step` | For `int` and `float`; `step` is what one press of ←→ in the panel moves. |
+| `slider` | `false`: no slider in the panel, only the number. |
+| `choices` | For `enum`: the strings it takes. |
+
+The key is `<plugin>.<name>`. The plugin's name becomes its group in the panel,
+and must not be one of ranma's own settings. Values are checked as strictly as
+ranma's own: a wrong type, a number out of range, or a name nothing declared
+is an error naming it. Options are declared while loading, so a plugin declares
+its options before `init.lua` sets them, since plugins load first.
+
+`ranma.get(key)` gives any option's value in force, by its dotted key:
+`"wm_mode.hint"`, `"border.style"`, `"history.max_results"`. While loading it
+knows what has been set so far, and not the theme's keys (the theme loads
+last). After that it knows everything, the settings panel's values included.
+
+### `settings.toml`
+
+The settings panel saves to `~/.config/ranma/settings.toml`, never into
+`init.lua`:
+
+```toml
+# Written by ranma's settings panel. ...
+[set]
+mouse = "hover"
+
+[set.history]
+max_results = 50
+
+[theme.panes]
+dim_unfocused = 0.3
+```
+
+`[set]` is applied as one more `ranma.set` after `init.lua`. `[theme]` is
+merged over the theme in use, as one more layer of what it inherits. What is
+here wins over both, which is why the panel marks a value that overrides your
+files (`◆`). It is read as strictly as they are, so editing it by hand is
+fine, with one exception: a plugin's options for a plugin that did not load
+are kept and skipped, with a toast saying so, because a broken plugin must not
+keep ranma from starting.
 
 ## Pickers and prompts
 

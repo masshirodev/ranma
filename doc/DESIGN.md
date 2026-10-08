@@ -582,6 +582,22 @@ table instead of each keeping its own list. A plugin's options are namespaced
 (`history.max_results`), set with `ranma.set` like any other and read with
 `ranma.get`. Changing one fires `option_change`.
 
+**How the registry holds values** (2026-10-08): it does not. An option is
+metadata only: key, group, name, description, type, range, home. Values live as
+TOML in three layers per home, merged the way a theme already merges over the
+one it inherits. Each `ranma.set` is merged into a table as well as applied, so
+the layers are what the built-in defaults left, what the files say, and what
+`settings.toml` saved. A theme key reads from the resolved theme table, with the
+panel's `[theme]` as one more layer of inheritance. Reading a value is walking a
+dotted key, and writing one goes through `ranma.set`'s and the theme loader's
+own strict parsing. So no option has a getter or setter to keep in step, and the
+panel cannot set a value a file could not. A test fails if a setting or theme
+key is in neither the registry nor its short list of keys left to the theme
+file (per-side gaps, custom border characters, text attributes, the optional
+colour roles). A colour's baseline is the theme in use, not the built-in one: a
+theme sets every colour, and marking them all as changed from the default would
+say nothing.
+
 **The settings panel** (`settings`, after tuios's) is a picker over that
 registry: every option, grouped, with its value edited in place (toggle, cycle,
 slider, swatch), the description of the selected one below and a mark on

@@ -1,0 +1,785 @@
+# The settings panel, cell for cell, as the design handoff draws it
+# (doc/handoffs/SETTINGS_PANEL.html, rendered with its own script, default theme).
+# The panel's layout is tested against these. Regenerate only from a new handoff.
+## 80x24 · ? keys and marks · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──╭─ keys and marks ───────────────────╮──┤
+│  3 use crate::pane│ │58be7d1 bar:││ L│ ↑↓ j k   move                      │5 │
+│  4                │ │e0c4f3a rend││  │ ←→ h l   change the value          │› │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││  │ enter    type a value, or flip     │› │
+│  6     let mut out│ │41aa0c7 past││  │ r        back to the default       │› ┃
+│  7     let mut res│ │0de93b2 toas││  │ u        undo the unsaved edit     │› ┃
+│  8     for i in 0.│ │~/src/ranma ││  │ /        filter by name            │] │
+│  9         if i + │ │❯ █         ││  │ tab      next group                │› │
+│ 10             out│ ╰────────────╯│  │ space    peek at the panes         │› │
+│ 11             bre│               │  │ w        save to settings.toml     │› │
+│ 12         }      │ ╭ 3 cargo ───╮│  │ esc      close; asks if unsaved    │› │
+│ 13         let (a,│ │test layout:││ ›│                                    │› │
+│ 14         out.pus│ │test picker:││  │ marks ──────────────────────────── │] │
+│ 15         rest = │ │test theme::││  │  •  differs from the default       │] │
+│ 16     }          │ │test render:│├──│  ◆  the panel’s value wins over    │──┤
+│ 17     out        │ │test paste::││ H│     init.lua or the theme          │n │
+│ 18 }              │ │test toast::││ f│  *  changed, not saved yet         │. │
+│ 19                │ │            ││ d│                                    │  │
+│ 20 pub fn master(a│ │test result:│├──╰─ any key ──────────────────────────╯──┤
+│ NORMAL  layout.rs │ │$ █         ││ ←→ step  enter type  r default  ? keys   │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · enum: Border style, stepped to a new style · rounded
+┏ 1 nvim ━━━━━━━━━━━┓ ┏ 2 zsh ━━━━━┓╭─ settings ─────────────────── 1 unsaved ─╮
+┃  1 //! Layouts: a ┃ ┃7d02e4b pick┃│ / filter                      61 options │
+┃  2                ┃ ┃c11a9e0 them┃├──────────────────────────────────────────┤
+┃  3 use crate::pane┃ ┃58be7d1 bar:┃│ Looks ─────────────────────────────── 15 │
+┃  4                ┃ ┃e0c4f3a rend┃│ › Border style *               ‹ thick › │
+┃  5 pub fn dwindle(┃ ┃9b2d6f8 doc:┃│   Float border                  ‹ same › │
+┃  6     let mut out┃ ┃41aa0c7 past┃│   Title position                 ‹ top › ┃
+┃  7     let mut res┃ ┃0de93b2 toas┃│   Title align                   ‹ left › ┃
+┃  8     for i in 0.┃ ┃~/src/ranma ┃│   Title format •  [ " {index}[ {progr… ] │
+┃  9         if i + ┃ ┃❯ █         ┃│   Indicator                     ‹ none › │
+┃ 10             out┃ ┗━━━━━━━━━━━━┛│   Inner gap •           ━●─────    ‹ 1 › │
+┃ 11             bre┃               │   Outer gap, sides      ●──────    ‹ 0 › │
+┃ 12         }      ┃ ┏ 3 cargo ━━━┓│   Outer gap, ends       ●──────    ‹ 0 › │
+┃ 13         let (a,┃ ┃test layout:┃│   Dim unfocused ◆       ━━━●───  ‹ 50% › │
+┃ 14         out.pus┃ ┃test picker:┃│   Focused pane bg           [ ·· unset ] │
+┃ 15         rest = ┃ ┃test theme::┃│   Other panes bg            [ ·· unset ] │
+┃ 16     }          ┃ ┃test render:┃├──────────────────────────────────────────┤
+┃ 17     out        ┃ ┃test paste::┃│ The line pane borders, floats and        │
+┃ 18 }              ┃ ┃test toast::┃│ pickers are drawn with.                  │
+┃ 19                ┃ ┃            ┃│ default rounded → thick                  │
+┃ 20 pub fn master(a┃ ┃test result:┃├──────────────────────────────────────────┤
+┃ NORMAL  layout.rs ┃ ┃$ █         ┃│ ←→ choose  r default  ? keys             │
+┗━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━┛╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · bool: Splash · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ General ───────────────────────────── 10 ┃
+│  4                │ │e0c4f3a rend││   Leader                    [ "ctrl+b" ] ┃
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Theme                      ‹ default › │
+│  6     let mut out│ │41aa0c7 past││   Layout •                    ‹ master › │
+│  7     let mut res│ │0de93b2 toas││   Master ratio •        ━━━━●──  ‹ 60% › │
+│  8     for i in 0.│ │~/src/ranma ││   Preserve split                  [ on ] │
+│  9         if i + │ │❯ █         ││   Shell                       [ $SHELL ] │
+│ 10             out│ ╰────────────╯│   Scrollback                   ‹ 10000 › │
+│ 11             bre│               │   Mouse •                      ‹ hover › │
+│ 12         }      │ ╭ 3 cargo ───╮│   Restore                        ‹ ask › │
+│ 13         let (a,│ │test layout:││ › Splash •                       [ off ] │
+│ 14         out.pus│ │test picker:││ WM mode ────────────────────────────── 2 │
+│ 15         rest = │ │test theme::││   Sticky                          [ on ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ An empty workspace shows the ranma logo, │
+│ 18 }              │ │test toast::││ with the keys to start below it.         │
+│ 19                │ │            ││ default on · init.lua off                │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ ←→ flip  r default  ? keys               │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · slider: Dim unfocused, unsaved · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ─────────────────── 1 unsaved ─╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Looks ─────────────────────────────── 15 │
+│  4                │ │e0c4f3a rend││   Border style               ‹ rounded › │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Float border                  ‹ same › │
+│  6     let mut out│ │41aa0c7 past││   Title position                 ‹ top › ┃
+│  7     let mut res│ │0de93b2 toas││   Title align                   ‹ left › ┃
+│  8     for i in 0.│ │~/src/ranma ││   Title format •  [ " {index}[ {progr… ] │
+│  9         if i + │ │❯ █         ││   Indicator                     ‹ none › │
+│ 10             out│ ╰────────────╯│   Inner gap •           ━●─────    ‹ 1 › │
+│ 11             bre│               │   Outer gap, sides      ●──────    ‹ 0 › │
+│ 12         }      │ ╭ 3 cargo ───╮│   Outer gap, ends       ●──────    ‹ 0 › │
+│ 13         let (a,│ │test layout:││ › Dim unfocused *       ━━━━●──  ‹ 60% › │
+│ 14         out.pus│ │test picker:││   Focused pane bg           [ ·· unset ] │
+│ 15         rest = │ │test theme::││   Other panes bg            [ ·· unset ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ How far the text of panes you are not in │
+│ 18 }              │ │test toast::││ fades toward their background. 0 is off. │
+│ 19                │ │            ││ default 0% · theme 30% · panel 50% → 60% │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ ←→ step  enter type  r default  ? keys   │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · colour: Border active, stepped · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ─────────────────── 1 unsaved ─╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Colours ───────────────────────────── 27 │
+│  4                │ │e0c4f3a rend││ › Border active *         [ ██ #fab387 ] │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Border inactive         [ ██ #45475a ] │
+│  6     let mut out│ │41aa0c7 past││   Border floating         [ ██ #f5c2e7 ] │
+│  7     let mut res│ │0de93b2 toas││   Bar bg                  [ ·· default ] │
+│  8     for i in 0.│ │~/src/ranma ││   Bar fg                  [ ██ #cdd6f4 ] │
+│  9         if i + │ │❯ █         ││   Bar dim                 [ ██ #6c7086 ] ┃
+│ 10             out│ ╰────────────╯│   Bar accent              [ ██ #89b4fa ] ┃
+│ 11             bre│               │   Bar urgent              [ ██ #f38ba8 ] │
+│ 12         }      │ ╭ 3 cargo ───╮│   Mode fg                 [ ██ #1e1e2e ] │
+│ 13         let (a,│ │test layout:││   Mode bg                 [ ██ #f38ba8 ] │
+│ 14         out.pus│ │test picker:││   Current ws fg           [ ██ #1e1e2e ] │
+│ 15         rest = │ │test theme::││   Current ws bg           [ ██ #89b4fa ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ The focused pane’s border.               │
+│ 18 }              │ │test toast::││                                          │
+│ 19                │ │            ││ default #89b4fa → #fab387                │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ ←→ theme colours  enter type  r default  │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · string: Title format · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Looks ─────────────────────────────── 15 │
+│  4                │ │e0c4f3a rend││   Border style               ‹ rounded › │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Float border                  ‹ same › │
+│  6     let mut out│ │41aa0c7 past││   Title position                 ‹ top › ┃
+│  7     let mut res│ │0de93b2 toas││   Title align                   ‹ left › ┃
+│  8     for i in 0.│ │~/src/ranma ││ › Title format •  [ " {index}[ {progr… ] │
+│  9         if i + │ │❯ █         ││   Indicator                     ‹ none › │
+│ 10             out│ ╰────────────╯│   Inner gap •           ━●─────    ‹ 1 › │
+│ 11             bre│               │   Outer gap, sides      ●──────    ‹ 0 › │
+│ 12         }      │ ╭ 3 cargo ───╮│   Outer gap, ends       ●──────    ‹ 0 › │
+│ 13         let (a,│ │test layout:││   Dim unfocused ◆       ━━━●───  ‹ 50% › │
+│ 14         out.pus│ │test picker:││   Focused pane bg           [ ·· unset ] │
+│ 15         rest = │ │test theme::││   Other panes bg            [ ·· unset ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ A pane’s title: {title}, {index},        │
+│ 18 }              │ │test toast::││ {program}, {cwd}. A part in [ ] shows …  │
+│ 19                │ │            ││ default " {title} " · theme " {index}[ {p…
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ enter edit  r default  ? keys            │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · filtering "bor": two groups · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / bor                            5 of 61 │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Looks ────────────────────────── 2 of 15 │
+│  4                │ │e0c4f3a rend││ › Border style               ‹ rounded › │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Float border                  ‹ same › │
+│  6     let mut out│ │41aa0c7 past││ Colours ──────────────────────── 3 of 27 │
+│  7     let mut res│ │0de93b2 toas││   Border active           [ ██ #89b4fa ] │
+│  8     for i in 0.│ │~/src/ranma ││   Border inactive         [ ██ #45475a ] │
+│  9         if i + │ │❯ █         ││   Border floating         [ ██ #f5c2e7 ] │
+│ 10             out│ ╰────────────╯│                                          │
+│ 11             bre│               │                                          │
+│ 12         }      │ ╭ 3 cargo ───╮│                                          │
+│ 13         let (a,│ │test layout:││                                          │
+│ 14         out.pus│ │test picker:││                                          │
+│ 15         rest = │ │test theme::││                                          │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ The line pane borders, floats and        │
+│ 18 }              │ │test toast::││ pickers are drawn with.                  │
+│ 19                │ │            ││ default rounded                          │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ ↑↓ move  ←→ change  esc clear            │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · typing a colour · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Colours ───────────────────────────── 27 │
+│  4                │ │e0c4f3a rend││ › Border active         [ ██ #fab38    ] │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Border inactive         [ ██ #45475a ] │
+│  6     let mut out│ │41aa0c7 past││   Border floating         [ ██ #f5c2e7 ] │
+│  7     let mut res│ │0de93b2 toas││   Bar bg                  [ ·· default ] │
+│  8     for i in 0.│ │~/src/ranma ││   Bar fg                  [ ██ #cdd6f4 ] │
+│  9         if i + │ │❯ █         ││   Bar dim                 [ ██ #6c7086 ] ┃
+│ 10             out│ ╰────────────╯│   Bar accent              [ ██ #89b4fa ] ┃
+│ 11             bre│               │   Bar urgent              [ ██ #f38ba8 ] │
+│ 12         }      │ ╭ 3 cargo ───╮│   Mode fg                 [ ██ #1e1e2e ] │
+│ 13         let (a,│ │test layout:││   Mode bg                 [ ██ #f38ba8 ] │
+│ 14         out.pus│ │test picker:││   Current ws fg           [ ██ #1e1e2e ] │
+│ 15         rest = │ │test theme::││   Current ws bg           [ ██ #89b4fa ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ A hex #rrggbb, an ANSI name (blue,       │
+│ 18 }              │ │test toast::││ bright-black), 0–255, or default.        │
+│ 19                │ │            ││ not a colour yet · was ██ #89b4fa        │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ enter apply  esc cancel  ctrl+u clear    │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · Esc with unsaved edits · rounded
+╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ─────────────────── 2 unsaved ─╮
+│  1 //! Layouts: a │ │7d02e4b pick││ / filter                      61 options │
+│  2                │ │c11a9e0 them│├──────────────────────────────────────────┤
+│  3 use crate::pane│ │58be7d1 bar:││ Looks ─────────────────────────────── 15 │
+│  4                │ │e0c4f3a rend││   Border style               ‹ rounded › │
+│  5 pub fn dwindle(│ │9b2d6f8 doc:││   Float border                  ‹ same › │
+│  6     let mut out│ │41aa0c7 past││   Title position                 ‹ top › ┃
+│  7     let mut res│ │0de93b2 toas││   Title align                   ‹ left › ┃
+│  8     for i in 0.│ │~/src/ranma ││   Title format •  [ " {index}[ {progr… ] │
+│  9         if i + │ │❯ █         ││   Indicator                     ‹ none › │
+│ 10             out│ ╰────────────╯│   Inner gap •           ━●─────    ‹ 1 › │
+│ 11             bre│               │   Outer gap, sides      ●──────    ‹ 0 › │
+│ 12         }      │ ╭ 3 cargo ───╮│   Outer gap, ends       ●──────    ‹ 0 › │
+│ 13         let (a,│ │test layout:││ › Dim unfocused *       ━━━━●──  ‹ 60% › │
+│ 14         out.pus│ │test picker:││   Focused pane bg           [ ·· unset ] │
+│ 15         rest = │ │test theme::││   Other panes bg            [ ·· unset ] │
+│ 16     }          │ │test render:│├──────────────────────────────────────────┤
+│ 17     out        │ │test paste::││ Close with 2 unsaved changes?            │
+│ 18 }              │ │test toast::││ Dim unfocused    50% → 60%               │
+│ 19                │ │            ││ Border active    #89b4fa → #fab387       │
+│ 20 pub fn master(a│ │test result:│├──────────────────────────────────────────┤
+│ NORMAL  layout.rs │ │$ █         ││ w save  d discard  esc keep editing      │
+╰───────────────────╯ ╰────────────╯╰───────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · space: peek at the workspace · rounded
+╭ 1 nvim ─────────────────────────────────────╮ ╭ 2 zsh ───────────────────────╮
+│  1 //! Layouts: a tree of splits.           │ │58be7d1 bar: mode chip for sub│
+│  2                                          │ │e0c4f3a render: crop panes, ne│
+│  3 use crate::pane::PaneId;                 │ │9b2d6f8 doc: plugins in Lua   │
+│  4                                          │ │41aa0c7 paste: upload over ssh│
+│  5 pub fn dwindle(area: Rect, n: usize) -> V│ │0de93b2 toast: urgent border  │
+│  6     let mut out = Vec::new();            │ │~/src/ranma main              │
+│  7     let mut rest = area;                 │ │❯ █                           │
+│  8     for i in 0..n {                      │ ╰──────────────────────────────╯
+│  9         if i + 1 == n {                  │                                 
+│ 10             out.push(rest);              │ ╭ 3 cargo ─────────────────────╮
+│ 11             break;                       │ │test picker::filter ... ok    │
+│ 12         }                                │ │test theme::inherit ... ok    │
+│ 13         let (a, b) = split(rest, i);     │ │test render::crop ... ok      │
+│ 14         out.push(a);                     │ │test paste::upload ... ok     │
+│ 15         rest = b;                        │ │test toast::stack ... ok      │
+│ 16     }                                    │ │                              │
+│ 17     out                                  │ │test result: ok. 42 passed; 0 │
+│ NORMAL  layout.rs                     9:13  │ │$ █                           │
+╰─────────────────────────────────────────────╯ ╰──────────────────────────────╯
+╭─ settings · peek ──────────────────────────────────────────────── 1 unsaved ─╮
+│ › Dim unfocused *           unsaved               ━━━━━━━━━━●──────  ‹ 60% › │
+╰─────────────────────────────────────────── space back · ←→ step · esc close ─╯
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · ? keys and marks · none
+  1 nvim                2 zsh          settings                                 
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them       keys and marks                        
+   3 use crate::pane   58be7d1 bar:   L  ↑↓ j k   move                       5  
+   4                   e0c4f3a rend      ←→ h l   change the value           ›  
+   5 pub fn dwindle(   9b2d6f8 doc:      enter    type a value, or flip      ›  
+   6     let mut out   41aa0c7 past      r        back to the default        › ▐
+   7     let mut res   0de93b2 toas      u        undo the unsaved edit      › ▐
+   8     for i in 0.   ~/src/ranma       /        filter by name             ]  
+   9         if i +    ❯ █               tab      next group                 ›  
+  10             out                     space    peek at the panes          ›  
+  11             bre                     w        save to settings.toml      ›  
+  12         }          3 cargo          esc      close; asks if unsaved     ›  
+  13         let (a,   test layout:   ›                                      ›  
+  14         out.pus   test picker:      marks ────────────────────────────  ]  
+  15         rest =    test theme::       •  differs from the default        ]  
+  16     }             test render:       ◆  the panel’s value wins over        
+  17     out           test paste::   H      init.lua or the theme           n  
+  18 }                 test toast::   f   *  changed, not saved yet          .  
+  19                                  d                                         
+  20 pub fn master(a   test result:       any key                               
+  NORMAL  layout.rs    $ █            ←→ step  enter type  r default  ? keys    
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · enum: Border style, stepped to a new style · none
+┏ 1 nvim ━━━━━━━━━━━┓ ┏ 2 zsh ━━━━━┓   settings                     1 unsaved   
+┃  1 //! Layouts: a ┃ ┃7d02e4b pick┃  / filter                      61 options  
+┃  2                ┃ ┃c11a9e0 them┃                                            
+┃  3 use crate::pane┃ ┃58be7d1 bar:┃  Looks ─────────────────────────────── 15  
+┃  4                ┃ ┃e0c4f3a rend┃  › Border style *               ‹ thick ›  
+┃  5 pub fn dwindle(┃ ┃9b2d6f8 doc:┃    Float border                  ‹ same ›  
+┃  6     let mut out┃ ┃41aa0c7 past┃    Title position                 ‹ top › ▐
+┃  7     let mut res┃ ┃0de93b2 toas┃    Title align                   ‹ left › ▐
+┃  8     for i in 0.┃ ┃~/src/ranma ┃    Title format •  [ " {index}[ {progr… ]  
+┃  9         if i + ┃ ┃❯ █         ┃    Indicator                     ‹ none ›  
+┃ 10             out┃ ┗━━━━━━━━━━━━┛    Inner gap •           ━●─────    ‹ 1 ›  
+┃ 11             bre┃                   Outer gap, sides      ●──────    ‹ 0 ›  
+┃ 12         }      ┃ ┏ 3 cargo ━━━┓    Outer gap, ends       ●──────    ‹ 0 ›  
+┃ 13         let (a,┃ ┃test layout:┃    Dim unfocused ◆       ━━━●───  ‹ 50% ›  
+┃ 14         out.pus┃ ┃test picker:┃    Focused pane bg           [ ·· unset ]  
+┃ 15         rest = ┃ ┃test theme::┃    Other panes bg            [ ·· unset ]  
+┃ 16     }          ┃ ┃test render:┃                                            
+┃ 17     out        ┃ ┃test paste::┃  The line pane borders, floats and         
+┃ 18 }              ┃ ┃test toast::┃  pickers are drawn with.                   
+┃ 19                ┃ ┃            ┃  default rounded · theme none → thick      
+┃ 20 pub fn master(a┃ ┃test result:┃                                            
+┃ NORMAL  layout.rs ┃ ┃$ █         ┃  ←→ choose  r default  ? keys              
+┗━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━┛                       w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · bool: Splash · none
+  1 nvim                2 zsh          settings                                 
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   General ───────────────────────────── 10 ▐
+   4                   e0c4f3a rend     Leader                    [ "ctrl+b" ] ▐
+   5 pub fn dwindle(   9b2d6f8 doc:     Theme                      ‹ default ›  
+   6     let mut out   41aa0c7 past     Layout •                    ‹ master ›  
+   7     let mut res   0de93b2 toas     Master ratio •        ━━━━●──  ‹ 60% ›  
+   8     for i in 0.   ~/src/ranma      Preserve split                  [ on ]  
+   9         if i +    ❯ █              Shell                       [ $SHELL ]  
+  10             out                    Scrollback                   ‹ 10000 ›  
+  11             bre                    Mouse •                      ‹ hover ›  
+  12         }          3 cargo         Restore                        ‹ ask ›  
+  13         let (a,   test layout:   › Splash •                       [ off ]  
+  14         out.pus   test picker:   WM mode ────────────────────────────── 2  
+  15         rest =    test theme::     Sticky                          [ on ]  
+  16     }             test render:                                             
+  17     out           test paste::   An empty workspace shows the ranma logo,  
+  18 }                 test toast::   with the keys to start below it.          
+  19                                  default on · init.lua off                 
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            ←→ flip  r default  ? keys                
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · slider: Dim unfocused, unsaved · none
+  1 nvim                2 zsh          settings                     1 unsaved   
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Looks ─────────────────────────────── 15  
+   4                   e0c4f3a rend     Border style •                ‹ none ›  
+   5 pub fn dwindle(   9b2d6f8 doc:     Float border                  ‹ same ›  
+   6     let mut out   41aa0c7 past     Title position                 ‹ top › ▐
+   7     let mut res   0de93b2 toas     Title align                   ‹ left › ▐
+   8     for i in 0.   ~/src/ranma      Title format •  [ " {index}[ {progr… ]  
+   9         if i +    ❯ █              Indicator                     ‹ none ›  
+  10             out                    Inner gap •           ━●─────    ‹ 1 ›  
+  11             bre                    Outer gap, sides      ●──────    ‹ 0 ›  
+  12         }          3 cargo         Outer gap, ends       ●──────    ‹ 0 ›  
+  13         let (a,   test layout:   › Dim unfocused *       ━━━━●──  ‹ 60% ›  
+  14         out.pus   test picker:     Focused pane bg           [ ·· unset ]  
+  15         rest =    test theme::     Other panes bg            [ ·· unset ]  
+  16     }             test render:                                             
+  17     out           test paste::   How far the text of panes you are not in  
+  18 }                 test toast::   fades toward their background. 0 is off.  
+  19                                  default 0% · theme 30% · panel 50% → 60%  
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            ←→ step  enter type  r default  ? keys    
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · colour: Border active, stepped · none
+  1 nvim                2 zsh          settings                     1 unsaved   
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Colours ───────────────────────────── 27  
+   4                   e0c4f3a rend   › Border active *         [ ██ #fab387 ]  
+   5 pub fn dwindle(   9b2d6f8 doc:     Border inactive         [ ██ #45475a ]  
+   6     let mut out   41aa0c7 past     Border floating         [ ██ #f5c2e7 ]  
+   7     let mut res   0de93b2 toas     Bar bg                  [ ·· default ]  
+   8     for i in 0.   ~/src/ranma      Bar fg                  [ ██ #cdd6f4 ]  
+   9         if i +    ❯ █              Bar dim                 [ ██ #6c7086 ] ▐
+  10             out                    Bar accent              [ ██ #89b4fa ] ▐
+  11             bre                    Bar urgent              [ ██ #f38ba8 ]  
+  12         }          3 cargo         Mode fg                 [ ██ #1e1e2e ]  
+  13         let (a,   test layout:     Mode bg                 [ ██ #f38ba8 ]  
+  14         out.pus   test picker:     Current ws fg           [ ██ #1e1e2e ]  
+  15         rest =    test theme::     Current ws bg           [ ██ #89b4fa ]  
+  16     }             test render:                                             
+  17     out           test paste::   The focused pane’s border.                
+  18 }                 test toast::                                             
+  19                                  default #89b4fa → #fab387                 
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            ←→ theme colours  enter type  r default   
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · string: Title format · none
+  1 nvim                2 zsh          settings                                 
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Looks ─────────────────────────────── 15  
+   4                   e0c4f3a rend     Border style •                ‹ none ›  
+   5 pub fn dwindle(   9b2d6f8 doc:     Float border                  ‹ same ›  
+   6     let mut out   41aa0c7 past     Title position                 ‹ top › ▐
+   7     let mut res   0de93b2 toas     Title align                   ‹ left › ▐
+   8     for i in 0.   ~/src/ranma    › Title format •  [ " {index}[ {progr… ]  
+   9         if i +    ❯ █              Indicator                     ‹ none ›  
+  10             out                    Inner gap •           ━●─────    ‹ 1 ›  
+  11             bre                    Outer gap, sides      ●──────    ‹ 0 ›  
+  12         }          3 cargo         Outer gap, ends       ●──────    ‹ 0 ›  
+  13         let (a,   test layout:     Dim unfocused ◆       ━━━●───  ‹ 50% ›  
+  14         out.pus   test picker:     Focused pane bg           [ ·· unset ]  
+  15         rest =    test theme::     Other panes bg            [ ·· unset ]  
+  16     }             test render:                                             
+  17     out           test paste::   A pane’s title: {title}, {index},         
+  18 }                 test toast::   {program}, {cwd}. A part in [ ] shows …   
+  19                                  default " {title} " · theme " {index}[ {p…
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            enter edit  r default  ? keys             
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · filtering "bor": two groups · none
+  1 nvim                2 zsh          settings                                 
+   1 //! Layouts: a    7d02e4b pick   / bor                            5 of 61  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Looks ────────────────────────── 2 of 15  
+   4                   e0c4f3a rend   › Border style •                ‹ none ›  
+   5 pub fn dwindle(   9b2d6f8 doc:     Float border                  ‹ same ›  
+   6     let mut out   41aa0c7 past   Colours ──────────────────────── 3 of 27  
+   7     let mut res   0de93b2 toas     Border active           [ ██ #89b4fa ]  
+   8     for i in 0.   ~/src/ranma      Border inactive         [ ██ #45475a ]  
+   9         if i +    ❯ █              Border floating         [ ██ #f5c2e7 ]  
+  10             out                                                            
+  11             bre                                                            
+  12         }          3 cargo                                                 
+  13         let (a,   test layout:                                             
+  14         out.pus   test picker:                                             
+  15         rest =    test theme::                                             
+  16     }             test render:                                             
+  17     out           test paste::   The line pane borders, floats and         
+  18 }                 test toast::   pickers are drawn with.                   
+  19                                  default rounded · theme none              
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            ↑↓ move  ←→ change  esc clear             
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · typing a colour · none
+  1 nvim                2 zsh          settings                                 
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Colours ───────────────────────────── 27  
+   4                   e0c4f3a rend   › Border active         [ ██ #fab38    ]  
+   5 pub fn dwindle(   9b2d6f8 doc:     Border inactive         [ ██ #45475a ]  
+   6     let mut out   41aa0c7 past     Border floating         [ ██ #f5c2e7 ]  
+   7     let mut res   0de93b2 toas     Bar bg                  [ ·· default ]  
+   8     for i in 0.   ~/src/ranma      Bar fg                  [ ██ #cdd6f4 ]  
+   9         if i +    ❯ █              Bar dim                 [ ██ #6c7086 ] ▐
+  10             out                    Bar accent              [ ██ #89b4fa ] ▐
+  11             bre                    Bar urgent              [ ██ #f38ba8 ]  
+  12         }          3 cargo         Mode fg                 [ ██ #1e1e2e ]  
+  13         let (a,   test layout:     Mode bg                 [ ██ #f38ba8 ]  
+  14         out.pus   test picker:     Current ws fg           [ ██ #1e1e2e ]  
+  15         rest =    test theme::     Current ws bg           [ ██ #89b4fa ]  
+  16     }             test render:                                             
+  17     out           test paste::   A hex #rrggbb, an ANSI name (blue,        
+  18 }                 test toast::   bright-black), 0–255, or default.         
+  19                                  not a colour yet · was ██ #89b4fa         
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            enter apply  esc cancel  ctrl+u clear     
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · Esc with unsaved edits · none
+  1 nvim                2 zsh          settings                     2 unsaved   
+   1 //! Layouts: a    7d02e4b pick   / filter                      61 options  
+   2                   c11a9e0 them                                             
+   3 use crate::pane   58be7d1 bar:   Looks ─────────────────────────────── 15  
+   4                   e0c4f3a rend     Border style •                ‹ none ›  
+   5 pub fn dwindle(   9b2d6f8 doc:     Float border                  ‹ same ›  
+   6     let mut out   41aa0c7 past     Title position                 ‹ top › ▐
+   7     let mut res   0de93b2 toas     Title align                   ‹ left › ▐
+   8     for i in 0.   ~/src/ranma      Title format •  [ " {index}[ {progr… ]  
+   9         if i +    ❯ █              Indicator                     ‹ none ›  
+  10             out                    Inner gap •           ━●─────    ‹ 1 ›  
+  11             bre                    Outer gap, sides      ●──────    ‹ 0 ›  
+  12         }          3 cargo         Outer gap, ends       ●──────    ‹ 0 ›  
+  13         let (a,   test layout:   › Dim unfocused *       ━━━━●──  ‹ 60% ›  
+  14         out.pus   test picker:     Focused pane bg           [ ·· unset ]  
+  15         rest =    test theme::     Other panes bg            [ ·· unset ]  
+  16     }             test render:                                             
+  17     out           test paste::   Close with 2 unsaved changes?             
+  18 }                 test toast::   Dim unfocused    50% → 60%                
+  19                                  Border active    #89b4fa → #fab387        
+  20 pub fn master(a   test result:                                             
+  NORMAL  layout.rs    $ █            w save  d discard  esc keep editing       
+                                                           w save · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 80x24 · space: peek at the workspace · none
+  1 nvim                                          2 zsh                         
+   1 //! Layouts: a tree of splits.              58be7d1 bar: mode chip for sub 
+   2                                             e0c4f3a render: crop panes, ne 
+   3 use crate::pane::PaneId;                    9b2d6f8 doc: plugins in Lua    
+   4                                             41aa0c7 paste: upload over ssh 
+   5 pub fn dwindle(area: Rect, n: usize) -> V   0de93b2 toast: urgent border   
+   6     let mut out = Vec::new();               ~/src/ranma main               
+   7     let mut rest = area;                    ❯ █                            
+   8     for i in 0..n {                                                        
+   9         if i + 1 == n {                                                    
+  10             out.push(rest);                  3 cargo                       
+  11             break;                          test picker::filter ... ok     
+  12         }                                   test theme::inherit ... ok     
+  13         let (a, b) = split(rest, i);        test render::crop ... ok       
+  14         out.push(a);                        test paste::upload ... ok      
+  15         rest = b;                           test toast::stack ... ok       
+  16     }                                                                      
+  17     out                                     test result: ok. 42 passed; 0  
+  NORMAL  layout.rs                     9:13     $ █                            
+                                                                                
+   settings · peek                                                  1 unsaved   
+  › Dim unfocused *           unsaved               ━━━━━━━━━━●──────  ‹ 60% ›  
+                                             space back · ←→ step · esc close   
+ SET    1:code  2:web  3                                cpu 12%  mem 41%  16:36 
+## 200x50 · selected slider · rounded
+╭ 1 nvim ───────────────────────────────────────────────────╮  ╭ 2 zsh ────────────────────────────────╮╭─ settings ───────────┬─────────────────────────────────────────────────────────── 2 unsaved ─╮
+│  1 //! Layouts: a tree of splits.                         │  │~/src/ranma main                       ││ Groups               │ / filter                                                   61 options │
+│  2                                                        │  │❯ git log --oneline -8                 │├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;                               │  │a3f91c2 layout: master keeps its ratio ││   General     •4  10 │ Looks ──────────────────────────────────────────────────────────── 15 │
+│  4                                                        │  │7d02e4b picker: headings stay on filter││   WM mode          2 │   Border style                                            ‹ rounded › │
+│  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> {    │  │c11a9e0 theme: toast roles for panels  ││ › Looks       •3  15 │   Float border                                               ‹ same › │
+│  6     let mut out = Vec::new();                          │  │58be7d1 bar: mode chip for sub-modes   ││   Colours         27 │   Title position                                              ‹ top › │
+│  7     let mut rest = area;                               │  │e0c4f3a render: crop panes, never resiz││   Paste            2 │   Title align                                                ‹ left › │
+│  8     for i in 0..n {                                    │  │9b2d6f8 doc: plugins in Lua            ││                      │   Title format •            theme         [ " {index}[ {program}] " ] │
+│  9         if i + 1 == n {                                │  │41aa0c7 paste: upload over ssh         ││ plugins ──────────── │   Indicator                                                  ‹ none › │
+│ 10             out.push(rest);                            │  │0de93b2 toast: urgent border           ││   mpris       •1   3 │   Inner gap *               unsaved        ━━━━●────────────    ‹ 2 › │
+│ 11             break;                                     │  │~/src/ranma main                       ││   battery          2 │   Outer gap, sides                         ●────────────────    ‹ 0 › ┃
+│ 12         }                                              │  │❯ █                                    ││                      │   Outer gap, ends                          ●────────────────    ‹ 0 › ┃
+│ 13         let (a, b) = split(rest, i);                   │  │                                       ││                      │ › Dim unfocused *           unsaved        ━━━━━━━━━━●──────  ‹ 60% › ┃
+│ 14         out.push(a);                                   │  │                                       ││                      │   Focused pane bg                                        [ ·· unset ] ┃
+│ 15         rest = b;                                      │  │                                       ││                      │   Other panes bg                                         [ ·· unset ] ┃
+│ 16     }                                                  │  │                                       ││                      │   Bar position                                             ‹ bottom › ┃
+│ 17     out                                                │  │                                       ││                      │   Bar separator                                              [ "  " ] ┃
+│ 18 }                                                      │  │                                       ││                      │   Workspace format                               [ " {n}[:{name}] " ] ┃
+│ 19                                                        │  │                                       ││                      │ Colours ────────────────────────────────────────────────────────── 27 ┃
+│ 20 pub fn master(area: Rect, n: usize, ratio: f32) -> Vec<│  │                                       ││                      │   Border active                                        [ ██ #89b4fa ] ┃
+│ 21     let w = (area.w as f32 * ratio).round() as u16;    │  │                                       ││                      │   Border inactive                                      [ ██ #45475a ] ┃
+│ 22     let (m, stack) = area.split_x(w);                  │  ╰───────────────────────────────────────╯│                      │   Border floating                                      [ ██ #f5c2e7 ] ┃
+│ 23     let mut out = vec![m];                             │                                           │                      │   Bar bg                                               [ ·· default ] ┃
+│ 24     out.extend(stack.rows(n - 1));                     │                                           │                      │   Bar fg                                               [ ██ #cdd6f4 ] ┃
+│ 25     out                                                │  ╭ 3 cargo ──────────────────────────────╮│                      │   Bar dim                                              [ ██ #6c7086 ] ┃
+│ 26 }                                                      │  │$ cargo test -q                        ││                      │   Bar accent                                           [ ██ #89b4fa ] ┃
+│ 27                                                        │  │running 42 tests                       ││                      │   Bar urgent                                           [ ██ #f38ba8 ] ┃
+│ 28 fn split(r: Rect, i: usize) -> (Rect, Rect) {          │  │test layout::dwindle ... ok            ││                      │   Mode fg                                              [ ██ #1e1e2e ] ┃
+│ 29     if i % 2 == 0 { r.split_x(r.w / 2) } else { r.split│  │test layout::master ... ok             ││                      │   Mode bg                                              [ ██ #f38ba8 ] ┃
+│ 30 }                                                      │  │test picker::filter ... ok             ││                      │   Current ws fg                                        [ ██ #1e1e2e ] ┃
+│ 31                                                        │  │test theme::inherit ... ok             ││                      │   Current ws bg                                        [ ██ #89b4fa ] ┃
+│ 32 #[cfg(test)]                                           │  │test render::crop ... ok               ││                      │   Occupied ws                                          [ ██ #cdd6f4 ] │
+│ 33 mod tests {                                            │  │test paste::upload ... ok              ││                      │   Empty ws                                             [ ██ #6c7086 ] │
+│ 34     use super::*;                                      │  │test toast::stack ... ok               ││                      │   Urgent ws                                            [ ██ #f38ba8 ] │
+│ 35                                                        │  │                                       ││                      │   Active tab fg                                        [ ██ #1e1e2e ] │
+│ 36     #[test]                                            │  │test result: ok. 42 passed; 0 failed   ││                      │   Active tab bg                                        [ ██ #89b4fa ] │
+│ 37     fn dwindle_fills_the_area() {                      │  │$ █                                    ││                      │   Tab fg                                               [ ██ #cdd6f4 ] │
+│ 38         let rs = dwindle(Rect::new(0, 0, 80, 24), 3);  │  │                                       ││                      │   Tab bg                                               [ ██ #313244 ] │
+│ 39         assert_eq!(rs.len(), 3);                       │  │                                       ││                      │   Picker selected fg                                   [ ██ #1e1e2e ] │
+│ 40     }                                                  │  │                                       ││                      │   Picker selected bg                                   [ ██ #89b4fa ] │
+│ 41 }                                                      │  │                                       │├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│~                                                          │  │                                       ││                        How far the text of panes you are not in fades toward their           │
+│~                                                          │  │                                       ││                        background. 0 is off.                                                 │
+│~                                                          │  │                                       ││                                                                                              │
+│~                                                          │  │                                       ││                        default 0% · theme 30% · panel 50%panes.dim_unfocused · float 0%–100% │
+│~                                                          │  │                                       │├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NORMAL  layout.rs                                   9:13  │  │                                       ││                        ←→ step  enter type  r default  u undo  / filter  tab next group      │
+╰───────────────────────────────────────────────────────────╯  ╰───────────────────────────────────────╯╰───────────────────────────────────────────────────────────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                                                                                                                                        cpu 12%  mem 41%  16:36 
+## 200x50 · selected enum · rounded
+┏ 1 nvim ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏ 2 zsh ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭─ settings ───────────┬─────────────────────────────────────────────────────────── 1 unsaved ─╮
+┃  1 //! Layouts: a tree of splits.                          ┃ ┃~/src/ranma main                       ┃│ Groups               │ / filter                                                   61 options │
+┃  2                                                         ┃ ┃❯ git log --oneline -8                 ┃├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+┃  3 use crate::pane::PaneId;                                ┃ ┃a3f91c2 layout: master keeps its ratio ┃│   General     •4  10 │ Looks ──────────────────────────────────────────────────────────── 15 │
+┃  4                                                         ┃ ┃7d02e4b picker: headings stay on filter┃│   WM mode          2 │ › Border style *            unsaved                         ‹ thick › │
+┃  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> {     ┃ ┃c11a9e0 theme: toast roles for panels  ┃│ › Looks       •4  15 │   Float border                                               ‹ same › │
+┃  6     let mut out = Vec::new();                           ┃ ┃58be7d1 bar: mode chip for sub-modes   ┃│   Colours         27 │   Title position                                              ‹ top › │
+┃  7     let mut rest = area;                                ┃ ┃e0c4f3a render: crop panes, never resiz┃│   Paste            2 │   Title align                                                ‹ left › │
+┃  8     for i in 0..n {                                     ┃ ┃9b2d6f8 doc: plugins in Lua            ┃│                      │   Title format •            theme         [ " {index}[ {program}] " ] │
+┃  9         if i + 1 == n {                                 ┃ ┃41aa0c7 paste: upload over ssh         ┃│ plugins ──────────── │   Indicator                                                  ‹ none › │
+┃ 10             out.push(rest);                             ┃ ┃0de93b2 toast: urgent border           ┃│   mpris       •1   3 │   Inner gap •               panel          ━━●──────────────    ‹ 1 › │
+┃ 11             break;                                      ┃ ┃~/src/ranma main                       ┃│   battery          2 │   Outer gap, sides                         ●────────────────    ‹ 0 › ┃
+┃ 12         }                                               ┃ ┃❯ █                                    ┃│                      │   Outer gap, ends                          ●────────────────    ‹ 0 › ┃
+┃ 13         let (a, b) = split(rest, i);                    ┃ ┃                                       ┃│                      │   Dim unfocused ◆           panel          ━━━━━━━━●────────  ‹ 50% › ┃
+┃ 14         out.push(a);                                    ┃ ┃                                       ┃│                      │   Focused pane bg                                        [ ·· unset ] ┃
+┃ 15         rest = b;                                       ┃ ┃                                       ┃│                      │   Other panes bg                                         [ ·· unset ] ┃
+┃ 16     }                                                   ┃ ┃                                       ┃│                      │   Bar position                                             ‹ bottom › ┃
+┃ 17     out                                                 ┃ ┃                                       ┃│                      │   Bar separator                                              [ "  " ] ┃
+┃ 18 }                                                       ┃ ┃                                       ┃│                      │   Workspace format                               [ " {n}[:{name}] " ] ┃
+┃ 19                                                         ┃ ┃                                       ┃│                      │ Colours ────────────────────────────────────────────────────────── 27 ┃
+┃ 20 pub fn master(area: Rect, n: usize, ratio: f32) -> Vec<R┃ ┃                                       ┃│                      │   Border active                                        [ ██ #89b4fa ] ┃
+┃ 21     let w = (area.w as f32 * ratio).round() as u16;     ┃ ┃                                       ┃│                      │   Border inactive                                      [ ██ #45475a ] ┃
+┃ 22     let (m, stack) = area.split_x(w);                   ┃ ┃                                       ┃│                      │   Border floating                                      [ ██ #f5c2e7 ] ┃
+┃ 23     let mut out = vec![m];                              ┃ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛│                      │   Bar bg                                               [ ·· default ] ┃
+┃ 24     out.extend(stack.rows(n - 1));                      ┃                                          │                      │   Bar fg                                               [ ██ #cdd6f4 ] ┃
+┃ 25     out                                                 ┃ ┏ 3 cargo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓│                      │   Bar dim                                              [ ██ #6c7086 ] ┃
+┃ 26 }                                                       ┃ ┃$ cargo test -q                        ┃│                      │   Bar accent                                           [ ██ #89b4fa ] ┃
+┃ 27                                                         ┃ ┃running 42 tests                       ┃│                      │   Bar urgent                                           [ ██ #f38ba8 ] ┃
+┃ 28 fn split(r: Rect, i: usize) -> (Rect, Rect) {           ┃ ┃test layout::dwindle ... ok            ┃│                      │   Mode fg                                              [ ██ #1e1e2e ] ┃
+┃ 29     if i % 2 == 0 { r.split_x(r.w / 2) } else { r.split_┃ ┃test layout::master ... ok             ┃│                      │   Mode bg                                              [ ██ #f38ba8 ] ┃
+┃ 30 }                                                       ┃ ┃test picker::filter ... ok             ┃│                      │   Current ws fg                                        [ ██ #1e1e2e ] ┃
+┃ 31                                                         ┃ ┃test theme::inherit ... ok             ┃│                      │   Current ws bg                                        [ ██ #89b4fa ] ┃
+┃ 32 #[cfg(test)]                                            ┃ ┃test render::crop ... ok               ┃│                      │   Occupied ws                                          [ ██ #cdd6f4 ] │
+┃ 33 mod tests {                                             ┃ ┃test paste::upload ... ok              ┃│                      │   Empty ws                                             [ ██ #6c7086 ] │
+┃ 34     use super::*;                                       ┃ ┃test toast::stack ... ok               ┃│                      │   Urgent ws                                            [ ██ #f38ba8 ] │
+┃ 35                                                         ┃ ┃                                       ┃│                      │   Active tab fg                                        [ ██ #1e1e2e ] │
+┃ 36     #[test]                                             ┃ ┃test result: ok. 42 passed; 0 failed   ┃│                      │   Active tab bg                                        [ ██ #89b4fa ] │
+┃ 37     fn dwindle_fills_the_area() {                       ┃ ┃$ █                                    ┃│                      │   Tab fg                                               [ ██ #cdd6f4 ] │
+┃ 38         let rs = dwindle(Rect::new(0, 0, 80, 24), 3);   ┃ ┃                                       ┃│                      │   Tab bg                                               [ ██ #313244 ] │
+┃ 39         assert_eq!(rs.len(), 3);                        ┃ ┃                                       ┃│                      │   Picker selected fg                                   [ ██ #1e1e2e ] │
+┃ 40     }                                                   ┃ ┃                                       ┃│                      │   Picker selected bg                                   [ ██ #89b4fa ] │
+┃ 41 }                                                       ┃ ┃                                       ┃├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+┃~                                                           ┃ ┃                                       ┃│                        The line pane borders, floats and pickers are drawn with.             │
+┃~                                                           ┃ ┃                                       ┃│                                                                                              │
+┃~                                                           ┃ ┃                                       ┃│                                                                                              │
+┃~                                                           ┃ ┃                                       ┃│                        default rounded → thick unsaved                   border.style · enum │
+┃~                                                           ┃ ┃                                       ┃├──────────────────────────────────────────────────────────────────────────────────────────────┤
+┃ NORMAL  layout.rs                                    9:13  ┃ ┃                                       ┃│                        ←→ choose  r default  u undo  / filter  tab next group  space peek    │
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰───────────────────────────────────────────────────────────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                                                                                                                                        cpu 12%  mem 41%  16:36 
+## 200x50 · selected bool · rounded
+╭ 1 nvim ────────────────────────────────────────────────────╮ ╭ 2 zsh ────────────────────────────────╮╭─ settings ───────────┬───────────────────────────────────────────────────────────────────────╮
+│  1 //! Layouts: a tree of splits.                          │ │~/src/ranma main                       ││ Groups               │ / filter                                                   61 options │
+│  2                                                         │ │❯ git log --oneline -8                 │├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;                                │ │a3f91c2 layout: master keeps its ratio ││ › General     •4  10 │ General ────────────────────────────────────────────────────────── 10 ┃
+│  4                                                         │ │7d02e4b picker: headings stay on filter││   WM mode          2 │   Leader                                                 [ "ctrl+b" ] ┃
+│  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> {     │ │c11a9e0 theme: toast roles for panels  ││   Looks       •3  15 │   Theme                                                   ‹ default › ┃
+│  6     let mut out = Vec::new();                           │ │58be7d1 bar: mode chip for sub-modes   ││   Colours         27 │   Layout •                  init.lua                       ‹ master › ┃
+│  7     let mut rest = area;                                │ │e0c4f3a render: crop panes, never resiz││   Paste            2 │   Master ratio •            init.lua       ━━━━━━━━━━●──────  ‹ 60% › ┃
+│  8     for i in 0..n {                                     │ │9b2d6f8 doc: plugins in Lua            ││                      │ › Preserve split                                               [ on ] ┃
+│  9         if i + 1 == n {                                 │ │41aa0c7 paste: upload over ssh         ││ plugins ──────────── │   Shell                                                    [ $SHELL ] ┃
+│ 10             out.push(rest);                             │ │0de93b2 toast: urgent border           ││   mpris       •1   3 │   Scrollback                                                ‹ 10000 › ┃
+│ 11             break;                                      │ │~/src/ranma main                       ││   battery          2 │   Mouse •                   init.lua                        ‹ hover › ┃
+│ 12         }                                               │ │❯ █                                    ││                      │   Restore                                                     ‹ ask › ┃
+│ 13         let (a, b) = split(rest, i);                    │ │                                       ││                      │   Splash •                  init.lua                          [ off ] ┃
+│ 14         out.push(a);                                    │ │                                       ││                      │ WM mode ─────────────────────────────────────────────────────────── 2 ┃
+│ 15         rest = b;                                       │ │                                       ││                      │   Sticky                                                       [ on ] ┃
+│ 16     }                                                   │ │                                       ││                      │   Hint delay                               ━━━━●──────────── ‹ 0.5s › ┃
+│ 17     out                                                 │ │                                       ││                      │ Looks ──────────────────────────────────────────────────────────── 15 ┃
+│ 18 }                                                       │ │                                       ││                      │   Border style                                            ‹ rounded › ┃
+│ 19                                                         │ │                                       ││                      │   Float border                                               ‹ same › ┃
+│ 20 pub fn master(area: Rect, n: usize, ratio: f32) -> Vec<R│ │                                       ││                      │   Title position                                              ‹ top › ┃
+│ 21     let w = (area.w as f32 * ratio).round() as u16;     │ │                                       ││                      │   Title align                                                ‹ left › ┃
+│ 22     let (m, stack) = area.split_x(w);                   │ │                                       ││                      │   Title format •            theme         [ " {index}[ {program}] " ] ┃
+│ 23     let mut out = vec![m];                              │ ╰───────────────────────────────────────╯│                      │   Indicator                                                  ‹ none › ┃
+│ 24     out.extend(stack.rows(n - 1));                      │                                          │                      │   Inner gap •               panel          ━━●──────────────    ‹ 1 › │
+│ 25     out                                                 │ ╭ 3 cargo ──────────────────────────────╮│                      │   Outer gap, sides                         ●────────────────    ‹ 0 › │
+│ 26 }                                                       │ │$ cargo test -q                        ││                      │   Outer gap, ends                          ●────────────────    ‹ 0 › │
+│ 27                                                         │ │running 42 tests                       ││                      │   Dim unfocused ◆           panel          ━━━━━━━━●────────  ‹ 50% › │
+│ 28 fn split(r: Rect, i: usize) -> (Rect, Rect) {           │ │test layout::dwindle ... ok            ││                      │   Focused pane bg                                        [ ·· unset ] │
+│ 29     if i % 2 == 0 { r.split_x(r.w / 2) } else { r.split_│ │test layout::master ... ok             ││                      │   Other panes bg                                         [ ·· unset ] │
+│ 30 }                                                       │ │test picker::filter ... ok             ││                      │   Bar position                                             ‹ bottom › │
+│ 31                                                         │ │test theme::inherit ... ok             ││                      │   Bar separator                                              [ "  " ] │
+│ 32 #[cfg(test)]                                            │ │test render::crop ... ok               ││                      │   Workspace format                               [ " {n}[:{name}] " ] │
+│ 33 mod tests {                                             │ │test paste::upload ... ok              ││                      │ Colours ────────────────────────────────────────────────────────── 27 │
+│ 34     use super::*;                                       │ │test toast::stack ... ok               ││                      │   Border active                                        [ ██ #89b4fa ] │
+│ 35                                                         │ │                                       ││                      │   Border inactive                                      [ ██ #45475a ] │
+│ 36     #[test]                                             │ │test result: ok. 42 passed; 0 failed   ││                      │   Border floating                                      [ ██ #f5c2e7 ] │
+│ 37     fn dwindle_fills_the_area() {                       │ │$ █                                    ││                      │   Bar bg                                               [ ·· default ] │
+│ 38         let rs = dwindle(Rect::new(0, 0, 80, 24), 3);   │ │                                       ││                      │   Bar fg                                               [ ██ #cdd6f4 ] │
+│ 39         assert_eq!(rs.len(), 3);                        │ │                                       ││                      │   Bar dim                                              [ ██ #6c7086 ] │
+│ 40     }                                                   │ │                                       ││                      │   Bar accent                                           [ ██ #89b4fa ] │
+│ 41 }                                                       │ │                                       │├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│~                                                           │ │                                       ││                        Keep a split’s direction when the workspace is resized.               │
+│~                                                           │ │                                       ││                                                                                              │
+│~                                                           │ │                                       ││                                                                                              │
+│~                                                           │ │                                       ││                        default on                                      preserve_split · bool │
+│~                                                           │ │                                       │├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NORMAL  layout.rs                                    9:13  │ │                                       ││                        ←→ flip  r default  u undo  / filter  tab next group  space peek      │
+╰────────────────────────────────────────────────────────────╯ ╰───────────────────────────────────────╯╰───────────────────────────────────────────────────────────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                                                                                                                                        cpu 12%  mem 41%  16:36 
+## 200x50 · selected colour · rounded
+╭ 1 nvim ────────────────────────────────────────────────────╮ ╭ 2 zsh ────────────────────────────────╮╭─ settings ───────────┬─────────────────────────────────────────────────────────── 1 unsaved ─╮
+│  1 //! Layouts: a tree of splits.                          │ │~/src/ranma main                       ││ Groups               │ / filter                                                   61 options │
+│  2                                                         │ │❯ git log --oneline -8                 │├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;                                │ │a3f91c2 layout: master keeps its ratio ││   General     •4  10 │ Colours ────────────────────────────────────────────────────────── 27 │
+│  4                                                         │ │7d02e4b picker: headings stay on filter││   WM mode          2 │   Border active                                        [ ██ #89b4fa ] │
+│  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> {     │ │c11a9e0 theme: toast roles for panels  ││   Looks       •3  15 │   Border inactive                                      [ ██ #45475a ] │
+│  6     let mut out = Vec::new();                           │ │58be7d1 bar: mode chip for sub-modes   ││ › Colours     •1  27 │   Border floating                                      [ ██ #f5c2e7 ] │
+│  7     let mut rest = area;                                │ │e0c4f3a render: crop panes, never resiz││   Paste            2 │   Bar bg                                               [ ·· default ] │
+│  8     for i in 0..n {                                     │ │9b2d6f8 doc: plugins in Lua            ││                      │   Bar fg                                               [ ██ #cdd6f4 ] │
+│  9         if i + 1 == n {                                 │ │41aa0c7 paste: upload over ssh         ││ plugins ──────────── │   Bar dim                                              [ ██ #6c7086 ] │
+│ 10             out.push(rest);                             │ │0de93b2 toast: urgent border           ││   mpris       •1   3 │   Bar accent                                           [ ██ #89b4fa ] │
+│ 11             break;                                      │ │~/src/ranma main                       ││   battery          2 │   Bar urgent                                           [ ██ #f38ba8 ] │
+│ 12         }                                               │ │❯ █                                    ││                      │   Mode fg                                              [ ██ #1e1e2e ] │
+│ 13         let (a, b) = split(rest, i);                    │ │                                       ││                      │   Mode bg                                              [ ██ #f38ba8 ] │
+│ 14         out.push(a);                                    │ │                                       ││                      │   Current ws fg                                        [ ██ #1e1e2e ] │
+│ 15         rest = b;                                       │ │                                       ││                      │   Current ws bg                                        [ ██ #89b4fa ] │
+│ 16     }                                                   │ │                                       ││                      │   Occupied ws                                          [ ██ #cdd6f4 ] │
+│ 17     out                                                 │ │                                       ││                      │   Empty ws                                             [ ██ #6c7086 ] │
+│ 18 }                                                       │ │                                       ││                      │   Urgent ws                                            [ ██ #f38ba8 ] │
+│ 19                                                         │ │                                       ││                      │   Active tab fg                                        [ ██ #1e1e2e ] │
+│ 20 pub fn master(area: Rect, n: usize, ratio: f32) -> Vec<R│ │                                       ││                      │   Active tab bg                                        [ ██ #89b4fa ] ┃
+│ 21     let w = (area.w as f32 * ratio).round() as u16;     │ │                                       ││                      │   Tab fg                                               [ ██ #cdd6f4 ] ┃
+│ 22     let (m, stack) = area.split_x(w);                   │ │                                       ││                      │   Tab bg                                               [ ██ #313244 ] ┃
+│ 23     let mut out = vec![m];                              │ ╰───────────────────────────────────────╯│                      │   Picker selected fg                                   [ ██ #1e1e2e ] ┃
+│ 24     out.extend(stack.rows(n - 1));                      │                                          │                      │ › Picker selected bg *      unsaved                    [ ██ #fab387 ] ┃
+│ 25     out                                                 │ ╭ 3 cargo ──────────────────────────────╮│                      │   Search fg                                            [ ██ #1e1e2e ] ┃
+│ 26 }                                                       │ │$ cargo test -q                        ││                      │   Search bg                                            [ ██ #f9e2af ] ┃
+│ 27                                                         │ │running 42 tests                       ││                      │   Search current fg                                    [ ██ #1e1e2e ] ┃
+│ 28 fn split(r: Rect, i: usize) -> (Rect, Rect) {           │ │test layout::dwindle ... ok            ││                      │   Search current bg                                    [ ██ #fab387 ] ┃
+│ 29     if i % 2 == 0 { r.split_x(r.w / 2) } else { r.split_│ │test layout::master ... ok             ││                      │   Toast fg                                             [ ██ #cdd6f4 ] ┃
+│ 30 }                                                       │ │test picker::filter ... ok             ││                      │   Toast bg                                             [ ██ #313244 ] ┃
+│ 31                                                         │ │test theme::inherit ... ok             ││                      │ Paste ───────────────────────────────────────────────────────────── 2 ┃
+│ 32 #[cfg(test)]                                            │ │test render::crop ... ok               ││                      │   Upload over ssh                                              [ on ] ┃
+│ 33 mod tests {                                             │ │test paste::upload ... ok              ││                      │   Image command                                              [ auto ] ┃
+│ 34     use super::*;                                       │ │test toast::stack ... ok               ││                      │ mpris plugin ────────────────────────────────────────────────────── 3 ┃
+│ 35                                                         │ │                                       ││                      │   Format                                   [ " {artist} – {title} " ] ┃
+│ 36     #[test]                                             │ │test result: ok. 42 passed; 0 failed   ││                      │   Max width •               init.lua       ━━━━━●───────────   ‹ 32 › ┃
+│ 37     fn dwindle_fills_the_area() {                       │ │$ █                                    ││                      │   Show when paused                                            [ off ] ┃
+│ 38         let rs = dwindle(Rect::new(0, 0, 80, 24), 3);   │ │                                       ││                      │ battery plugin ──────────────────────────────────────────────────── 2 ┃
+│ 39         assert_eq!(rs.len(), 3);                        │ │                                       ││                      │   Warn below                               ━━━━━●───────────  ‹ 20% › ┃
+│ 40     }                                                   │ │                                       ││                      │   Hide when full                                               [ on ] ┃
+│ 41 }                                                       │ │                                       │├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│~                                                           │ │                                       ││                        The selected row’s ground in pickers, help and this panel.            │
+│~                                                           │ │                                       ││                                                                                              │
+│~                                                           │ │                                       ││                        sample  › Dim unfocused                ‹  50% ›   the panel keeps its c
+│~                                                           │ │                                       ││                        default #89b4fa → #fab387 unsaved   colors.picker_selected_bg · color │
+│~                                                           │ │                                       │├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NORMAL  layout.rs                                    9:13  │ │                                       ││                        ←→ theme colours  enter type  r default  u undo  / filter  space peek │
+╰────────────────────────────────────────────────────────────╯ ╰───────────────────────────────────────╯╰───────────────────────────────────────────────────────────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                                                                                                                                        cpu 12%  mem 41%  16:36 
+## 200x50 · selected string · rounded
+╭ 1 nvim ────────────────────────────────────────────────────╮ ╭ 2 zsh ────────────────────────────────╮╭─ settings ───────────┬───────────────────────────────────────────────────────────────────────╮
+│  1 //! Layouts: a tree of splits.                          │ │~/src/ranma main                       ││ Groups               │ / filter                                                   61 options │
+│  2                                                         │ │❯ git log --oneline -8                 │├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│  3 use crate::pane::PaneId;                                │ │a3f91c2 layout: master keeps its ratio ││   General     •4  10 │ Looks ──────────────────────────────────────────────────────────── 15 │
+│  4                                                         │ │7d02e4b picker: headings stay on filter││   WM mode          2 │   Border style                                            ‹ rounded › │
+│  5 pub fn dwindle(area: Rect, n: usize) -> Vec<Rect> {     │ │c11a9e0 theme: toast roles for panels  ││ › Looks       •3  15 │   Float border                                               ‹ same › │
+│  6     let mut out = Vec::new();                           │ │58be7d1 bar: mode chip for sub-modes   ││   Colours         27 │   Title position                                              ‹ top › │
+│  7     let mut rest = area;                                │ │e0c4f3a render: crop panes, never resiz││   Paste            2 │   Title align                                                ‹ left › │
+│  8     for i in 0..n {                                     │ │9b2d6f8 doc: plugins in Lua            ││                      │ › Title format •            theme         [ " {index}[ {program}] " ] │
+│  9         if i + 1 == n {                                 │ │41aa0c7 paste: upload over ssh         ││ plugins ──────────── │   Indicator                                                  ‹ none › │
+│ 10             out.push(rest);                             │ │0de93b2 toast: urgent border           ││   mpris       •1   3 │   Inner gap •               panel          ━━●──────────────    ‹ 1 › │
+│ 11             break;                                      │ │~/src/ranma main                       ││   battery          2 │   Outer gap, sides                         ●────────────────    ‹ 0 › ┃
+│ 12         }                                               │ │❯ █                                    ││                      │   Outer gap, ends                          ●────────────────    ‹ 0 › ┃
+│ 13         let (a, b) = split(rest, i);                    │ │                                       ││                      │   Dim unfocused ◆           panel          ━━━━━━━━●────────  ‹ 50% › ┃
+│ 14         out.push(a);                                    │ │                                       ││                      │   Focused pane bg                                        [ ·· unset ] ┃
+│ 15         rest = b;                                       │ │                                       ││                      │   Other panes bg                                         [ ·· unset ] ┃
+│ 16     }                                                   │ │                                       ││                      │   Bar position                                             ‹ bottom › ┃
+│ 17     out                                                 │ │                                       ││                      │   Bar separator                                              [ "  " ] ┃
+│ 18 }                                                       │ │                                       ││                      │   Workspace format                               [ " {n}[:{name}] " ] ┃
+│ 19                                                         │ │                                       ││                      │ Colours ────────────────────────────────────────────────────────── 27 ┃
+│ 20 pub fn master(area: Rect, n: usize, ratio: f32) -> Vec<R│ │                                       ││                      │   Border active                                        [ ██ #89b4fa ] ┃
+│ 21     let w = (area.w as f32 * ratio).round() as u16;     │ │                                       ││                      │   Border inactive                                      [ ██ #45475a ] ┃
+│ 22     let (m, stack) = area.split_x(w);                   │ │                                       ││                      │   Border floating                                      [ ██ #f5c2e7 ] ┃
+│ 23     let mut out = vec![m];                              │ ╰───────────────────────────────────────╯│                      │   Bar bg                                               [ ·· default ] ┃
+│ 24     out.extend(stack.rows(n - 1));                      │                                          │                      │   Bar fg                                               [ ██ #cdd6f4 ] ┃
+│ 25     out                                                 │ ╭ 3 cargo ──────────────────────────────╮│                      │   Bar dim                                              [ ██ #6c7086 ] ┃
+│ 26 }                                                       │ │$ cargo test -q                        ││                      │   Bar accent                                           [ ██ #89b4fa ] ┃
+│ 27                                                         │ │running 42 tests                       ││                      │   Bar urgent                                           [ ██ #f38ba8 ] ┃
+│ 28 fn split(r: Rect, i: usize) -> (Rect, Rect) {           │ │test layout::dwindle ... ok            ││                      │   Mode fg                                              [ ██ #1e1e2e ] ┃
+│ 29     if i % 2 == 0 { r.split_x(r.w / 2) } else { r.split_│ │test layout::master ... ok             ││                      │   Mode bg                                              [ ██ #f38ba8 ] ┃
+│ 30 }                                                       │ │test picker::filter ... ok             ││                      │   Current ws fg                                        [ ██ #1e1e2e ] ┃
+│ 31                                                         │ │test theme::inherit ... ok             ││                      │   Current ws bg                                        [ ██ #89b4fa ] ┃
+│ 32 #[cfg(test)]                                            │ │test render::crop ... ok               ││                      │   Occupied ws                                          [ ██ #cdd6f4 ] │
+│ 33 mod tests {                                             │ │test paste::upload ... ok              ││                      │   Empty ws                                             [ ██ #6c7086 ] │
+│ 34     use super::*;                                       │ │test toast::stack ... ok               ││                      │   Urgent ws                                            [ ██ #f38ba8 ] │
+│ 35                                                         │ │                                       ││                      │   Active tab fg                                        [ ██ #1e1e2e ] │
+│ 36     #[test]                                             │ │test result: ok. 42 passed; 0 failed   ││                      │   Active tab bg                                        [ ██ #89b4fa ] │
+│ 37     fn dwindle_fills_the_area() {                       │ │$ █                                    ││                      │   Tab fg                                               [ ██ #cdd6f4 ] │
+│ 38         let rs = dwindle(Rect::new(0, 0, 80, 24), 3);   │ │                                       ││                      │   Tab bg                                               [ ██ #313244 ] │
+│ 39         assert_eq!(rs.len(), 3);                        │ │                                       ││                      │   Picker selected fg                                   [ ██ #1e1e2e ] │
+│ 40     }                                                   │ │                                       ││                      │   Picker selected bg                                   [ ██ #89b4fa ] │
+│ 41 }                                                       │ │                                       │├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│~                                                           │ │                                       ││                        A pane’s title: {title}, {index}, {program}, {cwd}. A part in [ ]     │
+│~                                                           │ │                                       ││                        shows only when its placeholders all have values.                     │
+│~                                                           │ │                                       ││                                                                                              │
+│~                                                           │ │                                       ││                        default " {title} " · theme " {index}[ {pborder.title_format · string │
+│~                                                           │ │                                       │├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NORMAL  layout.rs                                    9:13  │ │                                       ││                        enter edit  r default  u undo  / filter  tab next group  space peek   │
+╰────────────────────────────────────────────────────────────╯ ╰───────────────────────────────────────╯╰───────────────────────────────────────────────────────────────────────── w save · esc close ─╯
+ SET    1:code  2:web  3                                                                                                                                                        cpu 12%  mem 41%  16:36 
+## what shrinks, by list width · rounded
+                                                                                                    
+  69 cells · the 200×50 panel: slider 17, source column                                             
+    › Dim unfocused *           unsaved        ━━━━━━━━━━●──────  ‹ 60% ›                           
+      Border active                                        [ ██ #89b4fa ]                           
+      Title format •            theme         [ " {index}[ {program}] " ]                           
+                                                                                                    
+  40 cells · the 80×24 panel: slider 7                                                              
+    › Dim unfocused *       ━━━━●──  ‹ 60% ›                                                        
+      Border active           [ ██ #89b4fa ]                                                        
+      Title format •  [ " {index}[ {progr… ]                                                        
+                                                                                                    
+  34 cells · slider 5                                                                               
+    › Dim unfocused *   ━━●──  ‹ 60% ›                                                              
+      Border active     [ ██ #89b4fa ]                                                              
+      Title format •  [ " {index}[ … ]                                                              
+                                                                                                    
+  28 cells · no slider; the value and mark stay                                                     
+    › Dim unfocused *    ‹ 60% ›                                                                    
+      Border a…   [ ██ #89b4fa ]                                                                    
+      Title format •  [ " {in… ]                                                                    
+                                                                                                    
+  22 cells · inner spaces go, then names give way                                                   
+    › Dim unfocus… * ‹60%›                                                                          
+      Bord…   [██ #89b4fa]                                                                          
+      Title form… • [" {…]                                                                          
+                                                                                                    

@@ -662,17 +662,43 @@ fn resolve_table(name: &str, dirs: &[PathBuf], seen: &mut HashSet<String>) -> Re
 }
 
 pub fn load(name: &str, dirs: &[PathBuf]) -> Result<Theme> {
-    let table = resolve_table(name, dirs, &mut HashSet::new())?;
+    Ok(load_over(name, dirs, None)?.0)
+}
+
+/// The theme resolved to one table through what it inherits: what the
+/// settings panel reads a theme key's value from.
+pub fn resolved(name: &str, dirs: &[PathBuf]) -> Result<toml::Table> {
+    resolve_table(name, dirs, &mut HashSet::new())
+}
+
+/// [`load`], with `overlay` (the settings panel's `[theme]`) merged over the
+/// resolved theme before it is checked, as one more layer of inheritance.
+/// Returns the theme and the table it resolved to before the overlay.
+pub fn load_over(
+    name: &str,
+    dirs: &[PathBuf],
+    overlay: Option<&toml::Table>,
+) -> Result<(Theme, toml::Table)> {
+    let resolved = resolve_table(name, dirs, &mut HashSet::new())?;
+    let mut table = resolved.clone();
+    if let Some(o) = overlay {
+        merge(&mut table, o.clone());
+    }
+    let what = if overlay.is_some_and(|o| !o.is_empty()) {
+        format!("theme `{name}` with settings.toml's [theme] over it")
+    } else {
+        format!("theme `{name}`")
+    };
     let mut theme: Theme = toml::Value::Table(table)
         .try_into()
-        .with_context(|| format!("theme `{name}`"))?;
+        .with_context(|| what.clone())?;
     theme.name = name.to_string();
     let dim = theme.panes.dim_unfocused;
     if !(0.0..=1.0).contains(&dim) {
-        bail!("theme `{name}`: panes.dim_unfocused must be 0-1, not {dim}");
+        bail!("{what}: panes.dim_unfocused must be 0-1, not {dim}");
     }
-    check(&theme).map_err(|e| anyhow::anyhow!("theme `{name}`: {e}"))?;
-    Ok(theme)
+    check(&theme).map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
+    Ok((theme, resolved))
 }
 
 /// What serde cannot see: placeholders by key, and `chars` where `custom`

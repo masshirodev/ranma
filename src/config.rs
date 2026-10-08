@@ -717,6 +717,14 @@ struct Builder {
     timers: crate::jobs::PendingTimers,
     /// `ranma.on("user:<name>", fn)`, by name.
     user_hooks: HashMap<String, Vec<Rc<RegistryKey>>>,
+    /// Every `ranma.set` so far, merged as TOML: what the settings panel
+    /// reads values from (`crate::options`).
+    set_table: toml::Table,
+    /// `set_table` as the built-in defaults left it, plus each plugin
+    /// option's default.
+    default_set: toml::Table,
+    /// `ranma.option` declarations.
+    plugin_options: Vec<crate::options::Opt>,
 }
 
 pub struct Config {
@@ -757,6 +765,11 @@ pub struct Config {
     pub source: Option<PathBuf>,
     /// Every plugin file found, in the order sourced, failed ones included.
     pub plugins: Vec<PluginLoad>,
+    /// What loaded but deserves a word: settings.toml naming an option
+    /// nothing declares.
+    pub warnings: Vec<String>,
+    /// Every option and the layers its value comes from (`crate::options`).
+    pub values: Values,
     /// Stops a Lua call that runs too long; armed by every call into `lua`.
     pub watchdog: Watchdog,
     /// Its timers and the processes it spawned (`crate::jobs`).
@@ -1009,6 +1022,7 @@ fn install_api(
     config_dir: Option<&Path>,
     jobs: &crate::jobs::Jobs,
     user: &UserEvents,
+    values: &Values,
 ) -> mlua::Result<()> {
     let ranma = lua.create_table()?;
     ranma.set("version", env!("CARGO_PKG_VERSION"))?;
@@ -1019,11 +1033,18 @@ fn install_api(
     ranma.set(
         "set",
         lua.create_function(|lua, value: Value| {
-            let patch: SettingsPatch = lua
-                .from_value(value)
-                .map_err(|e| rt_err(format!("ranma.set: {e}")))?;
+            let table = match lua.from_value::<toml::Value>(value) {
+                Ok(toml::Value::Table(t)) => t,
+                Ok(other) => {
+                    return Err(rt_err(format!(
+                        "ranma.set: takes a table of settings, not {}",
+                        other.type_str()
+                    )));
+                }
+                Err(e) => return Err(rt_err(format!("ranma.set: {e}"))),
+            };
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
-            apply_settings(&mut b.settings, patch, "ranma.set").map_err(rt_err)
+            apply_set(&mut b, table, "ranma.set").map_err(rt_err)
         })?,
     )?;
 
@@ -1568,6 +1589,68 @@ fn install_api(
     )?;
 
     crate::luapane::install(lua, &ranma)?;
+    ranma.set(
+        "option",
+        lua.create_function(|lua, (key, spec): (String, Value)| {
+            let spec = match lua.from_value::<toml::Value>(spec) {
+                Ok(toml::Value::Table(t)) => t,
+                _ => {
+                    return Err(rt_err(format!(
+                        "ranma.option(\"{key}\"): the second argument is a table: {{ type, default, ... }}"
+                    )));
+                }
+            };
+            let (opt, default) = crate::options::from_spec(&key, &spec).map_err(rt_err)?;
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            let builtin_top = crate::options::get(&b.default_set, &opt.group).is_some()
+                && !b.plugin_options.iter().any(|o| o.group == opt.group);
+            if builtin_top || crate::options::GROUPS.iter().any(|(g, _)| *g == opt.group) {
+                return Err(rt_err(format!(
+                    "ranma.option(\"{key}\"): `{}` is one of ranma's own settings; name the option after your plugin",
+                    opt.group
+                )));
+            }
+            if b.plugin_options.iter().any(|o| o.key == key) {
+                return Err(rt_err(format!("ranma.option(\"{key}\"): declared twice")));
+            }
+            crate::options::set(&mut b.default_set, &key, default);
+            b.plugin_options.push(opt);
+            Ok(())
+        })?,
+    )?;
+    {
+        let values = values.clone();
+        ranma.set(
+            "get",
+            lua.create_function(move |lua, key: String| {
+                if let Some(b) = lua.app_data_ref::<Builder>() {
+                    let is_theme = crate::options::builtin()
+                        .iter()
+                        .any(|o| o.key == key && o.home == crate::options::Home::Theme);
+                    if is_theme {
+                        return Err(rt_err(format!(
+                            "ranma.get(\"{key}\"): the theme is not loaded yet while the configuration loads"
+                        )));
+                    }
+                    let v = crate::options::get(&b.set_table, &key)
+                        .or_else(|| crate::options::get(&b.default_set, &key));
+                    return match v {
+                        Some(v) => lua.to_value(v),
+                        None if known_key(&b, &key) => Ok(Value::Nil),
+                        None => Err(rt_err(format!("ranma.get: no option `{key}`"))),
+                    };
+                }
+                let v = values.borrow();
+                let Some(o) = v.options.iter().find(|o| o.key == key) else {
+                    return Err(rt_err(format!("ranma.get: no option `{key}`")));
+                };
+                match v.layers.effective(o) {
+                    Some(val) => lua.to_value(&val),
+                    None => Ok(Value::Nil),
+                }
+            })?,
+        )?;
+    }
     crate::luaui::install(lua, &ranma)?;
     crate::store::Stores::new(crate::store::dir()).install(lua, &ranma)?;
     {
@@ -1622,9 +1705,10 @@ pub fn load_from(
     let watchdog = Watchdog::default();
     let jobs = crate::jobs::Jobs::default();
     let user_events = UserEvents::default();
+    let values = Values::default();
     // mlua's error is not Send without its `send` feature, so it cannot go through
     // anyhow's `.context` directly; its Display is all we need from it anyway.
-    install_api(&lua, config_dir, &jobs, &user_events)
+    install_api(&lua, config_dir, &jobs, &user_events, &values)
         .and_then(|()| watchdog.install(&lua))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("installing the ranma Lua API")?;
@@ -1637,6 +1721,12 @@ pub fn load_from(
         })
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("the built-in default config failed (this is a ranma bug)")?;
+    {
+        let mut b = lua
+            .app_data_mut::<Builder>()
+            .expect("builder installed above");
+        b.default_set = b.set_table.clone();
+    }
 
     let mut plugins = Vec::new();
     if let Some(dir) = config_dir {
@@ -1662,6 +1752,36 @@ pub fn load_from(
                 lua.load(src).set_name(format!("@{name}")).exec()
             })
             .map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
+
+    // The settings panel's file, over everything a person wrote.
+    let mut warnings = Vec::new();
+    let panel = match config_dir {
+        Some(dir) => read_settings_file(&dir.join(SETTINGS_FILE))?,
+        None => PanelFile::default(),
+    };
+    {
+        let mut b = lua
+            .app_data_mut::<Builder>()
+            .expect("builder installed above");
+        let file_set = b.set_table.clone();
+        let mut apply = panel.set.clone();
+        // A plugin that did not load leaves its saved options with nothing to
+        // apply to. They are kept, for when it loads again, and said; one
+        // broken plugin must not stop ranma from starting.
+        let groups: Vec<String> = apply.keys().cloned().collect();
+        for g in groups {
+            let builtin = crate::options::get(&b.default_set, &g).is_some()
+                || SETTINGS_ONLY_IN_LUA.contains(&g.as_str());
+            if !builtin {
+                apply.remove(&g);
+                warnings.push(format!(
+                    "{SETTINGS_FILE}: `{g}` is no option ranma knows now (a plugin that did not load?); kept, not applied"
+                ));
+            }
+        }
+        apply_set(&mut b, apply, SETTINGS_FILE).map_err(|e| anyhow::anyhow!("{e}"))?;
+        b.set_table = file_set;
     }
 
     let mut builder = lua
@@ -1718,7 +1838,25 @@ pub fn load_from(
             order(t, &builder.toolbars);
         }
     }
-    let theme = theme::load(&builder.settings.theme, &theme::theme_dirs(config_dir))?;
+    let (theme, file_theme) = theme::load_over(
+        &builder.settings.theme,
+        &theme::theme_dirs(config_dir),
+        Some(&panel.theme),
+    )?;
+    {
+        let mut options = crate::options::builtin();
+        options.extend(builder.plugin_options.iter().cloned());
+        let mut v = values.0.borrow_mut();
+        v.options = options;
+        v.layers = crate::options::Layers {
+            default_set: std::mem::take(&mut builder.default_set),
+            file_set: std::mem::take(&mut builder.set_table),
+            panel_set: panel.set,
+            default_theme: theme::resolved(theme::DEFAULT_THEME_NAME, &[])?,
+            file_theme,
+            panel_theme: panel.theme,
+        };
+    }
     jobs.adopt(std::mem::take(&mut builder.timers));
     *user_events.hooks.borrow_mut() = std::mem::take(&mut builder.user_hooks);
 
@@ -1747,11 +1885,159 @@ pub fn load_from(
         theme,
         source: user_file,
         plugins,
+        warnings,
         watchdog,
         jobs,
         user_events,
+        values,
         lua,
     })
+}
+
+/// Where the settings panel saves, in the config directory.
+pub const SETTINGS_FILE: &str = "settings.toml";
+
+/// Top-level settings that exist but have no default in the built-in
+/// init.lua (so `default_set` cannot vouch for them).
+const SETTINGS_ONLY_IN_LUA: [&str; 2] = ["shell", "paste"];
+
+/// What `settings.toml` holds: `[set]`, as `ranma.set` takes it, and
+/// `[theme]`, merged over the theme in use.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PanelFile {
+    pub set: toml::Table,
+    pub theme: toml::Table,
+}
+
+/// Read `settings.toml`, strictly: only `[set]` and `[theme]`. No file is an
+/// empty one.
+pub fn read_settings_file(path: &Path) -> Result<PanelFile> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(PanelFile::default()),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    };
+    let mut t: toml::Table = text
+        .parse()
+        .with_context(|| format!("parsing {}", path.display()))?;
+    let mut table = |k: &str| -> Result<toml::Table> {
+        match t.remove(k) {
+            None => Ok(toml::Table::new()),
+            Some(toml::Value::Table(t)) => Ok(t),
+            Some(_) => anyhow::bail!("{}: `{k}` must be a table", path.display()),
+        }
+    };
+    let out = PanelFile {
+        set: table("set")?,
+        theme: table("theme")?,
+    };
+    if let Some(k) = t.keys().next() {
+        anyhow::bail!(
+            "{}: unknown table `{k}` (expected [set] and [theme])",
+            path.display()
+        );
+    }
+    Ok(out)
+}
+
+/// Write `settings.toml` whole, by a write and a rename: a crash leaves the
+/// old file or the new one.
+pub fn write_settings_file(path: &Path, f: &PanelFile) -> Result<()> {
+    let mut root = toml::Table::new();
+    if !f.set.is_empty() {
+        root.insert("set".into(), toml::Value::Table(f.set.clone()));
+    }
+    if !f.theme.is_empty() {
+        root.insert("theme".into(), toml::Value::Table(f.theme.clone()));
+    }
+    let text = format!(
+        "# Written by ranma's settings panel. init.lua and the theme say the rest;\n\
+         # what is here wins over them. Edit it by hand if you like: it is read\n\
+         # as strictly as they are.\n{}",
+        toml::to_string(&root).context("writing the settings")?
+    );
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, text).with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("writing {}", path.display()))
+}
+
+/// Every option and where each value comes from, shared between the
+/// configuration and `ranma.get`.
+#[derive(Debug, Clone, Default)]
+pub struct Values(Rc<std::cell::RefCell<ValueState>>);
+
+#[derive(Debug, Clone, Default)]
+pub struct ValueState {
+    pub options: Vec<crate::options::Opt>,
+    pub layers: crate::options::Layers,
+}
+
+impl Values {
+    pub fn borrow(&self) -> std::cell::Ref<'_, ValueState> {
+        self.0.borrow()
+    }
+    pub fn borrow_mut(&self) -> std::cell::RefMut<'_, ValueState> {
+        self.0.borrow_mut()
+    }
+}
+
+fn known_key(b: &Builder, key: &str) -> bool {
+    crate::options::builtin().iter().any(|o| o.key == key)
+        || b.plugin_options.iter().any(|o| o.key == key)
+}
+
+/// Apply a `ranma.set` table: a plugin's group to its declared options,
+/// checked; the rest as ranma's own settings, parsed as strictly as ever.
+/// Both are kept in the builder's TOML, for the settings panel.
+fn apply_set(b: &mut Builder, mut t: toml::Table, who: &str) -> Result<(), String> {
+    let mut plugin = toml::Table::new();
+    let groups: Vec<String> = b.plugin_options.iter().map(|o| o.group.clone()).collect();
+    for g in groups {
+        if let Some(v) = t.remove(&g) {
+            plugin.insert(g, v);
+        }
+    }
+    fn leaves(prefix: &str, v: &toml::Value, out: &mut Vec<(String, toml::Value)>) {
+        match v {
+            toml::Value::Table(t) => {
+                for (k, v) in t {
+                    leaves(&format!("{prefix}.{k}"), v, out)
+                }
+            }
+            v => out.push((prefix.to_string(), v.clone())),
+        }
+    }
+    let mut set = Vec::new();
+    for (g, v) in &plugin {
+        if !v.is_table() {
+            return Err(format!(
+                "{who}: `{g}` is a plugin's options; give a table: {g} = {{ ... }}"
+            ));
+        }
+        leaves(g, v, &mut set);
+    }
+    for (key, v) in &set {
+        let Some(o) = b.plugin_options.iter().find(|o| &o.key == key) else {
+            let known: Vec<&str> = b
+                .plugin_options
+                .iter()
+                .filter(|o| key.starts_with(&format!("{}.", o.group)))
+                .map(|o| o.key.as_str())
+                .collect();
+            return Err(format!(
+                "{who}: no option `{key}` (declared: {})",
+                known.join(", ")
+            ));
+        };
+        crate::options::check(o, v).map_err(|e| format!("{who}: {e}"))?;
+    }
+    let patch: SettingsPatch = toml::Value::Table(t.clone())
+        .try_into()
+        .map_err(|e| format!("{who}: {e}"))?;
+    apply_settings(&mut b.settings, patch, who)?;
+    crate::options::merge(&mut b.set_table, t);
+    crate::options::merge(&mut b.set_table, plugin);
+    Ok(())
 }
 
 /// How deep `ranma.emit` may nest (a handler emitting, whose handler emits,
@@ -2915,6 +3201,200 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("0.5 to 3600")
+        );
+    }
+
+    /// Every key the defaults leave in a table, as dotted leaves.
+    fn leaf_keys(prefix: &str, t: &toml::Table, out: &mut Vec<String>) {
+        for (k, v) in t {
+            let key = if prefix.is_empty() {
+                k.clone()
+            } else {
+                format!("{prefix}.{k}")
+            };
+            match v {
+                toml::Value::Table(sub) => leaf_keys(&key, sub, out),
+                _ => out.push(key),
+            }
+        }
+    }
+
+    #[test]
+    fn the_registry_covers_every_setting_and_theme_key_or_says_why_not() {
+        let cfg = load_from(None, None, None).unwrap();
+        let v = cfg.values.borrow();
+        let has = |k: &str| v.options.iter().any(|o| o.key == k);
+        let mut keys = Vec::new();
+        leaf_keys("", &v.layers.default_set, &mut keys);
+        for k in &keys {
+            assert!(has(k), "ranma.set's `{k}` is not in the options registry");
+        }
+        let mut keys = Vec::new();
+        leaf_keys("", &v.layers.default_theme, &mut keys);
+        for k in &keys {
+            let left_out = crate::options::NOT_IN_PANEL
+                .iter()
+                .any(|n| k == n || k.starts_with(&format!("{n}.")));
+            assert!(
+                has(k) || left_out,
+                "the theme's `{k}` is neither an option nor in NOT_IN_PANEL"
+            );
+        }
+        // And every option names something real.
+        for o in v.options.iter() {
+            let found = match o.home {
+                crate::options::Home::Init => {
+                    crate::options::get(&v.layers.default_set, &o.key).is_some()
+                }
+                crate::options::Home::Theme => {
+                    crate::options::get(&v.layers.default_theme, &o.key).is_some()
+                }
+            };
+            assert!(
+                found || o.unset.is_some(),
+                "option `{}` is in no default layer",
+                o.key
+            );
+        }
+    }
+
+    #[test]
+    fn plugins_declare_options_set_them_and_read_them() {
+        let dir = config_tree(
+            "options",
+            &[
+                (
+                    "plugin/history.lua",
+                    "ranma.option('history.max_results', { type = 'int', min = 1, max = 500, default = 100 })\n\
+                     ranma.option('history.case', { type = 'bool', default = false })\n\
+                     seen = ranma.get('history.max_results')",
+                ),
+                (
+                    "init.lua",
+                    "ranma.set { history = { max_results = 20 }, splash = false }",
+                ),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert!(!cfg.settings.splash);
+        cfg.lua.set_app_data(Runtime::default());
+        let get = |k: &str| {
+            cfg.lua
+                .load(format!("return ranma.get('{k}')"))
+                .eval::<Value>()
+                .unwrap()
+        };
+        assert_eq!(get("history.max_results").as_integer(), Some(20));
+        assert_eq!(get("history.case").as_boolean(), Some(false));
+        assert_eq!(get("splash").as_boolean(), Some(false));
+        assert_eq!(
+            get("border.style").as_string().unwrap().to_str().unwrap(),
+            "rounded"
+        );
+        let seen: i64 = cfg.lua.load("return seen").eval().unwrap();
+        assert_eq!(seen, 100, "at load, a plugin reads its default");
+        let v = cfg.values.borrow();
+        let o = v
+            .options
+            .iter()
+            .find(|o| o.key == "history.max_results")
+            .unwrap();
+        assert!(o.plugin && o.group == "history");
+        assert_eq!(
+            v.layers.value(o, crate::options::Layer::File),
+            Some(toml::Value::Integer(20))
+        );
+
+        let err = |src: &str| with_user(src).unwrap_err().to_string();
+        assert!(
+            err("ranma.option('wm_mode.x', { type = 'bool', default = true })")
+                .contains("ranma's own")
+        );
+        assert!(err("ranma.option('p.x', { type = 'bool', default = true }) ranma.option('p.x', { type = 'bool', default = true })").contains("declared twice"));
+        assert!(
+            err(
+                "ranma.option('p.x', { type = 'bool', default = true }) ranma.set { p = { y = 1 } }"
+            )
+            .contains("no option `p.y`")
+        );
+        assert!(
+            err("ranma.option('p.x', { type = 'int', default = 1 }) ranma.set { p = { x = 'a' } }")
+                .contains("whole number")
+        );
+        assert!(err("ranma.set { nope = 1 }").contains("unknown field `nope`"));
+        assert!(err("ranma.get('nope.x')").contains("no option"));
+        assert!(err("ranma.get('border.style')").contains("not loaded yet"));
+    }
+
+    #[test]
+    fn settings_toml_wins_over_init_lua_and_the_theme() {
+        let dir = config_tree(
+            "panelfile",
+            &[
+                ("init.lua", "ranma.set { splash = false, mouse = 'hover' }"),
+                (
+                    "settings.toml",
+                    "[set]\nmouse = 'off'\n[set.wm_mode]\nhint = false\n\n[set.gone]\nx = 1\n\n[theme.panes]\ndim_unfocused = 0.4\n",
+                ),
+            ],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(cfg.settings.mouse, MouseMode::Off);
+        assert!(!cfg.settings.splash, "init.lua still says the rest");
+        assert_eq!(cfg.settings.wm_mode_hint, None);
+        assert_eq!(cfg.theme.panes.dim_unfocused, 0.4);
+        assert!(cfg.warnings[0].contains("`gone`"), "{:?}", cfg.warnings);
+        let v = cfg.values.borrow();
+        let o = |k: &str| v.options.iter().find(|o| o.key == k).unwrap().clone();
+        use crate::options::Layer;
+        let mouse = o("mouse");
+        assert_eq!(
+            v.layers.value(&mouse, Layer::Default),
+            Some(toml::Value::String("click".into()))
+        );
+        assert_eq!(
+            v.layers.value(&mouse, Layer::File),
+            Some(toml::Value::String("hover".into()))
+        );
+        assert_eq!(
+            v.layers.value(&mouse, Layer::Panel),
+            Some(toml::Value::String("off".into()))
+        );
+        let dim = o("panes.dim_unfocused");
+        assert_eq!(
+            v.layers.value(&dim, Layer::File),
+            None,
+            "the theme says 0, as the default does"
+        );
+        assert_eq!(v.layers.effective(&dim), Some(toml::Value::Float(0.4)));
+
+        // Written back, it reads the same.
+        let path = dir.join("settings.toml");
+        let f = read_settings_file(&path).unwrap();
+        write_settings_file(&path, &f).unwrap();
+        assert_eq!(read_settings_file(&path).unwrap(), f);
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .starts_with("# Written by ranma's settings panel")
+        );
+
+        let bad = |text: &str| {
+            let d = config_tree("panelbad", &[("settings.toml", text)]);
+            load(Some(&d)).unwrap_err().to_string()
+        };
+        assert!(bad("[sett]\nx = 1\n").contains("unknown table `sett`"));
+        assert!(bad("[set]\nmouse = 'sideways'\n").contains("settings.toml"));
+        assert!(
+            format!(
+                "{:#}",
+                load(Some(&config_tree(
+                    "panelbad2",
+                    &[("settings.toml", "[theme.panes]\ndim_unfocused = 'x'\n")]
+                )))
+                .unwrap_err()
+            )
+            .contains("settings.toml")
         );
     }
 }

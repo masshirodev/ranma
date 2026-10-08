@@ -436,6 +436,13 @@ impl App {
                 Some(Duration::from_secs(15)),
             );
         }
+        for w in self.config.warnings.clone() {
+            self.toast(
+                w,
+                crate::toast::Level::Normal,
+                Some(Duration::from_secs(15)),
+            );
+        }
     }
 
     // ---- where things are ------------------------------------------------------
