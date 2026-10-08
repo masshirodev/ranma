@@ -817,6 +817,9 @@ pub struct Panel {
     pub themes: Vec<String>,
     /// The last thing the app said about an edit it could not apply.
     pub error: Option<String>,
+    /// Opened from a plugin's screen (`o`): only its group is listed, out of
+    /// this many options, and `esc` goes back to the screen of this title.
+    pub scope: Option<(usize, String)>,
 }
 
 /// What a key asks of the app.
@@ -857,6 +860,7 @@ impl Panel {
             palette,
             themes,
             error: None,
+            scope: None,
         }
     }
 
@@ -1371,12 +1375,17 @@ impl Panel {
                 st("bar_accent").bg(bst_bg(none)).bold(),
             );
         }
+        let back = self
+            .scope
+            .as_ref()
+            .map(|(_, t)| format!(" back to {t} "))
+            .unwrap_or_else(|| " close ".into());
         let bl: [(&str, bool); 5] = [
             (" ", false),
             ("w", true),
             (" save · ", false),
             ("esc", true),
-            (" close ", false),
+            (&back, false),
         ];
         let mut bx = x + w - 2 - bl.iter().map(|(t, _)| len(t)).sum::<i32>();
         for (t, k) in bl {
@@ -1409,7 +1418,10 @@ impl Panel {
             } else {
                 s.put(qx + 1, q_y, "filter", st("bar_dim"));
             }
-            let t = format!("{total} options");
+            let t = match &self.scope {
+                Some((all, _)) => format!("{total} of {all} options"),
+                None => format!("{total} options"),
+            };
             s.put(x0 + cw - len(&t), q_y, &t, st("bar_dim"));
         }
 

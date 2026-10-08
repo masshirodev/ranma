@@ -652,11 +652,13 @@ pub enum Filter {
 }
 
 /// A plugin's screen: what it describes, and where the user is in it.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Screen {
     pub title: String,
     pub chip: String,
     pub options: bool,
+    /// The options group `o` opens in settings (the plugin's name).
+    pub group: Option<String>,
     pub filter: Filter,
     pub status: Option<(String, Role)>,
     pub subtitle: Option<String>,
@@ -678,10 +680,12 @@ pub struct Screen {
     pub help: bool,
     pub peek: bool,
     /// The list's first row, when nothing can be selected.
-    pub scroll: usize,
+    pub scroll: std::cell::Cell<usize>,
     /// The detail area's height, fixed while the screen is open (0: not
     /// decided yet).
-    pub detail_rows: usize,
+    pub detail_rows: std::cell::Cell<usize>,
+    /// Where each row was drawn last: (screen row, id), for the mouse.
+    pub rows_at: std::cell::RefCell<Vec<(u16, String)>>,
 }
 
 /// What a key asks of the app.
@@ -776,11 +780,9 @@ impl Screen {
     fn move_sel(&mut self, down: bool) {
         let ids: Vec<String> = self.rows().iter().map(|r| r.id.clone()).collect();
         if ids.is_empty() {
-            self.scroll = if down {
-                self.scroll + 1
-            } else {
-                self.scroll.saturating_sub(1)
-            };
+            let sc = self.scroll.get();
+            self.scroll
+                .set(if down { sc + 1 } else { sc.saturating_sub(1) });
             return;
         }
         let cur = self
@@ -947,7 +949,7 @@ impl Screen {
     }
 
     pub fn draw(
-        &mut self,
+        &self,
         w: u16,
         h: u16,
         bar_y: Option<u16>,
@@ -970,7 +972,7 @@ impl Screen {
 
     #[allow(clippy::too_many_arguments)]
     fn draw_screen(
-        &mut self,
+        &self,
         s: &mut Grid,
         x: i32,
         y: i32,
@@ -1032,16 +1034,16 @@ impl Screen {
         let body = rule2 - list_top;
         let mut d: i32 = 0;
         if sel_row.as_ref().is_some_and(|r| !r.detail.is_empty()) {
-            if self.detail_rows == 0 {
+            if self.detail_rows.get() == 0 {
                 let want = if self.detail == 0 {
                     3
                 } else {
                     self.detail as i32
                 };
                 let rows = want.max(body / 5).min((body as f64 * 0.4).floor() as i32);
-                self.detail_rows = rows.max(0) as usize;
+                self.detail_rows.set(rows.max(0) as usize);
             }
-            d = self.detail_rows as i32;
+            d = self.detail_rows.get() as i32;
             if body - d - 1 < 5 {
                 d = 0;
             }
@@ -1161,12 +1163,13 @@ impl Screen {
                 }
                 off
             }
-            None => self.scroll as i32,
+            None => self.scroll.get() as i32,
         };
         off = off.clamp(0, (items.len() as i32 - l).max(0));
         if sel_idx.is_none() {
-            self.scroll = off as usize;
+            self.scroll.set(off as usize);
         }
+        let mut rows_at = Vec::new();
         if items.is_empty() {
             s.put(
                 x0,
@@ -1180,8 +1183,14 @@ impl Screen {
                 break;
             };
             let is_sel = sel_idx == Some((off + i) as usize);
+            if let Line::Row(r) = it
+                && r.select
+            {
+                rows_at.push(((list_top + i) as u16, r.id.clone()));
+            }
             draw_line(s, it, x0, list_top + i, cw, 2, is_sel, &self.query, hch);
         }
+        *self.rows_at.borrow_mut() = rows_at;
         if items.len() as i32 > l {
             let th = ((l * l) as f64 / items.len() as f64).round().max(1.0) as i32;
             let tp =
@@ -2102,7 +2111,7 @@ mod tests {
         ]
     }
 
-    fn check_screen(mut scr: Screen, w: u16, h: u16, style: BorderStyle, title: &str) {
+    fn check_screen(scr: Screen, w: u16, h: u16, style: BorderStyle, title: &str) {
         let g = scr.draw(w, h, Some(h - 1), &Lines::of(style, None), style);
         let (x, y, pw, ph) = scr.rect(w, h, Some(h - 1));
         compare(&g, &mock(title), x, x + pw, y..y + ph, title);
@@ -2604,7 +2613,7 @@ mod tests {
         let mut d = dash();
         assert!(d.selected().is_none(), "nothing to select");
         press(&mut d, "down");
-        assert_eq!(d.scroll, 1, "the arrows scroll instead");
+        assert_eq!(d.scroll.get(), 1, "the arrows scroll instead");
         assert_eq!(press(&mut d, "c"), Outcome::Key(s("c"), None));
     }
 }

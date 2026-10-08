@@ -40,6 +40,21 @@ impl App {
     }
 
     pub(super) fn open_settings(&mut self) {
+        // One slot: a plugin's screen there gives way.
+        self.close_plugin_screen(true);
+        self.open_settings_panel(None);
+    }
+
+    /// Settings scoped to one plugin's options (`o` on its screen); `esc`
+    /// goes back to the screen, which waits in `stashed_screen`.
+    pub(super) fn open_settings_scoped(&mut self, group: &str, back: &str) {
+        self.open_settings_panel(Some((group.to_string(), back.to_string())));
+        if self.settings.is_none() {
+            self.after_settings_closed(false);
+        }
+    }
+
+    fn open_settings_panel(&mut self, scope: Option<(String, String)>) {
         if self.screen.w < MIN_W || self.screen.h < MIN_H {
             self.status = Some(format!(
                 "settings needs a screen of {MIN_W}×{MIN_H} at least"
@@ -47,9 +62,18 @@ impl App {
             return;
         }
         let values = self.config.values.borrow();
-        let entries = settings::entries(&values.options, &values.layers);
+        let mut entries = settings::entries(&values.options, &values.layers);
         drop(values);
-        let panel = Panel::new(entries, self.palette(), theme_names());
+        let all = entries.len();
+        if let Some((group, _)) = &scope {
+            entries.retain(|e| &e.opt.group == group);
+            if entries.is_empty() {
+                self.status = Some(format!("{group} declares no options"));
+                return;
+            }
+        }
+        let mut panel = Panel::new(entries, self.palette(), theme_names());
+        panel.scope = scope.map(|(_, back)| (all, back));
         self.settings = Some(SettingsState {
             panel,
             settings: self.config.settings.clone(),
@@ -163,6 +187,12 @@ impl App {
                 self.clear_pending_values();
                 self.relayout();
             }
+        }
+        if self.settings.is_none() {
+            self.after_settings_closed(true);
+        } else if self.settings.as_ref().is_some_and(|s| !s.panel.confirm) {
+            // "esc keep editing": the screen that was waiting does not open.
+            self.pending_screen = None;
         }
     }
 
@@ -297,6 +327,7 @@ impl App {
         if close {
             self.settings = None;
             self.relayout();
+            self.after_settings_closed(true);
         } else {
             self.refresh_settings_panel();
         }

@@ -301,6 +301,32 @@ for _ in $(seq 1 20); do screen | grep -q '─ settings ─' || break; sleep 0.2
 screen | grep -q '─ settings ─' && fail "Esc did not close the panel"
 rm "$CFG/settings.toml"; sleep 0.5
 
+# A plugin's screen: opened from a global bind, floated in settings' place
+# with its chip on the bar, a row key reaching the plugin, and Esc closing it.
+# The pane under it keeps its size.
+cat > "$CFG/plugin/screen.lua" <<LUA
+ranma.bind("f5", function()
+  ranma.screen { title = "agents", status = { "1 needs you", "urgent" }, body = {
+    { "heading", "Needs you", count = 1 },
+    { "row", id = "api", name = "api · claude", value = { "? 12m", "urgent" },
+      keys = { { "a", "answer", function(id) ranma.notify("answered " .. id) end } } },
+  } }
+end, { global = true })
+LUA
+sleep 1
+T send-keys -t s 'clear; stty size' Enter; sleep 0.3
+before=$(screen | grep -oE '^│[0-9]+ [0-9]+' | head -1)
+T send-keys -t s F5
+wait_for '─ agents ─' 8 || fail "a plugin's screen did not open"
+bar | grep -q ' AGENTS ' || fail "the bar does not show the screen's chip ($(bar))"
+T send-keys -t s a
+wait_for 'answered api' 4 || fail "a row key did not reach the plugin"
+T send-keys -t s Escape; sleep 0.3
+screen | grep -q '─ agents ─' && fail "Esc did not close the plugin's screen"
+T send-keys -t s 'clear; stty size' Enter; sleep 0.3
+[ "$(screen | grep -oE '^│[0-9]+ [0-9]+' | head -1)" = "$before" ] || fail "the pane under a plugin's screen was resized"
+rm "$CFG/plugin/screen.lua"; sleep 0.5
+
 # Scripting over the socket: open a pane in the background and get its id,
 # read its screen, type into it, and wait for it with its exit status.
 T send-keys -t s "P=\$($BIN open -P -d -- 'echo smoke-captured; read x; exit \$x'); sleep 0.5; $BIN capture -p \$P | grep -q smoke-captured && echo CAPTURE-OK; $BIN send -p \$P -e 7; $BIN wait -p \$P; echo WAIT=\$?; $BIN panes | head -1" Enter

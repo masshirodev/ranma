@@ -860,6 +860,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
 | `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
+| `ranma.screen { ... }` | A screen of the plugin's own; see [Screens](#screens--ranmascreen--). |
 | `ranma.picker { ... }` | A filtered list of your own; see [Pickers and prompts](#pickers-and-prompts). |
 | `ranma.input { ... }` | A one-line prompt of your own. |
 | `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
@@ -1082,6 +1083,76 @@ ranma.bind("h", function()
   end }
 end, { desc = "history" })
 ```
+
+## Screens — `ranma.screen { ... }`
+
+A plugin's own screen: a list of blocks in the settings panel's frame, in
+its place on the right, floating over the workspace. The panes under it keep
+running at their size: a screen previews nothing about the layout, so nothing
+is resized when it opens and closes.
+
+```lua
+local s = ranma.screen {
+  title = "agents",            -- the top edge; the bar's chip is AGENTS (chip = to change it)
+  status = { "2 need you", "urgent" },
+  filter = "names",            -- "/" filters rows by name; "plugin" calls on_query; false: none
+  count = "5 agents",
+  detail = 4,                  -- the detail area's preferred height
+  options = true,              -- "o" opens settings on this plugin's options
+  keys = { { "n", "new", function(row) ... end } },
+  card = { { "a", "answer it", "waiting" } },   -- the keys card ("?")
+  body = {
+    { "heading", "Needs you", count = 2 },
+    { "row", id = "api", name = "api · claude", note = "1:code  ~/src/api",
+      value = { "? 12m", "urgent" },
+      keys = { { "a", "answer", function(id) ... end } },
+      detail = { { "log", lines = lines, at = 6 }, { "facts", { "ws", "1:code" }, { "pane", "1" } } } },
+  },
+  on_close = function() ... end,
+}
+s:set { body = new_body, status = { "1 needs you", "urgent" } }   -- live
+s:close()
+```
+
+| Block | |
+| --- | --- |
+| `{ "heading", text, tag =, count = }` | A title, a dim tag, a rule and a count, as settings' groups. |
+| `{ "row", id =, name =, ... }` | A selectable line: `name`, `mark = { "•", role }`, `note` (a second, dim column, shown on wide screens), `value`, `select = false`, `keys`, `detail` (the blocks shown under the list while it is selected), `on_change(dir)` and `on_edit(text)` for an editable value. |
+| `{ "text", "…", role =, strong =, max = }` | A wrapped paragraph, `max` lines (4), the last ending in `…`. |
+| `{ "facts", { label, value, role =, strong = }, ... }` | `label value · label value`; pairs go from the end when there is no room. |
+| `{ "progress", label =, frac =, num = }` | A bar between a label and a number, 0 to 1. |
+| `{ "log", lines =, n =, at = }` | The last `n` lines, dim; line `at` (from 1) in the text colour and kept in view. A line is text, or segments `{ text, "hit" | "num" | "strong" }`. |
+| `{ "separator" }`, `{ "space" }` | A rule; an empty row. |
+
+A row's `value` is text, `{ text, role }`, or one of the settings panel's
+shapes: `{ choice = "spotify" }`, `{ toggle = true }`, `{ slider = 0.6, text = "60%" }`,
+`{ swatch = "#ff6a6a" }`, `{ field = "text" }`. Those are edited in place: `←→` call
+the row's `on_change` with 1 or -1, and `enter` on a field asks for text and
+calls `on_edit`. The plugin updates the row itself, so nothing is unsaved. Roles
+are the only colour a plugin names: `normal`, `dim`, `accent`, `urgent`
+(always bold).
+
+Keys: ranma keeps `↑↓` `j` `k` (move), `tab` (next heading), `/` (filter),
+`esc` (close) and `?` (keys), plus `←→` `h` `l` and `enter` on an editable row.
+A screen or row binding one of them is an error naming it. `space` peeks
+(the screen folds to its selected row at the bottom) and `o` opens the
+plugin's options, unless the plugin binds those keys itself. A key's function
+gets the selected row's id (`nil` with nothing selected). The footer shows the
+selected row's keys, then the screen's, dropping from the end; `? keys` always
+stays. The mouse selects a row and the wheel moves through them.
+
+`s:set { ... }` changes what it names (`title`, `status`, `subtitle`, `count`,
+`body`, `keys`, `card`, `on_query`, `on_close`), up to a few times a second.
+The screen is redrawn at most every 100 ms whatever the rate. The selection
+follows its row's `id`; a row that goes hands it to the row taking its place.
+Nothing marks what changed: say it with roles, and with the status.
+
+One screen at a time, in one slot shared with the settings panel: opening a
+screen closes settings (which asks first about unsaved edits) or the screen
+before it, and `on_close` tells the plugin it was closed by the user or by
+another screen (`s:close()` does not call it). With `filter = "plugin"`,
+`on_query(text)` runs 150 ms after typing stops. Only from a bind, hook,
+module or timer.
 
 ## Timers and processes
 

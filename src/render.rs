@@ -177,6 +177,13 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         draw_settings(f, app);
         return None;
     }
+    if app.plugin_screen().is_some() && app.picker().is_none() {
+        draw_plugin_screen(f, app);
+        return None;
+    }
+    if app.plugin_screen().is_some() {
+        draw_plugin_screen(f, app);
+    }
     if let (Some(p), Some(l)) = (app.picker(), app.sheet_layout()) {
         draw_sheet(f, app, p, &l);
         return None;
@@ -731,7 +738,7 @@ fn draw_which_key(f: &mut Frame, app: &App) {
 /// The settings panel: `crate::settings` draws it as theme roles into a grid,
 /// painted here in the colours it opened with.
 fn draw_settings(f: &mut Frame, app: &App) {
-    use crate::settings::{Lines, Paint};
+    use crate::settings::Lines;
     let Some(st) = app.settings_panel() else {
         return;
     };
@@ -745,7 +752,33 @@ fn draw_settings(f: &mut Frame, app: &App) {
         &lines,
         b.style,
     );
-    let roles = toml::Value::try_from(&st.colors).ok();
+    paint_grid(f, app, &grid, &st.colors);
+}
+
+/// A plugin's screen (`ranma.screen`), floated where settings sits.
+fn draw_plugin_screen(f: &mut Frame, app: &App) {
+    use crate::settings::Lines;
+    let Some(ps) = app.plugin_screen() else {
+        return;
+    };
+    let screen = f.area();
+    let b = &app.config.theme.border;
+    let lines = Lines::of(b.style, b.chars.as_deref());
+    let grid = ps.screen.draw(
+        screen.width,
+        screen.height,
+        app.bar_rect().map(|r| r.y),
+        &lines,
+        b.style,
+    );
+    paint_grid(f, app, &grid, &app.colors());
+}
+
+/// Paint a grid of theme roles (`crate::settings::Grid`) in these colours.
+fn paint_grid(f: &mut Frame, app: &App, grid: &crate::settings::Grid, colors: &Colors) {
+    use crate::settings::Paint;
+    let screen = f.area();
+    let roles = toml::Value::try_from(colors).ok();
     let resolve = |p: Paint| -> theme::Color {
         match p {
             Paint::Lit(c) => c,

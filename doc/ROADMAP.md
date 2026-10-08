@@ -220,7 +220,10 @@ features below the line live outside the repository.
 - [x] State: `pane.vars`, `ranma.store` (`workspace.vars` left out; DESIGN.md says why)
 - [ ] Keys: which-key groups, user modes, user commands
 - [x] Drawing: `picker` and `input`
-- [ ] Drawing: `panel`, `tooltip`, `badge`
+- [x] Design: `doc/briefs/PLUGIN_PANEL.md`, handoff in `doc/handoffs/`
+- [x] Plugin screens: `ranma.screen` (designed from the handoff)
+- [ ] Tooltips: `ranma.tooltip`, `pane:link_at`
+- [ ] Badges: `pane:badge` on borders
 - [ ] `pane:watch`, measured first
 - [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)

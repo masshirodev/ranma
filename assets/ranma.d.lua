@@ -330,6 +330,59 @@ function ranma.picker(spec) end
 ---@param spec ranma.Input
 function ranma.input(spec) end
 
+---@alias ranma.Role "normal"|"dim"|"accent"|"urgent"
+
+---A row's value: text (in a role), or one of the settings panel's shapes.
+---@alias ranma.Value string|{ [1]: string, [2]: ranma.Role? }|{ choice: string }|{ toggle: boolean }|{ slider: number, text?: string }|{ swatch: string }|{ field: string }
+
+---A key and its label, and the function it runs (called with the selected row's id).
+---@alias ranma.ScreenKey { [1]: string, [2]: string, [3]: fun(row_id: string?)? }
+
+---A block of a screen. The first field is its kind:
+---{ "heading", text, tag?, count? }
+---{ "row", id=, name=, mark={ glyph, role }, note=, value=, select=false, keys={ ranma.ScreenKey }, detail={ blocks }, on_change=fun(dir: 1|-1), on_edit=fun(text) }
+---{ "text", text, role?, strong?, max? }
+---{ "facts", { label, value, role?, strong? }, ... }
+---{ "progress", label?, frac=0..1, num? }
+---{ "log", lines={ "text" | { { "text", "hit"|"num"|"strong"? }, ... } }, n?, at? (from 1) }
+---{ "separator" }   { "space" }
+---@alias ranma.Block table
+
+---@class ranma.ScreenSpec
+---@field title string
+---@field chip? string Up to 6 letters for the bar; the title in capitals when left out.
+---@field filter? "names"|"plugin"|false `/`: ranma filters the names, or on_query answers.
+---@field on_query? fun(query: string) For filter = "plugin": called 150 ms after typing stops.
+---@field detail? integer The detail area's preferred height (default 3).
+---@field status? { [1]: string, [2]: ranma.Role? } On the top edge, right.
+---@field subtitle? string The first row, when there is no filter.
+---@field count? string|integer The first row, right.
+---@field keys? ranma.ScreenKey[] Keys for the whole screen.
+---@field card? { [1]: string, [2]: string, [3]: string? }[] The keys card: key, what it does, the state it is for.
+---@field options? boolean `o` opens settings on this plugin's options.
+---@field group? string Which options group `o` shows (the title when left out).
+---@field body? ranma.Block[]
+---@field empty? string What an empty body says.
+---@field on_close? fun() The user (or another screen) closed it.
+
+---@class ranma.Screen
+local Screen = {}
+
+---Change what it names: title, status, subtitle, count, body, keys, card,
+---on_query, on_close. The selection follows its row's id.
+---@param t table
+function Screen:set(t) end
+
+---Close it (on_close is not called: the plugin knows).
+function Screen:close() end
+
+---Open a screen in the settings panel's place, floating over the workspace.
+---One at a time: it closes settings (which asks about unsaved edits) or the
+---screen before it.
+---@param spec ranma.ScreenSpec
+---@return ranma.Screen
+function ranma.screen(spec) end
+
 ---Call every ranma.on("user:<name>") listener with `data`, there and then.
 ---@param name string
 ---@param data any

@@ -696,6 +696,9 @@ pub enum Op {
     Kill(u64),
     Picker(crate::luaui::PickerSpec),
     Input(crate::luaui::InputSpec),
+    Screen(Box<crate::luascreen::ScreenSpec>),
+    ScreenSet(u64, Box<crate::luascreen::Update>),
+    ScreenClose(u64),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1655,6 +1658,7 @@ fn install_api(
         )?;
     }
     crate::luaui::install(lua, &ranma)?;
+    crate::luascreen::install(lua, &ranma)?;
     crate::store::Stores::new(crate::store::dir()).install(lua, &ranma)?;
     {
         let user = user.clone();

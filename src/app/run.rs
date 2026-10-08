@@ -758,6 +758,7 @@ fn event_loop(
             app.begin_frame();
             let mut cursor = None;
             term.draw(|f| cursor = render::draw(f, app))?;
+            app.screen_drawn_now();
             if cursor != last_cursor {
                 if let Some(c) = cursor {
                     execute!(term.backend_mut(), cursor_style(c))?;

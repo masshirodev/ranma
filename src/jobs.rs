@@ -39,7 +39,8 @@ pub const LINE_BATCH: Duration = Duration::from_millis(50);
 /// it to the wrong callback.
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-fn next_id() -> u64 {
+/// The next id of the process-wide sequence (timers, jobs, screens).
+pub fn next_id() -> u64 {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 

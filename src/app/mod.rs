@@ -36,6 +36,7 @@ mod paste;
 mod query;
 mod rules;
 mod run;
+mod screen;
 mod session;
 mod settings;
 mod snapshots;
@@ -210,6 +211,15 @@ pub struct App {
     picker: Option<crate::picker::Picker>,
     /// The settings panel, while open (`settings`).
     settings: Option<settings::SettingsState>,
+    /// A plugin's screen, in the same slot (`ranma.screen`).
+    plugin_screen: Option<screen::PluginScreen>,
+    /// The screen `o` left for its options, back on `esc`.
+    stashed_screen: Option<screen::PluginScreen>,
+    /// A screen waiting for settings to answer about unsaved edits.
+    pending_screen: Option<Box<crate::luascreen::ScreenSpec>>,
+    /// When a plugin's screen was last drawn, and when it is next due.
+    screen_drawn: Option<Instant>,
+    screen_redraw_due: Option<Instant>,
     copy: Option<CopyState>,
     /// Bytes for the host terminal itself (OSC 52 clipboard writes), written by
     /// the event loop after the event that queued them.
@@ -364,6 +374,11 @@ impl App {
             reload_at: None,
             picker: None,
             settings: None,
+            plugin_screen: None,
+            stashed_screen: None,
+            pending_screen: None,
+            screen_drawn: None,
+            screen_redraw_due: None,
             copy: None,
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
@@ -1551,6 +1566,10 @@ impl App {
             self.settings_input(ev);
             return;
         }
+        // So does a plugin's screen, unless a prompt it opened is up.
+        if self.plugin_screen.is_some() && self.picker.is_none() && self.screen_input(&ev) {
+            return;
+        }
         // Toolbars answer taps in every mode, over an open picker too: the
         // button that opened a sheet closes it.
         if let Event::Mouse(m) = ev
@@ -2645,6 +2664,9 @@ impl App {
                         }
                         config::Op::Kill(id) => self.config.jobs.kill(id),
                         config::Op::Picker(spec) => self.open_lua_picker(spec),
+                        config::Op::Screen(spec) => self.open_plugin_screen(*spec),
+                        config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
+                        config::Op::ScreenClose(id) => self.screen_close(id),
                         config::Op::Input(spec) => self.open_lua_input(spec),
                     }
                 }
@@ -2919,6 +2941,7 @@ impl App {
             .chain(self.config.jobs.next_due())
             .chain(self.idle_due)
             .chain(self.hover_due)
+            .chain(self.screen_deadline())
             .min()
     }
 
@@ -3118,6 +3141,7 @@ impl App {
     fn run_timers(&mut self, now: Instant) {
         self.expire_press(now);
         self.run_lua_timers(now);
+        self.screen_timers(now);
         if self.idle_due.is_some_and(|t| t <= now) {
             self.check_idle(now);
         }
@@ -3241,6 +3265,10 @@ impl App {
     fn segment(&self, name: &str) -> Segment {
         match name {
             "mode" if self.settings.is_some() => vec![Piece::new(" SET ", Style::Mode)],
+            "mode" if self.plugin_screen.is_some() => {
+                let chip = &self.plugin_screen.as_ref().expect("checked").screen.chip;
+                vec![Piece::new(format!(" {chip} "), Style::Mode)]
+            }
             "mode" => match self.mode {
                 Mode::Wm => vec![Piece::new(" WM ", Style::Mode)],
                 Mode::Copy => {
@@ -4981,5 +5009,91 @@ mod tests {
         typed(&mut a, "or");
         key(&mut a, KeyCode::Enter);
         assert_eq!(a.status.as_deref(), Some("got error"));
+    }
+
+    fn lua(a: &mut App, src: &str) {
+        a.call_lua(|lua| lua.load(src).exec()).unwrap();
+    }
+
+    const AGENTS: &str = r#"
+        ran = {}
+        s = ranma.screen {
+          title = "agents", options = true, group = "agents",
+          keys = { { "n", "new", function(row) table.insert(ran, "new " .. tostring(row)) end } },
+          body = {
+            { "heading", "Needs you", count = 1 },
+            { "row", id = "api", name = "api · claude", value = { "? 12m", "urgent" },
+              keys = { { "a", "answer", function(row) table.insert(ran, "answer " .. row) end } } },
+            { "row", id = "vol", name = "Volume", value = { slider = 0.5 },
+              on_change = function(d) table.insert(ran, "step " .. d) end },
+          },
+          on_close = function() table.insert(ran, "closed") end,
+        }
+    "#;
+
+    fn ran(a: &App) -> Vec<String> {
+        a.config.lua.load("return ran").eval().unwrap()
+    }
+
+    #[test]
+    fn a_plugin_screen_opens_takes_keys_and_calls_back() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        lua(&mut a, AGENTS);
+        assert_eq!(a.plugin_screen().unwrap().screen.title, "agents");
+        assert_eq!(a.segment("mode"), vec![Piece::new(" AGENTS ", Style::Mode)]);
+        typed(&mut a, "a");
+        typed(&mut a, "n");
+        key(&mut a, KeyCode::Down);
+        key(&mut a, KeyCode::Right);
+        key(&mut a, KeyCode::Left);
+        assert_eq!(ran(&a), ["answer api", "new api", "step 1", "step -1"]);
+        // Live content: the selection stays on its row.
+        lua(
+            &mut a,
+            r#"s:set { status = { "1 needs you", "urgent" }, body = {
+            { "row", id = "new", name = "new one" }, { "row", id = "vol", name = "Volume", value = { slider = 0.6 } } } }"#,
+        );
+        let ps = a.plugin_screen().unwrap();
+        assert_eq!(ps.screen.selected().unwrap().id, "vol");
+        assert_eq!(ps.screen.status.as_ref().unwrap().0, "1 needs you");
+        key(&mut a, KeyCode::Esc);
+        assert!(a.plugin_screen().is_none());
+        assert_eq!(ran(&a).last().unwrap(), "closed");
+        // Closed by the plugin: no on_close.
+        lua(&mut a, AGENTS);
+        lua(&mut a, "s:close()");
+        assert!(a.plugin_screen().is_none());
+        assert!(ran(&a).is_empty());
+    }
+
+    #[test]
+    fn options_open_settings_on_the_plugins_group_and_esc_comes_back() {
+        use crossterm::event::KeyCode;
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some("ranma.option('agents.notify', { type = 'bool', default = true })"),
+        )
+        .unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 100, 30);
+        lua(&mut a, AGENTS);
+        typed(&mut a, "o");
+        let st = a.settings_panel().expect("settings opened");
+        assert_eq!(st.panel.entries.len(), 1, "only the plugin's group");
+        assert_eq!(st.panel.scope.as_ref().unwrap().1, "agents");
+        assert!(a.plugin_screen().is_none(), "one slot");
+        key(&mut a, KeyCode::Esc);
+        assert!(a.settings_panel().is_none());
+        assert_eq!(
+            a.plugin_screen().unwrap().screen.title,
+            "agents",
+            "back to the screen"
+        );
+        // Opening settings itself closes the screen, which hears it.
+        a.run_action(crate::action::Action::Settings);
+        assert!(a.plugin_screen().is_none() && a.settings_panel().is_some());
+        assert_eq!(ran(&a).last().unwrap(), "closed");
     }
 }

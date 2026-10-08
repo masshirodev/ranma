@@ -703,6 +703,34 @@ What it does not do yet:
   and reopening shows the truth.
 - Toasts are drawn under the panel while it is open.
 
+**Plugin screens, as built** (2026-10-09, from `doc/handoffs/PLUGIN_PANEL.md`):
+
+- `src/screen.rs` ports the handoff's script function by function, drawing
+  theme roles into the settings panel's grid. Tests compare it with
+  `PLUGIN_PANEL_MOCK.txt` for every scene ranma draws: the four sample
+  screens at 80×24 in two border styles, their keys card and peek, 200×50,
+  the nested 40×15, the block chart, the badges and their ladder, and both
+  tooltips. `src/luascreen.rs` reads `ranma.screen`'s table as strictly as a
+  config. `src/app/screen.rs` gives it the slot it shares with settings.
+- A screen floats over the workspace in settings' place, and resizes nothing.
+  The handoff's reason: the agents list is opened and closed all day, and a
+  resize would reflow every agent's program each time.
+- Updates are coalesced to one redraw per 100 ms (ranma's own frame cap is
+  8 ms), and `on_query` runs 150 ms after typing stops. The handoff left both
+  open.
+
+Where it departs from the handoff:
+
+- `o` opens the real settings panel, filtered to the plugin's group (`4 of 64
+  options`, `esc back to agents`). The handoff drew that scene with the
+  screen's own code. Settings has its own handoff and tests, and two drawings
+  of one panel would drift, so that scene is not compared cell for cell.
+- A key ranma keeps is an error when `ranma.screen` is called, not "at load":
+  screens open at run time.
+- The tooltip mocks' key line (`ctrl+click open`) names keys ranma does not
+  have. Links open from hints (`leader o`). A tooltip shows whatever the
+  plugin passes, and the link plugin will pass the real keys.
+
 **Pickers and prompts** (2026-10-08) are ranma's own `Picker` with a kind of
 their own and an item target that is an index. The Lua items table is kept in
 the registry while the picker is open, so `on_select` gets the item the plugin

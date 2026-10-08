@@ -19,6 +19,7 @@ pub mod keys;
 pub mod layout;
 pub mod layouts;
 pub mod luapane;
+pub mod luascreen;
 pub mod luaui;
 pub mod nestbar;
 pub mod options;
