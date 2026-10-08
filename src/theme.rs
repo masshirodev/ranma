@@ -510,6 +510,28 @@ pub struct Gaps {
     pub inner: u16,
     pub outer_horizontal: u16,
     pub outer_vertical: u16,
+    /// One side's outer gap; unset, it follows `outer_vertical` (top and
+    /// bottom) or `outer_horizontal` (left and right).
+    #[serde(default)]
+    pub outer_top: Option<u16>,
+    #[serde(default)]
+    pub outer_bottom: Option<u16>,
+    #[serde(default)]
+    pub outer_left: Option<u16>,
+    #[serde(default)]
+    pub outer_right: Option<u16>,
+}
+
+impl Gaps {
+    /// The outer gap on each side: top, right, bottom, left.
+    pub fn outer(&self) -> [u16; 4] {
+        [
+            self.outer_top.unwrap_or(self.outer_vertical),
+            self.outer_right.unwrap_or(self.outer_horizontal),
+            self.outer_bottom.unwrap_or(self.outer_vertical),
+            self.outer_left.unwrap_or(self.outer_horizontal),
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -753,6 +775,20 @@ mod tests {
         assert_eq!(t.border.style, BorderStyle::Plain);
         let d = load("default", &[]).unwrap();
         assert_eq!(t.colors.border_inactive, d.colors.border_inactive);
+    }
+
+    #[test]
+    fn a_side_s_outer_gap_overrides_its_axis() {
+        let dir = tmp_dir("gaps");
+        std::fs::write(
+            dir.join("mine.toml"),
+            "[gaps]\nouter_horizontal = 2\nouter_vertical = 1\nouter_top = 3\nouter_left = 0\n",
+        )
+        .unwrap();
+        let t = load("mine", &[dir]).unwrap();
+        assert_eq!(t.gaps.outer(), [3, 2, 1, 0]);
+        let d = load("default", &[]).unwrap();
+        assert_eq!(d.gaps.outer(), [0, 0, 0, 0]);
     }
 
     #[test]

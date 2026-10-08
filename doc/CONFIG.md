@@ -1017,6 +1017,7 @@ palette, say) styles toolbars too.
 | `border.title_format` | the title's text (see [Formats](#formats)): `{title}` (its name, else what its program set), `{index}` (its place in the workspace, from 1), `{program}` (the program in its foreground), `{cwd}` (its directory, `~` for home). `" {title} "` by default. |
 | `border.indicator` | `none`, or `arrows`: arrows on the focused pane's edges, pointing in (not on the edge its title is on) |
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
+| `gaps.outer_top`, `outer_bottom`, `outer_left`, `outer_right` | cells, one side's outer gap over its axis's (`outer_top = 2` with `outer_vertical = 1`: two above, one below); unset, the side follows `outer_vertical` or `outer_horizontal` |
 | `bar.position` | `top`, `bottom`, `hidden` |
 | `bar.separator` | text drawn between two modules on the same side |
 | `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |

@@ -1581,6 +1581,11 @@ Rust, for predictable latency without a GC, and for the emulator:
 - Borders and gaps are cells; they are cheap and stay. Animations are not planned:
   a cell grid cannot animate smoothly, and they would spend the speed this project
   exists for.
+- Gaps are whole cells, never fractions (2026-10-08): a terminal cannot start a
+  pane's grid part of a cell over, so `0.5` could only be rounded to something
+  the file does not say. What a fraction was usually wanted for is a side on its
+  own: `outer_top` and its three siblings override one side of their axis, and
+  unset follow it, so themes with only the two axes look as before.
 
 ## Non-goals
 

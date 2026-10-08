@@ -511,8 +511,7 @@ impl App {
         // yielded bar keeps no row: focus coming and going must not resize the
         // panes, so the bar is drawn over them when it shows at all.
         let a = self.chrome().workspace;
-        let g = &self.config.theme.gaps;
-        a.inset(g.outer_horizontal, g.outer_vertical)
+        a.inset_sides(self.config.theme.gaps.outer())
     }
 
     /// Where the splash goes, and the keys it names: on a shown workspace

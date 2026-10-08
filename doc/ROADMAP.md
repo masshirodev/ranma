@@ -25,6 +25,7 @@ resizes of the host terminal, with zero redraws while idle. Passed 2026-09-28
 - [x] Resize: host resize → layout → each PTY
 - [x] Draw on change only; coalesce floods at the frame cap (120 fps)
 - [x] Borders and gaps from the theme; WM-mode indicator; pane titles on borders
+- [x] Outer gaps per side (`outer_top`, `outer_bottom`, `outer_left`, `outer_right`)
 - [x] Decide `shift+digit` handling: use `alt+digit` (DESIGN.md, "Digits: Alt, not Shift")
 
 Pulled forward from milestone 2 because the tree made them cheap: `resize`,

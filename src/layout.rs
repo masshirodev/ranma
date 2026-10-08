@@ -48,6 +48,13 @@ impl Rect {
             hh,
         )
     }
+    /// Inset by each side's own amount: top, right, bottom, left. Each axis
+    /// gives way to zero size rather than past it.
+    pub fn inset_sides(&self, [top, right, bottom, left]: [u16; 4]) -> Rect {
+        let w = self.w.saturating_sub(left.saturating_add(right));
+        let h = self.h.saturating_sub(top.saturating_add(bottom));
+        Rect::new(self.x + left.min(self.w), self.y + top.min(self.h), w, h)
+    }
     pub fn contains(&self, x: u16, y: u16) -> bool {
         x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
     }
@@ -1337,6 +1344,12 @@ mod tests {
     fn inset_saturates() {
         assert_eq!(Rect::new(0, 0, 3, 3).inset(5, 5).w, 0);
         assert_eq!(Rect::new(2, 2, 10, 6).inset(1, 1), Rect::new(3, 3, 8, 4));
+        // Each side its own: more on top than at the bottom.
+        assert_eq!(
+            Rect::new(0, 0, 20, 10).inset_sides([3, 2, 1, 0]),
+            Rect::new(0, 3, 18, 6)
+        );
+        assert_eq!(Rect::new(0, 0, 4, 4).inset_sides([9, 0, 9, 0]).h, 0);
     }
 
     #[test]
