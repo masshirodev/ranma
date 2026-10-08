@@ -613,7 +613,7 @@ asked for it as its first user:
 | Watch | `pane:watch(regex, fn)`: Rust matches lines as they complete, at most every 100 ms, and Lua runs only on a match | agents ("Do you want to proceed?") |
 | Draw | `ranma.picker{items, on_select, preview}`, `ranma.panel{...}` (a float of lines with roles), `ranma.tooltip(anchor, text)`, `pane:badge(text, role)` in the border title | every UI plugin |
 | Time | `ranma.defer(ms, fn)`, `ranma.every(ms, fn)`, `ranma.spawn(argv, {on_exit, on_line})` off ranma's thread | anything that shells out |
-| State | `pane.vars` / `workspace.vars` (tables that live as long as the pane or workspace), `ranma.store(name)` (persisted across restart and upgrade, under the state directory) | agents, history |
+| State | `pane.vars` (a table that lives as long as the pane), `ranma.store(name)` (persisted across restart and upgrade, under the state directory) | agents, history |
 | Keys | which-key groups (`ranma.bind("g", { group = "git" })`, nested), user modes (`ranma.mode(name, { binds, label, on_enter, on_exit })`), user commands in the `:` palette (`ranma.command(name, fn, { desc, complete })`) | which-key folders, plugin keymaps |
 | Develop | `ranma --dump-types` (LuaLS annotations for every function, event and option), `ranma lua 'expr'` (evaluate in the running server, print the result), `ranma health` (each plugin: loaded, failed and why, timings) | writing plugins in nvim |
 
@@ -641,6 +641,15 @@ an id the new configuration reused would reach the wrong callback. Dropping a
 configuration signals its jobs' process groups. `spawn` is refused at load,
 because `--check-config` loads the configuration too. An `every` that errors is
 stopped: at 50 ms, an error a tick would bury the bar.
+
+**State** (2026-10-08): `pane.vars` is a Lua table per pane id, held in the
+Lua state's registry and cleared when the pane ends. A reload starts the Lua
+state over, and the vars with it. `workspace.vars` is left out: there is no
+workspace handle to hang it on, and a workspace's number is not an identity
+(panes move, sessions renumber nothing but hold their own). `ranma.store(name)`
+is the state that lasts, a JSON object per name under the state directory,
+written whole and atomically on each `set`. It is small on purpose: a file
+rewritten on ranma's own thread is not a database, and the 1 MiB ceiling says so.
 
 **Events** (2026-10-08) cost nothing until a hook asks. `pane_idle` keeps an
 account of output only while a hook for it exists, and re-arms the wakeup of a

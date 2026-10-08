@@ -51,6 +51,7 @@ impl App {
     pub(super) fn pane_ended(&mut self, id: PaneId) {
         self.cwds.remove(&id);
         self.activity.remove(&id);
+        crate::luapane::forget(&self.config.lua, id);
         let code = self.exit_codes.remove(&id);
         self.ended.push_back((id, code));
         if self.ended.len() > ENDED_KEPT {

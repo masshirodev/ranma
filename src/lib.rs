@@ -30,6 +30,7 @@ pub mod render;
 pub mod restore;
 pub mod snapshot;
 pub mod splash;
+pub mod store;
 pub mod sysstat;
 pub mod theme;
 pub mod tmux;

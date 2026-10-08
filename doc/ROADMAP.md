@@ -216,7 +216,7 @@ features below the line live outside the repository.
 - [x] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
   `pane_idle`, `hover`, `user:<name>`
 - [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
-- [ ] State: `pane.vars`, `workspace.vars`, `ranma.store`
+- [x] State: `pane.vars`, `ranma.store` (`workspace.vars` left out; DESIGN.md says why)
 - [ ] Keys: which-key groups, user modes, user commands
 - [ ] Drawing: `picker`, `panel`, `tooltip`, `badge`
 - [ ] `pane:watch`, measured first

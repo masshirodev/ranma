@@ -120,6 +120,7 @@ impl UserData for Handle {
         f.add_field_method_get("title", |_, h| Ok(h.0.title.clone()));
         f.add_field_method_get("cols", |_, h| Ok(h.0.cols));
         f.add_field_method_get("rows", |_, h| Ok(h.0.rows));
+        f.add_field_method_get("vars", |lua, h| vars(lua, h.0.id));
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
@@ -242,6 +243,36 @@ impl UserData for Handle {
                 )
             },
         );
+    }
+}
+
+/// Where every pane's `vars` live: one table per pane id, kept in the Lua
+/// state, so every handle on a pane sees the same one.
+const VARS: &str = "ranma.pane_vars";
+
+/// A pane's `vars`: a plain table a plugin keeps anything in, for as long as
+/// the pane lives (or until a reload starts the Lua state over).
+fn vars(lua: &Lua, id: PaneId) -> mlua::Result<Table> {
+    let all: Table = match lua.named_registry_value::<Option<Table>>(VARS)? {
+        Some(t) => t,
+        None => {
+            let t = lua.create_table()?;
+            lua.set_named_registry_value(VARS, &t)?;
+            t
+        }
+    };
+    if let Some(t) = all.get::<Option<Table>>(id)? {
+        return Ok(t);
+    }
+    let t = lua.create_table()?;
+    all.set(id, &t)?;
+    Ok(t)
+}
+
+/// A pane closed: its `vars` go with it.
+pub fn forget(lua: &Lua, id: PaneId) {
+    if let Ok(Some(all)) = lua.named_registry_value::<Option<Table>>(VARS) {
+        let _ = all.set(id, Value::Nil);
     }
 }
 
@@ -415,6 +446,26 @@ mod tests {
         let (out, _) = call(&cfg, &[(2, &b)], "kept:focus()");
         assert!(out.unwrap_err().to_string().contains("pane 1 is gone"));
         assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn a_panes_vars_are_shared_by_its_handles_and_go_with_it() {
+        let cfg = load_from(None, None, None).unwrap();
+        let a = pane(1, "x");
+        let b = pane(2, "y");
+        let (out, _) = call(
+            &cfg,
+            &[(1, &a), (2, &b)],
+            r#"
+            ranma.pane(1).vars.seen = 3
+            assert(ranma.pane(1).vars.seen == 3, "another handle, the same table")
+            assert(ranma.pane(2).vars.seen == nil)
+            "#,
+        );
+        out.unwrap();
+        forget(&cfg.lua, 1);
+        let (out, _) = call(&cfg, &[(1, &a)], "return ranma.pane(1).vars.seen");
+        assert!(out.unwrap().is_nil());
     }
 
     #[test]

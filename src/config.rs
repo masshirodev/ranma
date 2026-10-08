@@ -1535,6 +1535,7 @@ fn install_api(
     )?;
 
     crate::luapane::install(lua, &ranma)?;
+    crate::store::Stores::new(crate::store::dir()).install(lua, &ranma)?;
     {
         let user = user.clone();
         ranma.set(

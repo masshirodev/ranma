@@ -834,6 +834,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
 | `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
+| `ranma.store(name)` | A plugin's state kept on disk; see [A plugin's state](#a-plugins-state--ranmastorename). Works at load too. |
 | `ranma.spawn(cmd, opts)` | Run a process in the background; see [Timers and processes](#timers-and-processes). |
 | `ranma.kill(id)` | Stop a process `spawn` started. |
 | `ranma.pane(id)` | A handle on pane `id`, or on the focused pane when `id` is left out; `nil` if there is none. See [Pane handles](#pane-handles). |
@@ -859,6 +860,7 @@ look at its text:
 | `visible`, `floating` | On screen now; in the floating layer. |
 | `title` | Its name if it has one, else its title. |
 | `cols`, `rows` | Its size. |
+| `vars` | A table of your own for this pane: every handle on the pane gets the same one. It lasts until the pane closes or the config reloads; for anything longer, use a [store](#a-plugins-state--ranmastorename). |
 
 Reading is live, from the pane's terminal. **Lines are numbered from the top of
 the screen**: `0` to `rows - 1` are the screen, and the scrollback goes up from
@@ -949,6 +951,29 @@ Its stdin is empty, and it runs in a process group of its own. `ranma.kill(id)`
 sends that group SIGTERM, and says whether the job was still running. A reload
 or ranma quitting does the same to every job the old configuration started,
 since nothing would hear them end. 64 may run at once.
+
+## A plugin's state — `ranma.store(name)`
+
+The Lua state starts over on every reload and every upgrade. What a plugin
+must remember across them goes in a store:
+
+```lua
+local s = ranma.store("history")
+s:set("count", (s:get("count") or 0) + 1)
+s:set("last", { cmd = "make", exit = 0 })
+s:set("last", nil)      -- forget it
+for _, k in ipairs(s:keys()) do ... end
+```
+
+A store is one JSON file, `$XDG_STATE_HOME/ranma/store/<name>.json`
+(`~/.local/state/ranma/store/`). It is read the first time it is asked for, and
+written whole on every `set` by a write and a rename, so a crash leaves the old
+file or the new one. Values are what JSON holds: nil, booleans, numbers,
+strings, and tables of them. A function is refused. Every `ranma.store` of one
+name in a configuration is the same store. Names are letters, digits, `_`,
+`-` and `.`. A store is for small state: past 1 MiB a `set` is refused and the
+store stays as it was. It works at load too, so a plugin can read its state
+as it starts.
 
 ## Toolbars — `ranma.toolbar(name, def)`
 
