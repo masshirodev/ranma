@@ -128,6 +128,8 @@ pub struct Settings {
     pub paste_upload: bool,
     /// Writes the clipboard's image as PNG to stdout; `None` is the platform's.
     pub paste_image_command: Option<String>,
+    /// An empty workspace shows the logo and how to start (Enter, help).
+    pub splash: bool,
 }
 
 impl Default for Settings {
@@ -153,6 +155,7 @@ impl Default for Settings {
             restore: RestoreMode::Ask,
             paste_upload: true,
             paste_image_command: None,
+            splash: true,
         }
     }
 }
@@ -178,6 +181,7 @@ struct SettingsPatch {
     title_host: Option<TitleHost>,
     restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
+    splash: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -786,6 +790,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(p) = patch.preserve_split {
         s.preserve_split = p;
+    }
+    if let Some(on) = patch.splash {
+        s.splash = on;
     }
     if patch.shell.is_some() {
         s.shell = patch.shell;
@@ -2128,6 +2135,14 @@ mod tests {
         assert_eq!(cfg.settings.nested, NestedMode::Auto);
         assert_eq!(cfg.settings.outer_leader, "ctrl+alt+b".parse().unwrap());
         assert_eq!(cfg.settings.title_host, TitleHost::Ssh);
+        assert!(cfg.settings.splash, "the splash is on by default");
+        assert!(
+            !with_user("ranma.set { splash = false }")
+                .unwrap()
+                .settings
+                .splash
+        );
+        assert!(with_user("ranma.set { splash = 'yes' }").is_err());
         let cfg = with_user("ranma.set { title_host = 'always' }").unwrap();
         assert_eq!(cfg.settings.title_host, TitleHost::Always);
         assert!(with_user("ranma.set { title_host = 'sometimes' }").is_err());

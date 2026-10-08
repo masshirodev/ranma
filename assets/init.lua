@@ -29,6 +29,9 @@ ranma.set {
   master_ratio = 0.55,
   -- Keep a split's direction when its container is resized (Hyprland's dwindle option).
   preserve_split = true,
+  -- An empty workspace shows the ranma logo and how to start: Enter opens a
+  -- shell, and the key that lists every bind. false leaves it blank.
+  splash = true,
 
   -- nil means $SHELL, then /bin/sh.
   shell = nil,

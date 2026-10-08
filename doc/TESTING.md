@@ -61,8 +61,8 @@ Builds the release binary and drives it inside a **private headless tmux server*
   command into the first, falls back to home for a directory that is gone,
   and `save_layout` writes the pane's directory back (the test's own
   `XDG_STATE_HOME`, never yours)
-- Enter and the keypad's Enter (tmux sends it as LF) on an empty workspace open
-  a shell there
+- an empty workspace shows the splash (the logo, Enter, and the help key), and
+  Enter and the keypad's Enter (tmux sends it as LF) there open a shell
 - a broken config written while running is reported at once, and the old one kept
 - a theme written while running is drawn: an ascii border, the title on the
   bottom edge from its format (with the program, read after a key), arrows on

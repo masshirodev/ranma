@@ -143,6 +143,10 @@ bar | grep -q ' 2 ' && fail "empty workspace 2 still in the bar"
 for enter in Enter KPEnter; do
   T send-keys -t s C-b 3 Escape; sleep 0.3
   screen | grep -q '╭' && fail "workspace 3 is not empty to begin with"
+  # The splash says so: the logo's first row and the Enter key.
+  wait_for '_______' 8 || fail "no splash logo on an empty workspace"
+  screen | grep -q 'Enter   open a shell' || fail "the splash does not name Enter"
+  screen | grep -q 'ctrl+b ?   every key' || fail "the splash does not name the help key"
   T send-keys -t s "$enter"
   wait_for '╭' 20 || fail "$enter on an empty workspace opened no pane"
   for _ in $(seq 1 20); do bar | grep -q ' 3:bash ' && break; sleep 0.25; done

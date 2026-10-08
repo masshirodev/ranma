@@ -501,6 +501,45 @@ impl App {
         a.inset(g.outer_horizontal, g.outer_vertical)
     }
 
+    /// Where the splash goes, and the keys it names: on a shown workspace
+    /// with nothing tiled and nothing focused, the state in which Enter opens
+    /// a shell (`enter_opens_pane`). `None` when there is no splash to draw.
+    pub fn splash(&self) -> Option<(Rect, Vec<(String, &'static str)>)> {
+        if !self.config.settings.splash || self.focused().is_some() {
+            return None;
+        }
+        let mut keys = vec![("Enter".to_string(), "open a shell")];
+        if let Some(k) = self.help_key() {
+            keys.push((k, "every key"));
+        }
+        Some((self.workspace_area(), keys))
+    }
+
+    /// The key that opens help, as typed: a global bind as it is, a WM bind
+    /// after the leader. The shortest wins, then the first in order.
+    fn help_key(&self) -> Option<String> {
+        let is_help = |b: &config::Bind| {
+            matches!(
+                b.action,
+                config::BindAction::Builtin(crate::action::Action::Help)
+            )
+        };
+        let leader = &self.config.settings.leader;
+        self.config
+            .global_binds
+            .iter()
+            .filter(|(_, b)| is_help(b))
+            .map(|(c, _)| c.to_string())
+            .chain(
+                self.config
+                    .binds
+                    .iter()
+                    .filter(|(_, b)| is_help(b))
+                    .map(|(c, _)| format!("{leader} {c}")),
+            )
+            .min_by(|a, b| a.len().cmp(&b.len()).then(a.cmp(b)))
+    }
+
     fn scratch_area(&self) -> Rect {
         self.workspace_area().centered(80, 80)
     }

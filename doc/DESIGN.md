@@ -272,6 +272,19 @@ application keypad mode, so it never arrives as `ESC O M`), LF on some, tmux
 among them, read as Ctrl+J. Other keys on an empty workspace still do
 nothing, and a global bind on Enter or Ctrl+J is checked first and wins.
 
+**And the empty workspace says so** (2026-10-08). Enter opening a shell was
+invisible: the screen was blank, as nvim's is without a dashboard. Now it
+shows the logo (figlet's Merlin1, the one picked on patorjk's TAAG) and under
+it the two keys that matter there: Enter, and whichever key is bound to
+`help`, read from the binds so a remapped leader or help key shows as it is.
+Drawn under everything, so a scratchpad over an empty workspace covers it,
+and only in the state Enter acts in (nothing focused). It uses the bar's
+colours (`bar_accent`, `bar_fg`, `bar_dim`) rather than theme keys of its
+own: a new theme key is a strictness hazard for every user theme (see
+AGENTS.md), and the bar's palette is already what the chrome speaks. It
+shrinks to fit: the name in plain letters, then nothing. `splash = false`
+turns it off.
+
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 

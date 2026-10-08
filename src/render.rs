@@ -106,6 +106,11 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     let mut cursor = None;
     let mut overlay_cleared = false;
 
+    // Under everything: a scratchpad shown over an empty workspace covers it.
+    if let Some((area, keys)) = app.splash() {
+        draw_splash(f, app, area, &keys);
+    }
+
     for view in &frame.views {
         // Floats and the scratchpad cover what is under them; without clearing,
         // the tiles' cells would show through wherever the float's are blank.
@@ -178,6 +183,46 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         return None;
     }
     cursor
+}
+
+/// The logo and the keys, centred as one block on the empty workspace.
+fn draw_splash(f: &mut Frame, app: &App, area: Rect, keys: &[(String, &str)]) {
+    use crate::splash::{self, Part};
+    let lines = splash::lines(area.w, area.h, keys);
+    if lines.is_empty() {
+        return;
+    }
+    let c = &app.config.theme.colors;
+    let style = |p: Part| match p {
+        Part::Logo => Style::default().fg(color(c.bar_accent)),
+        Part::Key => Style::default()
+            .fg(color(c.bar_fg))
+            .add_modifier(Modifier::BOLD),
+        Part::Text => Style::default().fg(color(c.bar_dim)),
+    };
+    // The logo and the keys are each centred as a block, so the keys keep
+    // one column for what they do.
+    let block_x = |logo: bool| {
+        let w = lines
+            .iter()
+            .filter(|l| l.iter().any(|(_, p)| (*p == Part::Logo) == logo))
+            .map(splash::line_width)
+            .max()
+            .unwrap_or(0) as u16;
+        area.x + area.w.saturating_sub(w) / 2
+    };
+    let (logo_x, keys_x) = (block_x(true), block_x(false));
+    let y = area.y + area.h.saturating_sub(lines.len() as u16) / 2;
+    let buf = f.buffer_mut();
+    for (i, line) in lines.iter().enumerate() {
+        let logo = line.iter().any(|(_, p)| *p == Part::Logo);
+        let mut x = if logo { logo_x } else { keys_x };
+        for (text, part) in line {
+            let room = area.right().saturating_sub(x) as usize;
+            let (nx, _) = buf.set_stringn(x, y + i as u16, text, room, style(*part));
+            x = nx;
+        }
+    }
 }
 
 fn draw_pane(

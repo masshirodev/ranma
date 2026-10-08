@@ -190,6 +190,8 @@ lets you style".
 
 - [x] A server's snapshot, written after activity and on exit, offered by a
   fresh server (`Enter` typed, `r` run), and the `restore` action
+- [x] The splash: an empty workspace shows the logo and the keys to start
+  (`splash`)
 
 ## Later, maybe
 
