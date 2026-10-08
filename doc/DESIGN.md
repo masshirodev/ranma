@@ -807,7 +807,12 @@ ended on, and with it a pane's first column.
 
 A notification that sits in the bar until the next key is easy to miss and easy
 to lose, so there are toasts: boxes at the top right that stack, expire, and
-never take focus or keys. The useful source of them is the shell — "tell me when
+never take focus or keys. The bar message stays for what it is good for, ranma's
+own one-liners ("workspace 5 is empty", a paste that could not run), and goes
+after five seconds (2026-10-08): it used to wait for a key in WM mode, so an
+error said once stayed in the middle of the bar for as long as you typed into
+programs, which never clear it. The clock is started by the loop noticing a new
+message, not by the sixty places that set one. The useful source of them is the shell — "tell me when
 this build is done" — so each ranma listens on a Unix socket of its own and puts
 its path in its panes' environment. `ranma notify` in a pane reaches exactly the
 ranma it runs in; with two terminals open, each gets its own. The socket is in

@@ -59,6 +59,9 @@ const FRAME: Duration = Duration::from_micros(8_333);
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(150);
 /// How often, at most, the workspaces module reads which program each pane runs.
 const PROGRAMS_EVERY: Duration = Duration::from_millis(500);
+/// How long a bar message stays. It was until the next key in WM mode, so an
+/// error said once sat in the bar for as long as you typed into programs.
+const STATUS_FOR: Duration = Duration::from_secs(5);
 /// Hooks that run actions that fire hooks: stop before it becomes a loop.
 const MAX_LUA_DEPTH: u8 = 4;
 /// The workspace number the scratchpad reports in hook payloads and state.
@@ -159,8 +162,12 @@ pub struct App {
     scratch: Workspace,
     scratch_shown: bool,
     pub mode: Mode,
-    /// A one-line message for the bar; cleared by the next key.
+    /// A one-line message for the bar; cleared by the next key in WM mode, or
+    /// after `STATUS_FOR`.
     pub status: Option<String>,
+    /// The message `run_timers` last saw and when: a new one starts the
+    /// clock, wherever it was set from.
+    status_seen: Option<(String, Instant)>,
     screen: Rect,
     next_id: PaneId,
     tx: Sender<AppEvent>,
@@ -303,6 +310,7 @@ impl App {
             scratch_shown: false,
             mode: Mode::Normal,
             status: None,
+            status_seen: None,
             screen: Rect::new(0, 0, cols, rows),
             next_id: 1,
             tx,
@@ -2518,6 +2526,26 @@ impl App {
             .collect();
     }
 
+    /// A bar message goes `STATUS_FOR` after it first showed. Messages are
+    /// set in many places by assignment; noticing a new one here keeps them
+    /// all on one clock without each having to start it.
+    fn expire_status(&mut self, now: Instant) {
+        let Some(text) = &self.status else {
+            self.status_seen = None;
+            return;
+        };
+        match &self.status_seen {
+            Some((seen, at)) if seen == text => {
+                if now >= *at + STATUS_FOR {
+                    self.status = None;
+                    self.status_seen = None;
+                    self.dirty = true;
+                }
+            }
+            _ => self.status_seen = Some((text.clone(), now)),
+        }
+    }
+
     /// The next moment something needs doing without an event arriving.
     fn next_deadline(&self) -> Option<Instant> {
         self.module_due
@@ -2527,6 +2555,7 @@ impl App {
             .chain(self.programs_due)
             .chain(self.snapshot_due)
             .chain(self.toasts.next_expiry())
+            .chain(self.status_seen.as_ref().map(|(_, at)| *at + STATUS_FOR))
             .chain(self.hint_due)
             .chain(self.press_due())
             .min()
@@ -2741,6 +2770,7 @@ impl App {
         if self.toasts.expire(now) {
             self.dirty = true;
         }
+        self.expire_status(now);
         if self.reload_at.is_some_and(|t| t <= now) {
             self.reload_config();
         }
@@ -4229,6 +4259,33 @@ mod tests {
             .collect();
         assert!(labels.iter().any(|l| l == "Equalize"), "{labels:?}");
         assert!(labels.iter().any(|l| l.starts_with("Send")), "{labels:?}");
+    }
+
+    #[test]
+    fn a_bar_message_goes_after_five_seconds() {
+        let mut a = app(None);
+        let t = Instant::now();
+        a.status = Some("paste_image: no clipboard here".into());
+        a.run_timers(t);
+        assert_eq!(
+            a.next_deadline(),
+            Some(t + STATUS_FOR),
+            "the loop wakes for it"
+        );
+        a.run_timers(t + STATUS_FOR - Duration::from_millis(1));
+        assert!(a.status.is_some());
+        a.run_timers(t + STATUS_FOR);
+        assert_eq!(a.status, None);
+        assert_eq!(a.status_seen, None);
+        // A different message starts its own five seconds.
+        a.status = Some("one".into());
+        a.run_timers(t);
+        a.status = Some("two".into());
+        a.run_timers(t + Duration::from_secs(4));
+        a.run_timers(t + STATUS_FOR);
+        assert_eq!(a.status.as_deref(), Some("two"));
+        a.run_timers(t + Duration::from_secs(9));
+        assert_eq!(a.status, None);
     }
 
     #[test]
