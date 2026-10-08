@@ -53,11 +53,12 @@ impl Style {
 }
 
 /// The mode module's sign that keys go to a ranma inside the focused pane.
-/// A no-break space after the ⧉, not a plain one: kitty draws a symbol
-/// followed by a space across both cells (its `narrow_symbols`), which put
-/// the squares half a cell right of the middle of their module's pill.
-/// Every terminal shows a no-break space as a blank, and none widens over it.
-pub const NESTED_SIGN: &str = " ⧉\u{a0}";
+/// Four cells, the ⧉ second: kitty and Windows Terminal both draw it about
+/// two cells wide, centred on the line after its own cell, so one blank
+/// before and two after put it in the middle of its pill. One either side
+/// (and a no-break space to keep kitty from widening it, 2026-10-07) left it
+/// half a cell right in Windows Terminal, which widens it regardless.
+pub const NESTED_SIGN: &str = " ⧉  ";
 
 /// What clicking a piece of the bar does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -500,11 +501,9 @@ mod tests {
 
     #[test]
     fn the_nested_sign_is_centred_in_its_cells() {
-        // One blank either side, and the right one is no plain space for a
-        // terminal to spread the glyph over.
-        assert_eq!(NESTED_SIGN.width(), 3);
-        assert!(NESTED_SIGN.starts_with(' ') && !NESTED_SIGN.ends_with(' '));
-        assert!(NESTED_SIGN.ends_with('\u{a0}'));
+        // Even, with the glyph's two cells in the middle two.
+        assert_eq!(NESTED_SIGN.width(), 4);
+        assert_eq!(NESTED_SIGN.chars().position(|c| c == '⧉'), Some(1));
     }
 
     #[test]

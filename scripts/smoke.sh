@@ -364,7 +364,7 @@ case "$OUTER" in "⧉ ranma@$HOST · "*) ;; *) fail "the outer title does not ca
 bar | grep -q ' ⧉' || fail "the outer ranma does not show the passthrough hint"
 T send-keys -t s C-b; sleep 0.4
 # The inner's mode shows after ⧉ in the outer bar; a bare WM would be the outer's.
-bar | grep -q '⧉. WM ' || fail "the leader did not reach the inner ranma ($(bar))"
+bar | grep -q '⧉ *WM ' || fail "the leader did not reach the inner ranma ($(bar))"
 bar | grep -q '^ WM ' && fail "the outer ranma took the leader"
 T send-keys -t s Escape; sleep 0.3
 # A pane beside the inner one takes the outer's focus: the outer bar no longer
