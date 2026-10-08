@@ -273,6 +273,14 @@ sleep 1.5
 for want in "started " "cwd /tmp/a b host=smokehost" "title" "bell visible=true" "idle" "user 7"; do
   grep -qF "$want" "$EVLOG" 2>/dev/null || fail "plugin event missing: '$want' (log: $(tr '\n' '|' < "$EVLOG" 2>/dev/null))"
 done
+# `ranma health` names the plugin and its hooks; `ranma lua` evaluates in the
+# running configuration and shows what came back.
+T send-keys -t s "$BIN health | grep -c 'plugin   ok.*events.lua'; $BIN lua '{ n = 1 + 1, s = ranma.state().mode }'" Enter
+wait_for '{ n = 2, s = "normal" }' 8 || fail "ranma lua did not show the table it returned"
+screen | grep -q '^│1 *│' || fail "ranma health did not list the plugin as loaded"
+T send-keys -t s "$BIN lua 'error(\"boom\")'; echo LUA_EXIT=\$?" Enter
+wait_for 'LUA_EXIT=1' 8 || fail "a failing ranma lua did not exit 1"
+T send-keys -t s clear Enter; sleep 0.3
 rm "$CFG/plugin/events.lua"; sleep 0.5
 
 # Scripting over the socket: open a pane in the background and get its id,

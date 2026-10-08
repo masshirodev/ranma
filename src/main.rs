@@ -24,6 +24,11 @@ struct Cli {
     #[arg(long)]
     dump_theme: bool,
 
+    /// Print the Lua API as LuaLS annotations, for an editor to complete and
+    /// check `ranma.*` in init.lua and plugins.
+    #[arg(long)]
+    dump_types: bool,
+
     /// Run in this terminal only, without a server: closing the terminal ends
     /// it. For tests, and for when a server is not wanted.
     #[arg(long)]
@@ -154,6 +159,13 @@ enum Command {
         #[arg(required = true)]
         input: Vec<String>,
     },
+    /// Evaluate Lua in the running ranma's configuration and print what it
+    /// returns: `ranma lua 'ranma.state()'`. The code is the arguments joined
+    /// by spaces, or stdin when there are none. It runs as a bind does.
+    Lua { code: Vec<String> },
+    /// Say what loaded and what runs: the config, each plugin and whether it
+    /// failed, the hooks, timers and jobs.
+    Health,
     /// Print a pane's text: its screen, and with --history that many lines of
     /// scrollback above it.
     Capture {
@@ -387,6 +399,18 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             };
             ipc::send(&ipc::send_request(pane, &input))?
         }
+        Command::Lua { code } => {
+            let code = if code.is_empty() {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut std::io::stdin(), &mut s)
+                    .context("reading Lua from stdin")?;
+                s
+            } else {
+                code.join(" ")
+            };
+            ipc::send(&format!("lua\n{code}"))?
+        }
+        Command::Health => ipc::send("health\n")?,
         Command::Capture { pane, history } => {
             let pane = ipc::pane_or_own(pane)?;
             ipc::send(&format!("capture\n{pane}\n{history}\n"))?
@@ -621,6 +645,10 @@ fn main() -> ExitCode {
     }
     if cli.dump_theme {
         print!("{}", theme::DEFAULT_THEME_SRC);
+        return ExitCode::SUCCESS;
+    }
+    if cli.dump_types {
+        print!("{}", ranma::devtools::TYPES);
         return ExitCode::SUCCESS;
     }
 

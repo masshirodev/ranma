@@ -10,6 +10,7 @@ ranma --dump-config --commented >> ~/.config/ranma/init.lua
                       # the same, all commented out: a reference inside your
                       # own file that changes nothing until you uncomment it
 ranma --dump-theme    # the built-in theme
+ranma --dump-types    # the Lua API as LuaLS annotations, for your editor
 ranma --check-config  # load your config and theme, report errors, exit
 ```
 
@@ -814,6 +815,30 @@ error (`stopped: ran longer than 200 ms`), shown in the bar. Hooks a bind
 fires share its 200 ms. Once a call is past its time, `pcall`, `xpcall` and
 `coroutine.resume` pass the error on instead of catching it, so a loop cannot
 keep itself alive by catching it.
+
+**Tools for writing them.**
+
+```sh
+ranma --dump-types > ~/.config/ranma/lua/ranma.d.lua   # completion and checks
+ranma lua 'ranma.pane():search("error")'                # try it on the live server
+ranma health                                            # what loaded, what runs
+```
+
+- `ranma --dump-types` prints every `ranma.*` function, field, option and event
+  as [LuaLS](https://luals.github.io/) annotations. Put the file where your
+  editor's Lua language server reads it (in `lua/`, or a `workspace.library`
+  entry), and `ranma.` completes, with argument types and the event names.
+  The file ships with the binary, so print it again after an upgrade.
+- `ranma lua CODE` runs Lua in the running server's configuration, as a bind
+  would (the same 200 ms, the same `ranma.*`), and prints what it returned:
+  tables as `{ k = v }`, strings quoted, one value per line. It is evaluated as
+  an expression first, then as statements, so `ranma lua 'ranma.state()'` and
+  `ranma lua 'local p = ranma.pane() return p.id'` both work. With no
+  arguments it reads the code from stdin. A Lua error is printed and exits 1.
+  Globals it sets stay until the next reload, which makes it a REPL.
+- `ranma health` lists the config file, each plugin with its load time or why
+  it failed, the hooks by event, the plugin events with listeners, and how many
+  timers and jobs there are.
 
 Saving any `.lua` file under the config directory reloads, plugins included,
 and linked `lua/`, `plugin/`, `pack/` or package directories are watched behind

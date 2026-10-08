@@ -277,27 +277,43 @@ pub enum Event {
     Hover,
 }
 
+/// Every event by the name `ranma.on` takes.
+pub const EVENTS: [(&str, Event); 15] = [
+    ("pane_open", Event::PaneOpen),
+    ("pane_close", Event::PaneClose),
+    ("focus_change", Event::FocusChange),
+    ("workspace_change", Event::WorkspaceChange),
+    ("session_switch", Event::SessionSwitch),
+    ("mode_change", Event::ModeChange),
+    ("config_reload", Event::ConfigReload),
+    ("command_finished", Event::CommandFinished),
+    ("driver_change", Event::DriverChange),
+    ("command_started", Event::CommandStarted),
+    ("cwd_change", Event::CwdChange),
+    ("title_change", Event::TitleChange),
+    ("bell", Event::Bell),
+    ("pane_idle", Event::PaneIdle),
+    ("hover", Event::Hover),
+];
+
+impl Event {
+    pub fn name(self) -> &'static str {
+        EVENTS
+            .iter()
+            .find(|(_, e)| *e == self)
+            .map(|(n, _)| *n)
+            .expect("every event is in EVENTS")
+    }
+}
+
 impl FromStr for Event {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "pane_open" => Event::PaneOpen,
-            "pane_close" => Event::PaneClose,
-            "focus_change" => Event::FocusChange,
-            "workspace_change" => Event::WorkspaceChange,
-            "session_switch" => Event::SessionSwitch,
-            "mode_change" => Event::ModeChange,
-            "config_reload" => Event::ConfigReload,
-            "command_finished" => Event::CommandFinished,
-            "driver_change" => Event::DriverChange,
-            "command_started" => Event::CommandStarted,
-            "cwd_change" => Event::CwdChange,
-            "title_change" => Event::TitleChange,
-            "bell" => Event::Bell,
-            "pane_idle" => Event::PaneIdle,
-            "hover" => Event::Hover,
-            _ => return Err(format!("unknown event `{s}`")),
-        })
+        EVENTS
+            .iter()
+            .find(|(n, _)| *n == s)
+            .map(|(_, e)| *e)
+            .ok_or_else(|| format!("unknown event `{s}`"))
     }
 }
 
@@ -743,6 +759,8 @@ pub struct Config {
     pub watchdog: Watchdog,
     /// Its timers and the processes it spawned (`crate::jobs`).
     pub jobs: crate::jobs::Jobs,
+    /// `ranma.on("user:<name>")` listeners.
+    user_events: UserEvents,
     /// Owns every Lua function referenced by `binds` and `hooks`.
     pub lua: Lua,
 }
@@ -759,6 +777,19 @@ impl std::fmt::Debug for Config {
 }
 
 impl Config {
+    /// Each plugin event with listeners, and how many, by name.
+    pub fn user_hooks(&self) -> Vec<(String, usize)> {
+        let mut out: Vec<(String, usize)> = self
+            .user_events
+            .hooks
+            .borrow()
+            .iter()
+            .map(|(n, v)| (n.clone(), v.len()))
+            .collect();
+        out.sort();
+        out
+    }
+
     /// Use the profile `name` over the base configuration, or none: the
     /// settings and bar are rebuilt from the base each time, so nothing a
     /// profile changed outlives it.
@@ -1715,6 +1746,7 @@ pub fn load_from(
         plugins,
         watchdog,
         jobs,
+        user_events,
         lua,
     })
 }

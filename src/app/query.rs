@@ -29,6 +29,8 @@ impl App {
             Query::Send { pane, input } => self.send_input(pane, &input).map(|_| String::new()),
             Query::Capture { pane, history } => self.capture(pane, history),
             Query::Pane { pane, op } => self.pane_op(pane, op).map(|_| String::new()),
+            Query::Lua(src) => self.eval_lua(&src),
+            Query::Health => Ok(self.health()),
             Query::Wait { pane } => {
                 if self.panes.contains_key(&pane) {
                     self.waiters.entry(pane).or_default().push(reply);
@@ -118,6 +120,82 @@ impl App {
                 })
             })
             .collect()
+    }
+
+    /// `ranma lua`: run as a bind runs, with the same budget, and what it
+    /// returned shown. A failure is the answer's error, not a toast.
+    fn eval_lua(&mut self, src: &str) -> Result<String, String> {
+        let mut failure = None;
+        let shown = self.call_lua(|lua| {
+            crate::devtools::eval(lua, src).inspect_err(|e| failure = Some(e.to_string()))
+        });
+        match (shown, failure) {
+            (Some(text), _) => Ok(if text.is_empty() { text } else { text + "\n" }),
+            (None, Some(e)) => {
+                // call_lua put the error in the bar as well; the caller has it.
+                self.status = None;
+                Err(e)
+            }
+            (None, None) => Err("lua: no result".into()),
+        }
+    }
+
+    /// `ranma health`: what loaded, what listens and what runs.
+    pub(super) fn health(&self) -> String {
+        use std::fmt::Write;
+        let c = &self.config;
+        let mut out = String::new();
+        match &c.source {
+            Some(p) => writeln!(out, "config   {}", p.display()),
+            None => writeln!(out, "config   built-in defaults only"),
+        }
+        .unwrap();
+        if c.plugins.is_empty() {
+            writeln!(out, "plugins  none").unwrap();
+        }
+        for p in &c.plugins {
+            let ms = p.took.as_secs_f64() * 1000.0;
+            match &p.error {
+                None => writeln!(out, "plugin   ok     {ms:6.1} ms  {}", p.path.display()),
+                Some(e) => writeln!(
+                    out,
+                    "plugin   FAILED {ms:6.1} ms  {}: {}",
+                    p.path.display(),
+                    e.lines().next().unwrap_or("")
+                ),
+            }
+            .unwrap();
+        }
+        let mut hooks: Vec<(&str, usize)> =
+            c.hooks.iter().map(|(e, v)| (e.name(), v.len())).collect();
+        hooks.sort();
+        let list = |v: Vec<String>| {
+            if v.is_empty() {
+                "none".to_string()
+            } else {
+                v.join(", ")
+            }
+        };
+        writeln!(
+            out,
+            "hooks    {}",
+            list(hooks.iter().map(|(n, k)| format!("{n} {k}")).collect())
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "events   {}",
+            list(
+                c.user_hooks()
+                    .iter()
+                    .map(|(n, k)| format!("user:{n} {k}"))
+                    .collect()
+            )
+        )
+        .unwrap();
+        writeln!(out, "timers   {}", c.jobs.timer_count()).unwrap();
+        writeln!(out, "jobs     {} running", c.jobs.running_count()).unwrap();
+        out
     }
 
     /// Every pane as Lua's pane handles see it. Cheap: nothing read from

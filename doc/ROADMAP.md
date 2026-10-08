@@ -210,7 +210,7 @@ features below the line live outside the repository.
   watched; a failing plugin dropped whole; the 200 ms watchdog
 - [ ] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `option_change`
-- [ ] `ranma --dump-types`, `ranma lua`, `ranma health`
+- [x] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
 - [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
 - [x] Events: `command_started`, `cwd_change`, `title_change`, `bell`,

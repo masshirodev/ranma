@@ -30,6 +30,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `update` | commits behind upstream and pulled but not installed, with and without fetching; a build the source has never seen behind nothing; the managed clone in the data directory unless `RANMA_SOURCE_DIR` names a ranma checkout (anything else refused); a directory in the clone's place that is not a checkout refused, not taken; the install command cloning only the managed source, and quoting |
 | `panetext` | lines numbered from the screen's top into the scrollback and clamped; rows trimmed, wide characters one char; a regex search newest first through the scrollback, its limit keeping the newest, a bad pattern refused; a match on a wrapped row ending on the next line |
 | `luapane` | a Lua pane handle's fields, `lines`, `range`, `search` and `cwd` on a real terminal; `ranma.pane()` defaulting to the focused pane, an unknown id `nil`, handles of one pane equal; pane methods queued in order with `ranma.action`; a handle outliving its pane refusing with "gone"; a bad pattern, option or key named; refused at load; `vars` shared by a pane's handles, its own per pane, and gone with the pane |
+| `devtools` | `ranma lua`'s display of values (numbers, quoted strings, lists in order, tables with sorted keys, depth cut with `{...}`, several returns one per line, statements returning nothing, errors); the LuaLS file describing every key of the real `ranma` table and every event, describing nothing that does not exist, and loading as Lua |
 | `store` | a store written by one Lua state read back by another, one copy per name, keys sorted, a removed key gone from the file; bad names, a function, a file that is not an object and a store past 1 MiB refused, the refused write leaving it as it was |
 | `jobs` | a process's stdout, stderr and status; lines in 50 ms batches before its exit; one that cannot start, and one past its timeout killed with its whole group; timers due in order, a one-shot gone, a repeating one not making up missed ticks, cancelling |
 | `app` (Lua timers and jobs) | a deferred timer runs once, a cancelled one never; a failing `every` stopped and named; a spawned process's lines and exit reaching `on_line` and `on_exit` through the event loop |
@@ -70,7 +71,9 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - a plugin dropped into `plugin/` while running loads on the reload, and hears
   a command start (OSC 133 C), a directory with its host (OSC 7, `%20`
   decoded), a title, a bell, the pane going quiet (`pane_idle` set to 0.5 by
-  the plugin) and its own `user:` event emitted from a timer
+  the plugin) and its own `user:` event emitted from a timer; `ranma health`
+  lists it as loaded, `ranma lua` shows a table it evaluated in the server,
+  and a Lua error there exits 1
 - an empty workspace shows the splash (the logo, Enter, and the help key), and
   Enter and the keypad's Enter (tmux sends it as LF) there open a shell
 - a broken config written while running is reported at once, and the old one kept

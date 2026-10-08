@@ -642,6 +642,15 @@ configuration signals its jobs' process groups. `spawn` is refused at load,
 because `--check-config` loads the configuration too. An `every` that errors is
 stopped: at 50 ms, an error a tick would bury the bar.
 
+**Tools** (2026-10-08): the LuaLS annotations are written by hand
+(`assets/ranma.d.lua`), not generated, because what makes them useful is the
+prose and the option shapes, which no reflection over the `ranma` table can
+recover. A test holds the file to the code. Every key of the real table and
+every event must appear, and every function the file describes must exist, so
+it fails the build instead of drifting. `ranma lua` is a socket query run
+through the same `call_lua` as a bind, under the same watchdog. An expression
+is tried before statements, which is what makes it a REPL.
+
 **State** (2026-10-08): `pane.vars` is a Lua table per pane id, held in the
 Lua state's registry and cleared when the pane ends. A reload starts the Lua
 state over, and the vars with it. `workspace.vars` is left out: there is no

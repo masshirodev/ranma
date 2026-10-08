@@ -9,6 +9,7 @@ pub mod bar;
 pub mod chrome;
 pub mod client;
 pub mod config;
+pub mod devtools;
 pub mod hints;
 pub mod hostcolors;
 pub mod input;

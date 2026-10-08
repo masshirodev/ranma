@@ -364,6 +364,11 @@ pub enum Query {
     Wait { pane: PaneId },
     /// Do something to one pane, wherever it is.
     Pane { pane: PaneId, op: PaneOp },
+    /// Evaluate Lua in the running configuration (`ranma lua`); answered
+    /// with what it returned, shown.
+    Lua(String),
+    /// What loaded and what runs: plugins, hooks, timers, jobs (`ranma health`).
+    Health,
 }
 
 /// What `Query::Pane` does. What the tmux shim needs that no action does,
@@ -464,6 +469,14 @@ pub fn parse_request(text: &str) -> Result<Request> {
             Query::Open(parse_open(lines)?)
         }
         "panes" => Query::Panes,
+        "health" => Query::Health,
+        // The chunk is the rest verbatim, newlines and all.
+        "lua" => Query::Lua(
+            text.split_once('\n')
+                .map(|(_, c)| c)
+                .unwrap_or("")
+                .to_string(),
+        ),
         "send" => {
             // The payload is the rest verbatim: a trailing newline is an Enter.
             let mut parts = text.splitn(4, '\n').skip(1);
@@ -858,6 +871,11 @@ mod tests {
             assert_eq!(q(&send_request(3, &input)), Query::Send { pane: 3, input });
         }
         assert_eq!(q("panes\n"), Query::Panes);
+        assert_eq!(q("health\n"), Query::Health);
+        assert_eq!(
+            q("lua\nlocal x = 1\nreturn x + 1\n"),
+            Query::Lua("local x = 1\nreturn x + 1\n".into())
+        );
         assert_eq!(
             q("capture\n4\n200\n"),
             Query::Capture {

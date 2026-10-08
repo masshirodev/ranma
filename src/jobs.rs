@@ -141,6 +141,10 @@ impl Jobs {
         self.0.borrow_mut().timers.remove(&id).is_some()
     }
 
+    pub fn running_count(&self) -> usize {
+        self.0.borrow().running.len()
+    }
+
     pub fn timer_count(&self) -> usize {
         self.0.borrow().timers.len()
     }
