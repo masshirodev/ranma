@@ -86,7 +86,7 @@ impl App {
 
     fn paste_image_into(&mut self, pane: PaneId) {
         let custom = self.config.settings.paste_image_command.as_deref();
-        let Some(clip) = paste::clipboard(custom, |v| std::env::var(v).ok()) else {
+        let Some(clip) = paste::clipboard(custom, paste::wsl(), |v| std::env::var(v).ok()) else {
             self.status =
                 Some("paste_image: no WSL, Wayland or X11 here; set paste.image_command".into());
             return;

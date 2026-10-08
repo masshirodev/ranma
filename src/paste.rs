@@ -157,7 +157,17 @@ fn is_windows_path(t: &str) -> bool {
 
 /// Whether this server runs under WSL, where the clipboard is Windows'.
 pub fn wsl() -> bool {
-    std::env::var_os("WSL_DISTRO_NAME").is_some_and(|v| !v.is_empty())
+    let release = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok();
+    is_wsl(|v| std::env::var(v).ok(), release.as_deref())
+}
+
+/// WSL by its variable, else by the kernel's release (`...-microsoft-standard-WSL2`,
+/// WSL1's `...-Microsoft`). The variable alone is not enough: a server started
+/// by WSL's boot-time `login` inherits a scrubbed environment with no `WSL_*`
+/// in it, though Windows interop works there all the same.
+fn is_wsl(env: impl Fn(&str) -> Option<String>, release: Option<&str>) -> bool {
+    env("WSL_DISTRO_NAME").is_some_and(|v| !v.is_empty())
+        || release.is_some_and(|r| r.to_ascii_lowercase().contains("microsoft"))
 }
 
 /// How the clipboard is read: files copied in a file manager, else an image.
@@ -175,13 +185,17 @@ pub enum Clipboard {
     Shell(String),
 }
 
-/// The configured command, else the platform's, from the environment the
-/// server started in.
-pub fn clipboard(custom: Option<&str>, env: impl Fn(&str) -> Option<String>) -> Option<Clipboard> {
+/// The configured command, else the platform's: WSL's (`wsl`, from [`wsl`]),
+/// else what the environment the server started in offers.
+pub fn clipboard(
+    custom: Option<&str>,
+    wsl: bool,
+    env: impl Fn(&str) -> Option<String>,
+) -> Option<Clipboard> {
     let set = |v: &str| env(v).is_some_and(|s| !s.is_empty());
     if let Some(c) = custom {
         Some(Clipboard::Shell(c.to_string()))
-    } else if set("WSL_DISTRO_NAME") {
+    } else if wsl {
         Some(Clipboard::Wsl)
     } else if set("WAYLAND_DISPLAY") {
         Some(Clipboard::Wayland)
@@ -874,25 +888,20 @@ mod tests {
             }
         };
         assert_eq!(
-            clipboard(
-                None,
-                env(&[
-                    ("WSL_DISTRO_NAME", "Arch"),
-                    ("WAYLAND_DISPLAY", "wayland-0")
-                ])
-            ),
+            clipboard(None, true, env(&[("WAYLAND_DISPLAY", "wayland-0")])),
             Some(Clipboard::Wsl),
             "WSLg sets WAYLAND_DISPLAY too"
         );
         assert_eq!(
             clipboard(
                 None,
+                false,
                 env(&[("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0")])
             ),
             Some(Clipboard::Wayland)
         );
         assert_eq!(
-            clipboard(None, env(&[("DISPLAY", ":0")])),
+            clipboard(None, false, env(&[("DISPLAY", ":0")])),
             Some(Clipboard::X11)
         );
         assert_eq!(
@@ -903,11 +912,32 @@ mod tests {
             read_argv(&Clipboard::X11, "TARGETS"),
             s(&["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"])
         );
-        assert_eq!(clipboard(None, env(&[])), None);
+        assert_eq!(clipboard(None, false, env(&[])), None);
         assert_eq!(
-            clipboard(Some("pngpaste -"), env(&[("DISPLAY", ":0")])),
+            clipboard(Some("pngpaste -"), true, env(&[("DISPLAY", ":0")])),
             Some(Clipboard::Shell("pngpaste -".into()))
         );
+    }
+
+    /// A server started by WSL's boot-time `login` has no `WSL_*` variables;
+    /// the kernel still says it is WSL.
+    #[test]
+    fn wsl_is_known_by_its_kernel_when_the_environment_was_scrubbed() {
+        let env = |vars: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                vars.iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert!(is_wsl(env(&[("WSL_DISTRO_NAME", "Arch")]), None));
+        assert!(is_wsl(
+            env(&[]),
+            Some("6.18.33.1-microsoft-standard-WSL2\n")
+        ));
+        assert!(is_wsl(env(&[]), Some("4.4.0-19041-Microsoft")), "WSL1");
+        assert!(!is_wsl(env(&[]), Some("6.18.51-1-lts")));
+        assert!(!is_wsl(env(&[("WSL_DISTRO_NAME", "")]), None));
     }
 
     /// The reason ssh gives is on the line before its last, behind a ProxyJump.

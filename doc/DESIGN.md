@@ -1289,7 +1289,7 @@ not files, and its image is read instead.
 
 | Where the server runs | Files | Image |
 | --- | --- | --- |
-| WSL (`WSL_DISTRO_NAME` set) | `[Windows.Forms.Clipboard]::GetFileDropList()`, each path through `wslpath` | `GetImage()`, saved as PNG |
+| WSL (`WSL_DISTRO_NAME` set, or a kernel release naming Microsoft) | `[Windows.Forms.Clipboard]::GetFileDropList()`, each path through `wslpath` | `GetImage()`, saved as PNG |
 | Wayland (`WAYLAND_DISPLAY`) | `wl-paste --list-types`, then `--type text/uri-list` | `wl-paste --no-newline --type image/png` |
 | X11 (`DISPLAY`) | `xclip -selection clipboard -t TARGETS -o`, then `-t text/uri-list` | `xclip ... -t image/png -o` |
 | anything else | none | `paste.image_command`, or an error naming that setting |
@@ -1299,6 +1299,11 @@ WSLg's Wayland clipboard bridge carries text reliably and images not, so it
 is not used. `paste.image_command` overrides the table and reads only an
 image (macOS's `pngpaste -` is the obvious use). The server takes the variables from the environment of the terminal that
 started it, which is the desktop's, since that is where shells start.
+WSL is the exception that proves the environment is not enough: when WSL
+boots its default user through `login`, the first shell, and so the server it
+starts, gets a scrubbed environment with no `WSL_*` in it, and every terminal
+opened later attaches to that server. Windows interop works there regardless,
+so WSL is also recognised by `/proc/sys/kernel/osrelease`.
 
 **Uploading with the pane's own ssh, not scp.** `ssh_host` strips the user, port
 and options, and `scp` spells some of them differently (`-P`, not `-p`). So the
