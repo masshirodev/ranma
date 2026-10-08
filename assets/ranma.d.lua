@@ -281,6 +281,30 @@ function ranma.pane(id) end
 ---@return ranma.Pane[]
 function ranma.panes() end
 
+---@class ranma.PickerItem
+---@field label string What is shown and matched.
+---@field detail? string Shown dimmed after it, not matched.
+
+---@class ranma.Picker
+---@field title? string
+---@field items (string|ranma.PickerItem)[] Up to 10000; any other fields of an item come back with it.
+---@field on_select fun(item: string|ranma.PickerItem, query: string)
+---@field on_cancel? fun()
+
+---A filtered list, drawn as ranma's own switchers are.
+---@param spec ranma.Picker
+function ranma.picker(spec) end
+
+---@class ranma.Input
+---@field title? string
+---@field text? string What the line starts with.
+---@field on_submit fun(text: string)
+---@field on_cancel? fun()
+
+---A one-line prompt.
+---@param spec ranma.Input
+function ranma.input(spec) end
+
 ---Call every ranma.on("user:<name>") listener with `data`, there and then.
 ---@param name string
 ---@param data any

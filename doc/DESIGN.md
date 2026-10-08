@@ -642,6 +642,14 @@ configuration signals its jobs' process groups. `spawn` is refused at load,
 because `--check-config` loads the configuration too. An `every` that errors is
 stopped: at 50 ms, an error a tick would bury the bar.
 
+**Pickers and prompts** (2026-10-08) are ranma's own `Picker` with a kind of
+their own and an item target that is an index. The Lua items table is kept in
+the registry while the picker is open, so `on_select` gets the item the plugin
+gave, extra fields and all, and ranma never has to model what a plugin's item
+means. The hooks are taken out of the app before the callback runs, so a
+callback can open the next picker (prompt, then list, as the history example
+does).
+
 **Tools** (2026-10-08): the LuaLS annotations are written by hand
 (`assets/ranma.d.lua`), not generated, because what makes them useful is the
 prose and the option shapes, which no reflection over the `ranma` table can

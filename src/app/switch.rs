@@ -642,7 +642,12 @@ impl App {
         let kind = self.picker.as_ref().map(|p| p.kind.clone());
         match outcome {
             Outcome::Open => {}
-            Outcome::Cancel => self.close_picker(),
+            Outcome::Cancel => {
+                self.close_picker();
+                if matches!(kind, Some(Kind::Lua | Kind::LuaInput)) {
+                    self.lua_ui_done(None);
+                }
+            }
             Outcome::Rename(i) => self.open_rename_prompt(i),
             Outcome::Kill(name) => self.confirm_kill(name),
             Outcome::Submit(text) => {
@@ -656,6 +661,7 @@ impl App {
                     Some(Kind::ConfirmQuit) => self.quit = true,
                     Some(Kind::ConfirmUpdate) => self.run_action(crate::action::Action::Update),
                     Some(Kind::ConfirmKill(name)) => self.kill_server(name),
+                    Some(Kind::LuaInput) => self.lua_ui_done(Some(LuaChoice::Text(text))),
                     _ => {}
                 }
             }
@@ -698,11 +704,72 @@ impl App {
                             self.rename_workspace(self.current, &query);
                         }
                     }
+                    (_, Target::Lua(i)) => self.lua_ui_done(Some(LuaChoice::Item(i, query))),
                     (_, Target::Invalid) => {}
                 }
             }
         }
         self.dirty = true;
+    }
+
+    /// A plugin's picker (`ranma.picker`): its items, matched as any picker's.
+    pub(super) fn open_lua_picker(&mut self, spec: crate::luaui::PickerSpec) {
+        let items = spec
+            .items
+            .into_iter()
+            .enumerate()
+            .map(|(i, (label, detail))| Item {
+                label,
+                detail,
+                target: Target::Lua(i),
+                current: false,
+            })
+            .collect();
+        self.lua_ui = Some(spec.hooks);
+        self.picker = Some(Picker::new(Kind::Lua, spec.title, items));
+        self.dirty = true;
+    }
+
+    /// A plugin's prompt (`ranma.input`).
+    pub(super) fn open_lua_input(&mut self, spec: crate::luaui::InputSpec) {
+        self.lua_ui = Some(spec.hooks);
+        self.picker = Some(Picker::prompt(Kind::LuaInput, spec.title, &spec.text));
+        self.dirty = true;
+    }
+
+    /// A plugin's picker or prompt closed: call it back with what was chosen,
+    /// or `on_cancel` with nothing. The hooks are taken first, so a callback
+    /// can open the next picker.
+    fn lua_ui_done(&mut self, choice: Option<LuaChoice>) {
+        let Some(hooks) = self.lua_ui.take() else {
+            return;
+        };
+        let lua = &self.config.lua;
+        let get = |k: &Option<std::rc::Rc<mlua::RegistryKey>>| {
+            k.as_ref()
+                .and_then(|k| lua.registry_value::<mlua::Function>(k).ok())
+        };
+        match choice {
+            None => {
+                if let Some(f) = get(&hooks.on_cancel) {
+                    self.call_lua(|_| f.call::<()>(()));
+                }
+            }
+            Some(LuaChoice::Text(text)) => {
+                if let Some(f) = get(&hooks.on_select) {
+                    self.call_lua(|_| f.call::<()>(text));
+                }
+            }
+            Some(LuaChoice::Item(i, query)) => {
+                let items = hooks
+                    .items
+                    .as_ref()
+                    .and_then(|k| lua.registry_value::<mlua::Table>(k).ok());
+                if let (Some(f), Some(items)) = (get(&hooks.on_select), items) {
+                    self.call_lua(|_| f.call::<()>((items.raw_get::<mlua::Value>(i + 1)?, query)));
+                }
+            }
+        }
     }
 
     /// Show a pane wherever it is: its session, its workspace or the scratchpad.
@@ -781,6 +848,14 @@ pub(super) fn server_items(
             }
         })
         .collect()
+}
+
+/// What a plugin's picker or prompt ended with.
+enum LuaChoice {
+    /// The item at this index (from 0), and the query typed.
+    Item(usize, String),
+    /// The text a prompt was submitted with.
+    Text(String),
 }
 
 #[cfg(test)]

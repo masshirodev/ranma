@@ -218,7 +218,8 @@ features below the line live outside the repository.
 - [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
 - [x] State: `pane.vars`, `ranma.store` (`workspace.vars` left out; DESIGN.md says why)
 - [ ] Keys: which-key groups, user modes, user commands
-- [ ] Drawing: `picker`, `panel`, `tooltip`, `badge`
+- [x] Drawing: `picker` and `input`
+- [ ] Drawing: `panel`, `tooltip`, `badge`
 - [ ] `pane:watch`, measured first
 - [ ] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [ ] The settings panel and `settings.toml`

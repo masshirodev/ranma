@@ -691,6 +691,8 @@ pub enum Op {
     Pane(crate::layout::PaneId, crate::luapane::PaneRequest),
     Spawn(u64, crate::jobs::SpawnSpec),
     Kill(u64),
+    Picker(crate::luaui::PickerSpec),
+    Input(crate::luaui::InputSpec),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1566,6 +1568,7 @@ fn install_api(
     )?;
 
     crate::luapane::install(lua, &ranma)?;
+    crate::luaui::install(lua, &ranma)?;
     crate::store::Stores::new(crate::store::dir()).install(lua, &ranma)?;
     {
         let user = user.clone();

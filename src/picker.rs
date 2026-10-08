@@ -39,6 +39,8 @@ pub enum Target {
     Workspace(u8),
     /// Open an empty workspace, named by the query if there is one.
     NewWorkspace,
+    /// The item at this index of a picker a plugin opened (`ranma.picker`).
+    Lua(usize),
 }
 
 /// What the palette shows, by the query's first character.
@@ -91,6 +93,10 @@ pub enum Kind {
     Layouts,
     /// A one-line prompt naming the layout `save_layout` writes.
     SaveLayout,
+    /// A list a plugin opened (`ranma.picker`).
+    Lua,
+    /// A one-line prompt a plugin opened (`ranma.input`).
+    LuaInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,6 +208,7 @@ impl Picker {
             Kind::RenameSession(_)
                 | Kind::RenameWorkspace(_)
                 | Kind::SaveLayout
+                | Kind::LuaInput
                 | Kind::RenamePane(_)
                 | Kind::ConfirmQuit
                 | Kind::ConfirmRestore

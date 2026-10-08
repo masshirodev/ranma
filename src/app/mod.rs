@@ -187,6 +187,8 @@ pub struct App {
     /// Lua and exec module output, keyed by module name.
     module_values: HashMap<String, Segment>,
     module_due: HashMap<String, Instant>,
+    /// What to call back when the picker or prompt a plugin opened closes.
+    lua_ui: Option<crate::luaui::Hooks>,
     /// Panes that printed since they were last idle: when the burst began and
     /// when they last printed. Kept only while a `pane_idle` hook exists.
     activity: HashMap<PaneId, (Instant, Instant)>,
@@ -347,6 +349,7 @@ impl App {
             lua_depth: 0,
             module_values: HashMap::new(),
             module_due: HashMap::new(),
+            lua_ui: None,
             activity: HashMap::new(),
             idle_due: None,
             cwds: HashMap::new(),
@@ -2610,6 +2613,8 @@ impl App {
                             self.config.jobs.start(id, spec, self.tx.clone())
                         }
                         config::Op::Kill(id) => self.config.jobs.kill(id),
+                        config::Op::Picker(spec) => self.open_lua_picker(spec),
+                        config::Op::Input(spec) => self.open_lua_input(spec),
                     }
                 }
                 self.lua_depth -= 1;
@@ -4876,5 +4881,73 @@ mod tests {
             }
         }
         assert_eq!(a.status.as_deref(), Some("one,two exit 4"));
+    }
+
+    fn key(a: &mut App, code: crossterm::event::KeyCode) {
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            code,
+            crossterm::event::KeyModifiers::NONE,
+        ))));
+    }
+
+    fn typed(a: &mut App, text: &str) {
+        for c in text.chars() {
+            key(a, crossterm::event::KeyCode::Char(c));
+        }
+    }
+
+    #[test]
+    fn a_plugins_picker_calls_back_with_the_item_and_the_query() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        a.call_lua(|lua| {
+            lua.load(
+                r#"
+                ranma.picker {
+                  title = "hits",
+                  items = { "alpha", { label = "beta", detail = "line -3", line = -3 }, "gamma" },
+                  on_select = function(item, query)
+                    ranma.notify(item.label .. " " .. item.line .. " " .. query)
+                  end,
+                  on_cancel = function() ranma.notify("cancelled") end,
+                }
+                "#,
+            )
+            .exec()
+        })
+        .unwrap();
+        let p = a.picker.as_ref().unwrap();
+        assert_eq!(
+            (p.kind.clone(), p.title.as_str()),
+            (crate::picker::Kind::Lua, "hits")
+        );
+        assert_eq!(p.visible().len(), 3);
+        typed(&mut a, "bet");
+        key(&mut a, KeyCode::Enter);
+        assert!(a.picker.is_none());
+        assert_eq!(a.status.as_deref(), Some("beta -3 bet"));
+
+        a.call_lua(|lua| {
+            lua.load(r#"ranma.picker { items = { "x" }, on_select = print, on_cancel = function() ranma.notify("cancelled") end }"#)
+                .exec()
+        })
+        .unwrap();
+        key(&mut a, KeyCode::Esc);
+        assert_eq!(a.status.as_deref(), Some("cancelled"));
+    }
+
+    #[test]
+    fn a_plugins_prompt_calls_back_with_the_text() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        a.call_lua(|lua| {
+            lua.load(r#"ranma.input { title = "search", text = "err", on_submit = function(t) ranma.notify("got " .. t) end }"#)
+                .exec()
+        })
+        .unwrap();
+        assert_eq!(a.picker.as_ref().unwrap().query, "err");
+        typed(&mut a, "or");
+        key(&mut a, KeyCode::Enter);
+        assert_eq!(a.status.as_deref(), Some("got error"));
     }
 }

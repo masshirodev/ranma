@@ -858,6 +858,8 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
+| `ranma.picker { ... }` | A filtered list of your own; see [Pickers and prompts](#pickers-and-prompts). |
+| `ranma.input { ... }` | A one-line prompt of your own. |
 | `ranma.emit(name, data)` | Call every `ranma.on("user:<name>")` listener with `data`; see [Hooks](#hooks--ranmaonevent-fn). |
 | `ranma.store(name)` | A plugin's state kept on disk; see [A plugin's state](#a-plugins-state--ranmastorename). Works at load too. |
 | `ranma.spawn(cmd, opts)` | Run a process in the background; see [Timers and processes](#timers-and-processes). |
@@ -931,6 +933,50 @@ ranma.bind("f5", function()
     p:copy_mode(hits[1].line, hits[1].col)
   end
 end, { desc = "last link" })
+```
+
+## Pickers and prompts
+
+```lua
+ranma.picker {
+  title = "hosts",
+  items = { "vps", { label = "box", detail = "lan", port = 2222 } },
+  on_select = function(item, query) ... end,  -- the item as given, and what was typed
+  on_cancel = function() ... end,             -- optional: Esc
+}
+
+ranma.input {
+  title = "search",
+  text = "error",                             -- optional: what the line starts with
+  on_submit = function(text) ... end,
+  on_cancel = function() ... end,
+}
+```
+
+They are ranma's own picker and prompt, drawn and matched as the switchers
+are (fuzzy, best first). An item is a string, or a table with a `label` and an
+optional `detail` shown dimmed after it (not matched). Any other fields ride
+along: `on_select` gets the item itself. Up to 10 000 items. Both open when
+your function returns and call back once something is chosen, inside the same
+budget as a bind. A callback may open the next picker. Only from a bind, hook,
+module or timer.
+
+A search over the scrollback, with what it found to pick from and jump to:
+
+```lua
+-- plugin/history.lua
+ranma.bind("h", function()
+  ranma.input { title = "history", on_submit = function(pattern)
+    local p = ranma.pane()
+    local items = {}
+    for _, h in ipairs(p:search(pattern, { limit = 500 })) do
+      local text = p:lines(h.line, h.line)[1]
+      items[#items + 1] = { label = text, detail = tostring(h.line), hit = h }
+    end
+    ranma.picker { title = #items .. " for " .. pattern, items = items,
+      on_select = function(item) p:copy_mode(item.hit.line, item.hit.col) end }
+  end }
+end, { desc = "history" })
 ```
 
 ## Timers and processes
