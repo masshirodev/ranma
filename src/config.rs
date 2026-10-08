@@ -273,12 +273,14 @@ pub enum Event {
     Bell,
     /// A pane that was printing has printed nothing for `pane_idle` seconds.
     PaneIdle,
+    /// The settings panel changed an option's value (live, saved or not).
+    OptionChange,
     /// The pointer came to rest on another cell of a pane.
     Hover,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 15] = [
+pub const EVENTS: [(&str, Event); 16] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -294,6 +296,7 @@ pub const EVENTS: [(&str, Event); 15] = [
     ("bell", Event::Bell),
     ("pane_idle", Event::PaneIdle),
     ("hover", Event::Hover),
+    ("option_change", Event::OptionChange),
 ];
 
 impl Event {
@@ -1855,6 +1858,7 @@ pub fn load_from(
             default_theme: theme::resolved(theme::DEFAULT_THEME_NAME, &[])?,
             file_theme,
             panel_theme: panel.theme,
+            ..Default::default()
         };
     }
     jobs.adopt(std::mem::take(&mut builder.timers));
@@ -1979,6 +1983,16 @@ impl Values {
     pub fn borrow_mut(&self) -> std::cell::RefMut<'_, ValueState> {
         self.0.borrow_mut()
     }
+}
+
+/// Apply ranma's own settings from a table, as `ranma.set` would: the
+/// settings panel's live edits go through here, so they are checked exactly
+/// as a file's are. A plugin's group is not ranma's own and must not be in it.
+pub fn patch_settings(s: &mut Settings, t: toml::Table, who: &str) -> Result<(), String> {
+    let patch: SettingsPatch = toml::Value::Table(t)
+        .try_into()
+        .map_err(|e| format!("{who}: {e}"))?;
+    apply_settings(s, patch, who)
 }
 
 fn known_key(b: &Builder, key: &str) -> bool {

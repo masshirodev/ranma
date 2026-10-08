@@ -602,7 +602,7 @@ say nothing.
 registry: every option, grouped, with its value edited in place (toggle, cycle,
 slider, swatch), the description of the selected one below and a mark on
 values that differ from the default. Its design comes from
-`doc/briefs/SETTINGS_PANEL.md`. **What it saves goes to
+`doc/briefs/done/SETTINGS_PANEL.md`. **What it saves goes to
 `<config_dir>/settings.toml`, never into `init.lua`.** That file is ranma's,
 applied after `init.lua`, and strict like a theme. ranma does not rewrite
 code a person wrote, and a UI that edits a file nobody can then read is
@@ -657,6 +657,51 @@ an id the new configuration reused would reach the wrong callback. Dropping a
 configuration signals its jobs' process groups. `spawn` is refused at load,
 because `--check-config` loads the configuration too. An `every` that errors is
 stopped: at 50 ms, an error a tick would bury the bar.
+
+**The settings panel, as built** (2026-10-09, from `doc/handoffs/done/SETTINGS_PANEL.html`):
+
+- `src/settings.rs` is a port of the handoff's script, function by function
+  (`drawRow`, `drawHead`, `drawPanel`, `drawHelp`, `drawPeek`), drawing theme
+  role names into a grid. The tests feed it the handoff's own sample registry
+  and compare every scene with `doc/handoffs/done/SETTINGS_PANEL_MOCK.txt`, the
+  handoff rendered by its own code: ten 80×24 states in two border styles,
+  five 200×50 views, and the rows at every list width.
+- An edit is applied by rebuilding the settings and the theme from what they
+  were when the panel opened, with every unsaved edit over them, through
+  `ranma.set`'s and the theme loader's strict parsing. A refused edit is taken
+  back and its reason shown. Saving writes only what differs from what the
+  files say. An edit that comes back to the file's value leaves
+  `settings.toml`, so a `◆` never marks a value that wins over nothing. The
+  config watcher's reload then reads it back as a start would.
+- The panes really are laid out in the space beside the panel, so programs get
+  a resize when it opens and when it closes. That is what makes the live
+  preview of gaps and borders true. (The handoff's sample git log says
+  "crop panes, never resize". Its drawing re-lays them out, and the drawing is
+  the decision.)
+
+Where it departs from the handoff:
+
+- No default key. A `p` bind would add a row to the which-key hint, whose
+  layout is pinned to its own handoff. `:settings` and the action reach it,
+  and `init.lua` binds it in one line.
+- The registry is ranma's, not the mock's: real ranges (scrollback to
+  1 000 000, not 100 000) and real descriptions. The mock's `mpris` and
+  `battery` groups were samples of how plugin groups look.
+- The which-key hint delay is "off" at the slider's left end, as drawn, and is
+  saved as `false`, as ranma spells it.
+- Typing a value is drawn for every type the way the mock draws it for a
+  colour. The hint text for numbers ("a whole number from 0 to 8") is ranma's.
+- The per-side outer gaps, the custom border's characters, text attributes
+  and the optional colour roles are not in the panel (`options::NOT_IN_PANEL`).
+
+What it does not do yet:
+
+- The mouse: the panel ignores it, and clicking `‹ ›` does nothing.
+- Setting a value back to unset over a file that sets it cannot be saved.
+  TOML has no "unset", so the panel says to remove it from the file instead.
+- A profile switched while the panel is open drops its live edits. Closing
+  and reopening shows the truth.
+- Toasts are drawn under the panel while it is open.
 
 **Pickers and prompts** (2026-10-08) are ranma's own `Picker` with a kind of
 their own and an item target that is an index. The Lua items table is kept in

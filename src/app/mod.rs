@@ -37,6 +37,7 @@ mod query;
 mod rules;
 mod run;
 mod session;
+mod settings;
 mod snapshots;
 mod switch;
 mod touch;
@@ -207,6 +208,8 @@ pub struct App {
     reload_at: Option<Instant>,
 
     picker: Option<crate::picker::Picker>,
+    /// The settings panel, while open (`settings`).
+    settings: Option<settings::SettingsState>,
     copy: Option<CopyState>,
     /// Bytes for the host terminal itself (OSC 52 clipboard writes), written by
     /// the event loop after the event that queued them.
@@ -360,6 +363,7 @@ impl App {
             module_generation: 0,
             reload_at: None,
             picker: None,
+            settings: None,
             copy: None,
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
@@ -566,7 +570,20 @@ impl App {
         // What the bar, toolbars and monocle strip leave (see `chrome`). A
         // yielded bar keeps no row: focus coming and going must not resize the
         // panes, so the bar is drawn over them when it shows at all.
-        let a = self.chrome().workspace;
+        let mut a = self.chrome().workspace;
+        // The settings panel takes its side of the screen (or, peeking, its
+        // three rows), and the panes are laid out beside it: what an edit to
+        // gaps or borders does is seen as it is made.
+        if let Some(st) = &self.settings {
+            let bar_y = self.bar_rect().map(|b| b.y);
+            let (px, py, pw, ph) = st.panel.rect(self.screen.w, self.screen.h, bar_y);
+            if st.panel.peek {
+                a.h = a.h.min(py.saturating_sub(a.y));
+            } else if pw < a.w {
+                a.w = px.saturating_sub(a.x).min(a.w);
+            }
+            let _ = ph;
+        }
         a.inset_sides(self.config.theme.gaps.outer())
     }
 
@@ -1529,6 +1546,11 @@ impl App {
     }
 
     fn handle_input(&mut self, ev: Event) {
+        // The settings panel has the keyboard while it is open.
+        if self.settings.is_some() {
+            self.settings_input(ev);
+            return;
+        }
         // Toolbars answer taps in every mode, over an open picker too: the
         // button that opened a sheet closes it.
         if let Event::Mouse(m) = ev
@@ -2412,6 +2434,7 @@ impl App {
             Action::SessionSwitcher => self.open_session_switcher(),
             Action::Help => self.open_palette(crate::picker::PaletteMode::Help),
             Action::CommandPalette => self.open_palette(crate::picker::PaletteMode::Command),
+            Action::Settings => self.open_settings(),
             Action::CopyMode => self.enter_copy_mode(None),
             Action::Hints => self.enter_hints(),
             // Backward: the most recent match first, which is what searching
@@ -2489,6 +2512,7 @@ impl App {
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
+                self.refresh_settings_panel();
                 self.report_plugin_failures();
                 self.relayout();
                 self.render_state_modules();
@@ -3216,6 +3240,7 @@ impl App {
     /// One module's current output: built-ins from state, others from the cache.
     fn segment(&self, name: &str) -> Segment {
         match name {
+            "mode" if self.settings.is_some() => vec![Piece::new(" SET ", Style::Mode)],
             "mode" => match self.mode {
                 Mode::Wm => vec![Piece::new(" WM ", Style::Mode)],
                 Mode::Copy => {

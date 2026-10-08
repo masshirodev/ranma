@@ -1,7 +1,7 @@
 //! The settings panel (`leader ,`): every option in the registry, its value
 //! edited in place (DESIGN.md, "The settings panel"; the design is
-//! `doc/handoffs/SETTINGS_PANEL_screen.js`, its rendering
-//! `doc/handoffs/SETTINGS_PANEL_MOCK.txt`).
+//! `doc/handoffs/done/SETTINGS_PANEL_screen.js`, its rendering
+//! `doc/handoffs/done/SETTINGS_PANEL_MOCK.txt`).
 //!
 //! Pure: the options and their layers in, a grid of cells out. A cell carries
 //! a theme role's name (or, for a colour swatch, the colour itself), never an
@@ -1875,7 +1875,7 @@ pub fn saved_layers(entries: &[Entry], set: &mut toml::Table, theme: &mut toml::
 mod tests {
     use super::*;
 
-    const MOCK: &str = include_str!("../doc/handoffs/SETTINGS_PANEL_MOCK.txt");
+    const MOCK: &str = include_str!("../doc/handoffs/done/SETTINGS_PANEL_MOCK.txt");
 
     /// The scene `title` of the handoff's rendering, row by row.
     fn mock(title: &str) -> Vec<String> {

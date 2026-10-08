@@ -263,6 +263,9 @@ ranma.bind("v", "paste_image")
 -- and ">" is ":" for hands used to other palettes.
 ranma.bind("?", "help")
 ranma.bind(":", "command_palette")
+-- The settings panel (every option, edited in place and saved to settings.toml)
+-- has no key by default, so the hint's layout stays the one designed for these
+-- binds; it is ":settings" in the palette, or bind it: ranma.bind("p", "settings")
 
 -- Global binds -------------------------------------------------------------------
 -- { global = true } binds a key outside WM mode, with no leader. The program in

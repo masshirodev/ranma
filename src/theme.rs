@@ -679,10 +679,25 @@ pub fn load_over(
     dirs: &[PathBuf],
     overlay: Option<&toml::Table>,
 ) -> Result<(Theme, toml::Table)> {
+    load_over_unset(name, dirs, overlay, &[])
+}
+
+/// [`load_over`], and these dotted keys taken out after: how the settings
+/// panel previews an optional key (a float's border, a pane's ground) set
+/// back to unset, which no TOML layer can say.
+pub fn load_over_unset(
+    name: &str,
+    dirs: &[PathBuf],
+    overlay: Option<&toml::Table>,
+    unset: &[String],
+) -> Result<(Theme, toml::Table)> {
     let resolved = resolve_table(name, dirs, &mut HashSet::new())?;
     let mut table = resolved.clone();
     if let Some(o) = overlay {
         merge(&mut table, o.clone());
+    }
+    for k in unset {
+        crate::options::remove(&mut table, k);
     }
     let what = if overlay.is_some_and(|o| !o.is_empty()) {
         format!("theme `{name}` with settings.toml's [theme] over it")

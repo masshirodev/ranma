@@ -219,6 +219,7 @@ does not matter; it is ignored.
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | The palette in help mode (`?`, `leader ?`): every bind, filterable by key or action; `Enter` runs the selected one. |
 | `command_palette` | The palette in command mode (`:`, `leader :`): every action, bound or not, with its argument and key. `Tab` completes one into the query; type its argument and the line heads the list as `run: …`, or as the parser's error if it would not parse. `Enter` runs it (one that needs an argument completes instead). The query's first character is the mode: `?` keys, `:` or `>` commands; typing it switches, `Ctrl+U` clears the rest. |
+| `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. No key by default (`:settings`, or `ranma.bind("p", "settings")`). See [The settings panel](#the-settings-panel). |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
@@ -976,6 +977,43 @@ its options before `init.lua` sets them, since plugins load first.
 knows what has been set so far, and not the theme's keys (the theme loads
 last). After that it knows everything, the settings panel's values included.
 
+### The settings panel
+
+`settings` (`:settings` in the palette, or bind it: `ranma.bind("p",
+"settings")`) opens a panel on the right of the screen listing every option:
+ranma's own, the theme keys it shows, and every plugin's, grouped. The panes
+are laid out beside it, so a change to gaps, borders or dimming shows as you
+make it. Closing gives them their width back. The bar says ` SET ` while it is
+open, and it has the keyboard.
+
+| Key | |
+| --- | --- |
+| `↑↓` `j` `k` | Move. `tab` jumps to the next group, `shift+tab` back. |
+| `←→` `h` `l` | Change the value: the next choice, on/off, a step of a number, the theme's next colour. |
+| `enter` | Type a value (a number, a colour, text), or flip a choice. `enter` applies it, `esc` cancels, `ctrl+u` clears. |
+| `r` | Back to the default. |
+| `u` | Undo the unsaved edit. |
+| `/` | Filter by name; `enter` keeps the filter and goes back to the list, `esc` clears it. |
+| `space` | Peek: the panel folds to one row at the bottom, the workspace full width; `←→` still steps. |
+| `?` | The keys and the marks. |
+| `w` | Save to `settings.toml`. |
+| `esc` | Close. With unsaved edits it asks: `w` save, `d` discard, `esc` keep editing. |
+
+Edits apply live as you make them and are saved only with `w`. One that ranma
+refuses (a leader that is no chord, a theme that does not load) is taken back,
+with the reason on the panel. The marks after a name: `•` differs from the
+default, `◆` the panel's value wins over what init.lua or the theme says, `*`
+changed and not saved. Below the list are the selected option's description
+and where its value comes from (`default 0% · theme 30% · panel 50% → 60%`).
+On a wide screen there is a column of sources and an index of the groups.
+
+The panel draws in the colours it opened with, so editing one it uses (the
+toast and picker roles) does not repaint it under you. It shows a sample row in
+the new colour instead. Saving writes `settings.toml`, the configuration
+reloads from it (plugins and all, as any reload does), and the panel stays
+open. `option_change` fires for each edit, saved or not (see
+[Hooks](#hooks--ranmaonevent-fn)).
+
 ### `settings.toml`
 
 The settings panel saves to `~/.config/ranma/settings.toml`, never into
@@ -1282,6 +1320,7 @@ end)
 | `bell` | `pane`, `workspace`, `visible`, `title` — every bell, seen or not (an unseen one also toasts, as before) |
 | `pane_idle` | `pane`, `workspace`, `visible`, `title`, `busy` (seconds it had been printing) — a pane that printed has printed nothing for `pane_idle` seconds. An agent or a build that stopped. Once per burst of output. |
 | `hover` | `pane`, `line`, `col` (as [pane handles](#pane-handles) number them), `x`, `y` — the pointer rested 150 ms on another cell of a pane's text. Needs the mouse on (`mouse` not `"off"`). |
+| `option_change` | `key`, `value`, `previous`, `saved` — the settings panel changed an option: as an edit is made (`saved` false), when it is put back, and once more for each edit saved (`saved` true). `value` is `nil` for unset. |
 | `user:<name>` | whatever `ranma.emit(name, data)` passed — a plugin's own event; see below |
 
 `command_finished` and `command_started` need the shell to say where commands

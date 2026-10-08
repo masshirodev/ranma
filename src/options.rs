@@ -824,6 +824,9 @@ pub struct Layers {
     pub file_theme: Table,
     /// `settings.toml`'s `[theme]`.
     pub panel_theme: Table,
+    /// What the settings panel shows live and has not saved, by home.
+    pub pending_set: Table,
+    pub pending_theme: Table,
 }
 
 impl Layers {
@@ -845,9 +848,16 @@ impl Layers {
         }
     }
 
-    /// The value in force: the panel's, else the file's, else the default.
+    /// The value in force: an unsaved edit's, the panel's, else the file's,
+    /// else the default.
     pub fn effective(&self, o: &Opt) -> Option<Value> {
-        self.value(o, Layer::Panel)
+        let pending = match o.home {
+            Home::Init => &self.pending_set,
+            Home::Theme => &self.pending_theme,
+        };
+        get(pending, &o.key)
+            .cloned()
+            .or_else(|| self.value(o, Layer::Panel))
             .or_else(|| self.value(o, Layer::File))
             .or_else(|| self.value(o, Layer::Default))
     }

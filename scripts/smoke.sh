@@ -283,6 +283,24 @@ wait_for 'LUA_EXIT=1' 8 || fail "a failing ranma lua did not exit 1"
 T send-keys -t s clear Enter; sleep 0.3
 rm "$CFG/plugin/events.lua"; sleep 0.5
 
+# The settings panel: opened by its action, the bar says SET; an option
+# found by filtering, stepped (marked unsaved), saved with w into
+# settings.toml, and closed, the panes getting their width back.
+T send-keys -t s "$BIN action settings" Enter
+wait_for '─ settings ─' 8 || fail "the settings panel did not open"
+bar | grep -q ' SET ' || fail "the bar does not say SET while the panel is open ($(bar))"
+T send-keys -t s '/'; T send-keys -t s 'dim'; T send-keys -t s Enter; sleep 0.2
+T send-keys -t s Right; sleep 0.3
+wait_for 'Dim unfocused \*' 4 || fail "stepping an option did not mark it unsaved"
+wait_for '1 unsaved' 2 || fail "the panel did not count the unsaved edit"
+T send-keys -t s w
+for _ in $(seq 1 20); do grep -q 'dim_unfocused = 0.05' "$CFG/settings.toml" 2>/dev/null && break; sleep 0.2; done
+grep -q 'dim_unfocused = 0.05' "$CFG/settings.toml" 2>/dev/null || fail "w did not save the edit to settings.toml"
+T send-keys -t s Escape
+for _ in $(seq 1 20); do screen | grep -q '─ settings ─' || break; sleep 0.2; done
+screen | grep -q '─ settings ─' && fail "Esc did not close the panel"
+rm "$CFG/settings.toml"; sleep 0.5
+
 # Scripting over the socket: open a pane in the background and get its id,
 # read its screen, type into it, and wait for it with its exit status.
 T send-keys -t s "P=\$($BIN open -P -d -- 'echo smoke-captured; read x; exit \$x'); sleep 0.5; $BIN capture -p \$P | grep -q smoke-captured && echo CAPTURE-OK; $BIN send -p \$P -e 7; $BIN wait -p \$P; echo WAIT=\$?; $BIN panes | head -1" Enter

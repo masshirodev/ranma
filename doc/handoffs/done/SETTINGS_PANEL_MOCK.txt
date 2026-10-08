@@ -1,5 +1,5 @@
 # The settings panel, cell for cell, as the design handoff draws it
-# (doc/handoffs/SETTINGS_PANEL.html, rendered with its own script, default theme).
+# (doc/handoffs/done/SETTINGS_PANEL.html, rendered with its own script, default theme).
 # The panel's layout is tested against these. Regenerate only from a new handoff.
 ## 80x24 · ? keys and marks · rounded
 ╭ 1 nvim ───────────╮ ╭ 2 zsh ─────╮╭─ settings ───────────────────────────────╮

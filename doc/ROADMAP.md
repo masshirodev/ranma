@@ -210,7 +210,7 @@ features below the line live outside the repository.
   watched; a failing plugin dropped whole; the 200 ms watchdog
 - [x] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `settings.toml` read and applied
-- [ ] `option_change`, fired by the settings panel
+- [x] `option_change`, fired by the settings panel
 - [x] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
 - [ ] `pane:link_at(line, col)`, `pane:marks()` (OSC 133 prompt positions)
@@ -222,8 +222,8 @@ features below the line live outside the repository.
 - [x] Drawing: `picker` and `input`
 - [ ] Drawing: `panel`, `tooltip`, `badge`
 - [ ] `pane:watch`, measured first
-- [ ] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
-- [ ] The settings panel and `settings.toml`
+- [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
+- [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)
 
 Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
 regex goto, link hover tooltips, agent integrations, autorun commands.

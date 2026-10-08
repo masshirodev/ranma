@@ -146,6 +146,8 @@ pub enum Action {
     Help,
     /// The same picker listing every action, bound or not, and running a typed one.
     CommandPalette,
+    /// The settings panel: every option, edited in place.
+    Settings,
     /// Keyboard scrollback and selection (vi keys) in the focused pane.
     CopyMode,
     /// Label the links on the focused pane's screen; typing a label copies it,
@@ -210,6 +212,7 @@ impl Action {
                 | Action::SessionSwitcher
                 | Action::Help
                 | Action::CommandPalette
+                | Action::Settings
                 | Action::CopyMode
                 | Action::Hints
                 | Action::Search
@@ -306,6 +309,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("session_switcher", ""),
     ("help", ""),
     ("command_palette", ""),
+    ("settings", ""),
     ("copy_mode", ""),
     ("hints", ""),
     ("search", ""),
@@ -633,6 +637,7 @@ impl FromStr for Action {
             "session_switcher" => no_arg(Action::SessionSwitcher),
             "help" => no_arg(Action::Help),
             "command_palette" => no_arg(Action::CommandPalette),
+            "settings" => no_arg(Action::Settings),
             "copy_mode" => no_arg(Action::CopyMode),
             "hints" => no_arg(Action::Hints),
             "search" => no_arg(Action::Search),
@@ -788,6 +793,7 @@ impl fmt::Display for Action {
             Action::SessionSwitcher => f.write_str("session_switcher"),
             Action::Help => f.write_str("help"),
             Action::CommandPalette => f.write_str("command_palette"),
+            Action::Settings => f.write_str("settings"),
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Hints => f.write_str("hints"),
             Action::Search => f.write_str("search"),
@@ -962,6 +968,7 @@ mod tests {
             "snap top_right",
             "snap center",
             "command_palette",
+            "settings",
             "copy_mode",
             "hints",
             "search",

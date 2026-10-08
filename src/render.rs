@@ -173,6 +173,10 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         draw_which_key(f, app);
     }
     draw_toasts(f, app);
+    if app.settings_panel().is_some() {
+        draw_settings(f, app);
+        return None;
+    }
     if let (Some(p), Some(l)) = (app.picker(), app.sheet_layout()) {
         draw_sheet(f, app, p, &l);
         return None;
@@ -720,6 +724,75 @@ fn draw_which_key(f: &mut Frame, app: &App) {
         let (x, y) = (area.x + x, area.y + y);
         if y < area.bottom() && x < area.right() {
             buf.set_stringn(x, y, text, (area.right() - x) as usize, style);
+        }
+    }
+}
+
+/// The settings panel: `crate::settings` draws it as theme roles into a grid,
+/// painted here in the colours it opened with.
+fn draw_settings(f: &mut Frame, app: &App) {
+    use crate::settings::{Lines, Paint};
+    let Some(st) = app.settings_panel() else {
+        return;
+    };
+    let screen = f.area();
+    let b = &st.theme.border;
+    let lines = Lines::of(b.style, b.chars.as_deref());
+    let grid = st.panel.draw(
+        screen.width,
+        screen.height,
+        app.bar_rect().map(|r| r.y),
+        &lines,
+        b.style,
+    );
+    let roles = toml::Value::try_from(&st.colors).ok();
+    let resolve = |p: Paint| -> theme::Color {
+        match p {
+            Paint::Lit(c) => c,
+            Paint::Role("bg" | "fg") => theme::Color::Default,
+            Paint::Role(name) => roles
+                .as_ref()
+                .and_then(|r| r.get(name))
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(theme::Color::Default),
+        }
+    };
+    let host = &app.host_colors;
+    let rgb = |c: theme::Color, fallback: Option<crate::hostcolors::Rgb>| match c {
+        theme::Color::Rgb(r, g, b) => Some(crate::hostcolors::Rgb { r, g, b }),
+        theme::Color::Indexed(i) => host.get(i as usize),
+        theme::Color::Default => fallback,
+    };
+    let buf = f.buffer_mut();
+    for y in 0..grid.h.min(screen.height) {
+        for x in 0..grid.w.min(screen.width) {
+            let Some(c) = grid.get(x, y) else {
+                continue;
+            };
+            let (fg, bg) = (resolve(c.fg), resolve(c.bg));
+            let mut style = Style::default().fg(color(fg)).bg(color(bg));
+            if c.fade > 0.0 {
+                match (rgb(fg, host.fg), rgb(bg, host.bg)) {
+                    (Some(a), Some(z)) => {
+                        let mix = |a: u8, z: u8| {
+                            (a as f32 + (z as f32 - a as f32) * c.fade).round() as u8
+                        };
+                        style = style.fg(Color::Rgb(mix(a.r, z.r), mix(a.g, z.g), mix(a.b, z.b)));
+                    }
+                    _ => style = style.add_modifier(Modifier::DIM),
+                }
+            }
+            if c.bold {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            if c.underline {
+                style = style.add_modifier(Modifier::UNDERLINED);
+            }
+            let mut tmp = [0u8; 4];
+            buf[(screen.x + x, screen.y + y)]
+                .set_symbol(c.ch.encode_utf8(&mut tmp))
+                .set_style(style);
         }
     }
 }
