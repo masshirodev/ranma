@@ -1352,14 +1352,19 @@ impl App {
                 } else {
                     title
                 };
-                let text = match (title.is_empty(), body.is_empty()) {
-                    (true, _) => body,
-                    (false, true) => title,
-                    (false, false) => format!("{title}: {body}"),
+                let (source, text) = match (title.is_empty(), body.is_empty()) {
+                    (true, _) => (None, body),
+                    (false, true) => (None, title),
+                    (false, false) => (Some(title), body),
                 };
-                if !text.trim().is_empty() {
-                    self.toast(text, crate::toast::Level::Normal, None);
-                }
+                self.toasts.push_from(
+                    source,
+                    text,
+                    crate::toast::Level::Normal,
+                    crate::toast::DEFAULT_TIMEOUT,
+                    Instant::now(),
+                );
+                self.dirty = true;
             }
         }
     }

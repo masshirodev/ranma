@@ -849,6 +849,15 @@ and how long it ran. A 133;D with no 133;C before it is the prompt after
 nothing ran, and fires nothing. The same reader is where images (the kitty
 graphics protocol) would have to be caught, when that comes.
 
+**The message outranks its sender** (2026-10-08). The toast was one string,
+`title: body`, wrapped to three lines with an ellipsis at the end, so a pane
+titled `user@host:/a/long/path` filled all three and the ellipsis took the body:
+a notification arrived, and said nothing. A toast now keeps its source apart
+from its text. Whole when the two fit; otherwise the source is cut in the
+middle to one line (its ends, the host and the directory, say the most) and the
+text gets the other two. The smoke test found it: run from a deep scratch
+directory, its `osc-toast-ok` never showed.
+
 ### The tmux shim: a stated subset, grown only from its log
 
 Some programs open panes of their own by driving tmux; Claude Code's agent

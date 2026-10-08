@@ -24,6 +24,10 @@ pub enum Level {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Toast {
     pub id: u64,
+    /// Who sent it (a notifying pane's title), shown before the text and the
+    /// first thing shortened when the two do not fit: a long `user@host:path`
+    /// must never push the message itself out of the box.
+    pub source: Option<String>,
     pub text: String,
     pub level: Level,
     pub expires: Instant,
@@ -37,14 +41,30 @@ pub struct Toasts {
 
 impl Toasts {
     pub fn push(&mut self, text: impl Into<String>, level: Level, timeout: Duration, now: Instant) {
+        self.push_from(None, text, level, timeout, now);
+    }
+
+    /// A toast with its sender: `source: text`, the source shortened first.
+    pub fn push_from(
+        &mut self,
+        source: Option<String>,
+        text: impl Into<String>,
+        level: Level,
+        timeout: Duration,
+        now: Instant,
+    ) {
         let text: String = text.into();
         let text = text.trim();
         if text.is_empty() {
             return;
         }
+        let source = source
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         self.next_id += 1;
         self.list.push(Toast {
             id: self.next_id,
+            source,
             text: text.to_string(),
             level,
             expires: now + timeout,
@@ -85,7 +105,7 @@ impl Toasts {
         let mut y = top;
         let mut out = Vec::new();
         for t in self.list.iter().rev() {
-            let lines = wrap(&t.text, inner_max.max(1), 3);
+            let lines = lines(t.source.as_deref(), &t.text, inner_max.max(1));
             let text_w = lines.iter().map(|l| width(l)).max().unwrap_or(0) as u16;
             let w = (text_w + 4).max(20).min(max_w);
             let h = lines.len() as u16 + 2;
@@ -98,6 +118,56 @@ impl Toasts {
         }
         out
     }
+}
+
+/// A toast's lines: `source: text` wrapped to three, if that fits whole;
+/// else the source cut in the middle to one line, and the text on the other
+/// two.
+fn lines(source: Option<&str>, text: &str, cols: usize) -> Vec<String> {
+    const MAX: usize = 3;
+    let Some(source) = source else {
+        return wrap(text, cols, MAX);
+    };
+    let whole = wrap(&format!("{source}: {text}"), cols, MAX + 1);
+    if whole.len() <= MAX {
+        return whole;
+    }
+    let mut out = vec![format!("{}:", middle_cut(source, cols.saturating_sub(1)))];
+    out.extend(wrap(text, cols, MAX - 1));
+    out
+}
+
+/// `s` in `cols` cells, its middle replaced by an ellipsis when it does not
+/// fit: a title's ends (the host, the directory) say the most.
+fn middle_cut(s: &str, cols: usize) -> String {
+    if width(s) <= cols {
+        return s.to_string();
+    }
+    if cols == 0 {
+        return String::new();
+    }
+    let keep = cols - 1;
+    let (mut head, mut head_w) = (String::new(), 0);
+    for c in s.chars() {
+        let cw = c.width().unwrap_or(0);
+        if head_w + cw > keep / 2 {
+            break;
+        }
+        head.push(c);
+        head_w += cw;
+    }
+    let (mut tail, mut tail_w) = (Vec::new(), 0);
+    for c in s.chars().rev() {
+        let cw = c.width().unwrap_or(0);
+        if head_w + tail_w + cw > keep {
+            break;
+        }
+        tail.push(c);
+        tail_w += cw;
+    }
+    head.push('…');
+    head.extend(tail.into_iter().rev());
+    head
 }
 
 fn width(s: &str) -> usize {
@@ -212,5 +282,36 @@ mod tests {
         assert_eq!(cut.len(), 2);
         assert!(cut[1].ends_with('…'));
         assert_eq!(wrap("日本語テキスト", 6, 3), ["日本語", "テキス", "ト"]);
+    }
+
+    /// A notifying pane deep in a directory tree: its title once filled all
+    /// three lines and the ellipsis ate the message.
+    #[test]
+    fn a_long_source_is_cut_before_the_message_is() {
+        let src = "me@host:/tmp/claude-1000/-home-me-projects-ranma/321e726c-1570-4e8a-b0ed-cbf2164afc9e/scratchpad/ranma-wsl";
+        let l = lines(Some(src), "osc-toast-ok", 30);
+        assert_eq!(l.len(), 2);
+        assert!(
+            l[0].starts_with("me@host:/tmp/") && l[0].ends_with("ranma-wsl:"),
+            "{l:?}"
+        );
+        assert!(l[0].contains('…'));
+        assert!(width(&l[0]) <= 30);
+        assert_eq!(l[1], "osc-toast-ok");
+        // What fits whole is left whole.
+        assert_eq!(
+            lines(Some("me@host:~"), "build done", 40),
+            ["me@host:~: build done"]
+        );
+        assert_eq!(lines(None, "build done", 40), ["build done"]);
+        // A long message still gets two lines under the cut source.
+        let long = lines(Some(src), &"word ".repeat(40), 30);
+        assert_eq!(long.len(), 3);
+        assert!(long[2].ends_with('…'));
+        assert_eq!(
+            middle_cut("日本語テキスト", 6),
+            "日…ト",
+            "wide characters count two cells"
+        );
     }
 }

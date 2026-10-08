@@ -945,7 +945,10 @@ end)
 
 Programs' own desktop notifications, OSC 9 (`printf '\e]9;done\a'`) and OSC
 777 (`\e]777;notify;title;body\a`), show as toasts, named after their pane
-when they give no title.
+when they give no title. When the name and the message do not fit the box
+together, the name is cut in the middle to one line (`me@host:/tmp/…/project:`)
+and the message keeps the rest: a pane deep in a directory tree never pushes
+its own notification out of view.
 
 ## Globals
 
