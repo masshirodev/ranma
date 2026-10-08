@@ -113,6 +113,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout (`"pngpaste -"` on macOS). It reads images only. Unset: `powershell.exe` under WSL, `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
+| `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. See [ranma inside ranma](#ranma-inside-ranma). |
 | `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
@@ -429,6 +430,18 @@ Over SSH, three levels deep, each machine starting ranma: with
   from ssh's command line. So a local ranma with a pane SSH'd into the VPS gives
   kitty `⧉ ranma@vps · nvim`, never `@desk@vps`. Borders, tabs and the bar still
   show the title without the mark.
+- `theme_colors = "outer"` draws this ranma with the `[colors]` of the ranma
+  around it, so a VPS ranma looks like the desktop one without a copy of its
+  theme. The outer sends them with its answer when a terminal attaches, every
+  role as its theme has it (including what it took from a ranma around *it*),
+  and this ranma lays them over its own theme's colours. Only colours:
+  `[styles]`, borders, gaps and the bar's shape stay this theme's. A role the
+  outer does not send, being older, keeps this theme's colour, and one this
+  build does not know is skipped, so the two need not be the same build.
+  They are sent at attach and never later (after that, what reaches the
+  client is read as keys), so a theme changed on the outer shows here at the
+  next attach. A terminal with no ranma around it gets this theme's own
+  colours back. `"own"` (the default) never takes them.
 
 ## Mouse
 

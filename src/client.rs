@@ -197,7 +197,12 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
     // Before any input thread: the host's replies are read off the terminal
     // here, with any keys typed meanwhile kept for the shell. The colours are
     // asked once; a switch to another server reuses them.
-    let (colors, typed_early, outer) = crate::hostcolors::query_all(Duration::from_millis(300));
+    let crate::hostcolors::Replies {
+        colors,
+        typed_early,
+        outer,
+        outer_colors,
+    } = crate::hostcolors::query_all(Duration::from_millis(300));
     let inside = std::env::var(ipc::ENV).ok();
     // Only the first server is stolen: a switch later joins whoever is there.
     let greet = |stream: &mut UnixStream, typed_early: Vec<u8>, steal: bool| -> Result<()> {
@@ -214,6 +219,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
                 inside: inside.clone(),
                 remote: crate::pane::over_ssh(),
                 outer,
+                outer_colors: outer_colors.clone(),
                 steal,
                 mobile,
             }),

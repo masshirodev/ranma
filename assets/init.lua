@@ -84,6 +84,14 @@ ranma.set {
   -- ranma sets no title at all.)
   title_host = "ssh",
 
+  -- Inside another ranma (over ssh, say), draw with that ranma's [colors]
+  -- instead of this theme's: "outer". They are sent when the terminal
+  -- attaches, so a theme changed out there shows here at the next attach.
+  -- Only colours: borders, styles and the bar's shape stay this theme's, and
+  -- a terminal with no ranma around it gets this theme's colours back.
+  -- (Needs nested = "auto" on the outer one, and an outer from 2026-10-08 on.)
+  theme_colors = "own",
+
   -- A server keeps a snapshot of its sessions, layouts, directories and
   -- commands in ~/.local/state/ranma/servers, written a few seconds after
   -- you do something and as it ends. After a reboot, a new server of the same

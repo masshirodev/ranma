@@ -94,7 +94,9 @@ impl<'de> Deserialize<'de> for Color {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+/// Serialized whole, unset roles as null, to go to a ranma inside this one
+/// (see `overlay`).
+#[derive(Debug, Clone, PartialEq, Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Colors {
     pub border_active: Color,
@@ -161,6 +163,31 @@ pub struct Colors {
 }
 
 impl Colors {
+    /// These colours with an outer ranma's laid over them, as its `colors`
+    /// message carries them (DESIGN.md, "An inner ranma in the outer's
+    /// colours"). Unlike a theme file this is lenient, key by key: the outer
+    /// may be a newer build with roles this one does not know, or an older
+    /// one without some this one has, and neither may cost the colours it
+    /// can use. A key this build does not know, or a value it cannot read,
+    /// is skipped; a role the outer did not send keeps its own colour.
+    pub fn overlay(&self, wire: &serde_json::Map<String, serde_json::Value>) -> Colors {
+        let Ok(serde_json::Value::Object(mut merged)) = serde_json::to_value(self) else {
+            return self.clone();
+        };
+        for (k, v) in wire {
+            if !merged.contains_key(k) {
+                continue;
+            }
+            let was = merged.insert(k.clone(), v.clone());
+            if serde_json::from_value::<Colors>(serde_json::Value::Object(merged.clone())).is_err()
+                && let Some(was) = was
+            {
+                merged.insert(k.clone(), was);
+            }
+        }
+        serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or_else(|_| self.clone())
+    }
+
     /// The gaps between buttons and the rest of a toolbar's row: `bar_bg`.
     pub fn toolbar_bg(&self) -> Color {
         self.toolbar_bg.unwrap_or(self.bar_bg)
@@ -681,6 +708,36 @@ mod tests {
         let t = load("default", &[]).unwrap();
         assert_eq!(t.border.style, BorderStyle::Rounded);
         assert_eq!(t.colors.bar_bg, Color::Default);
+    }
+
+    #[test]
+    fn an_outer_ranmas_colours_lay_over_key_by_key() {
+        let own = load("default", &[]).unwrap().colors;
+        let wire = |j: serde_json::Value| j.as_object().unwrap().clone();
+
+        // The whole set, as an outer sends it, round-trips.
+        let mut theirs = own.clone();
+        theirs.border_active = Color::Rgb(1, 2, 3);
+        theirs.module_bg = Some(Color::Indexed(4));
+        let sent = serde_json::to_value(&theirs).unwrap();
+        assert_eq!(own.overlay(sent.as_object().unwrap()), theirs);
+
+        // A newer outer's unknown role, an older one's missing roles and a
+        // value this build cannot read cost nothing else.
+        let got = own.overlay(&wire(serde_json::json!({
+            "border_active": "#010203",
+            "a_role_from_the_future": "#ffffff",
+            "bar_fg": "#nothex",
+        })));
+        assert_eq!(got.border_active, Color::Rgb(1, 2, 3));
+        assert_eq!(got.bar_fg, own.bar_fg);
+        assert_eq!(got.toast_bg, own.toast_bg);
+
+        // An unset role there is unset here too: it follows the outer's roles.
+        let mut mine = own.clone();
+        mine.selection_bg = Some(Color::Indexed(1));
+        let got = mine.overlay(&wire(serde_json::json!({ "selection_bg": null })));
+        assert_eq!(got.selection_bg, None);
     }
 
     #[test]

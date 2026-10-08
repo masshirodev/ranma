@@ -84,7 +84,11 @@ impl App {
                     && shows
                     && let Some(p) = self.panes.get(&id)
                 {
-                    p.write(nestbar::hello_reply());
+                    // The colours first: they are read only up to the answer's
+                    // DA1, and whatever it carries goes on to inner ranmas.
+                    let mut answer = nestbar::colors_osc(&self.config.theme.colors);
+                    answer.extend(nestbar::hello_reply());
+                    p.write(answer);
                 }
             }
             crate::osc::Mark::RanmaReport(json) => {
@@ -241,6 +245,30 @@ impl App {
         if self.bar_yielded() != was {
             self.relayout();
         }
+    }
+
+    /// A (new) terminal is showing this ranma, and the ranma around it sent
+    /// these colours (or none, for a plain terminal or an older ranma).
+    pub fn set_outer_colors(&mut self, colors: Option<serde_json::Map<String, serde_json::Value>>) {
+        self.outer_colors = colors;
+        self.adopt_colors();
+    }
+
+    /// Draw with the outer ranma's colours when the setting asks for them
+    /// and it sent some, else with the theme's own: laid over them, so a
+    /// role the outer did not send keeps this theme's colour.
+    pub(super) fn adopt_colors(&mut self) {
+        if let Some(own) = self.own_colors.take() {
+            self.config.theme.colors = own;
+        }
+        if self.config.settings.theme_colors == crate::config::ThemeColors::Outer
+            && let Some(wire) = &self.outer_colors
+        {
+            let own = self.config.theme.colors.clone();
+            self.config.theme.colors = own.overlay(wire);
+            self.own_colors = Some(own);
+        }
+        self.dirty = true;
     }
 
     /// This ranma draws no bar of its own: an outer one shows its workspaces,

@@ -128,6 +128,8 @@ an outer shows it.
   `doc/handoffs/done/`); protocol 2, with 1 still understood
 - [x] A ranma reached from the scratchpad (an `ssh` started there) is held by
   `S` as a workspace holds one: expanded while shown, counted while hidden
+- [x] `theme_colors = "outer"`: an inner ranma draws with the outer's
+  `[colors]`, sent with the answer at attach and laid over its own leniently
 
 ## 7. Upgrading without closing anything
 

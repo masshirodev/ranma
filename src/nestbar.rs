@@ -160,6 +160,32 @@ pub fn hello_reply() -> Vec<u8> {
     format!("\x1b]{OSC};ranma;{OLDEST};{PROTOCOL}\x07").into_bytes()
 }
 
+/// An outer ranma's colours, sent just ahead of its answer to `HELLO`:
+/// `colors;<json>`, every role of its theme as that theme spells it. A ranma
+/// inside with `theme_colors = "outer"` draws with them (DESIGN.md, "An inner
+/// ranma in the outer's colours"). Only at the hello, never later: after it,
+/// the inner client's input goes through crossterm, which would read an
+/// unasked OSC as keys. A client of any build strips OSCs from what it was
+/// typed while starting, so an older inner ignores this.
+pub fn colors_osc(c: &crate::theme::Colors) -> Vec<u8> {
+    let json = serde_json::to_string(c).unwrap_or_default();
+    format!("\x1b]{OSC};colors;{json}\x07").into_bytes()
+}
+
+/// The colours an outer ranma sent with its answer, if it sent any; read
+/// leniently later (`Colors::overlay`), since that ranma may be a build with
+/// roles this one does not know.
+pub fn outer_colors_in(input: &[u8]) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let text = String::from_utf8_lossy(input);
+    let marker = format!("\x1b]{OSC};colors;");
+    let at = text.find(&marker)? + marker.len();
+    let end = text[at..].find(['\x07', '\x1b'])?;
+    match serde_json::from_str(&text[at..at + end]).ok()? {
+        serde_json::Value::Object(m) => Some(m),
+        _ => None,
+    }
+}
+
 /// The protocol an outer ranma answered `HELLO` with, found in what the
 /// terminal sent back; `None` when no ranma answered (a plain terminal).
 pub fn outer_in(input: &[u8]) -> Option<u32> {
@@ -1073,6 +1099,31 @@ mod tests {
         assert_eq!(outer_in(b"\x1b]11;rgb:0/0/0\x07\x1b[?62;c"), None);
         // What leaves the stripped input is nothing of it.
         assert!(crate::hostcolors::leftover_input(&noise).is_empty());
+    }
+
+    #[test]
+    fn the_outer_colours_ride_ahead_of_the_answer() {
+        let colors = crate::theme::load("default", &[]).unwrap().colors;
+        let mut input = b"\x1b]11;rgb:0/0/0\x07".to_vec();
+        input.extend(colors_osc(&colors));
+        input.extend(hello_reply());
+        input.extend(b"\x1b[?62;c");
+        let got = outer_colors_in(&input).unwrap();
+        assert_eq!(colors.overlay(&got), colors);
+        assert_eq!(
+            got.len(),
+            serde_json::to_value(&colors)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .len()
+        );
+        // The answer is still found, and nothing is left to be typed.
+        assert_eq!(outer_in(&input), Some(PROTOCOL));
+        assert!(crate::hostcolors::leftover_input(&input).is_empty());
+        // An outer that sends none, and one whose message is not an object.
+        assert_eq!(outer_colors_in(&hello_reply()), None);
+        assert_eq!(outer_colors_in(b"\x1b]51377;colors;[1]\x07"), None);
     }
 
     #[test]

@@ -249,11 +249,12 @@ pub fn run(config: Config) -> Result<()> {
         term.backend_mut().write_all(b"\x1b[22;0t")?;
         // Before the input thread exists: the replies are read straight off the
         // terminal here, and none may be left for crossterm to take for keys.
-        let (host_colors, typed_early, outer) =
-            crate::hostcolors::query_all(Duration::from_millis(300));
+        let replies = crate::hostcolors::query_all(Duration::from_millis(300));
+        let typed_early = replies.typed_early;
         let mut app = App::new(config, tx.clone(), cols, rows);
-        app.host_colors = host_colors;
-        app.set_outer(outer);
+        app.host_colors = replies.colors;
+        app.set_outer(replies.outer);
+        app.set_outer_colors(replies.outer_colors);
         let _ipc = listen(&mut app, &tx, None);
         app.driven_by(crate::client::mobile_env(), crate::pane::over_ssh());
         app.open_pane(None).context("starting the first pane")?;
@@ -826,6 +827,7 @@ fn drive(
     app.host_colors = hello.colors.clone();
     app.client_inside = hello.inside.clone();
     app.set_outer(hello.outer);
+    app.set_outer_colors(hello.outer_colors.clone());
     app.handle(AppEvent::Input(Event::Resize(hello.cols, hello.rows)));
     app.driven_by(hello.mobile, hello.remote);
     // The title is this terminal's now: say who we are again (and where, if it
@@ -957,6 +959,7 @@ mod tests {
                 inside: None,
                 remote: false,
                 outer: None,
+                outer_colors: None,
                 steal: false,
                 mobile: false,
             },

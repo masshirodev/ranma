@@ -158,14 +158,14 @@ pub fn parse_replies(input: &[u8]) -> HostColors {
 /// Returns the colours, and any other input that arrived meanwhile (see
 /// `leftover_input`).
 pub fn query(timeout: Duration) -> (HostColors, Vec<u8>) {
-    let (colors, early, _) = query_all(timeout);
-    (colors, early)
+    let r = query_all(timeout);
+    (r.colors, r.typed_early)
 }
 
 /// `query`, also asking whether a ranma draws around this one (see
-/// `nestbar`): its protocol, if one answered. The question goes before DA1,
+/// `nestbar`): its protocol and colours, if one answered. The question goes before DA1,
 /// so an outer ranma's answer comes before the DA1 reply that ends reading.
-pub fn query_all(timeout: Duration) -> (HostColors, Vec<u8>, Option<u32>) {
+pub fn query_all(timeout: Duration) -> Replies {
     let mut q = String::from("\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b]12;?\x1b\\");
     for i in 0..16 {
         q.push_str(&format!("\x1b]4;{i};?\x1b\\"));
@@ -178,7 +178,7 @@ pub fn query_all(timeout: Duration) -> (HostColors, Vec<u8>, Option<u32>) {
         .and_then(|_| stdout.flush())
         .is_err()
     {
-        return (HostColors::default(), Vec::new(), None);
+        return Replies::default();
     }
 
     let fd = std::io::stdin().as_raw_fd();
@@ -207,11 +207,24 @@ pub fn query_all(timeout: Duration) -> (HostColors, Vec<u8>, Option<u32>) {
             break;
         }
     }
-    (
-        parse_replies(&buf),
-        leftover_input(&buf),
-        crate::nestbar::outer_in(&buf),
-    )
+    Replies {
+        colors: parse_replies(&buf),
+        typed_early: leftover_input(&buf),
+        outer: crate::nestbar::outer_in(&buf),
+        outer_colors: crate::nestbar::outer_colors_in(&buf),
+    }
+}
+
+/// What the terminal answered at start (`query_all`).
+#[derive(Debug, Default)]
+pub struct Replies {
+    pub colors: HostColors,
+    /// Keys typed meanwhile; they belong to the focused pane.
+    pub typed_early: Vec<u8>,
+    /// The protocol of a ranma around this one, if one answered.
+    pub outer: Option<u32>,
+    /// Its theme's colours, if it sent them (see `nestbar::colors_osc`).
+    pub outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.

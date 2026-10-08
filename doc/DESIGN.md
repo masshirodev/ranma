@@ -1237,6 +1237,44 @@ drop crossterm's `Resize`. Several signals before the thread wakes are one
 resize at the size by then. smoke.sh stops the client while a resize and a
 focus report arrive, which puts them in one wakeup.
 
+**An inner ranma in the outer's colours** (2026-10-08). A ranma over SSH
+draws with the theme on the far machine, which lags the desktop's: a theme
+rendered from the desktop palette (matugen) reaches the VPS only through a
+dotfiles commit and a pull. With `theme_colors = "outer"` the inner draws
+with the outer's colours instead. Decided:
+
+- **Colours only, never the config.** `init.lua` is code and binds, and two
+  machines have reasons to differ there; carrying it over a terminal would
+  run one machine's Lua on another. Not `[styles]`, borders, gaps or the
+  bar's shape either: those are what a host's ranma is shaped like, and the
+  inner draws no bar beside an outer one anyway. What is left of an inner on
+  screen is borders, floats, pickers and toasts, and colour is what makes
+  them match.
+- **Opt-in on the inner**, so a box can keep its own colours to tell it apart
+  at a glance. The outer always sends: it costs one message per attach.
+- **Sent once, with the answer to the hello** (`51377;colors;<json>`, just
+  before `51377;ranma;...`), and never later. After the hello the inner
+  client reads its terminal through crossterm, which would read an unasked
+  OSC as Alt+`]` and then keys, typing JSON into the shell. So a theme
+  changed on the outer shows inside at the next attach, not at once. Asking
+  again on a reload would need a second reader for the client's input; not
+  worth it for a theme switch.
+- **Laid over the inner's own colours, key by key, leniently.** A theme
+  file is strict because a typo silently ignored looks like a ranma bug. The
+  wire is the opposite case: the two ends are different builds on different
+  machines, so a role the inner does not know is skipped, one the outer did
+  not send keeps the inner's colour, and a value that does not read is
+  dropped alone. An unset optional role there is unset here, so it follows
+  the outer's roles as it does on the outer. No protocol bump: the message
+  is separate from the answer, an outer that sends none leaves the inner as
+  it was, and every client strips OSCs from its start-up input, so an older
+  inner ignores it.
+- **What is sent is what the outer draws with**, so a chain carries the
+  outermost colours down every level that asks for them.
+- **Per attach.** The client passes them in its hello (`outer_colors`); a
+  terminal with no ranma around it brings the inner's own colours back, and
+  a config reload lays the outer's over the new theme again.
+
 ### Pasting files into a pane that runs ssh
 
 **Decided 2026-10-05; widened from images to any file 2026-10-06.** A program on the far side of an `ssh` (an AI

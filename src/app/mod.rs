@@ -279,6 +279,10 @@ pub struct App {
     host_focused: bool,
     /// The report last sent outward, so only a change is sent.
     last_report: Option<crate::nestbar::Report>,
+    /// The colours the ranma around the attached client sent (see `nested`).
+    outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The theme's own colours while the outer's are drawn instead.
+    own_colors: Option<crate::theme::Colors>,
     /// The pane drawn without a border last time (see `frameless`).
     frameless_was: Option<PaneId>,
     /// Where `save_layout` writes and `load_layout` reads (see `layouts`).
@@ -377,6 +381,8 @@ impl App {
             outer_v: 0,
             host_focused: true,
             last_report: None,
+            outer_colors: None,
+            own_colors: None,
             frameless_was: None,
         };
         app.schedule_modules(Instant::now());
@@ -2358,6 +2364,10 @@ impl App {
                     );
                 }
                 self.config = cfg;
+                // The new theme's colours are its own; the outer's go over
+                // them again, if the setting still asks for them.
+                self.own_colors = None;
+                self.adopt_colors();
                 self.module_generation += 1;
                 self.module_values.clear();
                 self.module_running.clear();
@@ -4038,6 +4048,35 @@ mod tests {
         a.set_outer(Some(crate::nestbar::PROTOCOL + 1));
         assert!(!a.bar_yielded());
         assert!(a.bar_rect().is_some());
+    }
+
+    /// `theme_colors = "outer"` draws with the colours the outer sent at
+    /// attach, and the theme's own again when a terminal without them
+    /// attaches; the default, `"own"`, never takes them.
+    #[test]
+    fn the_outers_colours_are_taken_only_when_asked_for() {
+        use crate::theme::Color;
+        let mut theirs = app(None).config.theme.colors;
+        theirs.border_active = Color::Rgb(9, 8, 7);
+        let wire = serde_json::to_value(&theirs).unwrap().as_object().cloned();
+
+        let mut own = app(None);
+        let mine = own.config.theme.colors.border_active;
+        own.set_outer_colors(wire.clone());
+        assert_eq!(own.config.theme.colors.border_active, mine);
+
+        let mut a = app(Some("ranma.set { theme_colors = 'outer' }"));
+        a.set_outer_colors(wire.clone());
+        assert_eq!(a.config.theme.colors.border_active, Color::Rgb(9, 8, 7));
+        // What this ranma tells a ranma inside it is what it draws with.
+        let sent = crate::nestbar::colors_osc(&a.config.theme.colors);
+        let sent = crate::nestbar::outer_colors_in(&sent).unwrap();
+        assert_eq!(sent["border_active"], "#090807");
+        a.dirty = false;
+        // A plain terminal attaches: its own colours come back.
+        a.set_outer_colors(None);
+        assert_eq!(a.config.theme.colors.border_active, mine);
+        assert!(a.dirty);
     }
 
     /// Inside another ranma, `paste_image` is the outer one's to do: the

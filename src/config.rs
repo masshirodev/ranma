@@ -67,6 +67,18 @@ pub enum NestedWorkspaces {
     Off,
 }
 
+/// Whose colours this ranma draws with when it runs inside another ranma
+/// (DESIGN.md, "An inner ranma in the outer's colours").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeColors {
+    /// Its own theme's, always.
+    Own,
+    /// The `[colors]` of the ranma around it, sent when the terminal
+    /// attached; its own theme's anywhere else.
+    Outer,
+}
+
 /// When ranma's title names the host it runs on (`⧉ ranma@vps · nvim`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -122,6 +134,7 @@ pub struct Settings {
     /// again in WM mode, it goes one level down.
     pub outer_leader: Chord,
     pub title_host: TitleHost,
+    pub theme_colors: ThemeColors,
     pub restore: RestoreMode,
     /// A paste that is nothing but paths of local files, into a pane running
     /// ssh, is uploaded first.
@@ -152,6 +165,7 @@ impl Default for Settings {
             nested: NestedMode::Auto,
             outer_leader: "ctrl+alt+b".parse().unwrap(),
             title_host: TitleHost::Ssh,
+            theme_colors: ThemeColors::Own,
             restore: RestoreMode::Ask,
             paste_upload: true,
             paste_image_command: None,
@@ -179,6 +193,7 @@ struct SettingsPatch {
     nested: Option<NestedMode>,
     outer_leader: Option<String>,
     title_host: Option<TitleHost>,
+    theme_colors: Option<ThemeColors>,
     restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
     splash: Option<bool>,
@@ -831,6 +846,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(h) = patch.title_host {
         s.title_host = h;
+    }
+    if let Some(c) = patch.theme_colors {
+        s.theme_colors = c;
     }
     if let Some(r) = patch.restore {
         s.restore = r;
@@ -2146,6 +2164,10 @@ mod tests {
         let cfg = with_user("ranma.set { title_host = 'always' }").unwrap();
         assert_eq!(cfg.settings.title_host, TitleHost::Always);
         assert!(with_user("ranma.set { title_host = 'sometimes' }").is_err());
+        assert_eq!(cfg.settings.theme_colors, ThemeColors::Own);
+        let cfg = with_user("ranma.set { theme_colors = 'outer' }").unwrap();
+        assert_eq!(cfg.settings.theme_colors, ThemeColors::Outer);
+        assert!(with_user("ranma.set { theme_colors = 'inherit' }").is_err());
         assert_eq!(with_user("").unwrap().settings.restore, RestoreMode::Ask);
         let cfg = with_user("ranma.set { restore = 'off' }").unwrap();
         assert_eq!(cfg.settings.restore, RestoreMode::Off);

@@ -43,6 +43,10 @@ pub struct Hello {
     /// (see `nestbar`): it shows this ranma's workspaces. Defaulted like `inside`.
     #[serde(default)]
     pub outer: Option<u32>,
+    /// The colours that ranma sent with its answer, as it sent them (see
+    /// `nestbar::colors_osc`). Defaulted like `inside`.
+    #[serde(default)]
+    pub outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
     /// `ranma attach --steal`: every other terminal showing the server is sent
     /// away, instead of sharing it. Defaulted like `inside`: an older client shares.
     #[serde(default)]
@@ -185,6 +189,7 @@ mod tests {
             inside: Some("/run/user/1000/ranma/1.sock".into()),
             remote: true,
             outer: Some(1),
+            outer_colors: None,
             steal: true,
             mobile: true,
         };
@@ -240,6 +245,7 @@ mod tests {
             inside: None,
             remote: false,
             outer: None,
+            outer_colors: None,
             steal: false,
             mobile: false,
         })
