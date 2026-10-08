@@ -200,6 +200,31 @@ lets you style".
 - [x] The splash: an empty workspace shows the logo and the keys to start
   (`splash`)
 
+## 11. Plugins: Neovim's shape
+
+DESIGN.md, "Plugins: Neovim's shape, in Lua". The core grows primitives; the
+features below the line live outside the repository.
+
+- [x] Design agreed
+- [ ] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
+  watched; a failing plugin dropped whole; the 200 ms watchdog
+- [ ] The options registry, with ranma's own settings declared through it;
+  `ranma.option`, `ranma.get`, `option_change`
+- [ ] `ranma --dump-types`, `ranma lua`, `ranma health`
+- [ ] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
+- [ ] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
+  `pane_idle`, `hover`, `user:<name>`
+- [ ] Time and processes: `defer`, `every`, `spawn`
+- [ ] State: `pane.vars`, `workspace.vars`, `ranma.store`
+- [ ] Keys: which-key groups, user modes, user commands
+- [ ] Drawing: `picker`, `panel`, `tooltip`, `badge`
+- [ ] `pane:watch`, measured first
+- [ ] Design: `doc/briefs/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
+- [ ] The settings panel and `settings.toml`
+
+Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
+regex goto, link hover tooltips, agent integrations, autorun commands.
+
 ## Later, maybe
 
 - Bar widgets in Lua, on a throttled tick.

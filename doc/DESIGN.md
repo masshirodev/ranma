@@ -506,16 +506,119 @@ only while in WM mode.
   and the config is rebuilt in a fresh Lua state and swapped in only if it loads.
   Otherwise the old one stays and the error is shown in the bar. Never crash on a
   bad config.
-- **Lua at run time** gets three functions and nothing more: `ranma.action` (run
-  an action), `ranma.notify` (a bar message) and `ranma.state` (a snapshot). They
-  exist only while ranma is calling into Lua, so a config cannot act on a window
+- **Lua at run time** (actions, notify, toast, state, client, profiles) exists
+  only while ranma is calling into Lua, so a config cannot act on a window
   manager that does not exist yet. Actions a hook runs can fire more hooks; the
-  chain stops at four levels.
-
-Not planned: WASM plugins in the style of zellij. A large commitment for v1, and
-Lua hooks cover the things actually wanted.
+  chain stops at four levels. What the run-time API grows into is the next
+  section.
 
 `doc/CONFIG.md` is the user-facing reference.
+
+### Plugins: Neovim's shape, in Lua (2026-10-08)
+
+Until now, ranma's Lua was a config: one `init.lua` saying how *this* ranma
+behaves. From here it is also the **extension language**. Anything that
+is not part of ranma's vision (an agent integration, a scrollback history
+picker, link tooltips, autorun rules) lives *outside the repository* as Lua
+plugins, the way Neovim's ecosystem lives outside Neovim. The core's job is to
+expose primitives general enough that those plugins never need a patch to
+ranma. This replaces "Lua hooks cover the things actually wanted" and the
+three-function run-time API.
+
+**What stays the same, and is the point:**
+
+- **Lua never runs on the render or PTY path.** Not per frame and not per byte.
+  Lua runs on binds, events, timers and callbacks. Anything a plugin draws
+  (a tooltip, a panel, a badge) is a plain value Rust draws. A primitive that
+  needs Lua per frame or per byte is refused, however useful.
+- **Strict at load.** A plugin's unknown option, event, action or theme role is
+  an error naming the file and line, exactly as in `init.lua`.
+- **No WASM, no native plugins.** Native code would defeat `install.sh`'s
+  check-and-restore and `ranma upgrade`'s in-place exec. WASM is a large runtime
+  for what Lua already does. A plugin that needs a stream (a pane's output as it
+  arrives, heavy processing) is an external program driving ranma through the
+  socket (`ranma action`, `send`, `capture`, `wait`, `popup`, `ranma lua`). That
+  is the second extension mechanism, and there is no third.
+- **No AI in the core.** An agent integration is a plugin built from events,
+  pane reading and badges. The non-goal stands; what changes is that the
+  plugin is now possible.
+
+**Loading.** Neovim's layout, minus what ranma does not need:
+
+- `<config_dir>/lua/` is on `require`'s path (`?.lua` and `?/init.lua`), so
+  `require("history")` finds `lua/history.lua` or `lua/history/init.lua`.
+- `<config_dir>/plugin/*.lua` is sourced automatically, in name order, after
+  the built-in defaults and *before* `init.lua`. A user's `init.lua` therefore
+  always has the last word over a plugin's binds and options.
+- `<config_dir>/pack/*/start/*/` adds each package's `lua/` to the path and
+  sources its `plugin/*.lua`, which is how a cloned plugin repository is used
+  without copying files around. Installing is `git clone`. A plugin manager,
+  if one is ever wanted, is itself a plugin.
+- Every one of these directories is watched like `init.lua`. A save anywhere
+  reloads the whole configuration in a fresh Lua state, as today.
+- **A failing plugin is dropped whole, not half-applied.** Each plugin file is
+  sourced against a copy of the configuration built so far, and its effects are
+  kept only if it finishes. One that errors is named in the bar
+  (`plugin agents.lua: ...`) and the rest still load. `init.lua` keeps its
+  stricter rule: if it fails, the old configuration stays.
+- **A plugin cannot hang the window manager.** Lua runs with an instruction
+  hook, and a callback still running after 200 ms is aborted with an error
+  naming it. A loop in a plugin costs a toast, not the terminal.
+
+**Options: one registry, read by everything.** `ranma.option(name, spec)`
+declares a typed setting (`bool`, `int` and `float` with a range and a step,
+`enum` with choices, `color`, `string`), with a default, a one-line `desc` and
+a `group`. **ranma declares its own settings the same way**, so `ranma.set`,
+`--dump-config`, the generated Lua types and the settings panel all read one
+table instead of each keeping its own list. A plugin's options are namespaced
+(`history.max_results`), set with `ranma.set` like any other and read with
+`ranma.get`. Changing one fires `option_change`.
+
+**The settings panel** (`settings`, after tuios's) is a picker over that
+registry: every option, grouped, with its value edited in place (toggle, cycle,
+slider, swatch), the description of the selected one below and a mark on
+values that differ from the default. Its design comes from
+`doc/briefs/SETTINGS_PANEL.md`. **What it saves goes to
+`<config_dir>/settings.toml`, never into `init.lua`.** That file is ranma's,
+applied after `init.lua`, and strict like a theme. ranma does not rewrite
+code a person wrote, and a UI that edits a file nobody can then read is
+worse than no UI. The panel marks values `settings.toml` overrides, so "why
+is my `init.lua` ignored" has an answer on screen.
+
+The panel edits looks too (border style, gaps, dimming, colours), because
+tuios's panel is useful mostly for those. **Theme keys are not moved into Lua
+options.** They stay TOML, and the registry describes them read-only so the
+panel can type them. An edit goes into `settings.toml`'s `[theme]` table, an
+overlay applied over the theme in use. A theme rendered by a template
+(matugen) keeps being rendered, and the overlay wins. Theme names in the
+overlay obey the same rule as any theme key: strict, and known to the
+installed binary.
+
+**Primitives, by kind.** Each is general, and each carries the plugin that
+asked for it as its first user:
+
+| Kind | Primitive | First user |
+| --- | --- | --- |
+| Read | `ranma.pane(id)`: `:lines(a, b)`, `:search(regex, opts)` over the screen and scrollback, `:link_at(row, col)`, `:cwd()`, `:program()`, `:marks()` (OSC 133 prompts) | history picker, link tooltip |
+| Act | `:scroll_to(line)`, `:send(text)`, `:copy_mode(at)`, `:focus()`; `ranma.panes()` | history goto |
+| Events | `command_started`, `cwd_change`, `title_change`, `bell`, `pane_idle` (output stopped after activity), `option_change`, `hover` (only when the cell under the pointer changes, after 150 ms still), and plugin-defined `user:<name>` through `ranma.emit` | agents, autorun, tooltip |
+| Watch | `pane:watch(regex, fn)`: Rust matches lines as they complete, at most every 100 ms, and Lua runs only on a match | agents ("Do you want to proceed?") |
+| Draw | `ranma.picker{items, on_select, preview}`, `ranma.panel{...}` (a float of lines with roles), `ranma.tooltip(anchor, text)`, `pane:badge(text, role)` in the border title | every UI plugin |
+| Time | `ranma.defer(ms, fn)`, `ranma.every(ms, fn)`, `ranma.spawn(argv, {on_exit, on_line})` off ranma's thread | anything that shells out |
+| State | `pane.vars` / `workspace.vars` (tables that live as long as the pane or workspace), `ranma.store(name)` (persisted across restart and upgrade, under the state directory) | agents, history |
+| Keys | which-key groups (`ranma.bind("g", { group = "git" })`, nested), user modes (`ranma.mode(name, { binds, label, on_enter, on_exit })`), user commands in the `:` palette (`ranma.command(name, fn, { desc, complete })`) | which-key folders, plugin keymaps |
+| Develop | `ranma --dump-types` (LuaLS annotations for every function, event and option), `ranma lua 'expr'` (evaluate in the running server, print the result), `ranma health` (each plugin: loaded, failed and why, timings) | writing plugins in nvim |
+
+`pane:watch` is the one primitive that comes close to the PTY path, so it is
+built to stay off it. The regex runs in Rust on completed lines only, matching
+is coalesced into a 100 ms window, a pane with no watchers pays nothing, and the
+scan is measured before it ships. If it cannot be made free when unused and
+cheap when used, it does not ship, and agents fall back to `pane_idle` and
+`title_change`.
+
+What this does not add: Lua bar widgets on a per-frame tick (modules stay
+cached, as below), Lua key filters that see every keystroke, and Lua-drawn
+cells. The renderer reads plain Rust values, as before.
 
 ### The bar: waybar's shape, without waybar's configuration
 
