@@ -429,7 +429,8 @@ ranma.profile("mobile", {
 -- ranma.notify("text") puts a message in the bar, ranma.toast("text",
 -- { urgent = true, timeout = 10 }) shows a toast, and ranma.state() returns
 -- { workspace, workspaces, focused, title, mode, panes }, and ranma.client()
--- { cols, rows, mobile, remote } for the terminal driving the screen.
+-- { cols, rows, mobile, remote, outer } for the terminal driving the screen
+-- (outer: a ranma runs around it, so this one is nested).
 --
 -- Hooks run on events, with a table describing it:
 --
@@ -439,7 +440,8 @@ ranma.profile("mobile", {
 -- session_switch, mode_change, config_reload, command_finished (needs a
 -- shell that sends OSC 133 marks; doc/CONFIG.md has the zsh lines),
 -- driver_change (a terminal started driving the screen; ev.mobile says it is a
--- phone or tablet, from RANMA_MOBILE=1 or `ranma attach --mobile`).
+-- phone or tablet, from RANMA_MOBILE=1 or `ranma attach --mobile`; ev.outer
+-- that a ranma runs around it).
 -- doc/CONFIG.md lists their fields.
 --
 -- Window rules: float, size or place a pane when its command (for exec panes)

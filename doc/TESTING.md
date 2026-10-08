@@ -28,7 +28,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `winch` | every SIGWINCH is a resize at the size then, the next one too; crossterm's own `Resize` is the event the input threads drop |
 | `picker` | fuzzy scoring, filtering, selection bounds, creating a session by name, the rename prompt |
 | `app::copy` | base64 for OSC 52 |
-| `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer; the outer's colours taken only with `theme_colors = "outer"`, passed on as drawn, and dropped when a terminal without them attaches |
+| `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer; the outer's colours taken only with `theme_colors = "outer"`, passed on as drawn, and dropped when a terminal without them attaches; `outer` in `ranma.client()` and `driver_change` |
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
 | `paste` | which pastes are nothing but paths of files that exist (one or several; quoted, escaped, `file://`, a plain path with spaces, Windows under WSL) and which are text; a `text/uri-list` read for its local files; names made inert and paths quoted as words; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload of two files through a stand-in ssh that runs the far side's real shell, and a folder refused |
 

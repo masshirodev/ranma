@@ -765,7 +765,7 @@ Inside a bind function, a hook, or a module's `render`:
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
-| `ranma.client()` | `{ cols, rows, mobile, remote }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), and whether it came over SSH. |
+| `ranma.client()` | `{ cols, rows, mobile, remote, outer }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
 These refuse to run while the config itself is loading; there is nothing to act on
 yet. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
@@ -934,7 +934,7 @@ end)
 | `config_reload` | nothing; runs in the newly loaded config |
 | `session_switch` | `session`, `previous` (names) |
 | `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
-| `driver_change` | `cols`, `rows`, `mobile`, `remote` (as `ranma.client()`), `previous_mobile` — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize. |
+| `driver_change` | `cols`, `rows`, `mobile`, `remote`, `outer` (as `ranma.client()`), `previous_mobile` — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize. |
 
 `command_finished` needs the shell to say where commands start and end, with
 the OSC 133 marks most terminals understand. For zsh, in `.zshrc`:

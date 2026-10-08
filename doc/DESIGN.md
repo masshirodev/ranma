@@ -1442,6 +1442,10 @@ background processes for the one thing the server is for.
   `RANMA_MOBILE=1` (set on the phone with `SetEnv` in Termux's SSH config; the
   far sshd must `AcceptEnv RANMA_*`) or `ranma attach --mobile`. Lua reads the
   driver's facts with `ranma.client()` and hears them change in `driver_change`.
+  `outer` (2026-10-08) says a ranma runs around the driver, from the same
+  answer the nested bar uses, so a profile can follow nesting. It is a fact
+  of the attach, not of the server, which is why it is here and not something
+  `init.lua` could test at load.
 - **Profiles.** `ranma.profile(name, { set, bar, toolbars })` declares
   overrides; `ranma.use_profile(name)` applies one over the base configuration
   and `ranma.use_profile(nil)` goes back to it exactly. A profile is an overlay,

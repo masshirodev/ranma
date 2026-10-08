@@ -2423,6 +2423,7 @@ impl App {
             rows: self.screen.h,
             mobile: self.client_mobile,
             remote: self.client_remote,
+            outer: self.client_outer,
         }
     }
 
@@ -3500,6 +3501,30 @@ mod tests {
         );
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.status.as_deref(), Some("200x50 false"));
+    }
+
+    /// `outer` says a ranma is around the terminal driving, as `drive` sets
+    /// it before `driver_change`: init.lua can tell nested from not.
+    #[test]
+    fn init_lua_hears_whether_a_ranma_is_around_the_terminal() {
+        let mut a = app(Some(
+            r#"
+            ranma.on("driver_change", function(ev)
+              ranma.notify("outer=" .. tostring(ev.outer))
+            end)
+            ranma.bind("z", function()
+              ranma.notify("client outer=" .. tostring(ranma.client().outer))
+            end)
+            "#,
+        ));
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        a.driven_by(false, true);
+        assert_eq!(a.status.as_deref(), Some("outer=true"));
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(a.status.as_deref(), Some("client outer=true"));
+        a.set_outer(None);
+        a.driven_by(false, false);
+        assert_eq!(a.status.as_deref(), Some("outer=false"));
     }
 
     #[test]

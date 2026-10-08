@@ -612,6 +612,8 @@ pub struct ClientFacts {
     pub rows: u16,
     pub mobile: bool,
     pub remote: bool,
+    /// A ranma around that terminal answered at attach (see `nestbar`).
+    pub outer: bool,
 }
 
 impl ClientFacts {
@@ -619,7 +621,8 @@ impl ClientFacts {
         t.set("cols", self.cols)?;
         t.set("rows", self.rows)?;
         t.set("mobile", self.mobile)?;
-        t.set("remote", self.remote)
+        t.set("remote", self.remote)?;
+        t.set("outer", self.outer)
     }
 }
 
