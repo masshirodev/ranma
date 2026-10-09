@@ -867,6 +867,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 
 | `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
 | `ranma.screen { ... }` | A screen of the plugin's own; see [Screens](#screens--ranmascreen--). |
+| `ranma.unwatch(id)` | Stop a `pane:watch`. |
 | `ranma.tooltip(anchor, content)` | A tooltip on a span of a pane's cells; see [Tooltips](#tooltips--ranmatooltipanchor-content). |
 | `ranma.picker { ... }` | A filtered list of your own; see [Pickers and prompts](#pickers-and-prompts). |
 | `ranma.input { ... }` | A one-line prompt of your own. |
@@ -912,6 +913,7 @@ line's number, so a number is good for the moment it was read in.
 | `:cwd()` | The directory its process is in, or `nil`. |
 | `:program()` | The program in its foreground, or `nil`. |
 | `:alive()` | Whether the pane still exists. |
+| `:watch(pattern, fn)` | Call `fn` when the regex newly matches on the pane's screen, a prompt appearing (`"Do you want to proceed\\?"`): with `{ pane, line, col, text, row }`. A match that stays, or scrolls up a row, fires once; one that goes and comes back fires again; one already on screen fires at once. Returns an id for `ranma.unwatch(id)`. Looked at 100 ms after the pane prints, over its screen only (never the scrollback); a pane out of sight is still watched. Watches go with their pane, and on a reload. |
 | `:link_at(line, col)` | The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): `{ url, line, col, span }`, or `nil`. |
 
 Acting is queued, like `ranma.action`, and done when your function returns, in

@@ -76,7 +76,22 @@ pub enum PaneRequest {
     },
     /// Set (or, with `None`, take off) this owner's badge on its border.
     Badge(String, Option<crate::screen::Badge>),
+    /// Watch the screen for a regex: (watch id, pattern, function).
+    Watch(u64, String, Callback),
 }
+
+/// A Lua function a request carries; equal only to itself.
+#[derive(Debug, Clone)]
+pub struct Callback(pub std::rc::Rc<mlua::RegistryKey>);
+
+impl PartialEq for Callback {
+    fn eq(&self, o: &Self) -> bool {
+        std::rc::Rc::ptr_eq(&self.0, &o.0)
+    }
+}
+
+/// Watches one configuration may hold at once.
+pub const MAX_WATCHES: usize = 64;
 
 struct Handle(PaneEntry);
 
@@ -270,6 +285,14 @@ impl UserData for Handle {
                 h.request(lua, PaneRequest::Badge(owner, badge))
             },
         );
+        m.add_method("watch", |lua, h, (pattern, f): (String, mlua::Function)| {
+            alacritty_terminal::term::search::RegexSearch::new(&pattern)
+                .map_err(|e| err(format!("pane:watch: bad pattern `{pattern}`: {e}")))?;
+            let id = crate::jobs::next_id();
+            let key = Callback(std::rc::Rc::new(lua.create_registry_value(f)?));
+            h.request(lua, PaneRequest::Watch(id, pattern, key))?;
+            Ok(id)
+        });
         m.add_method("scroll_to", |lua, h, line: i32| {
             h.request(lua, PaneRequest::ScrollTo(line))
         });
@@ -326,8 +349,16 @@ pub fn forget(lua: &Lua, id: PaneId) {
     }
 }
 
-/// Install `ranma.pane` and `ranma.panes` into the `ranma` table.
+/// Install `ranma.pane`, `ranma.panes` and `ranma.unwatch` into the `ranma`
+/// table.
 pub fn install(lua: &Lua, ranma: &Table) -> mlua::Result<()> {
+    ranma.set(
+        "unwatch",
+        lua.create_function(|lua, id: u64| {
+            runtime(lua, "ranma.unwatch")?.ops.push(Op::Unwatch(id));
+            Ok(())
+        })?,
+    )?;
     ranma.set(
         "pane",
         lua.create_function(|lua, id: Option<PaneId>| {
@@ -545,6 +576,27 @@ mod tests {
         assert!(e("ranma.pane():badge('a', 'abc')").contains("one or two characters"));
         assert!(e("ranma.pane():badge('a', '?', 'x', 'loud')").contains("no role `loud`"));
         assert!(e("ranma.pane():badge('a', '?', 'a very long word')").contains("12 characters"));
+    }
+
+    #[test]
+    fn a_watch_is_queued_with_its_function_and_its_pattern_checked() {
+        let cfg = load_from(None, None, None).unwrap();
+        let a = pane(1, "x");
+        let (out, ops) = call(
+            &cfg,
+            &[(1, &a)],
+            "w = ranma.pane():watch('proceed[?]', print) ranma.unwatch(w) return w",
+        );
+        let id = out.unwrap().as_integer().unwrap() as u64;
+        assert!(
+            matches!(&ops[0], Op::Pane(1, PaneRequest::Watch(w, p, _)) if *w == id && p == "proceed[?]")
+        );
+        assert_eq!(ops[1], Op::Unwatch(id));
+        let e = call(&cfg, &[(1, &a)], "ranma.pane():watch('(', print)")
+            .0
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("bad pattern"), "{e}");
     }
 
     #[test]

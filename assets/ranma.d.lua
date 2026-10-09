@@ -308,6 +308,15 @@ function Pane:keys(...) end
 ---@param line integer
 function Pane:scroll_to(line) end
 
+---Hear when a regex newly matches on the pane's screen: a prompt appearing
+---("Do you want to proceed?"). Looked at 100 ms after output, over the
+---screen only; a match that stays (or scrolls up a row) fires once, one that
+---goes and comes back fires again. Returns an id for ranma.unwatch.
+---@param pattern string
+---@param fn fun(ev: { pane: integer, line: integer, col: integer, text: string, row: string })
+---@return integer id
+function Pane:watch(pattern, fn) end
+
 ---The link under a cell (a URL in the text, or an OSC 8 link), whole.
 ---@param line integer
 ---@param col integer
@@ -413,6 +422,10 @@ function Screen:close() end
 ---@param spec ranma.ScreenSpec
 ---@return ranma.Screen
 function ranma.screen(spec) end
+
+---Stop a pane:watch.
+---@param id integer
+function ranma.unwatch(id) end
 
 ---A tooltip anchored to a span of a pane's cells (a link, as pane:link_at
 ---gives it), or nil to take it down. It goes on any key, when the pointer

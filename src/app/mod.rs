@@ -42,6 +42,7 @@ mod settings;
 mod snapshots;
 mod switch;
 mod touch;
+mod watch;
 
 pub use touch::{ButtonState, SheetLayout};
 pub(crate) mod upgrade;
@@ -222,6 +223,11 @@ pub struct App {
     /// The config directory's watcher, made again on every reload so that a
     /// directory linked in since (a plugin's) is followed too.
     pub(super) watcher: Option<notify::RecommendedWatcher>,
+    /// Plugins' `pane:watch`es, by id; the panes that printed since the last
+    /// look, and when the next look is due.
+    watches: std::collections::BTreeMap<u64, watch::Watch>,
+    watch_pending: HashSet<PaneId>,
+    watch_due: Option<Instant>,
     /// A plugin's screen, in the same slot (`ranma.screen`).
     plugin_screen: Option<screen::PluginScreen>,
     /// The screen `o` left for its options, back on `esc`.
@@ -386,6 +392,9 @@ impl App {
             picker: None,
             settings: None,
             plugin_screen: None,
+            watches: std::collections::BTreeMap::new(),
+            watch_pending: HashSet::new(),
+            watch_due: None,
             watcher: None,
             tooltip: None,
             badges: HashMap::new(),
@@ -1393,7 +1402,10 @@ impl App {
     fn handle_pane_event(&mut self, id: PaneId, ev: TermEvent) {
         let visible = self.visible.contains(&id);
         match &ev {
-            TermEvent::Wakeup => self.note_activity(id),
+            TermEvent::Wakeup => {
+                self.note_activity(id);
+                self.watch_output(id);
+            }
             TermEvent::Bell => {
                 let (workspace, title) = (self.workspace_of(id), self.label_of(id));
                 self.emit(HookEvent::Bell, |t| {
@@ -2572,6 +2584,8 @@ impl App {
                 // The plugins that set them start over too.
                 self.badges.clear();
                 self.badge_owners.clear();
+                self.watches.clear();
+                self.watch_pending.clear();
                 self.refresh_settings_panel();
                 self.report_plugin_failures();
                 self.relayout();
@@ -2709,6 +2723,7 @@ impl App {
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
                         config::Op::Copy(text) => self.set_host_clipboard(&text),
+                        config::Op::Unwatch(id) => self.unwatch(id),
                         config::Op::Tooltip(spec) => {
                             self.tooltip = spec.and_then(|t| {
                                 let offset =
@@ -3027,6 +3042,7 @@ impl App {
             .chain(self.idle_due)
             .chain(self.hover_due)
             .chain(self.screen_deadline())
+            .chain(self.watch_due)
             .min()
     }
 
@@ -3227,6 +3243,7 @@ impl App {
         self.expire_press(now);
         self.run_lua_timers(now);
         self.screen_timers(now);
+        self.look(now);
         if self.idle_due.is_some_and(|t| t <= now) {
             self.check_idle(now);
         }

@@ -101,6 +101,53 @@ pub fn search<T>(term: &Term<T>, pattern: &str, limit: usize) -> Result<Vec<Hit>
         .collect())
 }
 
+/// One match a watch saw on the screen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Seen {
+    pub line: i32,
+    pub col: usize,
+    /// The text matched.
+    pub text: String,
+    /// The whole row it is on: what identifies it from one look to the next.
+    pub row: String,
+}
+
+/// The matches of `regex` on the screen (never the scrollback: a look is
+/// bounded by the screen's size), one per row at most, top to bottom.
+pub fn screen_matches<T>(term: &Term<T>, regex: &mut RegexSearch) -> Vec<Seen> {
+    let rows = term.screen_lines() as i32;
+    let offset = term.grid().display_offset() as i32;
+    let start = Point::new(Line(-offset), Column(0));
+    let end = Point::new(
+        Line(rows - 1 - offset),
+        Column(term.columns().saturating_sub(1)),
+    );
+    let mut out: Vec<Seen> = Vec::new();
+    for m in RegexIter::new(start, end, Direction::Right, term, regex).take(rows as usize * 4) {
+        let line = m.start().line.0;
+        if out.last().is_some_and(|s| s.line == line) {
+            continue;
+        }
+        out.push(Seen {
+            line,
+            col: m.start().column.0,
+            text: term.bounds_to_string(*m.start(), *m.end()),
+            row: row_text(term, line),
+        });
+    }
+    out
+}
+
+/// What is new since the last look: matches on rows whose text was not
+/// matched before. A prompt that stays, or scrolls up a row, is not news; one
+/// that goes and comes back is.
+pub fn new_matches(before: &std::collections::HashSet<String>, now: &[Seen]) -> Vec<Seen> {
+    now.iter()
+        .filter(|s| !before.contains(&s.row))
+        .cloned()
+        .collect()
+}
+
 /// The link under (`line`, `col`): its target, the line and column it starts
 /// at, and how many cells it covers. URLs in the text and OSC 8 links, as
 /// hints finds them, looked for in the rows around the line so a URL wrapped
@@ -196,6 +243,29 @@ mod tests {
         assert_eq!(newest[0].line, 0, "the limit keeps the newest");
         assert!(search(&t, "nope", 10).unwrap().is_empty());
         assert!(search(&t, "(", 10).unwrap_err().contains("bad pattern"));
+    }
+
+    #[test]
+    fn a_watch_sees_the_screen_and_only_whats_new() {
+        let t = term("ok\r\nGo on? proceed?\r\n> 1. Yes");
+        let mut re = RegexSearch::new("proceed\\?").unwrap();
+        let now = screen_matches(&t, &mut re);
+        assert_eq!(now.len(), 1);
+        assert_eq!(
+            (now[0].line, now[0].col, now[0].text.as_str()),
+            (1, 7, "proceed?")
+        );
+        assert_eq!(now[0].row, "Go on? proceed?");
+        let mut seen = std::collections::HashSet::new();
+        assert_eq!(new_matches(&seen, &now).len(), 1, "first look: news");
+        seen.extend(now.iter().map(|s| s.row.clone()));
+        assert!(new_matches(&seen, &now).is_empty(), "still there: not news");
+        // Scrolled up a row by more output: the same row's text, not news.
+        let t = term("ok\r\nGo on? proceed?\r\n> 1. Yes\r\nmore");
+        assert!(new_matches(&seen, &screen_matches(&t, &mut re)).is_empty());
+        // Not in the scrollback: only the screen is looked at.
+        let t = term("proceed?\r\na\r\nb\r\nc");
+        assert!(screen_matches(&t, &mut re).is_empty());
     }
 
     #[test]

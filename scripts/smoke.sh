@@ -313,6 +313,9 @@ ranma.bind("f5", function()
   } }
 end, { global = true })
 ranma.bind("f6", function() ranma.pane():badge("agents", "?", "waiting", "urgent") end, { global = true })
+ranma.bind("f8", function()
+  ranma.pane():watch("smoke-proceed[?]", function(e) ranma.notify("watched " .. e.text) end)
+end, { global = true })
 ranma.bind("f7", function()
   local p = ranma.pane()
   local h = p:search("https://smoke[.]example/[a-z]+")[1]
@@ -340,6 +343,11 @@ screen | grep -q '│ https://smoke.example/page *│' || fail "the tooltip does
 T send-keys -t s ' '; sleep 0.3
 screen | grep -q 'smoke-tip' && fail "a key did not take the tooltip down"
 T send-keys -t s BSpace
+
+# A watch hears a prompt that appears after it was set.
+T send-keys -t s F8; sleep 0.3
+T send-keys -t s 'echo smoke-proceed?' Enter
+wait_for 'watched smoke-proceed?' 4 || fail "a watch did not hear the prompt"
 
 # A badge on the focused pane's border, after its title.
 T send-keys -t s F6

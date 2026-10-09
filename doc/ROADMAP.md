@@ -225,7 +225,7 @@ features below the line live outside the repository.
 - [x] Plugin screens: `ranma.screen` (designed from the handoff)
 - [x] Tooltips: `ranma.tooltip`, `pane:link_at`
 - [x] Badges: `pane:badge` on borders
-- [ ] `pane:watch`, measured first
+- [x] `pane:watch`, measured first (the screen, not completed lines: DESIGN.md)
 - [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)
 

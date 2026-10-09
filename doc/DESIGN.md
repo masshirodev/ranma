@@ -784,12 +784,20 @@ when a marked command finishes (`cd` is a command). There is no polling for it.
 A plugin's own events (`user:<name>`) run synchronously inside the emitting
 call, as Neovim's `User` autocommands do, with a depth limit for loops.
 
-`pane:watch` is the one primitive that comes close to the PTY path, so it is
-built to stay off it. The regex runs in Rust on completed lines only, matching
-is coalesced into a 100 ms window, a pane with no watchers pays nothing, and the
-scan is measured before it ships. If it cannot be made free when unused and
-cheap when used, it does not ship, and agents fall back to `pane_idle` and
-`title_change`.
+**Watching a pane's screen** (`pane:watch`, 2026-10-09). The design first
+said "Rust matches completed lines". That was wrong for the agents it is for:
+a TUI such as Claude Code redraws a region, and its "Do you want to proceed?"
+is never a completed line of output. So a watch matches the **screen**: news
+is a match on a row whose text was not matched at the last look. A prompt that
+stays, or scrolls up a row, fires once; one that goes and comes back fires
+again. It stays off the PTY path. A wakeup only marks the pane, the look
+happens at most every 100 ms in the app's loop, over the screen's rows alone,
+and a pane nobody watches is never looked at. A hidden watched pane gets its
+wakeup re-armed at each look, which is at most ten a second while it prints.
+Measured before shipping, with a 2 000 000-line flood (`seq`), three runs
+each, the server's CPU ticks: no watch 60–64; a watch that never matches
+50–65; a watch matching every row (118 Lua calls in the flood) 63–69. Free
+unused, cheap used, so it shipped.
 
 What this does not add: Lua bar widgets on a per-frame tick (modules stay
 cached, as below), Lua key filters that see every keystroke, and Lua-drawn

@@ -54,6 +54,7 @@ impl App {
         self.cwds.remove(&id);
         self.activity.remove(&id);
         self.badges.remove(&id);
+        self.forget_watches(id);
         if self.tooltip.as_ref().is_some_and(|(t, _)| t.pane == id) {
             self.tooltip = None;
         }
@@ -246,6 +247,7 @@ impl App {
                 self.dirty = true;
                 Ok(())
             }
+            PaneRequest::Watch(wid, pattern, f) => self.add_watch(wid, id, &pattern, f.0),
             PaneRequest::Badge(owner, badge) => {
                 if !self.panes.contains_key(&id) {
                     return Err(no_pane(id));

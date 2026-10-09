@@ -706,6 +706,8 @@ pub enum Op {
     Tooltip(Option<crate::luaui::TooltipSpec>),
     /// Put text on the clipboard of the terminal driving ranma (OSC 52).
     Copy(String),
+    /// Stop a `pane:watch`.
+    Unwatch(u64),
 }
 
 /// What the `ranma` global writes into while the config runs.
