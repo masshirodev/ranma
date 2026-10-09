@@ -17,20 +17,76 @@ pub const NAME_MAX: usize = 16;
 pub struct Row {
     /// The key as pressed, short: `ctrl+shift+←↓↑→`, `M`, `alt+⏎`, `( )`.
     pub key: String,
+    /// What it does; a folder's is its name after a `+`.
     pub name: String,
+    pub kind: RowKind,
+}
+
+/// What a row is, for how it is drawn and where it sorts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RowKind {
+    Bind,
+    /// A key that opens more keys.
+    Folder,
+    /// A folder with nothing in it (left so by a plugin that failed to
+    /// load), or the row saying so inside one.
+    Empty,
+}
+
+impl Row {
+    fn bind(key: String, name: String) -> Row {
+        Row {
+            key,
+            name,
+            kind: RowKind::Bind,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Group {
-    pub name: &'static str,
+    pub name: String,
     pub rows: Vec<Row>,
 }
 
-/// A bind as the hint sees it: its chord, and what it does.
+/// What a bind does, as the hint sees it.
 pub enum BindKind<'a> {
     Action(&'a Action),
-    /// A Lua function, with its `desc` if the bind gave one.
-    Lua(Option<&'a str>),
+    Lua,
+    /// A folder, by name; `empty` when it has no keys.
+    Folder {
+        name: &'a str,
+        empty: bool,
+    },
+}
+
+/// A bind as the hint sees it: its chord, what it does, and the `desc` and
+/// `group` it was given.
+pub struct Entry<'a> {
+    pub chord: Chord,
+    pub kind: BindKind<'a>,
+    pub desc: Option<&'a str>,
+    pub group: Option<&'a str>,
+}
+
+impl<'a> Entry<'a> {
+    /// A bind of the configuration's.
+    pub fn of(chord: Chord, b: &'a crate::config::Bind) -> Entry<'a> {
+        use crate::config::BindAction;
+        Entry {
+            chord,
+            kind: match &b.action {
+                BindAction::Builtin(a) => BindKind::Action(a),
+                BindAction::Lua(_) => BindKind::Lua,
+                BindAction::Folder(f) => BindKind::Folder {
+                    name: &f.name,
+                    empty: f.binds.is_empty(),
+                },
+            },
+            desc: b.desc.as_deref(),
+            group: b.group.as_deref(),
+        }
+    }
 }
 
 // ---- short spellings -------------------------------------------------------------
@@ -92,6 +148,9 @@ const GROUP_ORDER: [&str; 7] = [
     "history",
     "ranma",
 ];
+
+/// Where user groups go among the built-in ones: after `workspaces`.
+const USER_GROUPS_AT: usize = 3;
 
 /// How binds of one kind combine into a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,36 +312,79 @@ fn digit_key(n: u8) -> Key {
     Key::Char(char::from(b'0' + n % 10))
 }
 
-/// The hint's groups, from the WM-mode bind table. Rows keep the order of
-/// `KINDS` (the order the design shows), custom binds sorted by key after.
-pub fn groups<'a>(binds: impl IntoIterator<Item = (Chord, BindKind<'a>)>) -> Vec<Group> {
+/// How rows sort in a group that is not one of the built-in ones (and after
+/// a built-in group's own rows): plain binds first, folders after, each in key
+/// order, case-folded with the lowercase first (`p` then `P`).
+fn listed_order(r: &Row) -> (bool, String, bool) {
+    let lower = r.key.to_lowercase();
+    let upper = r.key != lower;
+    (r.kind != RowKind::Bind, lower, upper)
+}
+
+/// The hint's groups, from a WM-mode bind table: the top level (`folder`
+/// `None`) or the keys of the folder named `folder`. `order` is the group
+/// names binds give, in the order the configuration first names them.
+///
+/// At the top level the built-in groups keep the order of `KINDS` (the order
+/// the design shows), user groups come after `workspaces`, and what no group
+/// claims is `yours`. In a folder, its keys that name no group go under the
+/// folder's own name, then the groups they name.
+pub fn groups<'a>(
+    binds: impl IntoIterator<Item = Entry<'a>>,
+    order: &[String],
+    folder: Option<&str>,
+) -> Vec<Group> {
     // (kind, mods) -> members with their chords; the kind's shape decides
     // whether they make one row.
     let mut known: Vec<Family> = Vec::new();
-    let mut yours: Vec<Row> = Vec::new();
-    for (chord, what) in binds {
-        match what {
-            BindKind::Lua(desc) => yours.push(Row {
-                key: short(&chord),
-                name: desc.unwrap_or("lua").to_string(),
-            }),
+    // Rows that stand alone, by the group they go in.
+    let mut listed: Vec<(String, Row)> = Vec::new();
+    let unclaimed = folder.unwrap_or("yours");
+    for e in binds {
+        let key = short(&e.chord);
+        let (name, kind, home) = match e.kind {
+            BindKind::Folder { name, empty } => (
+                format!("+{name}"),
+                if empty {
+                    RowKind::Empty
+                } else {
+                    RowKind::Folder
+                },
+                unclaimed,
+            ),
+            BindKind::Lua => (
+                e.desc.unwrap_or("lua").to_string(),
+                RowKind::Bind,
+                unclaimed,
+            ),
             BindKind::Action(a) => match kind_of(a) {
-                None => {}
-                Some(Err(text)) => yours.push(Row {
-                    key: short(&chord),
-                    name: text,
-                }),
+                None => continue,
+                Some(Err(text)) => (
+                    e.desc.map_or(text, str::to_string),
+                    RowKind::Bind,
+                    unclaimed,
+                ),
                 Some(Ok((i, member))) => {
-                    match known
-                        .iter_mut()
-                        .find(|(ki, m, _)| *ki == i && *m == chord.mods)
-                    {
-                        Some((_, _, v)) => v.push((member, chord)),
-                        None => known.push((i, chord.mods, vec![(member, chord)])),
+                    if e.desc.is_none() && e.group.is_none() {
+                        match known
+                            .iter_mut()
+                            .find(|(ki, m, _)| *ki == i && *m == e.chord.mods)
+                        {
+                            Some((_, _, v)) => v.push((member, e.chord)),
+                            None => known.push((i, e.chord.mods, vec![(member, e.chord)])),
+                        }
+                        continue;
                     }
+                    (
+                        e.desc.unwrap_or(KINDS[i].name).to_string(),
+                        RowKind::Bind,
+                        folder.unwrap_or(KINDS[i].group),
+                    )
                 }
             },
-        }
+        };
+        let group = e.group.unwrap_or(home).to_string();
+        listed.push((group, Row { key, name, kind }));
     }
     // The bind table is a map: order what came out of it, so the hint is
     // the same every time.
@@ -291,7 +393,7 @@ pub fn groups<'a>(binds: impl IntoIterator<Item = (Chord, BindKind<'a>)>) -> Vec
     for (i, _, mut members) in known {
         let kind = &KINDS[i];
         members.sort_by_key(|(m, c)| (*m, short(c)));
-        let row_of = |key: String, name: String| (i, Row { key, name });
+        let row_of = |key: String, name: String| (i, Row::bind(key, name));
         match kind.shape {
             Shape::Dirs => {
                 // Members on their own arrow collapse; any other key stands alone.
@@ -386,22 +488,64 @@ pub fn groups<'a>(binds: impl IntoIterator<Item = (Chord, BindKind<'a>)>) -> Vec
     }
     // Stable: within a kind, the family row first, then its odd members.
     rows.sort_by_key(|(i, _)| *i);
-    yours.sort_by(|a, b| a.key.cmp(&b.key));
-    GROUP_ORDER
-        .iter()
-        .map(|g| Group {
-            name: g,
-            rows: if *g == "yours" {
-                yours.clone()
+    // In a folder every family lands under the folder's name.
+    let family_group = |i: usize| folder.unwrap_or(KINDS[i].group);
+    let names: Vec<String> = match folder {
+        Some(f) => std::iter::once(f.to_string())
+            .chain(order.iter().filter(|g| g.as_str() != f).cloned())
+            .collect(),
+        None => {
+            let user = order
+                .iter()
+                .filter(|g| !GROUP_ORDER.contains(&g.as_str()))
+                .cloned();
+            GROUP_ORDER[..USER_GROUPS_AT]
+                .iter()
+                .map(|g| g.to_string())
+                .chain(user)
+                .chain(GROUP_ORDER[USER_GROUPS_AT..].iter().map(|g| g.to_string()))
+                .collect()
+        }
+    };
+    let built_in = |g: &str| folder.is_none() && GROUP_ORDER.contains(&g) && g != "yours";
+    names
+        .into_iter()
+        .map(|g| {
+            let own = rows
+                .iter()
+                .filter(|(i, _)| family_group(*i) == g)
+                .map(|(_, r)| r.clone());
+            let mut extra: Vec<Row> = listed
+                .iter()
+                .filter(|(lg, _)| *lg == g)
+                .map(|(_, r)| r.clone())
+                .collect();
+            extra.sort_by_key(listed_order);
+            let rows: Vec<Row> = if built_in(&g) {
+                // Its own rows in the design's order, what binds add after.
+                own.chain(extra).collect()
             } else {
-                rows.iter()
-                    .filter(|(i, _)| KINDS[*i].group == *g)
-                    .map(|(_, r)| r.clone())
-                    .collect()
-            },
+                let mut all: Vec<Row> = own.chain(extra).collect();
+                all.sort_by_key(listed_order);
+                all
+            };
+            Group { name: g, rows }
         })
         .filter(|g| !g.rows.is_empty())
         .collect()
+}
+
+/// The groups of an opened folder with no keys: its name, and a row saying
+/// so.
+pub fn empty_folder(name: &str) -> Vec<Group> {
+    vec![Group {
+        name: name.to_string(),
+        rows: vec![Row {
+            key: String::new(),
+            name: "nothing bound".into(),
+            kind: RowKind::Empty,
+        }],
+    }]
 }
 
 // ---- layout ----------------------------------------------------------------------------
@@ -418,9 +562,14 @@ pub enum Role {
     /// The key itself; bold.
     KeyBase,
     Name,
-    /// `?` in the bottom frame; bold.
+    /// A folder's `+name`: the heading's colour, not bold.
+    Folder,
+    /// A folder with no keys, and `nothing bound` inside one: dim.
+    Empty,
+    /// `?` and `bksp` in the bottom frame; bold.
     FooterKey,
-    /// ` all keys `, the dropped groups, and the spaces around frame text.
+    /// ` all keys `, ` back `, the dropped groups, the breadcrumb's ` › `,
+    /// and the spaces around frame text.
     FooterText,
 }
 
@@ -431,7 +580,7 @@ pub struct Panel {
     /// Text to draw, at (column, row) inside the panel.
     pub pieces: Vec<(u16, u16, String, Role)>,
     /// Groups left out for lack of room, named in the bottom frame.
-    pub dropped: Vec<&'static str>,
+    pub dropped: Vec<String>,
     /// The binds flowed in rows without headings (a small screen).
     pub flowed: bool,
 }
@@ -469,7 +618,7 @@ fn col_of<'a>(groups: Vec<&'a Group>) -> Col<'a> {
             kw = kw.max(width(&r.key));
             nw = nw.max(width(&r.name).min(NAME_MAX));
         }
-        hw = hw.max(width(g.name));
+        hw = hw.max(width(&g.name));
     }
     let h = groups.iter().map(|g| group_h(g)).sum::<usize>() + groups.len().saturating_sub(1);
     Col {
@@ -511,9 +660,11 @@ fn pack(groups: &[Group], h: usize, avail: usize) -> (Vec<Col<'_>>, usize, usize
     (cols, total, groups.len())
 }
 
-/// The panel for a `sw` × `sh` screen, titled with the chord that opened WM
-/// mode; `help` is the key for all binds (`?`), shown in the bottom frame.
-/// `None` when the screen is too small for any of it.
+/// The panel for a `sw` × `sh` screen, titled with `crumbs`: the chord that
+/// opened WM mode, then the keys of each folder opened since. `help` is the
+/// key for all binds (`?`) and `back` whether `bksp back` is offered (in a
+/// folder), both in the bottom frame. `None` when the screen is too small for
+/// any of it.
 ///
 /// Its height is at most half the screen's, frame included. It takes the
 /// lowest height at which every group fits across the width; if none does,
@@ -523,8 +674,9 @@ pub fn layout(
     groups: &[Group],
     sw: u16,
     sh: u16,
-    title: &str,
+    crumbs: &[String],
     help: Option<&str>,
+    back: bool,
 ) -> Option<Panel> {
     let first = groups.first()?;
     let cap = (sh as usize / 2).saturating_sub(2);
@@ -545,18 +697,24 @@ pub fn layout(
         for col in &cols {
             let mut cy = 1;
             for g in &col.groups {
-                pieces.push((cx as u16, cy as u16, g.name.to_string(), Role::Heading));
+                pieces.push((cx as u16, cy as u16, g.name.clone(), Role::Heading));
                 for (i, r) in g.rows.iter().enumerate() {
                     let y = (cy + 1 + i) as u16;
-                    key_pieces(&mut pieces, (cx + col.kw - width(&r.key)) as u16, y, &r.key);
-                    pieces.push(((cx + col.kw + 1) as u16, y, cut_name(&r.name), Role::Name));
+                    row_pieces(
+                        &mut pieces,
+                        (cx + col.kw - width(&r.key)) as u16,
+                        (cx + col.kw + 1) as u16,
+                        y,
+                        r,
+                        cut_name(&r.name),
+                    );
                 }
                 cy += group_h(g) + 1;
             }
             cx += col.w + 2;
         }
-        let dropped: Vec<&'static str> = groups[kept..].iter().map(|g| g.name).collect();
-        frame(&mut pieces, pw, ph, title, help, &dropped);
+        let dropped: Vec<String> = groups[kept..].iter().map(|g| g.name.clone()).collect();
+        frame(&mut pieces, pw, ph, crumbs, help, back, &dropped);
         return Some(Panel {
             w: pw,
             h: ph,
@@ -593,12 +751,18 @@ pub fn layout(
     for (y, line) in lines.iter().enumerate() {
         for (x, r) in line {
             let (x, y) = ((2 + x) as u16, (1 + y) as u16);
-            key_pieces(&mut pieces, x, y, &r.key);
-            pieces.push((x + width(&r.key) as u16 + 1, y, r.name.clone(), Role::Name));
+            row_pieces(
+                &mut pieces,
+                x,
+                x + width(&r.key) as u16 + 1,
+                y,
+                r,
+                r.name.clone(),
+            );
         }
     }
     let ph = lines.len() as u16 + 2;
-    frame(&mut pieces, sw, ph, title, help, &[]);
+    frame(&mut pieces, sw, ph, crumbs, help, back, &[]);
     Some(Panel {
         w: sw,
         h: ph,
@@ -606,6 +770,31 @@ pub fn layout(
         dropped: Vec::new(),
         flowed: true,
     })
+}
+
+/// A row: its key at `kx` and its name at `nx`, each in its role. An empty
+/// folder's row is dim whole.
+fn row_pieces(
+    pieces: &mut Vec<(u16, u16, String, Role)>,
+    kx: u16,
+    nx: u16,
+    y: u16,
+    r: &Row,
+    name: String,
+) {
+    if r.kind == RowKind::Empty {
+        if !r.key.is_empty() {
+            pieces.push((kx, y, r.key.clone(), Role::Empty));
+        }
+        pieces.push((nx, y, name, Role::Empty));
+        return;
+    }
+    key_pieces(pieces, kx, y, &r.key);
+    let role = match r.kind {
+        RowKind::Folder => Role::Folder,
+        _ => Role::Name,
+    };
+    pieces.push((nx, y, name, role));
 }
 
 /// A key: the modifier prefix plain, the key after the last `+` bold.
@@ -620,19 +809,45 @@ fn key_pieces(pieces: &mut Vec<(u16, u16, String, Role)>, x: u16, y: u16, key: &
     }
 }
 
-/// The text on the frame rows: the leader chord top left, `? all keys` and
-/// any dropped groups on the bottom row.
+/// The text on the frame rows: the breadcrumb top left, `bksp back` (in a
+/// folder) and any dropped groups bottom left, `? all keys` bottom right.
 fn frame(
     pieces: &mut Vec<(u16, u16, String, Role)>,
     pw: u16,
     ph: u16,
-    title: &str,
+    crumbs: &[String],
     help: Option<&str>,
-    dropped: &[&str],
+    back: bool,
+    dropped: &[String],
 ) {
-    pieces.push((1, 0, " ".into(), Role::FooterText));
-    pieces.push((2, 0, title.to_string(), Role::Title));
-    pieces.push((2 + width(title) as u16, 0, " ".into(), Role::FooterText));
+    // Too wide, the breadcrumb is cut from the left: `… › g › b`. (The
+    // handoff's generator drew `… g › b`; its spec's words are followed.)
+    let room = (pw as usize).saturating_sub(4);
+    let shown_w = |parts: &[String], lead: bool| {
+        parts.iter().map(|p| width(p)).sum::<usize>()
+            + 3 * parts.len().saturating_sub(1)
+            + if lead { 4 } else { 0 }
+    };
+    let mut from = 0;
+    while crumbs.len() - from > 1 && shown_w(&crumbs[from..], from > 0) > room {
+        from += 1;
+    }
+    let mut x: u16 = 1;
+    pieces.push((x, 0, " ".into(), Role::FooterText));
+    x += 1;
+    if from > 0 {
+        pieces.push((x, 0, "… › ".into(), Role::FooterText));
+        x += 4;
+    }
+    for (i, c) in crumbs[from..].iter().enumerate() {
+        if i > 0 {
+            pieces.push((x, 0, " › ".into(), Role::FooterText));
+            x += 3;
+        }
+        pieces.push((x, 0, c.clone(), Role::Title));
+        x += width(c) as u16;
+    }
+    pieces.push((x, 0, " ".into(), Role::FooterText));
     let bottom = ph - 1;
     let help_w = help.map_or(0, |h| width(h) as u16 + 11);
     let fx = pw.saturating_sub(help_w + 2);
@@ -646,19 +861,45 @@ fn frame(
             Role::FooterText,
         ));
     }
+    let mut x: u16 = 1;
+    if back {
+        pieces.push((1, bottom, " ".into(), Role::FooterText));
+        pieces.push((2, bottom, "bksp".into(), Role::FooterKey));
+        pieces.push((6, bottom, " back ".into(), Role::FooterText));
+        x = 12;
+        if !dropped.is_empty() {
+            pieces.push((x, bottom, "·".into(), Role::FooterText));
+            x += 1;
+        }
+    }
     if !dropped.is_empty() {
         let text = format!(" +{} ", dropped.join(" · "));
-        let room = fx.saturating_sub(2) as usize;
+        let room = fx.saturating_sub(x + 1) as usize;
         let cut: String = text.chars().take(room).collect();
-        pieces.push((1, bottom, cut, Role::FooterText));
+        pieces.push((x, bottom, cut, Role::FooterText));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{BindAction, Config};
 
-    /// The default binds, as the hint reads them.
+    /// The groups of a configuration's top level, or of the folder at `path`.
+    fn groups_of(cfg: &Config, path: &[&str]) -> Vec<Group> {
+        let path: Vec<Chord> = path.iter().map(|k| k.parse().unwrap()).collect();
+        let table = crate::config::folder_binds(&cfg.binds, &path).expect("a folder");
+        let name = path.split_last().map(|(last, outer)| {
+            let parent = crate::config::folder_binds(&cfg.binds, outer).unwrap();
+            parent[last].folder().unwrap().name.as_str()
+        });
+        groups(
+            table.iter().map(|(c, b)| Entry::of(*c, b)),
+            &cfg.group_order,
+            name,
+        )
+    }
+
     /// The default binds as the handoff drew them: binds added since (only
     /// `paste_image` so far) would redraw the mock, which pins the layout, not
     /// the bind table. `the_defaults_list_paste_image` covers those.
@@ -667,36 +908,17 @@ mod tests {
         groups(
             cfg.binds
                 .iter()
-                .filter(|(_, b)| {
-                    !matches!(
-                        b.action,
-                        crate::config::BindAction::Builtin(Action::PasteImage)
-                    )
-                })
-                .map(|(c, b)| {
-                    (
-                        *c,
-                        match &b.action {
-                            crate::config::BindAction::Builtin(a) => BindKind::Action(a),
-                            crate::config::BindAction::Lua(_) => BindKind::Lua(None),
-                        },
-                    )
-                }),
+                .filter(|(_, b)| !matches!(b.action, BindAction::Builtin(Action::PasteImage)))
+                .map(|(c, b)| Entry::of(*c, b)),
+            &cfg.group_order,
+            None,
         )
     }
 
     #[test]
     fn the_defaults_list_paste_image() {
         let cfg = crate::config::load_from(None, None, None).unwrap();
-        let all = groups(cfg.binds.iter().map(|(c, b)| {
-            (
-                *c,
-                match &b.action {
-                    crate::config::BindAction::Builtin(a) => BindKind::Action(a),
-                    crate::config::BindAction::Lua(_) => BindKind::Lua(None),
-                },
-            )
-        }));
+        let all = groups_of(&cfg, &[]);
         let history = all.iter().find(|g| g.name == "history").unwrap();
         assert!(
             history
@@ -731,26 +953,44 @@ mod tests {
         g.into_iter().map(|r| r.into_iter().collect()).collect()
     }
 
-    /// One panel from the handoff's fixture.
-    fn mock(name: &str) -> Vec<String> {
-        let src = include_str!("../doc/handoffs/done/WHICH_KEY_MOCK.txt");
-        src.split("## ")
-            .find(|b| b.starts_with(name))
+    /// One panel from a handoff's fixture.
+    fn mock(src: &str, name: &str) -> Vec<String> {
+        src.split("\n## ")
+            .find(|b| b.lines().next() == Some(name))
             .unwrap_or_else(|| panic!("no mock {name}"))
             .lines()
             .skip(1)
+            .take_while(|l| !l.is_empty())
             .map(str::to_string)
             .collect()
     }
 
-    fn check(name: &str, w: u16, h: u16, border: bool) {
-        let p = layout(&default_groups(), w, h, "ctrl+b", Some("?")).expect("a panel");
-        let got = draw(&p, border);
-        let want = mock(name);
+    fn same(name: &str, p: &Panel, border: bool, want: Vec<String>) {
+        let got = draw(p, border);
         assert_eq!(got.len(), want.len(), "{name}: rows\n{}", got.join("\n"));
         for (i, (g, m)) in got.iter().zip(&want).enumerate() {
             assert_eq!(g, m, "{name}: row {i}\ngot:\n{}", got.join("\n"));
         }
+    }
+
+    const FIRST: &str = include_str!("../doc/handoffs/done/WHICH_KEY_MOCK.txt");
+    const FOLDERS: &str = include_str!("../doc/handoffs/done/WHICH_KEY_FOLDERS_MOCK.txt");
+
+    fn crumbs(keys: &[&str]) -> Vec<String> {
+        keys.iter().map(|k| k.to_string()).collect()
+    }
+
+    fn check(name: &str, w: u16, h: u16, border: bool) {
+        let p = layout(
+            &default_groups(),
+            w,
+            h,
+            &crumbs(&["ctrl+b"]),
+            Some("?"),
+            false,
+        )
+        .expect("a panel");
+        same(name, &p, border, mock(FIRST, name));
     }
 
     // The handoff draws the panel cell for cell; these hold the layout to it,
@@ -760,7 +1000,15 @@ mod tests {
     fn at_80x24_three_groups_fit_and_the_rest_are_named() {
         check("80x24 rounded", 80, 24, true);
         check("80x24 none", 80, 24, false);
-        let p = layout(&default_groups(), 80, 24, "ctrl+b", Some("?")).unwrap();
+        let p = layout(
+            &default_groups(),
+            80,
+            24,
+            &crumbs(&["ctrl+b"]),
+            Some("?"),
+            false,
+        )
+        .unwrap();
         assert_eq!(p.dropped, vec!["sessions", "history", "ranma"]);
     }
 
@@ -776,14 +1024,172 @@ mod tests {
 
     #[test]
     fn a_small_screen_flows_and_a_tiny_one_shows_nothing() {
+        let c = crumbs(&["ctrl+b"]);
         check("40x15 flowed", 40, 15, true);
         assert!(
-            layout(&default_groups(), 40, 15, "ctrl+b", Some("?"))
+            layout(&default_groups(), 40, 15, &c, Some("?"), false)
                 .unwrap()
                 .flowed
         );
-        assert!(layout(&default_groups(), 29, 40, "ctrl+b", Some("?")).is_none());
-        assert!(layout(&default_groups(), 120, 5, "ctrl+b", Some("?")).is_none());
+        assert!(layout(&default_groups(), 29, 40, &c, Some("?"), false).is_none());
+        assert!(layout(&default_groups(), 120, 5, &c, Some("?"), false).is_none());
+    }
+
+    /// The configuration the folders handoff draws: the user's own (card
+    /// c159), plugins grouped, git behind a folder.
+    const C159: &str = r#"
+        ranma.bind("c", "exec nvim", { desc = "editor" })
+        ranma.bind("e", "exec yazi", { desc = "files" })
+        ranma.bind("h", function() end, { desc = "history", group = "plugins" })
+        ranma.bind("n", function() end, { desc = "notes", group = "plugins" })
+        ranma.bind("i", { folder = "agents", group = "plugins" })
+        ranma.bind("i a", function() end, { desc = "all" })
+        -- Keys before their folder: folders are put together at the end.
+        ranma.bind("g s", "exec lazygit", { desc = "status" })
+        ranma.bind("g", { folder = "git" })
+        ranma.bind("g c", "exec git commit", { desc = "commit" })
+        ranma.bind("g d", "exec git diff", { desc = "diff" })
+        ranma.bind("g l", "exec git log", { desc = "log" })
+        ranma.bind("g shift+p", "exec git pull", { desc = "pull" })
+        ranma.bind("g p", "exec git push", { desc = "push" })
+        ranma.bind("g b", { folder = "branches" })
+        ranma.bind("g b b", function() end, { desc = "switch" })
+        ranma.bind("g b d", function() end, { desc = "delete" })
+        ranma.bind("g b m", function() end, { desc = "merge" })
+        ranma.bind("g b n", function() end, { desc = "new" })
+    "#;
+
+    fn c159() -> Config {
+        crate::config::load_from(None, None, Some(C159)).unwrap()
+    }
+
+    fn check_folders(name: &str, g: &[Group], w: u16, h: u16, keys: &[&str], border: bool) {
+        let p = layout(g, w, h, &crumbs(keys), Some("?"), keys.len() > 1).expect("a panel");
+        same(name, &p, border, mock(FOLDERS, name));
+    }
+
+    #[test]
+    fn user_groups_and_folders_at_the_top_level() {
+        let cfg = c159();
+        let top = groups_of(&cfg, &[]);
+        let names: Vec<&str> = top.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "layout",
+                "panes",
+                "workspaces",
+                "plugins",
+                "yours",
+                "sessions",
+                "history",
+                "ranma"
+            ]
+        );
+        let k = &["ctrl+b"];
+        check_folders("80x24 top rounded", &top, 80, 24, k, true);
+        check_folders("120x35 top rounded", &top, 120, 35, k, true);
+        check_folders("200x50 top rounded", &top, 200, 50, k, true);
+        check_folders("40x15 top flowed", &top, 40, 15, k, true);
+        let p = layout(&top, 80, 24, &crumbs(k), Some("?"), false).unwrap();
+        assert_eq!(
+            p.dropped[0], "plugins",
+            "user groups are named first at 80×24"
+        );
+    }
+
+    #[test]
+    fn a_folder_open_and_a_folder_in_it() {
+        let cfg = c159();
+        let git = groups_of(&cfg, &["g"]);
+        check_folders("80x24 git rounded", &git, 80, 24, &["ctrl+b", "g"], true);
+        check_folders("80x24 git none", &git, 80, 24, &["ctrl+b", "g"], false);
+        check_folders("120x35 git rounded", &git, 120, 35, &["ctrl+b", "g"], true);
+        check_folders("40x15 git flowed", &git, 40, 15, &["ctrl+b", "g"], true);
+        let branches = groups_of(&cfg, &["g", "b"]);
+        check_folders(
+            "80x24 git branches rounded",
+            &branches,
+            80,
+            24,
+            &["ctrl+b", "g", "b"],
+            true,
+        );
+    }
+
+    #[test]
+    fn an_empty_folder_is_dim_and_says_so_when_opened() {
+        let cfg = c159();
+        let x: Chord = "x".parse().unwrap();
+        let top = groups(
+            cfg.binds
+                .iter()
+                .map(|(c, b)| Entry::of(*c, b))
+                .chain(std::iter::once(Entry {
+                    chord: x,
+                    kind: BindKind::Folder {
+                        name: "scratch",
+                        empty: true,
+                    },
+                    desc: None,
+                    group: Some("plugins"),
+                })),
+            &cfg.group_order,
+            None,
+        );
+        check_folders(
+            "120x35 empty folder in top rounded",
+            &top,
+            120,
+            35,
+            &["ctrl+b"],
+            true,
+        );
+        let p = layout(&top, 120, 35, &crumbs(&["ctrl+b"]), Some("?"), false).unwrap();
+        let roles: Vec<Role> = p
+            .pieces
+            .iter()
+            .filter(|(_, _, t, _)| t == "x" || t == "+scratch")
+            .map(|(.., r)| *r)
+            .collect();
+        assert_eq!(roles, [Role::Empty, Role::Empty], "the whole row is dim");
+        let open = empty_folder("scratch");
+        check_folders(
+            "80x24 empty folder open rounded",
+            &open,
+            80,
+            24,
+            &["ctrl+b", "x"],
+            true,
+        );
+    }
+
+    #[test]
+    fn a_folder_row_is_drawn_as_a_folder() {
+        let cfg = c159();
+        let top = groups_of(&cfg, &[]);
+        let p = layout(&top, 200, 50, &crumbs(&["ctrl+b"]), Some("?"), false).unwrap();
+        let role = |t: &str| p.pieces.iter().find(|(.., x, _)| x == t).map(|(.., r)| *r);
+        assert_eq!(role("+git"), Some(Role::Folder));
+        assert_eq!(role("editor"), Some(Role::Name));
+    }
+
+    #[test]
+    fn a_long_breadcrumb_is_cut_from_the_left() {
+        let g = vec![Group {
+            name: "deep".into(),
+            rows: vec![Row::bind("a".into(), "a".into())],
+        }];
+        let keys: Vec<String> = ["ctrl+b", "aaaa", "bbbb", "cccc", "dddd", "eeee", "f"]
+            .iter()
+            .map(|k| k.to_string())
+            .collect();
+        let p = layout(&g, 80, 24, &keys, Some("?"), true).unwrap();
+        let top = &draw(&p, true)[0];
+        assert!(top.starts_with("╭ … › "), "{top}");
+        assert!(!top.contains("… › › "), "{top}");
+        assert!(top.contains("eeee › f "), "{top}");
+        assert!(!top.contains("ctrl+b"), "{top}");
     }
 
     #[test]
@@ -808,45 +1214,28 @@ mod tests {
                 ranma.bind("h", "focus left")
                 ranma.bind("x", function() end, { desc = "do the thing" })
                 ranma.bind("y", function() end)
+                ranma.bind("z", "detach", { group = "history" })
+                ranma.bind("shift+z", "exec top", { desc = "top", group = "history" })
                 "#,
             ),
         )
         .unwrap();
-        let g = groups(cfg.binds.iter().map(|(c, b)| {
-            (
-                *c,
-                match &b.action {
-                    crate::config::BindAction::Builtin(a) => BindKind::Action(a),
-                    crate::config::BindAction::Lua(_) => BindKind::Lua(b.desc.as_deref()),
-                },
-            )
-        }));
+        let g = groups_of(&cfg, &[]);
         let layout_rows = &g.iter().find(|g| g.name == "layout").unwrap().rows;
-        assert_eq!(
-            layout_rows[0],
-            Row {
-                key: "↓↑→".into(),
-                name: "focus".into()
-            }
-        );
-        assert!(layout_rows.contains(&Row {
-            key: "h".into(),
-            name: "focus left".into()
-        }));
-        let names: Vec<&str> = g.iter().map(|g| g.name).collect();
+        assert_eq!(layout_rows[0], Row::bind("↓↑→".into(), "focus".into()));
+        assert!(layout_rows.contains(&Row::bind("h".into(), "focus left".into())));
+        let names: Vec<&str> = g.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(&names[..4], ["layout", "panes", "workspaces", "yours"]);
         let yours = &g[3].rows;
-        assert!(yours.contains(&Row {
-            key: "left".replace("left", "←"),
-            name: "exec htop".into()
-        }));
-        assert!(yours.contains(&Row {
-            key: "x".into(),
-            name: "do the thing".into()
-        }));
-        assert!(yours.contains(&Row {
-            key: "y".into(),
-            name: "lua".into()
-        }));
+        assert!(yours.contains(&Row::bind("←".into(), "exec htop".into())));
+        assert!(yours.contains(&Row::bind("x".into(), "do the thing".into())));
+        assert!(yours.contains(&Row::bind("y".into(), "lua".into())));
+        // A built-in group's name puts a row after that group's own rows.
+        let history = &g.iter().find(|g| g.name == "history").unwrap().rows;
+        let tail: Vec<&str> = history[history.len() - 2..]
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect();
+        assert_eq!(tail, ["detach", "top"]);
     }
 }

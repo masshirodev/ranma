@@ -480,6 +480,14 @@ ranma.profile("mobile", {
 --
 --   ranma.bind("n", function() os.execute("notify-send hi") end, { desc = "say hi" })
 --
+-- { group = "..." } lists it under a heading of its own, and a folder keeps
+-- many keys behind one: leader g opens it, then s runs "g s".
+--
+--   ranma.bind("h", history_open, { desc = "history", group = "plugins" })
+--   ranma.bind("g", { folder = "git" })
+--   ranma.bind("g s", "exec lazygit", { desc = "status" })
+--   ranma.bind("g b", { folder = "branches" })    -- folders nest
+--
 -- Inside a bind, hook or module, ranma.action("workspace 2") runs an action,
 -- ranma.notify("text") puts a message in the bar, ranma.toast("text",
 -- { urgent = true, timeout = 10 }) shows a toast, and ranma.state() returns

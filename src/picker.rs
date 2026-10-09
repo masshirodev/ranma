@@ -21,8 +21,9 @@ pub enum Target {
     NewSession,
     /// A ranma server, by name (the server switcher).
     Server(String),
-    /// Run this bind: from the global table if the flag is set.
-    Bind(Chord, bool),
+    /// Run this bind: from the global table if the flag is set. More than
+    /// one chord is a key inside folders (`g s`).
+    Bind(Vec<Chord>, bool),
     /// An action from the catalogue. One that needs an argument is completed
     /// into the query instead of run.
     Action {
@@ -660,7 +661,7 @@ mod tests {
         let mut items = vec![Item {
             label: "ctrl+b t               new_pane".into(),
             detail: String::new(),
-            target: Target::Bind("t".parse().unwrap(), false),
+            target: Target::Bind(vec!["t".parse().unwrap()], false),
             current: false,
         }];
         for (name, needs_arg) in [("new_pane", false), ("workspace", true), ("detach", false)] {

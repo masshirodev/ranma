@@ -939,17 +939,18 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
 /// by `whichkey`, from the WM-mode binds; drawn in the theme's roles, the
 /// frame in the mode colour on the toast surface (the design's handoff).
 fn draw_which_key(f: &mut Frame, app: &App) {
-    use crate::whichkey::{self, BindKind, Role};
+    use crate::whichkey::{self, Role};
     let screen = f.area();
-    let groups = whichkey::groups(app.wm_binds().iter().map(|(c, b)| {
-        (
-            *c,
-            match &b.action {
-                crate::config::BindAction::Builtin(a) => BindKind::Action(a),
-                crate::config::BindAction::Lua(_) => BindKind::Lua(b.desc.as_deref()),
-            },
-        )
-    }));
+    let order = &app.config.group_order;
+    let table = app.wm_table();
+    let groups = match app.folder_name() {
+        Some(name) if table.is_empty() => whichkey::empty_folder(name),
+        folder => whichkey::groups(
+            table.iter().map(|(c, b)| whichkey::Entry::of(*c, b)),
+            order,
+            folder,
+        ),
+    };
     let help = app
         .config
         .binds
@@ -961,13 +962,17 @@ fn draw_which_key(f: &mut Frame, app: &App) {
             )
         })
         .map(|(c, _)| whichkey::short(c));
-    let title = whichkey::short(&app.wm_chord());
+    let crumbs: Vec<String> = std::iter::once(app.wm_chord())
+        .chain(app.open_folder().iter().copied())
+        .map(|c| whichkey::short(&c))
+        .collect();
     let Some(p) = whichkey::layout(
         &groups,
         screen.width,
         screen.height,
-        &title,
+        &crumbs,
         help.as_deref(),
+        !app.open_folder().is_empty(),
     ) else {
         return;
     };
@@ -997,6 +1002,8 @@ fn draw_which_key(f: &mut Frame, app: &App) {
             }
             Role::KeyMods => surface.fg(color(c.mode_bg)),
             Role::Heading => surface.fg(color(c.bar_accent)).add_modifier(Modifier::BOLD),
+            Role::Folder => surface.fg(color(c.bar_accent)),
+            Role::Empty => surface.fg(color(c.bar_dim)),
             Role::Name | Role::FooterText => surface,
         };
         let (x, y) = (area.x + x, area.y + y);

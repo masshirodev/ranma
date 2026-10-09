@@ -77,11 +77,17 @@ function ranma.get(key) end
 ---@class ranma.BindOpts
 ---@field exit? boolean Whether WM mode ends after the bind fires; given, it overrides wm_mode.sticky both ways.
 ---@field global? boolean Looked up outside WM mode, before the program sees the key.
----@field desc? string A short name for the which-key hint.
+---@field desc? string A short name for the which-key hint, for an action or a function.
+---@field group? string The which-key heading it is listed under: a built-in group's name or one of yours.
 
----Bind keys (in WM mode, or `global`) to an action string or a Lua function.
----@param keys string A chord, e.g. "t", "shift+left", "ctrl+alt+b".
----@param action string|fun()
+---@class ranma.Folder
+---@field folder string Its name: `+name` in the which-key hint, the heading inside it.
+---@field group? string The heading it is listed under in its parent.
+
+---Bind keys (in WM mode, or `global`) to an action string, a Lua function,
+---or a folder of more keys. "g s" binds s inside the folder on g.
+---@param keys string A chord, e.g. "t", "shift+left", "ctrl+alt+b"; chords separated by spaces bind inside folders.
+---@param action string|fun()|ranma.Folder
 ---@param opts? ranma.BindOpts
 function ranma.bind(keys, action, opts) end
 
@@ -109,7 +115,7 @@ function ranma.mode(name, def) end
 ---@param opts? ranma.CommandOpts
 function ranma.command(name, fn, opts) end
 
----Drop a bind.
+---Drop a bind ("g s" drops one inside a folder).
 ---@param keys string
 function ranma.unbind(keys) end
 

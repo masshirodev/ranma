@@ -314,9 +314,13 @@ impl App {
             .config
             .toolbar(toolbar)
             .and_then(|t| t.buttons.get(i))
-            .map(|b| match &b.action {
-                BindAction::Builtin(a) => Ok(a.clone()),
-                BindAction::Lua(k) => Err(self.config.lua.registry_value::<mlua::Function>(k)),
+            .and_then(|b| match &b.action {
+                BindAction::Builtin(a) => Some(Ok(a.clone())),
+                BindAction::Lua(k) => {
+                    Some(Err(self.config.lua.registry_value::<mlua::Function>(k)))
+                }
+                // A toolbar's buttons are never folders: ranma.toolbar makes none.
+                BindAction::Folder(_) => None,
             })
         else {
             return;

@@ -350,6 +350,9 @@ pub struct App {
     hint_on: bool,
     /// The chord that opened WM mode: the hint's title.
     wm_chord: Option<crate::keys::Chord>,
+    /// The folders opened in WM mode, by the key each is on: WM mode looks
+    /// keys up in the last one's (see `wm_table`).
+    folder: Vec<crate::keys::Chord>,
     /// What the ranma in each pane reported (see `nested`).
     reports: HashMap<PaneId, crate::nestbar::Report>,
     /// A ranma around the attached client answered its question: it shows
@@ -491,6 +494,7 @@ impl App {
             passed_key: None,
             hint_on: false,
             wm_chord: None,
+            folder: Vec::new(),
             reports: HashMap::new(),
             client_outer: false,
             outer_v: 0,
@@ -2228,6 +2232,7 @@ impl App {
 
         self.status = None;
         self.dirty = true;
+        let hint_was_on = self.hint_on;
         // A key in WM mode puts the hint away, and a later pause brings it
         // back, after twice the wait: looking between deliberate presses
         // should not make it flash.
@@ -2240,6 +2245,9 @@ impl App {
         let Some(chord) = chord else {
             return;
         };
+        if !self.folder.is_empty() && self.folder_key(chord, leader, hint_was_on) {
+            return;
+        }
         // In a mode of the user's, its own keys; Esc and Enter leave it, and
         // the leader goes back to WM mode's keys.
         if self.user_mode.is_some() && !self.wm_binds().contains_key(&chord) {
@@ -2268,22 +2276,44 @@ impl App {
             self.set_mode(Mode::Normal);
             return;
         }
-        if !self.wm_binds().contains_key(&chord) && chord != leader {
+        if !self.wm_table().contains_key(&chord) && chord != leader {
             // Unbound keys are swallowed: WM mode is a mode, and typing into a pane
-            // by accident while in it is worse than a dead key.
+            // by accident while in it is worse than a dead key. A folder stays
+            // open, its panel up.
             self.status = Some(format!("{chord} is not bound"));
+            if !self.folder.is_empty() {
+                self.hint_on = hint_was_on;
+            }
+            return;
+        }
+        // A folder's key opens it. Its panel replaces the one showing at
+        // once; with none showing it waits for the usual first pause, so
+        // keys typed quickly draw nothing.
+        if self
+            .wm_table()
+            .get(&chord)
+            .is_some_and(|b| b.folder().is_some())
+        {
+            self.folder.push(chord);
+            self.hint_on = hint_was_on;
+            self.hint_due = (!hint_was_on)
+                .then_some(self.config.settings.wm_mode_hint)
+                .flatten()
+                .map(|d| Instant::now() + d);
             return;
         }
         // An explicit `exit` decides alone; unset, the action's default and
         // `wm_mode.sticky` do.
-        let explicit = self.wm_binds().get(&chord).and_then(|b| b.exit);
-        let exits = if chord == leader && !self.wm_binds().contains_key(&chord) {
+        let explicit = self.wm_table().get(&chord).and_then(|b| b.exit);
+        let exits = if chord == leader && !self.wm_table().contains_key(&chord) {
             // The leader pressed again goes through to the program, tmux style.
             self.run_action(Action::SendLeader);
             true
         } else {
             self.run_bind(chord, false)
         };
+        // A bind inside a folder closes it: a folder is a prefix, not a place.
+        self.folder.clear();
         // Only from WM mode: the bind may have entered copy mode or opened a picker.
         let ends = explicit.unwrap_or(exits || !self.sticky_now());
         if ends && self.mode == Mode::Wm {
@@ -2313,7 +2343,7 @@ impl App {
         let table = if global {
             &self.config.global_binds
         } else {
-            self.wm_binds()
+            self.wm_table()
         };
         let Some(bind) = table.get(&chord) else {
             return false;
@@ -2330,6 +2360,8 @@ impl App {
                 }
                 Err(_) => self.status = Some("lua: bind function is gone".into()),
             },
+            // Opened by the key handler, never run.
+            BindAction::Folder(_) => {}
         }
         exits
     }
@@ -2411,6 +2443,69 @@ impl App {
             .map_or(&self.config.binds, |m| &m.binds)
     }
 
+    /// The keys WM mode looks up for the next key: the open folder's, else
+    /// `wm_binds`.
+    pub fn wm_table(&self) -> &HashMap<crate::keys::Chord, config::Bind> {
+        config::folder_binds(self.wm_binds(), &self.folder).unwrap_or(self.wm_binds())
+    }
+
+    /// The folders open in WM mode, outermost first, by key.
+    pub fn open_folder(&self) -> &[crate::keys::Chord] {
+        &self.folder
+    }
+
+    /// The name of the innermost folder open.
+    pub fn folder_name(&self) -> Option<&str> {
+        let (last, outer) = self.folder.split_last()?;
+        config::folder_binds(self.wm_binds(), outer)?
+            .get(last)?
+            .folder()
+            .map(|f| f.name.as_str())
+    }
+
+    /// A key in an open folder that is not one of its binds' business:
+    /// Backspace goes up a level, Esc and Enter leave WM mode, the leader
+    /// goes back to the top level, and help (`?`) opens with the folder's
+    /// keys at the head of the list. Returns whether it took the key.
+    fn folder_key(
+        &mut self,
+        chord: crate::keys::Chord,
+        leader: crate::keys::Chord,
+        hint_was_on: bool,
+    ) -> bool {
+        use crate::keys::{Key, Mods};
+        if self.wm_table().contains_key(&chord) {
+            return false;
+        }
+        let bare = chord.mods == Mods::default();
+        if bare && matches!(chord.key, Key::Escape | Key::Return) {
+            self.set_mode(Mode::Normal);
+        } else if bare && chord.key == Key::Backspace {
+            self.folder.pop();
+            self.hint_on = hint_was_on;
+        } else if chord == leader {
+            self.folder.clear();
+            self.hint_on = hint_was_on;
+        } else if self
+            .wm_binds()
+            .get(&chord)
+            .is_some_and(|b| matches!(b.action, BindAction::Builtin(Action::Help)))
+        {
+            let prefix: Vec<String> = std::iter::once(self.config.settings.leader)
+                .chain(self.folder.iter().copied())
+                .map(|c| c.to_string())
+                .collect();
+            self.open_palette(crate::picker::PaletteMode::Help);
+            if let Some(p) = self.picker.as_mut() {
+                p.query = format!("?{} ", prefix.join(" "));
+            }
+            self.set_mode(Mode::Normal);
+        } else {
+            return false;
+        }
+        true
+    }
+
     /// Whether a bind leaves WM mode on: the user mode's `sticky`, else
     /// `wm_mode.sticky`.
     fn sticky_now(&self) -> bool {
@@ -2461,6 +2556,7 @@ impl App {
     }
 
     fn set_mode(&mut self, mode: Mode) {
+        self.folder.clear();
         if mode != Mode::Wm {
             self.hint_due = None;
             self.hint_on = false;
@@ -6129,6 +6225,96 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_folder_opens_its_keys_and_closes_after_one() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(Some(
+            r#"
+            log = {}
+            ranma.set { wm_mode = { hint = 0.3 } }
+            ranma.bind("g", { folder = "git" })
+            ranma.bind("g s", function() table.insert(log, "s") end, { desc = "status" })
+            ranma.bind("g b", { folder = "branches" })
+            ranma.bind("g b n", function() table.insert(log, "n") end, { desc = "new" })
+            "#,
+        ));
+        let leader = |a: &mut App| {
+            a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+                KeyCode::Char('b'),
+                KeyModifiers::CONTROL,
+            ))))
+        };
+        let log = |a: &App| -> Vec<String> { a.config.lua.load("return log").eval().unwrap() };
+        let g: crate::keys::Chord = "g".parse().unwrap();
+        let b: crate::keys::Chord = "b".parse().unwrap();
+
+        // Typed quickly: the folder opens, no panel is drawn yet, the bind
+        // inside runs and closes it.
+        leader(&mut a);
+        key(&mut a, KeyCode::Char('g'));
+        assert_eq!(a.open_folder(), [g]);
+        assert_eq!(a.folder_name(), Some("git"));
+        assert!(!a.which_key_shown());
+        assert!(a.hint_due.is_some(), "the usual first pause");
+        key(&mut a, KeyCode::Char('s'));
+        assert_eq!(log(&a), vec!["s"]);
+        assert!(a.open_folder().is_empty(), "a folder is a prefix");
+        assert_eq!(a.mode, Mode::Wm, "sticky: back at WM mode's top level");
+        key(&mut a, KeyCode::Esc);
+
+        // With the hint up, a folder replaces it at once; bksp goes up a level.
+        leader(&mut a);
+        a.hint_on = true;
+        key(&mut a, KeyCode::Char('g'));
+        key(&mut a, KeyCode::Char('b'));
+        assert_eq!(a.open_folder(), [g, b]);
+        assert!(a.which_key_shown(), "replaced straight away");
+        key(&mut a, KeyCode::Backspace);
+        assert_eq!(a.open_folder(), [g]);
+        assert_eq!(a.mode, Mode::Wm);
+        assert!(a.which_key_shown());
+        // A key with no bind is swallowed and the folder stays, panel up.
+        key(&mut a, KeyCode::Char('z'));
+        assert_eq!(a.open_folder(), [g]);
+        assert!(a.which_key_shown());
+        assert_eq!(a.status.as_deref(), Some("z is not bound"));
+        // The leader goes back to the top level, still in WM mode.
+        leader(&mut a);
+        assert!(a.open_folder().is_empty());
+        assert_eq!(a.mode, Mode::Wm);
+        // Esc leaves WM mode from any depth.
+        key(&mut a, KeyCode::Char('g'));
+        key(&mut a, KeyCode::Char('b'));
+        key(&mut a, KeyCode::Esc);
+        assert_eq!(a.mode, Mode::Normal);
+        assert!(a.open_folder().is_empty());
+        // Bksp at the top level does what it always did.
+        leader(&mut a);
+        key(&mut a, KeyCode::Backspace);
+        assert!(a.picker.is_some(), "the session list");
+        a.picker = None;
+        a.set_mode(Mode::Normal);
+
+        // ? inside a folder: help, the folder's keys at the head of the list.
+        leader(&mut a);
+        key(&mut a, KeyCode::Char('g'));
+        key(&mut a, KeyCode::Char('?'));
+        assert_eq!(a.mode, Mode::Normal);
+        let first = a.picker.as_ref().unwrap().visible().remove(0);
+        assert!(first.label.starts_with("ctrl+b g "), "{}", first.label);
+        // Picking a folder there opens it, its panel up.
+        a.picker = None;
+        a.run_help_bind(vec![g, b], false);
+        assert_eq!(a.mode, Mode::Wm);
+        assert_eq!(a.open_folder(), [g, b]);
+        assert!(a.which_key_shown());
+        a.set_mode(Mode::Normal);
+        // And a key inside one runs.
+        a.run_help_bind(vec![g, b, "n".parse().unwrap()], false);
+        assert_eq!(log(&a), vec!["s", "n"]);
+        assert!(a.open_folder().is_empty());
     }
 
     #[test]

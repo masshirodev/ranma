@@ -590,17 +590,29 @@ impl App {
             (false, &self.config.binds),
             (true, &self.config.global_binds),
         ] {
-            for (chord, bind) in table {
+            // Every key, those inside folders too (`ctrl+b g s`).
+            let mut todo: Vec<(Vec<Chord>, &crate::config::Bind)> =
+                table.iter().map(|(c, b)| (vec![*c], b)).collect();
+            while let Some((path, bind)) = todo.pop() {
+                let spelled: Vec<String> = path.iter().map(Chord::to_string).collect();
                 let keys = if global {
-                    chord.to_string()
+                    spelled.join(" ")
                 } else {
-                    format!("{leader} {chord}")
+                    format!("{leader} {}", spelled.join(" "))
                 };
-                // A Lua bind has no action text to show; its `desc` says
-                // what it does, as it does in the which-key hint.
+                // A Lua bind has no action text to show, and a folder only its
+                // name; a `desc` says what a bind does, as in the which-key hint.
                 let what = match (&bind.action, &bind.desc) {
-                    (crate::config::BindAction::Lua(_), Some(d)) => d.as_str(),
-                    _ => bind.label.as_str(),
+                    (crate::config::BindAction::Folder(f), _) => {
+                        for (c, b) in &f.binds {
+                            let mut inner = path.clone();
+                            inner.push(*c);
+                            todo.push((inner, b));
+                        }
+                        format!("+{}", f.name)
+                    }
+                    (_, Some(d)) => d.clone(),
+                    _ => bind.label.clone(),
                 };
                 items.push(Item {
                     label: format!("{keys:<22} {what}"),
@@ -609,7 +621,7 @@ impl App {
                     } else {
                         String::new()
                     },
-                    target: Target::Bind(*chord, global),
+                    target: Target::Bind(path, global),
                     current: false,
                 });
             }
@@ -743,7 +755,7 @@ impl App {
                     (_, Target::NewSession) => self.new_session(Some(&query)),
                     (_, Target::Pane(id)) => self.reveal_pane(id),
                     (_, Target::Server(name)) => self.pick_server(name),
-                    (_, Target::Bind(chord, global)) => self.run_help_bind(chord, global),
+                    (_, Target::Bind(path, global)) => self.run_help_bind(path, global),
                     (_, Target::Action { name: line, .. } | Target::Run(line)) => {
                         self.run_command(&line)
                     }
@@ -878,8 +890,27 @@ impl App {
 
     /// Run a bind picked from help. A WM bind runs as if pressed in WM mode, but
     /// ranma returns to normal mode afterwards: help is a palette, not a mode.
-    fn run_help_bind(&mut self, chord: Chord, global: bool) {
-        self.run_bind(chord, global);
+    /// A key picked in help: run as if typed. A folder opens in WM mode,
+    /// its panel up at once, since that is what was asked to see.
+    pub(super) fn run_help_bind(&mut self, path: Vec<Chord>, global: bool) {
+        let Some((&last, outer)) = path.split_last() else {
+            return;
+        };
+        if global {
+            self.run_bind(last, true);
+            return;
+        }
+        let opens = crate::config::folder_binds(&self.config.binds, &path).is_some();
+        if opens {
+            self.enter_wm(self.config.settings.leader);
+            self.folder = path;
+            self.hint_on = self.config.settings.wm_mode_hint.is_some();
+            self.hint_due = None;
+            return;
+        }
+        self.folder = outer.to_vec();
+        self.run_bind(last, false);
+        self.folder.clear();
         if self.mode == super::Mode::Wm {
             self.set_mode(super::Mode::Normal);
         }

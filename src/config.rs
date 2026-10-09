@@ -270,6 +270,17 @@ pub enum BindAction {
     /// Shared, so the builder can be copied before a plugin runs and the
     /// copy put back if the plugin fails.
     Lua(Rc<RegistryKey>),
+    /// A key with keys behind it (`{ folder = NAME }`): pressing it opens
+    /// them in WM mode, and the which-key hint shows them instead of the
+    /// top level.
+    Folder(Folder),
+}
+
+/// A folder's name and its keys, which may be folders in turn.
+#[derive(Debug, Clone)]
+pub struct Folder {
+    pub name: String,
+    pub binds: HashMap<Chord, Bind>,
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +297,32 @@ pub struct Bind {
     /// A short name for the which-key hint (`{ desc = "..." }`); a Lua bind
     /// has no action to name it by otherwise.
     pub desc: Option<String>,
+    /// The which-key heading it is listed under (`{ group = "..." }`).
+    pub group: Option<String>,
+}
+
+impl Bind {
+    /// The folder this key opens, when it is one.
+    pub fn folder(&self) -> Option<&Folder> {
+        match &self.action {
+            BindAction::Folder(f) => Some(f),
+            _ => None,
+        }
+    }
+}
+
+/// The keys behind `path` (chords after the leader, each but the last a
+/// folder): the folder the path ends at, or `None` when it does not lead to
+/// one. An empty path is `top` itself.
+pub fn folder_binds<'a>(
+    top: &'a HashMap<Chord, Bind>,
+    path: &[Chord],
+) -> Option<&'a HashMap<Chord, Bind>> {
+    let mut table = top;
+    for c in path {
+        table = &table.get(c)?.folder()?.binds;
+    }
+    Some(table)
 }
 
 /// A mode of the user's (`ranma.mode`): WM mode with a key table of its own,
@@ -518,7 +555,7 @@ impl Button {
     pub fn builtin(&self) -> Option<&Action> {
         match &self.action {
             BindAction::Builtin(a) => Some(a),
-            BindAction::Lua(_) => None,
+            BindAction::Lua(_) | BindAction::Folder(_) => None,
         }
     }
 }
@@ -782,6 +819,11 @@ struct Builder {
     commands: std::collections::BTreeMap<String, UserCommand>,
     settings: Settings,
     binds: HashMap<Chord, Bind>,
+    /// Binds and unbinds inside folders (`"g s"`), in the order made: put
+    /// in their folders when the whole configuration has loaded.
+    nested: Vec<(String, Vec<Chord>, Option<Bind>)>,
+    /// Group names, in the order binds first named them.
+    group_order: Vec<String>,
     global_binds: HashMap<Chord, Bind>,
     hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
     bar: BarLayout,
@@ -818,6 +860,9 @@ pub struct Config {
     pub settings: Settings,
     /// Keys looked up in WM mode, after the leader.
     pub binds: HashMap<Chord, Bind>,
+    /// The which-key groups binds name (`{ group = "..." }`), in the order
+    /// the configuration first names them.
+    pub group_order: Vec<String>,
     /// Keys looked up outside WM mode, before the program sees them.
     pub global_binds: HashMap<Chord, Bind>,
     pub hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
@@ -974,8 +1019,9 @@ fn rt_err(msg: impl Into<String>) -> mlua::Error {
 /// The error for a function that builds the configuration called once it has
 /// been built: from a bind, hook, module or timer. The traceback names which.
 /// One bind as `ranma.bind` spells it, and each of a `ranma.mode`'s: the
-/// chord, the bind, and whether it is global (`global_ok`: only `ranma.bind`
-/// takes that option).
+/// keys (one chord, or `"g s"`: chords inside the folder on `g`), the bind,
+/// and whether it is global (`global_ok`: only `ranma.bind` takes that
+/// option, and folders).
 fn parse_bind(
     lua: &Lua,
     keys: &str,
@@ -983,32 +1029,95 @@ fn parse_bind(
     opts: Option<&Table>,
     who: &str,
     global_ok: bool,
-) -> mlua::Result<(Chord, Bind, bool)> {
-    let chord: Chord = keys
-        .parse()
-        .map_err(|e| rt_err(format!("{who}: key `{keys}`: {e}")))?;
+) -> mlua::Result<(Vec<Chord>, Bind, bool)> {
+    let path: Vec<Chord> = keys
+        .split_whitespace()
+        .map(|k| {
+            k.parse()
+                .map_err(|e| rt_err(format!("{who}: key `{keys}`: {e}")))
+        })
+        .collect::<mlua::Result<_>>()?;
+    if path.is_empty() {
+        return Err(rt_err(format!("{who}: no key given")));
+    }
+    if path.len() > 1 && !global_ok {
+        return Err(rt_err(format!(
+            "{who}: key `{keys}`: keys inside a folder are bound with ranma.bind"
+        )));
+    }
+    let backspace = Chord {
+        key: crate::keys::Key::Backspace,
+        mods: crate::keys::Mods::default(),
+    };
+    if path.len() > 1 && path.last() == Some(&backspace) {
+        return Err(rt_err(format!(
+            "{who}(\"{keys}\"): backspace goes up a level inside a folder and cannot be bound there"
+        )));
+    }
     let mut exit_override: Option<bool> = None;
     let mut global = false;
     let mut desc: Option<String> = None;
-    let expected = if global_ok {
-        "exit, global, desc"
-    } else {
-        "exit, desc"
+    let mut group: Option<String> = None;
+    // A folder is a table in the action's place, which takes its group too.
+    let folder = match &action {
+        Value::Table(t) if global_ok => {
+            let mut name: Option<String> = None;
+            for pair in t.pairs::<String, Value>() {
+                let (k, v) = pair?;
+                match (k.as_str(), v) {
+                    ("folder", Value::String(n)) => name = Some(n.to_str()?.to_string()),
+                    ("group", Value::String(g)) => group = Some(g.to_str()?.to_string()),
+                    (k @ ("folder" | "group"), other) => {
+                        return Err(rt_err(format!(
+                            "{who}(\"{keys}\"): `{k}` must be a string, not {}",
+                            other.type_name()
+                        )));
+                    }
+                    (k, _) => {
+                        return Err(rt_err(format!(
+                            "{who}(\"{keys}\"): a folder takes `folder` and `group`, not `{k}` (its name is its description)"
+                        )));
+                    }
+                }
+            }
+            let name = name.ok_or_else(|| {
+                rt_err(format!(
+                    "{who}(\"{keys}\"): a table in the action's place is a folder: {{ folder = NAME }}"
+                ))
+            })?;
+            check_heading(who, keys, "folder", &name)?;
+            Some(name)
+        }
+        _ => None,
+    };
+    let expected = match (folder.is_some(), global_ok) {
+        (true, _) => "group",
+        (false, true) => "exit, global, desc, group",
+        (false, false) => "exit, desc",
     };
     if let Some(t) = opts {
         for pair in t.pairs::<String, Value>() {
             let (k, v) = pair?;
             match (k.as_str(), v) {
-                ("exit", Value::Boolean(b)) => exit_override = Some(b),
-                ("global", Value::Boolean(b)) if global_ok => global = b,
-                ("desc", Value::String(d)) => desc = Some(d.to_str()?.to_string()),
-                ("desc", other) => {
+                ("group", Value::String(g)) if global_ok => {
+                    group = Some(g.to_str()?.to_string());
+                }
+                ("exit", Value::Boolean(b)) if folder.is_none() => exit_override = Some(b),
+                ("global", Value::Boolean(b)) if global_ok && folder.is_none() => global = b,
+                ("desc", Value::String(d)) if folder.is_none() => {
+                    desc = Some(d.to_str()?.to_string());
+                }
+                (k @ ("desc" | "group"), other)
+                    if folder.is_none() && (k == "desc" || global_ok) =>
+                {
                     return Err(rt_err(format!(
-                        "{who}(\"{keys}\"): `desc` must be a string, not {}",
+                        "{who}(\"{keys}\"): `{k}` must be a string, not {}",
                         other.type_name()
                     )));
                 }
-                ("exit", other) | ("global", other) if k != "global" || global_ok => {
+                ("exit", other) | ("global", other)
+                    if folder.is_none() && (k != "global" || global_ok) =>
+                {
                     return Err(rt_err(format!(
                         "{who}(\"{keys}\"): `{k}` must be true or false, not {}",
                         other.type_name()
@@ -1022,8 +1131,27 @@ fn parse_bind(
             }
         }
     }
-    let bind = match action {
-        Value::String(s) => {
+    if let Some(g) = &group {
+        check_heading(who, keys, "group", g)?;
+    }
+    if global && path.len() > 1 {
+        return Err(rt_err(format!(
+            "{who}(\"{keys}\"): a key inside a folder cannot be global"
+        )));
+    }
+    let bind = match (folder, action) {
+        (Some(name), _) => Bind {
+            action: BindAction::Folder(Folder {
+                name,
+                binds: HashMap::new(),
+            }),
+            exits_mode: false,
+            exit: None,
+            label: "folder".into(),
+            desc: None,
+            group,
+        },
+        (None, Value::String(s)) => {
             let s = s.to_str()?.to_string();
             let parsed: Action = s
                 .parse()
@@ -1034,23 +1162,38 @@ fn parse_bind(
                 action: BindAction::Builtin(parsed),
                 label: s,
                 desc,
+                group,
             }
         }
-        Value::Function(f) => Bind {
+        (None, Value::Function(f)) => Bind {
             action: BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
             exits_mode: exit_override.unwrap_or(false),
             exit: exit_override,
             label: "<lua function>".into(),
             desc,
+            group,
         },
-        other => {
+        (None, other) => {
             return Err(rt_err(format!(
                 "{who}(\"{keys}\"): action must be a string or a function, not {}",
                 other.type_name()
             )));
         }
     };
-    Ok((chord, bind, global))
+    Ok((path, bind, global))
+}
+
+/// A folder's or a group's name: a heading in the which-key hint, so
+/// something to read and at most as wide as a name there.
+fn check_heading(who: &str, keys: &str, what: &str, name: &str) -> mlua::Result<()> {
+    let w = unicode_width::UnicodeWidthStr::width(name);
+    if name.trim().is_empty() || w > crate::whichkey::NAME_MAX {
+        return Err(rt_err(format!(
+            "{who}(\"{keys}\"): a {what} name is 1 to {} cells, not `{name}`",
+            crate::whichkey::NAME_MAX
+        )));
+    }
+    Ok(())
 }
 
 fn loading_only() -> mlua::Error {
@@ -1236,8 +1379,22 @@ fn install_api(
         "bind",
         lua.create_function(
             |lua, (keys, action, opts): (String, Value, Option<Table>)| {
-                let (chord, bind, global) =
+                let (path, bind, global) =
                     parse_bind(lua, &keys, action, opts.as_ref(), "ranma.bind", true)?;
+                let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+                if let Some(g) = &bind.group
+                    && !b.group_order.contains(g)
+                {
+                    b.group_order.push(g.clone());
+                }
+                if path.len() > 1 {
+                    // Put in its folder once the file is done: the folder
+                    // may be declared after its keys.
+                    b.nested.push((keys, path, Some(bind)));
+                    return Ok(());
+                }
+                drop(b);
+                let chord = path[0];
                 if global
                     && chord
                         == lua
@@ -1298,10 +1455,10 @@ fn install_api(
                             if let Some(t) = &opts {
                                 t.raw_remove(1)?;
                             }
-                            let (chord, bind, global) =
+                            let (path, bind, global) =
                                 parse_bind(lua, &keys, action, opts.as_ref(), &who, false)?;
-                            debug_assert!(!global);
-                            mode.binds.insert(chord, bind);
+                            debug_assert!(!global && path.len() == 1);
+                            mode.binds.insert(path[0], bind);
                         }
                     }
                     (k @ ("label" | "sticky" | "on_enter" | "on_exit" | "binds"), other) => {
@@ -1381,12 +1538,22 @@ fn install_api(
     ranma.set(
         "unbind",
         lua.create_function(|lua, keys: String| {
-            let chord: Chord = keys
-                .parse()
-                .map_err(|e| rt_err(format!("ranma.unbind: key `{keys}`: {e}")))?;
+            let path: Vec<Chord> = keys
+                .split_whitespace()
+                .map(|k| {
+                    k.parse()
+                        .map_err(|e| rt_err(format!("ranma.unbind: key `{keys}`: {e}")))
+                })
+                .collect::<mlua::Result<_>>()?;
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
-            b.binds.remove(&chord);
-            b.global_binds.remove(&chord);
+            match path.as_slice() {
+                [] => return Err(rt_err("ranma.unbind: no key given")),
+                [chord] => {
+                    b.binds.remove(chord);
+                    b.global_binds.remove(chord);
+                }
+                _ => b.nested.push((keys, path, None)),
+            }
             Ok(())
         })?,
     )?;
@@ -1397,6 +1564,7 @@ fn install_api(
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             b.binds.clear();
             b.global_binds.clear();
+            b.nested.clear();
             Ok(())
         })?,
     )?;
@@ -2156,6 +2324,18 @@ pub fn load_from(
             ..Default::default()
         };
     }
+    // Keys inside folders, now that every folder is declared; then folders
+    // left with no keys. One a failed plugin emptied stays, drawn as empty:
+    // that plugin's error is already reported, and the folder is better shown
+    // than a key that silently does nothing.
+    for (keys, path, bind) in std::mem::take(&mut builder.nested) {
+        put_nested(&mut builder.binds, &keys, &path, bind)?;
+    }
+    if plugins.iter().all(|p| p.error.is_none())
+        && let Some((keys, name)) = empty_folder(&builder.binds, "")
+    {
+        anyhow::bail!("folder \"{name}\" on {keys} has no keys");
+    }
     // A bind may name a mode declared after it; by now all are, so a name
     // that is none of them is an error here, as an unknown action is.
     {
@@ -2189,6 +2369,7 @@ pub fn load_from(
         profile: None,
         settings: builder.settings,
         binds: builder.binds,
+        group_order: builder.group_order,
         global_binds: builder.global_binds,
         hooks: builder.hooks,
         bar: builder.bar,
@@ -2550,6 +2731,59 @@ fn sorted_entries(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// Bind (or, with `None`, unbind) `path` inside its folders: every chord but
+/// the last must be a folder by now.
+fn put_nested(
+    top: &mut HashMap<Chord, Bind>,
+    keys: &str,
+    path: &[Chord],
+    bind: Option<Bind>,
+) -> Result<()> {
+    let (last, folders) = path.split_last().expect("two chords at least");
+    let mut table = top;
+    for (i, c) in folders.iter().enumerate() {
+        let spelled = path[..=i]
+            .iter()
+            .map(Chord::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        table = match table.get_mut(c).map(|b| &mut b.action) {
+            Some(BindAction::Folder(f)) => &mut f.binds,
+            _ => anyhow::bail!(
+                "ranma.bind(\"{keys}\"): `{spelled}` is not a folder (make it one with ranma.bind(\"{spelled}\", {{ folder = NAME }}))"
+            ),
+        };
+    }
+    match bind {
+        Some(b) => {
+            table.insert(*last, b);
+        }
+        None => {
+            table.remove(last);
+        }
+    }
+    Ok(())
+}
+
+/// The first folder with no keys, depth first in key order: its keys as
+/// bound and its name.
+fn empty_folder(table: &HashMap<Chord, Bind>, prefix: &str) -> Option<(String, String)> {
+    let mut chords: Vec<&Chord> = table.keys().collect();
+    chords.sort_by_key(|c| c.to_string());
+    for c in chords {
+        if let Some(f) = table[c].folder() {
+            let keys = format!("{prefix}{c}");
+            if f.binds.is_empty() {
+                return Some((keys, f.name.clone()));
+            }
+            if let Some(found) = empty_folder(&f.binds, &format!("{keys} ")) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 /// Source one plugin file against a copy of the configuration built so far,
 /// keeping its effects only if it finishes: a failing plugin is dropped
 /// whole, never half-applied, and the others still load.
@@ -2733,8 +2967,77 @@ mod tests {
     fn builtin(cfg: &Config, keys: &str) -> Option<Action> {
         match &cfg.binds.get(&keys.parse().unwrap())?.action {
             BindAction::Builtin(a) => Some(a.clone()),
-            BindAction::Lua(_) => None,
+            BindAction::Lua(_) | BindAction::Folder(_) => None,
         }
+    }
+
+    #[test]
+    fn folders_hold_keys_in_any_order_and_nest() {
+        let cfg = with_user(
+            r#"
+            ranma.bind("g s", "exec lazygit", { desc = "status" })
+            ranma.bind("g", { folder = "git", group = "tools" })
+            ranma.bind("g b", { folder = "branches" })
+            ranma.bind("g b n", function() end, { desc = "new" })
+            ranma.bind("g b d", "exec git branch -d")
+            ranma.unbind("g b d")
+            ranma.bind("h", function() end, { desc = "history", group = "plugins" })
+            "#,
+        )
+        .unwrap();
+        let g: Chord = "g".parse().unwrap();
+        let git = cfg.binds[&g].folder().unwrap();
+        assert_eq!(git.name, "git");
+        assert_eq!(cfg.binds[&g].group.as_deref(), Some("tools"));
+        assert_eq!(git.binds.len(), 2, "s and b");
+        let path: Vec<Chord> = ["g", "b"].iter().map(|k| k.parse().unwrap()).collect();
+        let branches = folder_binds(&cfg.binds, &path).unwrap();
+        assert_eq!(branches.len(), 1, "d was unbound");
+        assert_eq!(cfg.group_order, vec!["tools", "plugins"]);
+        assert!(
+            !cfg.binds[&g].exits_mode,
+            "opening a folder stays in WM mode"
+        );
+    }
+
+    #[test]
+    fn folders_and_groups_are_parsed_strictly() {
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(
+            err(r#"ranma.bind("x", { folder = "scratch" })"#)
+                .contains(r#"folder "scratch" on x has no keys"#)
+        );
+        assert!(
+            err(r#"ranma.bind("g", "detach") ranma.bind("g s", "detach")"#)
+                .contains("`g` is not a folder")
+        );
+        assert!(
+            err(r#"ranma.bind("g s", "detach")"#).contains("`g` is not a folder"),
+            "a folder never declared"
+        );
+        assert!(err(r#"ranma.bind("g", { folder = "git", desc = "x" })"#).contains("not `desc`"));
+        assert!(
+            err(r#"ranma.bind("g", { folder = "git" }, { exit = true })"#)
+                .contains("unknown option `exit` (expected group)")
+        );
+        assert!(err(r#"ranma.bind("g", { group = "git" })"#).contains("{ folder = NAME }"));
+        assert!(
+            err(r#"ranma.bind("g", { folder = "git" }) ranma.bind("g backspace", "detach")"#)
+                .contains("backspace goes up a level")
+        );
+        assert!(
+            err(r#"ranma.bind("g", { folder = "git" }) ranma.bind("g s", "detach", { global = true })"#)
+                .contains("cannot be global")
+        );
+        assert!(
+            err(r#"ranma.bind("h", "detach", { group = "a name far too long" })"#)
+                .contains("1 to 16 cells")
+        );
+        assert!(err(r#"ranma.bind("h", "detach", { group = 3 })"#).contains("must be a string"));
+        assert!(
+            err(r#"ranma.mode("m", { binds = { ["a b"] = "detach" } })"#)
+                .contains("keys inside a folder are bound with ranma.bind")
+        );
     }
 
     #[test]
@@ -2757,7 +3060,7 @@ mod tests {
         assert_eq!(builtin(&cfg, "alt+s"), Some(Action::MoveToScratchpad));
         match &cfg.global_binds[&"alt+s".parse().unwrap()].action {
             BindAction::Builtin(a) => assert_eq!(*a, Action::ScratchpadToggle),
-            BindAction::Lua(_) => panic!("alt+s is a builtin"),
+            _ => panic!("alt+s is a builtin"),
         }
         assert_eq!(
             builtin(&cfg, "m"),
@@ -3327,6 +3630,24 @@ mod tests {
                 .contains("no_such_setting"),
             "a plugin is parsed as strictly as init.lua"
         );
+    }
+
+    #[test]
+    fn a_folder_a_failed_plugin_emptied_stays_empty() {
+        let dir = config_tree(
+            "emptied",
+            &[
+                (
+                    "plugin/agents.lua",
+                    "ranma.bind('i a', 'help')\nerror('boom')",
+                ),
+                ("init.lua", "ranma.bind('i', { folder = 'agents' })"),
+            ],
+        );
+        let cfg = load(Some(&dir)).expect("the plugin's error is reported, not the folder");
+        let i: Chord = "i".parse().unwrap();
+        assert!(cfg.binds[&i].folder().unwrap().binds.is_empty());
+        assert!(cfg.plugins[0].error.is_some());
     }
 
     #[test]

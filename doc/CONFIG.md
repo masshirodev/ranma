@@ -159,7 +159,54 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 | --- | --- |
 | `exit` | Whether WM mode ends after the bind fires. Given, it decides alone, over `wm_mode.sticky` too: `{ exit = false }` keeps WM mode after a resize even with `sticky = false`, and `{ exit = true }` ends a sticky one. Left out, it follows the action (`new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it), and `sticky = false` ends the mode after any bind. |
 | `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+s` to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used `M-s` spell-word), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
-| `desc` | A short name for the bind in the which-key hint (up to 16 cells show). A Lua function has no action to be named by, so without it the hint calls it `lua` and help (`leader ?`) `<lua function>`; with it, both show the `desc`. |
+| `desc` | A short name for the bind in the which-key hint (up to 16 cells show), for an action as well as a Lua function: `{ desc = "status" }` reads better than `exec lazygit`. A Lua function has no action to be named by, so without it the hint calls it `lua` and help (`leader ?`) `<lua function>`; with it, both show the `desc`. |
+| `group` | The which-key heading the bind is listed under, up to 16 cells. A built-in group's name (`panes`, `history`, …) puts the row after that group's own; a new name makes a heading of its own, after `workspaces`, in the order the configuration first names them. Without it, a bind ranma knows goes in its usual group and anything else in `yours`. |
+
+### Folders — keys behind a key
+
+A folder is a key with more keys behind it, as in Neovim's which-key:
+`leader g` opens it, then `s` runs what `g s` is bound to. In the hint it is
+one row, `g +git`; opened, the hint shows its keys instead, titled with the
+keys pressed so far (`ctrl+b › g`).
+
+```lua
+ranma.bind("g", { folder = "git" })                -- a folder on g
+ranma.bind("g s", "exec lazygit", { desc = "status" })
+ranma.bind("g c", "exec git commit", { desc = "commit" })
+ranma.bind("g b", { folder = "branches" })         -- folders nest
+ranma.bind("g b n", new_branch, { desc = "new" })
+
+ranma.bind("h", history_open, { desc = "history", group = "plugins" })
+ranma.bind("i", { folder = "agents", group = "plugins" })   -- a folder in a group
+```
+
+- **`{ folder = NAME }` in the action's place** makes the key a folder. It
+  takes `group` and nothing else: its name is its description, and opening
+  one never ends WM mode.
+- **Keys separated by spaces** bind inside the folder on the first ones. Each
+  leading key must be a folder by the end of the configuration (plugins and
+  `init.lua` both), so the order of the lines does not matter; a key bound to
+  anything else strands its keys, and the error names it. `ranma.unbind("g s")`
+  drops one.
+- **A bind inside a folder fires and closes it**: you are back at WM mode's
+  top level, still in WM mode when it is sticky. A folder is a prefix, not a
+  place; keys that should repeat belong in a mode (`ranma.mode`), and a
+  folder's key can open one.
+- **In a folder**: `bksp` goes up a level (it cannot be bound inside one),
+  `esc` and `⏎` leave WM mode, the leader goes back to the top level, and `?`
+  opens help with the folder's keys first. Any other key it does not bind is
+  swallowed, and the folder stays open.
+- **The hint**: a folder opened while the hint is up replaces it at once;
+  with none up it waits for the usual pause, so `leader g s` typed quickly
+  draws nothing. Inside, the folder's keys are under its own name, then
+  under the groups they name.
+- **A folder with no keys** is an error at load (`folder "scratch" on x has
+  no keys`). One left empty because the plugin that bound its keys failed to
+  load is kept, drawn dim, and opens on `nothing bound`: that plugin's error
+  is already reported, and an empty folder is better shown than a key that
+  silently does nothing.
+- Folders and `group` are for WM mode's keys: a global bind or a
+  `ranma.mode`'s keys cannot be one.
 
 ### Keys
 
@@ -276,8 +323,10 @@ workspaces, your own binds, sessions, history, ranma. It never takes a key:
 press one and it goes away and the key does what it does; pause again (twice
 as long this time) and it is back. Families read as one row, as you press
 them: `←↓↑→ focus`, `shift+←↓↑→ resize`, `1-0 workspace`, `ctrl+h/l prev/next
-tab`. The keys are your binds, so rebinding changes it; a Lua bind is named
-by its `desc`. It is at most half the screen high and takes more columns on a
+tab`. The keys are your binds, so rebinding changes it; a bind is named by
+its `desc` when it has one, and listed under its `group`. A folder is one row,
+`g +git`, and opening it shows its keys in the same panel (see "Folders"
+above). It is at most half the screen high and takes more columns on a
 wide one; groups that do not fit are named in its bottom frame
 (`+sessions · history · ranma`), and `? all keys` is there for the rest. A
 small screen gets the binds flowed without headings, and one under 30×6
