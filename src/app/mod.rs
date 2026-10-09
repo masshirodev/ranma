@@ -3858,6 +3858,14 @@ impl App {
                 }
                 seg
             }
+            // A ranma in the focused pane shows the title on its own pane's
+            // border: here it would be the same words twice.
+            "title"
+                if !self.config.title_nested
+                    && self.focused().is_some_and(|f| self.reports_from(f)) =>
+            {
+                Vec::new()
+            }
             "title" => self
                 .focused_title()
                 .filter(|t| !t.is_empty())
@@ -5953,6 +5961,42 @@ mod tests {
                 (host >> 8) as u8,
                 host as u8
             ))
+        );
+    }
+
+    #[test]
+    fn the_title_gives_way_to_a_ranma_that_shows_it_itself() {
+        let title_of = |user: Option<&str>| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let config = crate::config::load_from(None, None, user).unwrap();
+            let mut a = App::new(config, tx, 60, 10);
+            // As a ranma inside announces itself: the marker, then its title.
+            let set = format!(
+                "exec printf '\\033]2;{}inner\\007'; sleep 5",
+                crate::pane::NESTED_MARKER
+            );
+            a.run_action(set.parse().unwrap());
+            let id = a.focused().unwrap();
+            pump(&mut a, &rx, |a| a.panes[&id].hosts_ranma());
+            let plain: String = a.segment("title").iter().map(|p| p.text.clone()).collect();
+            let report = format!("{{\"v\":{}}}", crate::nestbar::PROTOCOL);
+            a.reports
+                .insert(id, crate::nestbar::Report::parse(&report).unwrap());
+            let nested: String = a.segment("title").iter().map(|p| p.text.clone()).collect();
+            (plain, nested)
+        };
+        let (plain, nested) = title_of(None);
+        assert!(plain.contains("inner"), "{plain}");
+        assert_eq!(nested, "", "hidden by default");
+        let (plain, nested) = title_of(Some(r#"ranma.module("title", { nested = "show" })"#));
+        assert_eq!(plain, nested);
+        assert!(
+            crate::config::load_from(
+                None,
+                None,
+                Some(r#"ranma.module("title", { nested = "x" })"#)
+            )
+            .is_err()
         );
     }
 }

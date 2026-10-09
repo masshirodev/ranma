@@ -758,6 +758,7 @@ struct Builder {
     workspaces_show_all: bool,
     workspaces_numbers_only: bool,
     workspaces_nested: NestedWorkspaces,
+    title_nested: bool,
     rules: Vec<Rule>,
     session_accents: HashMap<String, theme::Color>,
     profiles: HashMap<String, Profile>,
@@ -794,6 +795,9 @@ pub struct Config {
     pub workspaces_numbers_only: bool,
     /// Which workspaces show the workspaces of a ranma inside them.
     pub workspaces_nested: NestedWorkspaces,
+    /// The `title` module shows the focused pane's title when that pane is a
+    /// ranma reporting to this one (which shows it on its own border too).
+    pub title_nested: bool,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
@@ -1329,7 +1333,11 @@ fn install_api(
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
-                let allowed: &[&str] = if name == "workspaces" { &["show", "label", "nested"] } else { &[] };
+                let allowed: &[&str] = match name.as_str() {
+                    "workspaces" => &["show", "label", "nested"],
+                    "title" => &["nested"],
+                    _ => &[],
+                };
                 if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
                     return Err(rt_err(format!(
                         "ranma.module(\"{name}\"): `{name}` is built in and takes {}; `{k}` is not one",
@@ -1384,6 +1392,22 @@ fn install_api(
                     lua.app_data_mut::<Builder>()
                         .ok_or_else(loading_only)?
                         .workspaces_nested = n;
+                }
+                if name == "title"
+                    && let Some(nested) = opts.get::<Option<String>>("nested")?
+                {
+                    let show = match nested.as_str() {
+                        "show" => true,
+                        "hide" => false,
+                        other => {
+                            return Err(rt_err(format!(
+                                "ranma.module(\"title\"): nested = \"{other}\" (expected \"hide\" or \"show\")"
+                            )));
+                        }
+                    };
+                    lua.app_data_mut::<Builder>()
+                        .ok_or_else(loading_only)?
+                        .title_nested = show;
                 }
                 return Ok(());
             }
@@ -1981,6 +2005,7 @@ pub fn load_from(
         workspaces_show_all: builder.workspaces_show_all,
         workspaces_numbers_only: builder.workspaces_numbers_only,
         workspaces_nested: builder.workspaces_nested,
+        title_nested: builder.title_nested,
         rules: builder.rules,
         session_accents: builder.session_accents,
         layouts: builder.layouts,

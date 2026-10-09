@@ -1618,10 +1618,15 @@ the way a workspace holds one:
 No protocol bump: the field defaults to none, so an outer that predates it
 reads the report as before and draws a plain `S`, which is what it did.
 
-What it does not do yet: the title is still shown twice when the focused pane
-is a nested ranma (the outer's centre and the inner's own border); the handoff
-suggests a setting to leave the centre empty then. The host an inner ranma runs
-on is not reported (the session name covers it when there are several).
+The title is not shown twice (2026-10-09): with a reporting ranma in the
+focused pane, the outer's `title` module is empty, since the inner shows its
+title on its own pane's border. A default rather than only the setting the
+handoff suggested, because the duplicate is never wanted; `ranma.module("title",
+{ nested = "show" })` brings it back. Only the title gives way: messages still
+take the centre, which is where the inner's status is surfaced.
+
+What it does not do yet: the host an inner ranma runs on is not reported
+(the session name covers it when there are several).
 
 **An unfocused nested ranma is a label on its border** (2026-10-06; designed
 from `doc/briefs/done/UNFOCUSED_BAR.md`, handoff

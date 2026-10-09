@@ -378,6 +378,9 @@ ranma.bar {
 -- inside draws no bar. "focused" expands only the one you are in; "all" every
 -- one holding a ranma; "off" none.
 ranma.module("workspaces", { show = "occupied", label = "program", nested = "focused" })
+-- The title in the middle gives way while the focused pane runs a ranma that
+-- reports here: it shows the title on its own pane's border. "show" keeps both.
+ranma.module("title", { nested = "hide" })
 
 -- cpu and mem take interval and format ("%s" is the reading):
 --   ranma.module("cpu", { interval = 1, format = "CPU %s" })
