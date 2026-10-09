@@ -1079,6 +1079,24 @@ as targets of what already exists, `workspace last` and `focus last`, so
 `move_to_workspace last` comes free. Kept across `ranma upgrade`; not in
 the snapshot, which is about bringing a layout back, not where you were.
 
+**Activity and silence cost what a hidden pane already costs.** A pane out
+of sight wakes the loop once and then not again until it is drawn (see
+"Rendering rules"), and once is all `monitor_activity` needs: the workspace
+is marked on that wakeup and stays marked until shown. It is a setting, not
+tmux's per-window option, because the question it answers ("where did
+something happen") is about the whole bar. It has a colour of its own,
+`ws_activity`, optional and falling back to `bar_accent`, so a theme
+rendered from a palette needs nothing new; a ranma inside reports it, and
+an older one reading the report ignores the field. Silence is the opposite
+question, about one pane: `monitor_silence` watches the focused one and,
+when it has printed and then stays quiet, says so with a toast and marks its
+workspace urgent like a bell, since it is an alert and not news. Knowing a
+hidden pane is *still* printing needs a wakeup per second, so a watched
+pane printing out of sight is re-armed at most once a second (the same
+`IDLE_REARM` the `pane_idle` hook uses), and only while it prints. Nothing
+is drawn on the watched pane's border: the toggle answers in the bar, and a
+border mark would compete with the sync mark and the badges for one row.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

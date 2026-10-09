@@ -1249,6 +1249,7 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
         bar::Style::WsOccupied => fg(c.ws_occupied, st.ws_occupied),
         bar::Style::WsEmpty => fg(c.ws_empty, st.ws_empty),
         bar::Style::WsUrgent => fg(c.ws_urgent, st.ws_urgent),
+        bar::Style::WsActivity => fg(c.ws_activity(), st.ws_activity),
         // A current workspace that is not the end of the path: bold, occupied.
         bar::Style::WsHolder => fg(c.ws_occupied, st.ws_occupied).add_modifier(Modifier::BOLD),
         bar::Style::TabActive => filled(c.tab_active_fg, c.tab_active_bg, st.tab_active),

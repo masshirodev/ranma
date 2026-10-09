@@ -238,7 +238,7 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 
 - [x] Pane numbers: `display_panes`
 - [x] The last workspace and the last pane: `workspace last`, `focus last`
-- [ ] Activity and silence marks on workspaces
+- [x] Activity and silence marks on workspaces: `monitor_activity`, `monitor_silence`
 - [ ] Panes that stay when their program ends (`remain_on_exit`)
 - [ ] Paste buffers and a picker over them
 - [ ] Pane scrollbars

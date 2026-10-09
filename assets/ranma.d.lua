@@ -42,6 +42,8 @@ ranma.config_dir = nil
 ---@field theme_colors? "own"|"outer"
 ---@field restore? "ask"|"off"
 ---@field pane_idle? number Seconds a printing pane must stay quiet for pane_idle, 0.5-3600.
+---@field monitor_activity? boolean Mark a workspace that printed while not shown.
+---@field monitor_silence? number Seconds a pane watched by monitor_silence must stay quiet, 1-86400.
 
 ---Change the settings it names; call it as often as you like.
 ---@param settings ranma.Settings

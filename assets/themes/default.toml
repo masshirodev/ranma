@@ -49,6 +49,10 @@ tab_inactive_bg = "#313244"
 # button_latched_fg / _bg = mode_fg / mode_bg
 # button_disabled_fg = bar_dim
 
+# A workspace that printed while not shown (monitor_activity). Unset here on
+# purpose: bar_accent.
+# ws_activity = ...
+
 # Copy mode's selection, and a bar module's ground (see [bar]). Unset here on
 # purpose: the selection is drawn reversed, and modules sit on bar_bg.
 # selection_fg = ...    selection_bg = ...
@@ -122,6 +126,7 @@ ws_active = ["bold"]
 ws_occupied = []
 ws_empty = []
 ws_urgent = ["bold"]
+ws_activity = []
 tab_active = ["bold"]
 tab_inactive = []
 # A pane's title on its border, and the focused pane's.

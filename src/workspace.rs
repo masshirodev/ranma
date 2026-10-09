@@ -11,6 +11,10 @@ pub struct Workspace {
     pub fullscreen: bool,
     /// A pane here rang the bell while the workspace was not shown.
     pub urgent: bool,
+    /// A pane here printed while the workspace was not shown, and
+    /// `monitor_activity` is on (tmux's `monitor-activity`).
+    #[serde(default)]
+    pub activity: bool,
     /// A name given with rename_workspace; the bar shows it after the number.
     /// A named workspace stays even while empty: the name says it is wanted.
     pub name: Option<String>,

@@ -148,6 +148,12 @@ pub struct Settings {
     pub splash: bool,
     /// How long a pane that printed must stay quiet for `pane_idle`.
     pub pane_idle: std::time::Duration,
+    /// Mark a workspace in the bar when a pane in it prints while it is not
+    /// shown (tmux's `monitor-activity`).
+    pub monitor_activity: bool,
+    /// How long a pane watched with `monitor_silence` must stay quiet after
+    /// printing before it says so.
+    pub monitor_silence: std::time::Duration,
 }
 
 impl Default for Settings {
@@ -176,6 +182,8 @@ impl Default for Settings {
             paste_image_command: None,
             splash: true,
             pane_idle: std::time::Duration::from_secs(5),
+            monitor_activity: false,
+            monitor_silence: std::time::Duration::from_secs(10),
         }
     }
 }
@@ -204,6 +212,8 @@ struct SettingsPatch {
     paste: Option<PastePatch>,
     splash: Option<bool>,
     pane_idle: Option<f64>,
+    monitor_activity: Option<bool>,
+    monitor_silence: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -939,6 +949,17 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
             ));
         }
         s.pane_idle = std::time::Duration::from_secs_f64(secs);
+    }
+    if let Some(on) = patch.monitor_activity {
+        s.monitor_activity = on;
+    }
+    if let Some(secs) = patch.monitor_silence {
+        if !(1.0..=86400.0).contains(&secs) {
+            return Err(format!(
+                "{who}: monitor_silence must be 1 to 86400 seconds, not {secs}"
+            ));
+        }
+        s.monitor_silence = std::time::Duration::from_secs_f64(secs);
     }
     if patch.shell.is_some() {
         s.shell = patch.shell;

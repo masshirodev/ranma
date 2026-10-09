@@ -111,6 +111,10 @@ pub struct Ws {
     pub occ: bool,
     #[serde(default)]
     pub urgent: bool,
+    /// It printed while not shown (`monitor_activity`). Older builds send
+    /// none and read past it.
+    #[serde(default)]
+    pub activity: bool,
     /// The key that goes to it, as a bind spells it (`3`).
     #[serde(default)]
     pub key: Option<String>,
@@ -372,6 +376,8 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
             Style::WsHolder
         } else if w.urgent || nest.is_some_and(Report::any_urgent) {
             Style::WsUrgent
+        } else if w.activity {
+            Style::WsActivity
         } else if w.occ {
             Style::WsOccupied
         } else {
@@ -777,6 +783,7 @@ mod tests {
             name: Some(name.into()),
             occ: true,
             urgent: false,
+            activity: false,
             key: Some(n.to_string()),
             nest: None,
         }

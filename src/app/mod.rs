@@ -199,6 +199,11 @@ pub struct App {
     activity: HashMap<PaneId, (Instant, Instant)>,
     /// When to look for panes gone quiet.
     idle_due: Option<Instant>,
+    /// Panes watched by `monitor_silence`: how long a quiet counts, and when
+    /// they last printed (none once they have been reported quiet).
+    silence: HashMap<PaneId, (Duration, Option<Instant>)>,
+    /// When to look at them again.
+    silence_due: Option<Instant>,
     /// The directory each pane's shell was last seen in, for `cwd_change`.
     cwds: HashMap<PaneId, String>,
     /// The cell the pointer is over (pane, line, column, x, y), and when it
@@ -389,6 +394,8 @@ impl App {
             lua_ui: None,
             activity: HashMap::new(),
             idle_due: None,
+            silence: HashMap::new(),
+            silence_due: None,
             cwds: HashMap::new(),
             hover_at: None,
             hover_due: None,
@@ -561,10 +568,11 @@ impl App {
         (!self.scratch.is_empty(), self.scratch_shown)
     }
 
-    /// (number, is current, has panes, urgent, name) for each listed workspace.
+    /// (number, is current, has panes, urgent, printed while not shown, name)
+    /// for each listed workspace.
     /// The name is the one given (rename_workspace), else the program in the
     /// workspace's focused pane, unless the module says `label = "number"`.
-    pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool, Option<String>)> {
+    pub fn workspace_list(&self) -> Vec<(u8, bool, bool, bool, bool, Option<String>)> {
         let mut nums: Vec<u8> = self
             .workspaces
             .iter()
@@ -584,6 +592,7 @@ impl App {
                     n == self.current,
                     ws.is_some_and(|w| !w.is_empty()),
                     ws.is_some_and(|w| w.urgent),
+                    ws.is_some_and(|w| w.activity),
                     ws.and_then(|w| w.name.clone()).or_else(|| {
                         if self.config.workspaces_numbers_only {
                             return None;
@@ -1150,6 +1159,7 @@ impl App {
         self.current = target;
         let ws = self.workspaces.entry(target).or_default();
         ws.urgent = false;
+        ws.activity = false;
         self.tidy();
         self.relayout();
     }
@@ -1443,6 +1453,8 @@ impl App {
         match &ev {
             TermEvent::Wakeup => {
                 self.note_activity(id);
+                self.mark_activity(id, visible);
+                self.note_printed(id);
                 self.watch_output(id);
             }
             TermEvent::Bell => {
@@ -2573,6 +2585,7 @@ impl App {
             Action::CopyMode => self.enter_copy_mode(None),
             Action::Hints => self.enter_hints(),
             Action::DisplayPanes => self.show_pane_numbers(),
+            Action::MonitorSilence(how) => self.monitor_silence(how),
             // Backward: the most recent match first, which is what searching
             // history usually wants.
             Action::Search => self.enter_copy_mode(Some(true)),
@@ -2838,6 +2851,130 @@ impl App {
         if self.idle_due.is_none() {
             self.idle_due = Some(now + IDLE_REARM.min(self.config.settings.pane_idle));
         }
+    }
+
+    /// A pane printed out of sight: its workspace is marked, with
+    /// `monitor_activity` on. A hidden pane wakes the loop once and then not
+    /// again until drawn, so this costs nothing while it keeps printing.
+    fn mark_activity(&mut self, id: PaneId, visible: bool) {
+        if !self.config.settings.monitor_activity || visible {
+            return;
+        }
+        match self.locate(id) {
+            Some(SCRATCHPAD) => {}
+            Some(n) if n == self.current => {}
+            Some(n) => {
+                if !self.ws_mut(n).activity {
+                    self.ws_mut(n).activity = true;
+                    self.dirty = true;
+                }
+            }
+            None => {
+                if let Some((si, n)) = self.locate_hidden(id)
+                    && let Some(ws) = self.sessions[si].workspaces.get_mut(&n)
+                {
+                    ws.activity = true;
+                }
+            }
+        }
+    }
+
+    /// `monitor_silence`: start or stop watching the focused pane.
+    fn monitor_silence(&mut self, how: Option<Option<u32>>) {
+        let Some(id) = self.focused() else {
+            return;
+        };
+        let quiet = match how {
+            Some(Some(secs)) => Some(Duration::from_secs(secs as u64)),
+            Some(None) => None,
+            None if self.silence.contains_key(&id) => None,
+            None => Some(self.config.settings.monitor_silence),
+        };
+        self.status = Some(match quiet {
+            Some(q) => {
+                self.silence.insert(id, (q, None));
+                format!("watching for {}s of silence", q.as_secs())
+            }
+            None => {
+                self.silence.remove(&id);
+                "not watching for silence".to_string()
+            }
+        });
+        self.dirty = true;
+    }
+
+    /// A watched pane printed: the quiet starts again from now.
+    fn note_printed(&mut self, id: PaneId) {
+        let Some((quiet, last)) = self.silence.get_mut(&id) else {
+            return;
+        };
+        let now = Instant::now();
+        *last = Some(now);
+        let due = now + IDLE_REARM.min(*quiet);
+        if self.silence_due.is_none_or(|d| d > due) {
+            self.silence_due = Some(due);
+        }
+    }
+
+    /// Watched panes quiet long enough are reported, once per burst: a
+    /// toast, and their workspace marked urgent if it is not shown. Panes
+    /// still printing out of sight are asked for their next wakeup, as
+    /// `check_idle` does, or the first would be the last until drawn.
+    fn check_silence(&mut self, now: Instant) {
+        let quiet: Vec<PaneId> = self
+            .silence
+            .iter()
+            .filter(|(_, (q, last))| last.is_some_and(|l| now.saturating_duration_since(l) >= *q))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in quiet {
+            if let Some((_, last)) = self.silence.get_mut(&id) {
+                *last = None;
+            }
+            let title = self.label_of(id);
+            let place = match self.locate(id) {
+                Some(SCRATCHPAD) => " (the scratchpad)".to_string(),
+                Some(n) => format!(" (workspace {n})"),
+                None => String::new(),
+            };
+            let what = if title.is_empty() {
+                "a pane".to_string()
+            } else {
+                title
+            };
+            self.toast(
+                format!("quiet: {what}{place}"),
+                crate::toast::Level::Normal,
+                None,
+            );
+            if !self.visible.contains(&id)
+                && let Some(n) = self
+                    .locate(id)
+                    .filter(|n| *n != SCRATCHPAD && *n != self.current)
+            {
+                self.ws_mut(n).urgent = true;
+                self.dirty = true;
+            }
+        }
+        let printing: Vec<PaneId> = self
+            .silence
+            .iter()
+            .filter(|(_, (_, last))| last.is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &printing {
+            if !self.visible.contains(id)
+                && let Some(p) = self.panes.get(id)
+            {
+                p.drawn();
+            }
+        }
+        self.silence_due = self
+            .silence
+            .values()
+            .filter_map(|(q, last)| last.map(|l| l + *q))
+            .chain((!printing.is_empty()).then_some(now + IDLE_REARM))
+            .min();
     }
 
     /// Panes quiet for `pane_idle` fire the hook and are forgotten. Panes
@@ -3110,6 +3247,7 @@ impl App {
             .chain(self.press_due())
             .chain(self.config.jobs.next_due())
             .chain(self.idle_due)
+            .chain(self.silence_due)
             .chain(self.hover_due)
             .chain(self.screen_deadline())
             .chain(self.watch_due)
@@ -3317,6 +3455,9 @@ impl App {
         if self.idle_due.is_some_and(|t| t <= now) {
             self.check_idle(now);
         }
+        if self.silence_due.is_some_and(|t| t <= now) {
+            self.check_silence(now);
+        }
         if self.hover_due.is_some_and(|t| t <= now) {
             self.hover_due = None;
             self.send_hover();
@@ -3495,11 +3636,13 @@ impl App {
                 let mut seg: Segment = self
                     .workspace_list()
                     .into_iter()
-                    .flat_map(|(n, current, occupied, urgent, name)| {
+                    .flat_map(|(n, current, occupied, urgent, activity, name)| {
                         let style = if current && !self.scratch_shown {
                             Style::WsActive
                         } else if urgent {
                             Style::WsUrgent
+                        } else if activity {
+                            Style::WsActivity
                         } else if occupied {
                             Style::WsOccupied
                         } else {
@@ -5004,7 +5147,7 @@ mod tests {
     }
 
     fn names(app: &App) -> Vec<Option<String>> {
-        app.workspace_list().into_iter().map(|w| w.4).collect()
+        app.workspace_list().into_iter().map(|w| w.5).collect()
     }
 
     #[test]
@@ -5396,5 +5539,64 @@ mod tests {
         assert_eq!(a.focused(), Some(1));
         // A workspace switch is not a pane change.
         assert_eq!(a.active().last_pane, Some(2));
+    }
+
+    #[test]
+    fn activity_marks_a_workspace_not_shown_until_it_is() {
+        let mut a = app(Some("ranma.set { monitor_activity = true }"));
+        with_pane(&mut a, 1);
+        with_pane_in(&mut a, 2, 7);
+        a.mark_activity(1, false);
+        assert!(
+            !a.workspaces[&1].activity,
+            "the shown workspace is never marked"
+        );
+        a.mark_activity(7, false);
+        assert!(a.workspaces[&2].activity);
+        let list = a.workspace_list();
+        assert!(list.iter().any(|w| w.0 == 2 && w.4));
+        a.run_action("workspace 2".parse().unwrap());
+        assert!(!a.workspaces[&2].activity, "seen");
+
+        let mut off = app(None);
+        with_pane_in(&mut off, 2, 7);
+        off.mark_activity(7, false);
+        assert!(!off.workspaces[&2].activity, "off by default");
+    }
+
+    #[test]
+    fn a_watched_pane_that_goes_quiet_says_so_once_per_burst() {
+        let mut a = app(Some("ranma.set { monitor_silence = 3 }"));
+        with_pane(&mut a, 1);
+        a.run_action("monitor_silence".parse().unwrap());
+        assert_eq!(a.silence.get(&1).map(|s| s.0), Some(Duration::from_secs(3)));
+        a.run_action("workspace 2".parse().unwrap());
+        // Watched, but quiet from the start: nothing to report.
+        let t0 = Instant::now();
+        a.check_silence(t0 + Duration::from_secs(60));
+        assert!(a.toasts.is_empty());
+        a.note_printed(1);
+        assert!(a.silence_due.is_some());
+        let printed = a.silence[&1].1.unwrap();
+        a.check_silence(printed + Duration::from_secs(2));
+        assert!(a.toasts.is_empty(), "not quiet long enough");
+        a.check_silence(printed + Duration::from_secs(3));
+        assert_eq!(a.toasts.len(), 1);
+        assert!(
+            a.workspaces[&1].urgent,
+            "out of sight, its workspace is marked"
+        );
+        a.check_silence(printed + Duration::from_secs(30));
+        assert_eq!(a.toasts.len(), 1, "once per burst");
+        assert!(a.silence_due.is_none(), "nothing to wake for");
+
+        a.run_action("workspace 1".parse().unwrap());
+        a.run_action("monitor_silence".parse().unwrap());
+        assert!(a.silence.is_empty(), "bare toggles off");
+        a.run_action("monitor_silence 30".parse().unwrap());
+        assert_eq!(a.silence[&1].0, Duration::from_secs(30));
+        a.run_action("monitor_silence off".parse().unwrap());
+        assert!(a.silence.is_empty());
+        assert!("monitor_silence 0".parse::<Action>().is_err());
     }
 }

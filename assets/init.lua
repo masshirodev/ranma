@@ -39,6 +39,15 @@ ranma.set {
   -- Seconds a pane that was printing must stay quiet before the pane_idle
   -- hook hears it (an agent or a build that stopped). 0.5-3600.
   pane_idle = 5,
+  -- tmux's monitor-activity: a workspace whose panes print while it is not
+  -- shown is marked in the bar (colors.ws_activity, else bar_accent) until
+  -- you go there.
+  monitor_activity = false,
+  -- tmux's monitor-silence: the monitor_silence action watches the focused
+  -- pane, and when it has printed and then stays quiet this many seconds, a
+  -- toast says so and its workspace is marked urgent (a build that finished,
+  -- a log that stopped). 1-86400.
+  monitor_silence = 10,
 
   -- nil means $SHELL, then /bin/sh.
   shell = nil,

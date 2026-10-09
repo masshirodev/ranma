@@ -157,6 +157,11 @@ pub enum Action {
     /// Label the links on the focused pane's screen; typing a label copies it,
     /// in capitals opens it.
     Hints,
+    /// Watch the focused pane for silence: when it has printed and then stays
+    /// quiet, say so (tmux's `monitor-silence`). Bare toggles with the
+    /// `monitor_silence` setting; a number of seconds watches for that long a
+    /// quiet; `off` stops.
+    MonitorSilence(Option<Option<u32>>),
     /// Number the panes on screen; typing a number focuses that pane (tmux's
     /// `display-panes`).
     DisplayPanes,
@@ -321,6 +326,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("copy_mode", ""),
     ("hints", ""),
     ("display_panes", ""),
+    ("monitor_silence", "[seconds|off]"),
     ("search", ""),
     ("new_session", "[name]"),
     ("session", "<name|next|prev>"),
@@ -652,6 +658,25 @@ impl FromStr for Action {
             "copy_mode" => no_arg(Action::CopyMode),
             "hints" => no_arg(Action::Hints),
             "display_panes" => no_arg(Action::DisplayPanes),
+            "monitor_silence" => match (first, second) {
+                (None, _) => Ok(Action::MonitorSilence(None)),
+                (Some("off"), None) => Ok(Action::MonitorSilence(Some(None))),
+                (Some(n), None) => n
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|n| (1..=86_400).contains(n))
+                    .map(|n| Action::MonitorSilence(Some(Some(n))))
+                    .ok_or(ActionError::BadArg {
+                        action: name.into(),
+                        arg: n.into(),
+                        expected: "seconds (1-86400) or off",
+                    }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "seconds (1-86400) or off",
+                }),
+            },
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
@@ -811,6 +836,9 @@ impl fmt::Display for Action {
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Hints => f.write_str("hints"),
             Action::DisplayPanes => f.write_str("display_panes"),
+            Action::MonitorSilence(None) => f.write_str("monitor_silence"),
+            Action::MonitorSilence(Some(None)) => f.write_str("monitor_silence off"),
+            Action::MonitorSilence(Some(Some(n))) => write!(f, "monitor_silence {n}"),
             Action::Search => f.write_str("search"),
             Action::NewSession(None) => f.write_str("new_session"),
             Action::NewSession(Some(n)) => write!(f, "new_session {n}"),

@@ -91,6 +91,10 @@ impl Toasts {
         self.list.len() != before
     }
 
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.list.is_empty()
     }

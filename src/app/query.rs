@@ -53,6 +53,7 @@ impl App {
     pub(super) fn pane_ended(&mut self, id: PaneId) {
         self.cwds.remove(&id);
         self.activity.remove(&id);
+        self.silence.remove(&id);
         self.badges.remove(&id);
         self.forget_watches(id);
         if self.tooltip.as_ref().is_some_and(|(t, _)| t.pane == id) {

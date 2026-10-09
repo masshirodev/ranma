@@ -136,6 +136,8 @@ Each call changes only the fields it names; call it as often as you like.
 | `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. See [ranma inside ranma](#ranma-inside-ranma). |
 | `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
 | `pane_idle` | `5` | Seconds a pane that was printing must stay quiet before the `pane_idle` hook hears of it, 0.5-3600. See [Hooks](#hooks--ranmaonevent-fn). |
+| `monitor_activity` | `false` | tmux's `monitor-activity`: a workspace whose panes print while it is not shown is drawn in `colors.ws_activity` (else `bar_accent`) in the workspaces module until you go there. Costs one wakeup per hidden pane until it is shown again. |
+| `monitor_silence` | `10` | Seconds a pane watched with the `monitor_silence` action must stay quiet, after printing, before ranma says so. 1-86400. |
 | `mouse` | `"click"` | Outside WM mode: `click` focuses the pane clicked, `hover` focuses the pane under the pointer, `off` leaves the mouse to your terminal. See [Mouse](#mouse). |
 
 ## Binds — `ranma.bind(keys, action, opts)`
@@ -225,6 +227,7 @@ does not matter; it is ignored.
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
 | `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile. Not bound by default: `ranma.bind("i", "display_panes")`. |
+| `monitor_silence [seconds\|off]` | Watch the focused pane for silence (tmux's `monitor-silence`): once it has printed and then stays quiet for the `monitor_silence` setting's seconds (or the number given), a toast says `quiet: <title>`, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles; `off` stops. A build or a log you want to hear the end of. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
@@ -1515,6 +1518,7 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.bar_bg`, `bar_fg`, `bar_dim`, `bar_accent`, `bar_urgent` | colour; the last four are the module styles `normal`, `dim`, `accent`, `urgent` |
 | `colors.mode_fg`, `mode_bg` | the WM-mode indicator, and the focused border in WM mode |
 | `colors.ws_active_fg`, `ws_active_bg`, `ws_occupied`, `ws_empty`, `ws_urgent` | the workspaces module |
+| `colors.ws_activity` | a workspace that printed while not shown (`monitor_activity`); unset, `bar_accent` |
 | `colors.tab_active_fg`, `tab_active_bg`, `tab_inactive_fg`, `tab_inactive_bg` | tab bars of groups |
 | `colors.picker_selected_fg`, `picker_selected_bg` | the selected row in switchers and help |
 | `colors.toolbar_bg` | a toolbar's row and the gaps between its buttons; unset, `bar_bg` |
@@ -1546,7 +1550,7 @@ palette, say) styles toolbars too.
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
 | `panes.active_bg`, `inactive_bg` | the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's `window-active-style` and `window-style`); unset, the terminal's own. Unfocused text fades toward `inactive_bg`. |
-| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected`, `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
+| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected`, `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
 
 A cell is about twice as tall as it is wide, so outer gaps look even at
 `outer_horizontal = 2 * outer_vertical`.

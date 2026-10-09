@@ -27,6 +27,8 @@ pub enum Style {
     WsOccupied,
     WsEmpty,
     WsUrgent,
+    /// A workspace that printed while not shown (`monitor_activity`).
+    WsActivity,
     /// A current workspace that is not the end of the path: bold, occupied.
     WsHolder,
     /// The deepest current workspace inside a nested ranma: bold text in that

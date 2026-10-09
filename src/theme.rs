@@ -160,6 +160,9 @@ pub struct Colors {
     pub module_bg: Option<Color>,
     #[serde(default)]
     pub module_fg: Option<Color>,
+    // A workspace that printed while not shown; unset, `bar_accent`.
+    #[serde(default)]
+    pub ws_activity: Option<Color>,
 }
 
 impl Colors {
@@ -188,6 +191,10 @@ impl Colors {
         serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or_else(|_| self.clone())
     }
 
+    /// A workspace that printed while not shown: `bar_accent`.
+    pub fn ws_activity(&self) -> Color {
+        self.ws_activity.unwrap_or(self.bar_accent)
+    }
     /// The gaps between buttons and the rest of a toolbar's row: `bar_bg`.
     pub fn toolbar_bg(&self) -> Color {
         self.toolbar_bg.unwrap_or(self.bar_bg)
@@ -351,6 +358,9 @@ pub struct Styles {
     pub ws_occupied: Attrs,
     pub ws_empty: Attrs,
     pub ws_urgent: Attrs,
+    /// Unset, none: the colour says it.
+    #[serde(default)]
+    pub ws_activity: Attrs,
     pub tab_active: Attrs,
     pub tab_inactive: Attrs,
     /// A pane's title on its border, and the focused pane's.

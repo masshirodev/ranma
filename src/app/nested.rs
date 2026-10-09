@@ -118,13 +118,14 @@ impl App {
         let ws = self
             .workspace_list()
             .into_iter()
-            .map(|(n, _current, occ, urgent, name)| {
+            .map(|(n, _current, occ, urgent, activity, name)| {
                 let focused = self.workspaces.get(&n).and_then(|w| w.focused);
                 Ws {
                     n,
                     name,
                     occ,
                     urgent,
+                    activity,
                     key: keys.get(&n).cloned(),
                     nest: focused
                         .and_then(|f| self.report_of(f))

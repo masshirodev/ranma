@@ -415,7 +415,7 @@ impl App {
         let mut items: Vec<Item> = self
             .workspace_list()
             .into_iter()
-            .map(|(n, current, _, _, name)| Item {
+            .map(|(n, current, _, _, _, name)| Item {
                 label: match name {
                     Some(name) => format!("{n}:{name}"),
                     None => n.to_string(),
