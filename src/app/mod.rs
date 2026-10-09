@@ -304,6 +304,12 @@ pub struct App {
     waiters: HashMap<PaneId, Vec<query::Reply>>,
     /// Exit statuses of children that ended, until their pane is closed.
     exit_codes: HashMap<PaneId, i32>,
+    /// Panes whose program ended and that stayed (`remain_on_exit`), with
+    /// its exit status. Enter in one runs it again.
+    dead: HashMap<PaneId, Option<i32>>,
+    /// Panes whose program ended and will stay, until the event loop has
+    /// read the last of their output.
+    exited: HashMap<PaneId, std::process::ExitStatus>,
     /// The last panes to end and their exit statuses, for a late `wait`.
     ended: std::collections::VecDeque<(PaneId, Option<i32>)>,
     /// Popups: when the key pane closes, the value pane gets focus back.
@@ -449,6 +455,8 @@ impl App {
             cpu_prev: None,
             waiters: HashMap::new(),
             exit_codes: HashMap::new(),
+            dead: HashMap::new(),
+            exited: HashMap::new(),
             ended: Default::default(),
             return_focus: HashMap::new(),
             synced: HashSet::new(),
@@ -1568,9 +1576,19 @@ impl App {
                 if let Some(code) = status.code() {
                     self.exit_codes.insert(id, code);
                 }
-                self.close_pane(id);
+                // The event loop reads what is left after this, then says
+                // Exit: the pane stays then, with all of it on screen.
+                if self.config.settings.remain_on_exit.keeps(status.code()) {
+                    self.exited.insert(id, status);
+                } else {
+                    self.close_pane(id);
+                }
             }
-            TermEvent::Exit => self.close_pane(id),
+            TermEvent::Exit => match self.exited.remove(&id) {
+                Some(status) => self.remain(id, status),
+                None if self.dead.contains_key(&id) => {}
+                None => self.close_pane(id),
+            },
             // Clipboard (OSC 52) and colour queries: milestone 3.
             _ => {}
         }
@@ -2115,6 +2133,9 @@ impl App {
                 self.run_action(Action::NewPane);
                 return;
             }
+            if let Some(id) = self.focused().filter(|f| self.dead.contains_key(f)) {
+                return self.dead_key(id, &key);
+            }
             // Typing ends a mouse selection, as in any terminal.
             if self.selection_pane.is_some() {
                 self.clear_selection();
@@ -2586,6 +2607,11 @@ impl App {
             Action::Hints => self.enter_hints(),
             Action::DisplayPanes => self.show_pane_numbers(),
             Action::MonitorSilence(how) => self.monitor_silence(how),
+            Action::RespawnPane => {
+                if let Some(id) = self.focused() {
+                    self.respawn_dead(id);
+                }
+            }
             // Backward: the most recent match first, which is what searching
             // history usually wants.
             Action::Search => self.enter_copy_mode(Some(true)),
@@ -2876,6 +2902,62 @@ impl App {
                     ws.activity = true;
                 }
             }
+        }
+    }
+
+    /// A pane's program ended and the pane stays: how it ended goes at the
+    /// bottom of what it printed, and whoever waits on it hears now, since
+    /// the program is what they wait for.
+    fn remain(&mut self, id: PaneId, status: std::process::ExitStatus) {
+        use std::os::unix::process::ExitStatusExt;
+        let how = match (status.code(), status.signal()) {
+            (Some(c), _) => format!("exited {c}"),
+            (None, Some(s)) => format!("killed by signal {s}"),
+            (None, None) => "ended".to_string(),
+        };
+        if let Some(p) = self.panes.get(&id) {
+            // Written into the emulator, not the PTY: nobody reads that now.
+            let line = format!("\r\n\x1b[0m\x1b[7m [{how}] Enter runs it again, q closes \x1b[0m");
+            let mut parser: alacritty_terminal::vte::ansi::Processor = Default::default();
+            parser.advance(&mut *p.term.lock(), line.as_bytes());
+        }
+        self.dead.insert(id, status.code());
+        self.process_ended(id);
+        self.dirty = true;
+    }
+
+    /// A key in a pane whose program ended: Enter runs it again, q closes
+    /// it, and the rest go nowhere.
+    fn dead_key(&mut self, id: PaneId, key: &KeyEvent) {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return;
+        }
+        match key.code {
+            KeyCode::Enter => self.respawn_dead(id),
+            KeyCode::Char('q') => self.close_pane(id),
+            _ => {}
+        }
+    }
+
+    /// `respawn_pane`: the pane's command again, where it first started. A
+    /// pane still running is left alone, which is not tmux's `-k`: a key
+    /// that kills what you are running is one press from a lost afternoon.
+    fn respawn_dead(&mut self, id: PaneId) {
+        if !self.dead.contains_key(&id) {
+            self.status = Some("its program is still running".into());
+            return;
+        }
+        let (command, cwd) = match self.panes.get(&id) {
+            Some(p) => (p.command.clone(), p.start_cwd.clone()),
+            None => return,
+        };
+        match self.respawn(id, command.as_deref(), cwd, &[]) {
+            Ok(()) => self.relayout(),
+            Err(e) => self.status = Some(e),
         }
     }
 
@@ -5598,5 +5680,53 @@ mod tests {
         a.run_action("monitor_silence off".parse().unwrap());
         assert!(a.silence.is_empty());
         assert!("monitor_silence 0".parse::<Action>().is_err());
+    }
+
+    /// Feed the app its own events until `done` says so (real panes, real
+    /// processes), or fail after a few seconds.
+    fn pump(a: &mut App, rx: &std::sync::mpsc::Receiver<AppEvent>, done: impl Fn(&App) -> bool) {
+        let end = Instant::now() + Duration::from_secs(5);
+        while !done(a) {
+            let left = end.saturating_duration_since(Instant::now());
+            assert!(!left.is_zero(), "timed out");
+            if let Ok(ev) = rx.recv_timeout(left.min(Duration::from_millis(50))) {
+                a.handle(ev);
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_command_stays_with_its_status_and_enter_runs_it_again() {
+        use crossterm::event::KeyCode;
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(r#"ranma.set { remain_on_exit = "failed" }"#),
+        )
+        .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        a.run_action("exec echo built; exit 3".parse().unwrap());
+        let id = a.focused().expect("a pane");
+        pump(&mut a, &rx, |a| a.dead.contains_key(&id));
+        assert_eq!(a.dead[&id], Some(3));
+        assert!(a.panes.contains_key(&id), "it stayed");
+        let text: String = screen(&a).join("\n");
+        assert!(text.contains("built"), "what it printed is still there");
+        assert!(text.contains("[exited 3]"), "{text}");
+        // Keys other than Enter and q go nowhere.
+        key(&mut a, KeyCode::Char('x'));
+        assert!(a.dead.contains_key(&id));
+        key(&mut a, KeyCode::Enter);
+        assert!(!a.dead.contains_key(&id), "running again");
+        pump(&mut a, &rx, |a| a.dead.contains_key(&id));
+        key(&mut a, KeyCode::Char('q'));
+        assert!(!a.panes.contains_key(&id), "q closes it");
+
+        // A command that succeeded closes, with "failed".
+        a.run_action("exec true".parse().unwrap());
+        let ok = a.focused().expect("a pane");
+        pump(&mut a, &rx, |a| !a.panes.contains_key(&ok));
+        assert!(!a.dead.contains_key(&ok));
     }
 }

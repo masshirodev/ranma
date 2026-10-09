@@ -39,6 +39,12 @@ ranma.set {
   -- Seconds a pane that was printing must stay quiet before the pane_idle
   -- hook hears it (an agent or a build that stopped). 0.5-3600.
   pane_idle = 5,
+  -- tmux's remain-on-exit: whether a pane stays when its program ends, with
+  -- how it ended written at the bottom. "off" closes it; "failed" keeps it
+  -- when the status is not 0 (a build that broke keeps its errors on
+  -- screen); "on" always. In a pane that stayed, Enter runs the same command
+  -- again where it started, q closes it; respawn_pane does it from anywhere.
+  remain_on_exit = "off",
   -- tmux's monitor-activity: a workspace whose panes print while it is not
   -- shown is marked in the bar (colors.ws_activity, else bar_accent) until
   -- you go there.

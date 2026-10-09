@@ -367,6 +367,14 @@ pub fn builtin() -> Vec<Opt> {
             "Seconds a pane that was printing must stay quiet before the pane_idle hook hears of it.",
         ),
         opt(
+            "remain_on_exit",
+            "general",
+            "Remain on exit",
+            choices(&["off", "failed", "on"]),
+            Init,
+            "Whether a pane stays when its program ends, showing how it ended: off closes it, failed keeps it when the status is not 0, on always. Enter runs it again, q closes it.",
+        ),
+        opt(
             "monitor_activity",
             "general",
             "Monitor activity",

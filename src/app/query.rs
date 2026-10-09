@@ -32,13 +32,13 @@ impl App {
             Query::Lua(src) => self.eval_lua(&src),
             Query::Health => Ok(self.health()),
             Query::Wait { pane } => {
-                if self.panes.contains_key(&pane) {
+                if self.panes.contains_key(&pane) && !self.dead.contains_key(&pane) {
                     self.waiters.entry(pane).or_default().push(reply);
                     return;
                 }
                 // Ids are never reused: one below the next is a pane that has
                 // already ended, which a script racing its own pane will ask about.
-                if pane > 0 && pane < self.next_id {
+                if self.dead.contains_key(&pane) || (pane > 0 && pane < self.next_id) {
                     Ok(self.ended_status(pane))
                 } else {
                     Err(no_pane(pane))
@@ -51,6 +51,7 @@ impl App {
     /// A pane is gone: whoever waits on it gets its exit status, and it is
     /// kept a while for whoever asks too late.
     pub(super) fn pane_ended(&mut self, id: PaneId) {
+        let reported = self.dead.remove(&id).is_some();
         self.cwds.remove(&id);
         self.activity.remove(&id);
         self.silence.remove(&id);
@@ -60,7 +61,17 @@ impl App {
             self.tooltip = None;
         }
         crate::luapane::forget(&self.config.lua, id);
-        let code = self.exit_codes.remove(&id);
+        if !reported {
+            self.process_ended(id);
+        }
+        self.exit_codes.remove(&id);
+    }
+
+    /// A pane's program is gone: its status is kept for `wait` and given to
+    /// whoever waits on it. With `remain_on_exit` that happens while the
+    /// pane stays; without, as it closes.
+    pub(super) fn process_ended(&mut self, id: PaneId) {
+        let code = self.exit_codes.get(&id).copied();
         self.ended.push_back((id, code));
         if self.ended.len() > ENDED_KEPT {
             self.ended.pop_front();
@@ -310,7 +321,7 @@ impl App {
     /// Replace a pane's process, keeping the pane: its place, size, id and
     /// name. The old process is hung up as its PTY closes; its events are
     /// muted first, so its exit does not close the pane it used to be in.
-    fn respawn(
+    pub(super) fn respawn(
         &mut self,
         id: PaneId,
         command: Option<&str>,
@@ -336,6 +347,7 @@ impl App {
             old.retire();
         }
         self.exit_codes.remove(&id);
+        self.dead.remove(&id);
         self.reports.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
         if let Some(cmd) = command {

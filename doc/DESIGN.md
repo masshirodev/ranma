@@ -1097,6 +1097,23 @@ pane printing out of sight is re-armed at most once a second (the same
 is drawn on the watched pane's border: the toggle answers in the bar, and a
 border mark would compete with the sync mark and the badges for one row.
 
+**A pane can stay when its program ends** (`remain_on_exit`, tmux's option,
+with its `failed` value: a build that broke keeps its errors on screen, a
+shell left with `exit` still closes). The decision is taken at the pane's
+`Exit`, not its `ChildExit`: alacritty's event loop sends the status, then
+reads once more without blocking (`drain_on_exit`, now on for every pane),
+then says it is done, so the pane stays with the program's last lines on it
+instead of losing whatever was still in the PTY. How it ended is written into
+the emulator, not the PTY, which nobody reads any more. Enter and `q` in such
+a pane restart and close it, since there is no program for keys to reach;
+`respawn_pane` restarts it from anywhere, and refuses a pane still running,
+unlike tmux's `respawn-pane -k`: a key that kills what is running is one slip
+away from losing it. A pane remembers the command it was started with and
+where, because `/proc/<pid>/cwd` is gone with the process. `ranma wait`
+hears the end of the program when it happens, which is what a script waits
+for. A server taking a new build closes these panes first: their PTY was
+dropped with the event loop, and there is nothing to hand over.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

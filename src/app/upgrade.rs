@@ -80,6 +80,10 @@ pub struct PaneHandover {
     pub title: String,
     pub name: Option<String>,
     pub snapshot: Snapshot,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub start_cwd: Option<std::path::PathBuf>,
 }
 
 impl PaneHandover {
@@ -107,6 +111,12 @@ impl App {
     /// the alternate screen needs to draw again (see `snapshot::take`).
     pub(crate) fn hand_over(&mut self) -> State {
         self.abandon_paste();
+        // A pane whose program ended (`remain_on_exit`) has no PTY left to
+        // keep: its reader dropped it. It closes, as it would have without
+        // the setting.
+        for id in self.dead.keys().copied().collect::<Vec<_>>() {
+            self.close_pane(id);
+        }
         let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
         ids.sort_unstable();
         let panes = ids
@@ -123,6 +133,8 @@ impl App {
                     title: p.title.clone(),
                     name: p.name.clone(),
                     snapshot,
+                    command: p.command.clone(),
+                    start_cwd: p.start_cwd.clone(),
                 })
             })
             .collect();
@@ -175,6 +187,8 @@ impl App {
                 Ok(mut pane) => {
                     pane.title = p.title.clone();
                     pane.name = p.name.clone();
+                    pane.command = p.command.clone();
+                    pane.start_cwd = p.start_cwd.clone();
                     adopted.insert(p.id, pane);
                 }
                 Err(e) => {

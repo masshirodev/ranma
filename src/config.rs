@@ -103,6 +103,29 @@ pub enum RestoreMode {
     Off,
 }
 
+/// Whether a pane stays when its program ends (tmux's `remain-on-exit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RemainOnExit {
+    /// The pane closes with its program, as it always did.
+    Off,
+    /// It stays when the program failed: a non-zero status, or a signal.
+    Failed,
+    /// It always stays.
+    On,
+}
+
+impl RemainOnExit {
+    /// Whether a program that ended with this status leaves its pane.
+    pub fn keeps(self, code: Option<i32>) -> bool {
+        match self {
+            RemainOnExit::Off => false,
+            RemainOnExit::Failed => code != Some(0),
+            RemainOnExit::On => true,
+        }
+    }
+}
+
 /// What ranma does when its source has moved on (see `update`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -154,6 +177,7 @@ pub struct Settings {
     /// How long a pane watched with `monitor_silence` must stay quiet after
     /// printing before it says so.
     pub monitor_silence: std::time::Duration,
+    pub remain_on_exit: RemainOnExit,
 }
 
 impl Default for Settings {
@@ -184,6 +208,7 @@ impl Default for Settings {
             pane_idle: std::time::Duration::from_secs(5),
             monitor_activity: false,
             monitor_silence: std::time::Duration::from_secs(10),
+            remain_on_exit: RemainOnExit::Off,
         }
     }
 }
@@ -214,6 +239,7 @@ struct SettingsPatch {
     pane_idle: Option<f64>,
     monitor_activity: Option<bool>,
     monitor_silence: Option<f64>,
+    remain_on_exit: Option<RemainOnExit>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -949,6 +975,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
             ));
         }
         s.pane_idle = std::time::Duration::from_secs_f64(secs);
+    }
+    if let Some(r) = patch.remain_on_exit {
+        s.remain_on_exit = r;
     }
     if let Some(on) = patch.monitor_activity {
         s.monitor_activity = on;

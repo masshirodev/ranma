@@ -254,6 +254,10 @@ pub struct Pane {
     pub name: Option<String>,
     /// The pane's own child (the shell, or the `exec` command).
     pub pid: u32,
+    /// The command line it was started with (`None`: the shell) and where:
+    /// what `respawn_pane` runs again once the program is gone.
+    pub command: Option<String>,
+    pub start_cwd: Option<std::path::PathBuf>,
     /// A descriptor of the PTY master, open for as long as the pane: what a
     /// server keeps across its exec to take a new build.
     pub master_fd: std::os::fd::RawFd,
@@ -343,16 +347,17 @@ impl Pane {
             env.insert(crate::ipc::ENV.into(), sock.display().to_string());
         }
 
+        let start_cwd = opts.cwd.clone().or_else(|| std::env::current_dir().ok());
         let pty_opts = tty::Options {
             shell: Some(program),
-            working_directory: opts.cwd.clone().or_else(|| std::env::current_dir().ok()),
+            working_directory: start_cwd.clone(),
             drain_on_exit: false,
             env,
         };
         let pty = tty::new(&pty_opts, size.window(), id).context("opening a PTY")?;
         let pid = pty.child().id();
         let master = pty.file().try_clone().context("duplicating the PTY")?;
-        Pane::start(
+        let mut pane = Pane::start(
             Parts {
                 id,
                 term,
@@ -364,7 +369,10 @@ impl Pane {
             },
             master,
             pty,
-        )
+        )?;
+        pane.command = opts.command.map(str::to_string);
+        pane.start_cwd = start_cwd;
+        Ok(pane)
     }
 
     /// A pane around a child that is already running, after a server took a
@@ -444,7 +452,10 @@ impl Pane {
             },
             inner: pty,
         };
-        let event_loop = EventLoop::new(term.clone(), proxy, pty, false, false)
+        // Drain on exit: one more read, without blocking, of what the program
+        // printed as it ended, so a pane that stays (`remain_on_exit`) shows
+        // its last lines.
+        let event_loop = EventLoop::new(term.clone(), proxy, pty, true, false)
             .context("starting the PTY event loop")?;
         let sender = event_loop.channel();
         // The thread ends on Msg::Shutdown or when the child exits, and drops
@@ -468,6 +479,8 @@ impl Pane {
             title: String::new(),
             name: None,
             pid,
+            command: None,
+            start_cwd: None,
             master_fd,
             io_thread,
         })

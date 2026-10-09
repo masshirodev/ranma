@@ -162,6 +162,9 @@ pub enum Action {
     /// `monitor_silence` setting; a number of seconds watches for that long a
     /// quiet; `off` stops.
     MonitorSilence(Option<Option<u32>>),
+    /// Run a pane's command again, where it started, once it has ended and
+    /// stayed (`remain_on_exit`).
+    RespawnPane,
     /// Number the panes on screen; typing a number focuses that pane (tmux's
     /// `display-panes`).
     DisplayPanes,
@@ -326,6 +329,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("copy_mode", ""),
     ("hints", ""),
     ("display_panes", ""),
+    ("respawn_pane", ""),
     ("monitor_silence", "[seconds|off]"),
     ("search", ""),
     ("new_session", "[name]"),
@@ -658,6 +662,7 @@ impl FromStr for Action {
             "copy_mode" => no_arg(Action::CopyMode),
             "hints" => no_arg(Action::Hints),
             "display_panes" => no_arg(Action::DisplayPanes),
+            "respawn_pane" => no_arg(Action::RespawnPane),
             "monitor_silence" => match (first, second) {
                 (None, _) => Ok(Action::MonitorSilence(None)),
                 (Some("off"), None) => Ok(Action::MonitorSilence(Some(None))),
@@ -836,6 +841,7 @@ impl fmt::Display for Action {
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Hints => f.write_str("hints"),
             Action::DisplayPanes => f.write_str("display_panes"),
+            Action::RespawnPane => f.write_str("respawn_pane"),
             Action::MonitorSilence(None) => f.write_str("monitor_silence"),
             Action::MonitorSilence(Some(None)) => f.write_str("monitor_silence off"),
             Action::MonitorSilence(Some(Some(n))) => write!(f, "monitor_silence {n}"),
