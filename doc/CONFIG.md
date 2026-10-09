@@ -841,6 +841,10 @@ ranma health                                            # what loaded, what runs
   it failed, the hooks by event, the plugin events with listeners, and how many
   timers and jobs there are.
 
+Linking a `plugin/`, `lua/` or `pack/` directory into the config directory (or
+taking it out) reloads as well, and its files are watched from then on: every
+reload looks again at what is linked.
+
 Saving any `.lua` file under the config directory reloads, plugins included,
 and linked `lua/`, `plugin/`, `pack/` or package directories are watched behind
 their links.

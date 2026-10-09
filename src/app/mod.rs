@@ -219,6 +219,9 @@ pub struct App {
     /// A plugin's tooltip, and its pane's scroll when it was set: it goes
     /// once the pane scrolls.
     pub tooltip: Option<(crate::luaui::TooltipSpec, usize)>,
+    /// The config directory's watcher, made again on every reload so that a
+    /// directory linked in since (a plugin's) is followed too.
+    pub(super) watcher: Option<notify::RecommendedWatcher>,
     /// A plugin's screen, in the same slot (`ranma.screen`).
     plugin_screen: Option<screen::PluginScreen>,
     /// The screen `o` left for its options, back on `esc`.
@@ -383,6 +386,7 @@ impl App {
             picker: None,
             settings: None,
             plugin_screen: None,
+            watcher: None,
             tooltip: None,
             badges: HashMap::new(),
             badge_owners: Vec::new(),
@@ -2562,6 +2566,9 @@ impl App {
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
+                if self.watcher.is_some() {
+                    self.watcher = watch_config(self.tx.clone());
+                }
                 // The plugins that set them start over too.
                 self.badges.clear();
                 self.badge_owners.clear();
@@ -3789,6 +3796,12 @@ pub(super) fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWa
                 matches!(
                     p.extension().and_then(|e| e.to_str()),
                     Some("lua") | Some("toml")
+                )
+                // A plugin directory linked in or taken out: no file of it
+                // changed, but what loads did.
+                || matches!(
+                    p.file_name().and_then(|n| n.to_str()),
+                    Some("plugin" | "lua" | "pack")
                 )
             })
         {

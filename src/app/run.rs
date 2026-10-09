@@ -266,7 +266,7 @@ pub fn run(config: Config) -> Result<()> {
         app.after_event();
         spawn_input_thread(tx.clone());
         start_background(&app, &tx);
-        let _watcher = watch_config(tx);
+        app.watcher = watch_config(tx);
         event_loop(&mut app, &rx, &mut term, None, None, Vec::new())
     })();
     let out = term.backend_mut();
@@ -297,7 +297,7 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
         anyhow::bail!("could not listen; see the status above");
     }
     start_background(&app, &tx);
-    let _watcher = watch_config(tx);
+    app.watcher = watch_config(tx);
     // A server started, not upgraded: it offers what the last one of its
     // name left (after a reboot, say).
     app.start_snapshots(name, true);
@@ -431,7 +431,7 @@ pub fn run_server_resume(
     );
     app.after_event();
     start_background(&app, &tx);
-    let _watcher = watch_config(tx);
+    app.watcher = watch_config(tx);
     // Taking a new build keeps the snapshots going and asks nothing.
     app.start_snapshots(name, false);
     let result = event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), clients);
