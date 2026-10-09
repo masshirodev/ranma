@@ -1267,6 +1267,83 @@ open path beside the mode and clears it on every mode change.
 **Not done**: folders in `ranma.mode` tables and global folders (both refused
 at load); a folder's own `desc`; nothing reads a folder's keys back to Lua.
 
+### A scrolling layout: niri's strip (2026-10-09)
+
+Designed from `doc/briefs/done/SCROLLING_LAYOUT.md`; the handoff is
+`doc/handoffs/done/SCROLLING_LAYOUT.html`, and its which-key board is
+`SCROLLING_LAYOUT_MOCK.txt`, which the hint's test holds cell for cell.
+
+**Scope: niri's strip, not its workspaces.** Of niri's five ideas, four
+are about one workspace and make a placement policy: an endless row of
+columns, the view following focus, windows stacked in a column, width
+presets. The fifth, vertical workspaces that appear and vanish, renumbers
+them, and in ranma a workspace's number is an address: `1`-`0` and
+`alt+1`-`0`, `workspace 3` in binds, snapshots restored by number, the
+nested bar's reports, the tmux shim. `workspace empty` and `ctrl+←→` cover
+its use. So `layout = "scrolling"` is a fifth layout beside dwindle, manual,
+master and monocle, and workspaces, the bar, sessions and snapshots are
+untouched.
+
+**The tree stays a tree.** A strip is a horizontal row at the root whose
+children are columns, each a pane, a vertical stack of panes, or a tabbed
+group; `Tree::arrange_strip` keeps that shape the way `arrange_master`
+keeps master's, rebuilding from the panes in tree order when the layout is
+switched to and only mending what another operation bent afterwards (a row
+inside a column becomes columns; a column holding containers is
+flattened). **A column's width is its weight in the root row**: up to 1 a
+fraction of the screen, above it whole cells, and since no column is
+narrower than `scroll_min` (at least 20) the two never meet. Keeping the
+width in the weight keeps it with its column through every tree operation
+(close, move, swap, a snapshot) with no parallel list to fall out of step;
+leaving the strip turns the weights into cells, so the row fits the screen
+as weights. Generic inserts (a float tiled again, a pane moved to the
+workspace, a program's `split-window`) open a column when the tree is a
+strip.
+
+**The view is the only new state**: a left edge in cells on the tree,
+not saved (it follows the focused pane on load). `crate::strip` is the
+arithmetic, pure and tested against the handoff's numbers: widths rounded
+to cells with the floor, the stops `e` walks, where the view goes
+(`follow`: the least move, centred, or centred on overflow), and how many
+columns lie beyond each edge. It is set after every relayout and after
+every event that moved focus, so a click or a hook scrolls as a key does.
+Scrolling is a redraw: no program is resized, no timer runs, idle stays at
+zero wakeups.
+
+**Showing what is off screen without animation.** A column across an edge
+is a *peek*: the frame carries it apart from the views, because a peek is
+never focused (focusing it scrolls it whole into view) and so needs none of
+what a view supports (the cursor, copy mode, selections, link hints);
+keeping it out of `views` keeps every rect-to-cell mapping in the app
+unchanged. It is drawn whole into a buffer of its own size by the ordinary
+pane drawing and the visible part copied in, dimmed halfway to its ground;
+a left peek's title is moved into what shows. The edge is drawn on the
+screen's last cell column rather than on an outer gap: with `gaps.outer =
+0`, the default, there is no gap, and reserving one would take a column
+from every strip. When columns end exactly at the edge there is no peek and
+the edge rule replaces the last column's own border.
+
+**Keys.** The existing keys keep their meaning, read along a strip: arrows
+focus, `shift` resizes, `ctrl+shift` moves, `alt` opens there. Only what has
+no counterpart is new, on keys that were free: `{ }` (niri's `[ ]`, but `[`
+is copy mode), `e` (niri's `r` is reload here), `E` its bigger version, `c`.
+The hint's rows follow the focused workspace's layout, so outside a strip
+the four are left out (the first handoff's fixtures still hold) and in one
+`toggle_split`, `swap_master` and `next_layout` are.
+
+**Where it departs from the handoff**
+
+- *`pane_strip` is not cut with `…` on the side away from the focused chip
+  at 80 columns*; the bar's usual fitting applies.
+- *A strip of one column keeps its width aside* (`Tree::lone_width`), since
+  the tree has no row to hold a weight for a single child.
+- *Swap master* is left as it is in a strip (it swaps with the first pane);
+  the hint leaves it out, as drawn.
+
+**Not done**: a layout per workspace (one strip beside dwindle workspaces),
+which the handoff names as worth doing next to it and is a change of its
+own; the peek of a grouped column draws its active tab without the tab bar.
+
 ### The kitty keyboard protocol, both ways (2026-10-09)
 
 ranma re-encodes every key for the pane it goes to, so the protocol is two

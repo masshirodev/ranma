@@ -120,7 +120,11 @@ impl App {
             return;
         };
         let home = dirs::home_dir();
-        let spec = Spec::from_node(&root, &self.pane_about());
+        let spec = if self.in_strip() {
+            Spec::from_strip(&root, &self.pane_about())
+        } else {
+            Spec::from_node(&root, &self.pane_about())
+        };
         let n = spec.panes().len();
         self.status = Some(match layouts::save(&dir, name, &spec) {
             Ok(path) => format!(
@@ -196,8 +200,22 @@ impl App {
                 }
             }
         }
+        let strip = self.strip_here();
+        let (screen, min) = (self.workspace_area().w, self.config.settings.scroll_min);
         let ws = self.active_mut();
         ws.tree.root = Some(spec.to_node(&mut ids.into_iter()));
+        // A strip loaded into a strip keeps its columns; a plain tree becomes
+        // a column per pane; a strip loaded elsewhere has its widths read as
+        // weights.
+        match (spec.scroll, strip) {
+            (true, true) => ws.tree.mark_strip(true),
+            (false, true) => ws.tree.mark_strip(false),
+            (true, false) => {
+                ws.tree.mark_strip(true);
+                ws.tree.leave_strip(screen, min);
+            }
+            (false, false) => {}
+        }
         ws.fullscreen = false;
         ws.preset = None;
         for extra in existing.iter().skip(leaves.len()) {

@@ -123,8 +123,12 @@ Each call changes only the fields it names; call it as often as you like.
 | --- | --- | --- |
 | `leader` | `"ctrl+b"` | The chord that enters WM mode. |
 | `theme` | `"default"` | Theme name; see [Themes](#themes). |
-| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. |
+| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. `scrolling`: niri's strip of columns, see [A scrolling layout](#a-scrolling-layout). |
 | `master_ratio` | `0.55` | With `layout = "master"`: the master's share of the width when a master area forms (0.1-0.9). Resizing it afterwards sticks. |
+| `scroll_widths` | `{ "1/3", "1/2", "2/3" }` | With `layout = "scrolling"`: the widths `column_width next` (`leader e`) steps through, 1 to 6 of them, each a fraction of the screen (`"a/b"`, at most 1) or whole cells (at least `scroll_min`). Not in the settings panel, which edits one value per row. |
+| `scroll_width` | `"1/2"` | With `layout = "scrolling"`: a new column's width, anything `scroll_widths` takes. |
+| `scroll_min` | `40` | With `layout = "scrolling"`: the narrowest a column gets, its border included, in cells (20-500). Fractions round to the nearest cell and never go under it, so a third of 80 is 40, not 26. A workspace narrower than this makes every column its full width. |
+| `scroll_center` | `"never"` | With `layout = "scrolling"`: `never` moves the view the least that shows the focused column whole; `always` centres it; `overflow` centres it only when it and the column focus came from do not fit on screen together (niri's `on-overflow`). |
 | `preserve_split` | `true` | Keep a split's direction across resizes. |
 | `splash` | `true` | An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to `help` lists every bind. It is drawn in `bar_accent` (the logo), `bar_fg` (the keys) and `bar_dim`; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. `false` leaves an empty workspace blank. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
@@ -241,7 +245,7 @@ sent them, which it is not asked to.
 | `new_pane` | Open a pane with the shell, placed by the layout, in the directory the focused pane's shell is in. |
 | `new_pane <dir>` | The same, on that side of the focused pane (`leader Alt+arrow`): `new_pane down` opens below. |
 | `close_pane` | Close the focused pane. |
-| `focus <dir>` | Focus the pane in that direction (`left right up down`). In `monocle`, `left` and `right` go through the tabs. |
+| `focus <dir>` | Focus the pane in that direction (`left right up down`). In `monocle`, `left` and `right` go through the tabs. In a strip, `left` and `right` go to the next column, on screen or not, and `up` and `down` stay in the column. |
 | `focus next` / `focus prev` | Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping. |
 | `focus last` | Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's `last-pane`, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key. Not bound by default (tmux's key: `ranma.bind(";", "focus last")`). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
@@ -259,6 +263,10 @@ sent them, which it is not asked to.
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |
 | `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). |
+| `consume_or_expel <left\|right>` | In a strip: alone in its column, the focused pane joins the column on that side, at the bottom (as a tab when that column is a group); sharing a column, it leaves into a new column on that side (`leader {` and `leader }`). |
+| `column_width <next\|prev\|full\|width>` | In a strip: the focused column's width. `next` (`leader e`) steps to the next of `scroll_widths`, wrapping (a column sized by hand goes to the first stop wider than it); `prev` back; `full` (`leader E`) makes it the screen's width and, again, gives back the width it had; `1/2` or a number of cells sets one. |
+| `center_column` | In a strip: centre the focused column in the view, once (`leader c`). |
+| `focus_column <first\|last>` | In a strip: focus the first or last column. |
 | `cycle_floats` | Raise the bottom-most floating pane and focus it (`leader f`); repeated, it walks through the pile. |
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |
 | `group_next` / `group_prev` | Cycle the tabs of the group around the focused pane. |
@@ -331,6 +339,60 @@ wide one; groups that do not fit are named in its bottom frame
 (`+sessions · history · ranma`), and `? all keys` is there for the rest. A
 small screen gets the binds flowed without headings, and one under 30×6
 nothing. `wm_mode = { hint = false }` turns it off.
+
+## A scrolling layout
+
+`ranma.set { layout = "scrolling" }` lays each workspace out as
+[niri](https://github.com/YaLTeR/niri) does: a strip of columns that may be
+wider than the screen, and a view onto it that follows the focused column.
+
+- **A new pane is a new column** right of the focused one, `scroll_width`
+  wide. Nothing already on screen is resized to make room; columns off
+  screen keep their size and keep running (scrolling resizes no program).
+- **A column holds one pane, a stack, or a group.** `alt+↑↓` (`new_pane up`
+  and `down`) opens a pane in the column; `{` and `}` take the focused pane
+  into the neighbouring column or out into a new one; `g` makes the column a
+  group (tabs) and back.
+- **The view follows focus**: `←→` go to the next column whether it shows or
+  not, and the view moves the least that shows it whole (`scroll_center`
+  can centre it instead; `c` centres it once). Focus moved any way counts:
+  a click, a hook, a switcher.
+- **Widths**: `e` steps through `scroll_widths`, `E` makes a column full
+  width and back, `shift+←→` sizes it by hand in cells (and dragging its
+  right border does too), `=` puts every column back to `scroll_width` and
+  the panes in each column to equal heights. `shift+↑↓` sizes a pane within
+  its column; `ctrl+shift+←→` moves the whole column along the strip, and
+  `ctrl+shift+↑↓` moves a pane within its column.
+- **What is off screen shows at the edges.** A column across the screen's
+  edge is drawn cut and dimmed (a *peek*), its title kept in what shows; a
+  click on it focuses it, and the press reaches no program. The edge itself
+  is a dotted `┊` with `‹` or `›` and how many columns are not wholly on
+  screen that way (`+` for ten or more); a solid border is the end of the
+  strip. With `border.style = "ascii"`, `: < >`.
+- **The which-key hint follows**: in a strip its first group is `strip`, with
+  `{ }`, `e`, `E` and `c`; `j` (`toggle_split`) and `space`
+  (`next_layout`) have no meaning there, are left out and, pressed, say so;
+  `M` (`swap_master`) is left out too.
+  Outside a strip the four new keys are left out and say so when pressed.
+- **The bar**: unchanged by default. `pane_strip` in a strip shows a chip
+  per column (a stack's panes joined by ` · `): the focused one in the
+  active-tab colours, one on screen an inactive tab, one peeking dim on that
+  ground, one off screen dim; a click focuses that column.
+- **Everything else keeps its meaning.** Floats belong to the screen and
+  never scroll; tiling one again makes it a new column. Fullscreen fills the
+  workspace and leaving puts the view back. The scratchpad is unchanged.
+  Closing a column moves the ones right of it left.
+- **Saved layouts** save a strip as its tree, `scroll = true` on the root
+  and a `width` per column (`"1/2"` or cells). Loaded where the layout is
+  not `scrolling`, the widths read as weights; a plain layout loaded into a
+  strip becomes one column per pane.
+- **Switching** to `scrolling` makes every pane a column, in tree order, at
+  `scroll_width`; switching away keeps the row of columns, sized to fit the
+  screen.
+
+The colours are roles every theme sets (no new theme key): the peek is its
+own colours mixed halfway to its ground, the rule `bar_dim`, the arrow and
+count `bar_fg`.
 
 ## Copy mode and search
 

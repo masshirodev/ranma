@@ -37,6 +37,9 @@ pub enum Style {
     /// A pane chip in the `pane_strip` module, drawn as a tab.
     TabActive,
     TabInactive,
+    /// A strip's column across the screen's edge: the inactive tab's ground,
+    /// dim text.
+    TabPeek,
     /// `bar.module_left` or `module_right`: the edge of a module's ground.
     Cap,
 }

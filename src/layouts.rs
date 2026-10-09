@@ -56,6 +56,42 @@ pub struct Spec {
     pub command: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Spec>,
+    /// The root of a strip (`layout = "scrolling"`): its children are
+    /// columns, each `width` wide.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub scroll: bool,
+    /// A strip column's width: a fraction of the screen (`"1/2"`) or cells.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<String>,
+}
+
+/// A strip column's weight as a width: a fraction (the nearest `a/b` with
+/// `b` up to 12) or whole cells.
+fn width_of(weight: f32) -> String {
+    if weight > 1.0 {
+        return format!("{}", weight.round() as u16);
+    }
+    let (mut best, mut err) = ((1u16, 1u16), f32::MAX);
+    for b in 1..=12u16 {
+        let a = (weight * b as f32).round().max(1.0) as u16;
+        let e = (a as f32 / b as f32 - weight).abs();
+        if e < err - 1e-4 {
+            (best, err) = ((a, b), e);
+        }
+    }
+    format!("{}/{}", best.0, best.1)
+}
+
+/// A width as a layout file writes it, as the strip's weight.
+pub fn width_weight(w: &str) -> Option<f32> {
+    let setting = match w.parse::<i64>() {
+        Ok(c) => crate::strip::WidthSetting::Cells(c),
+        Err(_) => crate::strip::WidthSetting::Text(w.to_string()),
+    };
+    setting
+        .parse(1, "width")
+        .ok()
+        .map(crate::strip::Width::weight)
 }
 
 impl Spec {
@@ -95,6 +131,21 @@ impl Spec {
         {
             return Err(format!("{}: must be a number above 0", here("size")));
         }
+        if let Some(w) = &self.width
+            && width_weight(w).is_none()
+        {
+            return Err(format!(
+                "{}: `{w}` is not a width (a fraction such as \"1/2\", or cells)",
+                here("width")
+            ));
+        }
+        if self.scroll && (self.is_pane() || self.split == Some(SplitName::Vertical) || self.group)
+        {
+            return Err(format!(
+                "{}: a strip's root is a horizontal container of columns",
+                if at.is_empty() { "the layout" } else { at }
+            ));
+        }
         if self.is_pane() {
             if self.split.is_some() || self.group {
                 return Err(format!(
@@ -131,7 +182,15 @@ impl Spec {
         let children: Vec<(Node, f32)> = self
             .children
             .iter()
-            .map(|c| (c.to_node(ids), c.size.unwrap_or(1.0)))
+            .map(|c| {
+                // A strip's columns weigh their widths (see `crate::strip`).
+                let w = match (self.scroll, c.width.as_deref().and_then(width_weight)) {
+                    (true, Some(w)) => w,
+                    (true, None) => 0.5,
+                    (false, _) => c.size.unwrap_or(1.0),
+                };
+                (c.to_node(ids), w)
+            })
             .collect();
         // One child in a plain container is that child, as the tree keeps it.
         if children.len() == 1 && !self.group {
@@ -142,6 +201,28 @@ impl Spec {
             tabbed: self.group.then_some(0),
             children,
         }
+    }
+
+    /// A strip as a layout: the tree, `scroll` on its root and each
+    /// column's width.
+    pub fn from_strip(
+        n: &Node,
+        about: &impl Fn(PaneId) -> (Option<String>, Option<String>),
+    ) -> Spec {
+        let mut s = Spec::from_node(n, about);
+        if let Node::Container {
+            split: Split::Horizontal,
+            tabbed: None,
+            children,
+        } = n
+        {
+            s.scroll = true;
+            for (c, (_, w)) in s.children.iter_mut().zip(children) {
+                c.size = None;
+                c.width = Some(width_of(*w));
+            }
+        }
+        s
     }
 
     /// A tree as a layout, with each pane's directory and command from `about`.
@@ -227,11 +308,20 @@ impl Spec {
                             mlua::Value::Number(n) => s.size = Some(n as f32),
                             _ => return Err(format!("{at}.size: must be a number")),
                         },
+                        "scroll" => match v {
+                            mlua::Value::Boolean(b) => s.scroll = b,
+                            _ => return Err(format!("{at}.scroll: must be true or false")),
+                        },
+                        "width" => match v {
+                            mlua::Value::Integer(i) => s.width = Some(i.to_string()),
+                            mlua::Value::String(_) => s.width = Some(text(v)?),
+                            _ => return Err(format!("{at}.width: must be \"a/b\" or cells")),
+                        },
                         "cwd" => s.cwd = Some(text(v)?),
                         "command" => s.command = Some(text(v)?),
                         other => {
                             return Err(format!(
-                                "{at}: unknown key `{other}` (expected split, group, size, cwd, command, or panes in the list part)"
+                                "{at}: unknown key `{other}` (expected split, group, size, scroll, width, cwd, command, or panes in the list part)"
                             ));
                         }
                     }
@@ -509,5 +599,34 @@ mod tests {
         for bad in ["", ".hidden", "a/b", "two words"] {
             assert!(!valid_name(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_strip_saves_its_widths_and_loads_them_back() {
+        let row = Node::Container {
+            split: Split::Horizontal,
+            tabbed: None,
+            children: vec![
+                (Node::Pane(1), 1.0 / 3.0),
+                (Node::Pane(2), 0.5),
+                (Node::Pane(3), 2.0 / 3.0),
+                (Node::Pane(4), 63.0),
+            ],
+        };
+        let spec = Spec::from_strip(&row, &|_| (None, None));
+        assert!(spec.scroll);
+        let widths: Vec<&str> = spec
+            .children
+            .iter()
+            .map(|c| c.width.as_deref().unwrap())
+            .collect();
+        assert_eq!(widths, ["1/3", "1/2", "2/3", "63"]);
+        let back = spec.to_node(&mut [1, 2, 3, 4].into_iter());
+        assert_eq!(back, row);
+        let text = toml::to_string(&spec).unwrap();
+        assert!(text.contains("scroll = true"), "{text}");
+        let mut bad = spec.clone();
+        bad.children[0].width = Some("wide".into());
+        assert!(bad.check().unwrap_err().contains("children[1].width"));
     }
 }

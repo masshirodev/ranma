@@ -40,6 +40,7 @@ pub mod settings;
 pub mod snapshot;
 pub mod splash;
 pub mod store;
+pub mod strip;
 pub mod sysstat;
 pub mod theme;
 pub mod tmux;

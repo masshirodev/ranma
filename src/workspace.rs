@@ -32,6 +32,14 @@ pub struct Workspace {
     /// goes (tmux's `last-pane`).
     #[serde(default)]
     pub last_pane: Option<PaneId>,
+    /// In a strip: the column focus was in last, which `scroll_center =
+    /// "overflow"` asks about.
+    #[serde(skip)]
+    pub strip_from: Option<usize>,
+    /// In a strip: what a column at full width had before, by its first
+    /// pane, for `column_width full` to give back.
+    #[serde(skip)]
+    pub full_width_of: std::collections::HashMap<PaneId, f32>,
 }
 
 impl Workspace {

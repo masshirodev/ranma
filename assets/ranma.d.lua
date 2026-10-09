@@ -20,13 +20,17 @@ ranma.config_dir = nil
 -- Building the configuration: init.lua and plugins, while they load.
 -- ---------------------------------------------------------------------------
 
----@alias ranma.Layout "dwindle"|"manual"|"master"|"monocle"
+---@alias ranma.Layout "dwindle"|"manual"|"master"|"monocle"|"scrolling"
 
 ---@class ranma.Settings
 ---@field leader? string The chord that enters WM mode, e.g. "ctrl+b".
 ---@field theme? string A theme name: themes/<name>.toml, then the built-ins.
 ---@field layout? ranma.Layout How new panes are placed.
 ---@field master_ratio? number With layout "master": the master's share, 0.1-0.9.
+---@field scroll_widths? (string|integer)[] With layout "scrolling": the widths column_width next steps through ("1/3" or cells).
+---@field scroll_width? string|integer With layout "scrolling": a new column's width.
+---@field scroll_min? integer With layout "scrolling": the narrowest column, border included, 20-500.
+---@field scroll_center? "never"|"always"|"overflow" With layout "scrolling": when the view centres the focused column.
 ---@field preserve_split? boolean Keep a split's direction across resizes.
 ---@field splash? boolean An empty workspace shows the logo and how to start.
 ---@field shell? string Program for new panes; nil means $SHELL, then /bin/sh.

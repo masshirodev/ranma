@@ -26,11 +26,24 @@ ranma.set {
   -- (a new pane joins the stack after the focused one; swap_master, leader
   -- shift+m, trades the focused pane with the master); "monocle" shows one
   -- tiled pane at a time with the others as tabs above it (focus left/right,
-  -- next/prev, or click a tab), keeping the tree for another layout to use.
+  -- next/prev, or click a tab), keeping the tree for another layout to use;
+  -- "scrolling" is niri's: a workspace is a strip of columns wider than the
+  -- screen, a new pane a new column right of the focused one, and the view
+  -- scrolls to the focused column (see the scroll_ settings below).
   layout = "dwindle",
   -- The master's share of the width in layout "master", 0.1-0.9. Resizing it
   -- (shift+arrows, or the mouse) sticks.
   master_ratio = 0.55,
+  -- Layout "scrolling": the widths e (column_width next) steps through, 1 to
+  -- 6, each a fraction of the screen ("1/3") or whole cells; a new column's
+  -- width; the narrowest a column gets, border included, 20-500 cells; and
+  -- when the view centres the focused column: "never" (move the least),
+  -- "always", or "overflow" (when it and the column focus came from do not
+  -- fit together).
+  scroll_widths = { "1/3", "1/2", "2/3" },
+  scroll_width = "1/2",
+  scroll_min = 40,
+  scroll_center = "never",
   -- Keep a split's direction when its container is resized (Hyprland's dwindle option).
   preserve_split = true,
   -- An empty workspace shows the ranma logo and how to start: Enter opens a
@@ -160,7 +173,7 @@ ranma.bind("f", "cycle_floats")
 -- Floats can be sized in percent and snapped to halves, quarters or the middle
 -- (a tile is floated first). Not bound by default; the palette (leader :) has
 -- them, or bind a few:
---   ranma.bind("c", "snap center")
+--   ranma.bind("alt+c", "snap center")
 --   ranma.bind("alt+shift+left", "snap left")
 --   ranma.bind("alt+shift+f", "float_size 80 80")
 ranma.bind("j", "toggle_split")
@@ -187,6 +200,16 @@ ranma.bind("space", "next_layout")
 --   })
 ranma.bind("alt+return", "fullscreen")
 ranma.bind("shift+m", "swap_master")
+-- Layout "scrolling" only (elsewhere they say so and do nothing): { and }
+-- take the focused pane into the column on that side, or out of its column
+-- into a new one; e steps the column through scroll_widths, E (shift+e)
+-- makes it full width and back, c centres it. Also, unbound:
+-- "column_width prev", "column_width 1/2" or cells, "focus_column first|last".
+ranma.bind("{", "consume_or_expel left")
+ranma.bind("}", "consume_or_expel right")
+ranma.bind("e", "column_width next")
+ranma.bind("shift+e", "column_width full")
+ranma.bind("c", "center_column")
 -- Synchronized input: a marks the focused pane (⇉ on its border); typing in a
 -- marked pane types into every marked pane of the workspace, each as if at
 -- its own keyboard (several SSH shells at once, say). A (shift+a) unmarks all.

@@ -336,6 +336,20 @@ pub struct Tree {
     /// How many panes the master layout last arranged: a master area forms
     /// when one pane becomes two, and takes `master_ratio` then.
     master_seen: usize,
+    /// The tree is a strip (`layout = "scrolling"`): its root row's weights
+    /// are column widths (`crate::strip`).
+    #[serde(default)]
+    strip: bool,
+    /// A strip of one column has no row to hold its width: it is kept here.
+    #[serde(default)]
+    lone_width: f32,
+    /// The strip's view: its left edge, in cells. Not saved; it follows the
+    /// focused pane.
+    #[serde(skip)]
+    view: u32,
+    /// A new column's width (`scroll_width`), as the last arrange said.
+    #[serde(skip)]
+    new_width: f32,
 }
 
 /// A terminal cell is about twice as tall as it is wide; dwindle compares
@@ -370,6 +384,13 @@ impl Tree {
         focused_rect: Option<Rect>,
         placement: Placement,
     ) {
+        // In a strip, whatever arrives (a float tiled again, a pane moved
+        // here, a program's split-window) is a new column right of the
+        // focused one.
+        if self.strip {
+            self.strip_open(new, focused, false, self.lone_weight_new());
+            return;
+        }
         let Some(root) = self.root.as_mut() else {
             self.root = Some(Node::Pane(new));
             return;
@@ -417,6 +438,17 @@ impl Tree {
         }
         let removed = remove_in(root, id);
         if removed {
+            // A strip down to one column keeps that column's width.
+            if let Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            } = &*root
+                && self.strip
+                && children.len() == 1
+            {
+                self.lone_width = children[0].1;
+            }
             normalize(root);
         }
         removed
@@ -801,6 +833,476 @@ impl Tree {
         let path = find_path(root, id)?;
         let (&idx, parent) = path.split_last()?;
         Some((node_at_mut(root, parent), idx))
+    }
+}
+
+// ---- the scrolling layout's strip (see `crate::strip`) ------------------------
+
+/// One column of a strip, laid out: its left edge relative to the
+/// workspace's left (negative when it starts off screen to the left), its
+/// width, and its panes laid out in a column-local rect whose `x` is 0.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StripColumn {
+    pub x: i32,
+    pub w: u16,
+    pub layout: Layout,
+}
+
+/// A whole strip laid out for a view, with how many columns are not wholly
+/// on screen on either side.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StripLayout {
+    pub columns: Vec<StripColumn>,
+    pub beyond_left: usize,
+    pub beyond_right: usize,
+}
+
+/// Whether a node is a column a strip can hold: a pane, a stack of panes,
+/// or a group (tabbed) of panes.
+fn is_column(n: &Node) -> bool {
+    let leaf = |c: &(Node, f32)| matches!(c.0, Node::Pane(_));
+    match n {
+        Node::Pane(_) => true,
+        Node::Container {
+            split: Split::Vertical,
+            tabbed: None,
+            children,
+        } => children.len() >= 2 && children.iter().all(leaf),
+        Node::Container {
+            tabbed: Some(_),
+            children,
+            ..
+        } => !children.is_empty() && children.iter().all(leaf),
+        _ => false,
+    }
+}
+
+/// A column made from panes: one alone, else a stack.
+fn column_of_panes(panes: &[PaneId]) -> Node {
+    match panes {
+        [one] => Node::Pane(*one),
+        many => Node::split(
+            Split::Vertical,
+            many.iter().map(|p| (Node::Pane(*p), 1.0)).collect(),
+        ),
+    }
+}
+
+impl Tree {
+    /// The strip's columns with their weights: the root's children when it is
+    /// a row, else the root alone (a strip of one).
+    pub fn columns(&self) -> Vec<(&Node, f32)> {
+        match &self.root {
+            None => Vec::new(),
+            Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            }) => children.iter().map(|(n, w)| (n, *w)).collect(),
+            Some(n) => vec![(n, self.lone_weight())],
+        }
+    }
+
+    /// The column `id` is in.
+    pub fn column_of(&self, id: PaneId) -> Option<usize> {
+        self.columns().iter().position(|(n, _)| {
+            let mut v = Vec::new();
+            collect(n, &mut v);
+            v.contains(&id)
+        })
+    }
+
+    /// The panes of column `i`, top to bottom (or tab order).
+    pub fn column_panes(&self, i: usize) -> Vec<PaneId> {
+        let mut v = Vec::new();
+        if let Some((n, _)) = self.columns().get(i) {
+            collect(n, &mut v);
+        }
+        v
+    }
+
+    /// The root's row of columns, made one when the strip has a single
+    /// column, so columns can be added and weighed alike.
+    fn strip_row(&mut self) -> Option<&mut Vec<(Node, f32)>> {
+        let root = self.root.take()?;
+        let row = match root {
+            Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            } => Node::split(Split::Horizontal, children),
+            other => Node::split(Split::Horizontal, vec![(other, self.lone_weight())]),
+        };
+        self.root = Some(row);
+        match self.root.as_mut() {
+            Some(Node::Container { children, .. }) => Some(children),
+            _ => None,
+        }
+    }
+
+    /// Back from a row of one to the column itself, its width kept aside:
+    /// the tree's shape everywhere else is a row only with two or more.
+    fn settle_row(&mut self) {
+        if let Some(Node::Container {
+            split: Split::Horizontal,
+            tabbed: None,
+            children,
+        }) = &mut self.root
+        {
+            match children.len() {
+                0 => self.root = None,
+                1 => {
+                    let (only, w) = children.pop().expect("one");
+                    self.lone_width = w;
+                    self.root = Some(only);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Put the tree in a strip's shape: a row of columns, each a pane, a
+    /// stack or a group. Coming from another layout (the tree was not a strip
+    /// last time), every pane becomes a column of its own, in tree order, at
+    /// `width`; after that, only what another operation left out of shape is
+    /// mended (a nested row's panes become columns of their own, a column
+    /// holding containers is flattened). Returns whether anything changed.
+    pub fn arrange_strip(&mut self, width: f32) -> bool {
+        self.new_width = width;
+        if !self.strip {
+            self.strip = true;
+            self.view = 0;
+            let panes = self.panes();
+            self.lone_width = width;
+            self.root = match panes.as_slice() {
+                [] => None,
+                [one] => Some(Node::Pane(*one)),
+                many => Some(Node::split(
+                    Split::Horizontal,
+                    many.iter().map(|p| (Node::Pane(*p), width)).collect(),
+                )),
+            };
+            return true;
+        }
+        let cols: Vec<(Node, f32)> = self
+            .columns()
+            .into_iter()
+            .map(|(n, w)| (n.clone(), w))
+            .collect();
+        if cols.iter().all(|(n, _)| is_column(n)) {
+            return false;
+        }
+        let mut mended = Vec::new();
+        for (n, w) in cols {
+            if is_column(&n) {
+                mended.push((n, w));
+                continue;
+            }
+            let mut panes = Vec::new();
+            collect(&n, &mut panes);
+            match n {
+                // A row inside a column: its panes are columns.
+                Node::Container {
+                    split: Split::Horizontal,
+                    tabbed: None,
+                    ..
+                } => mended.extend(panes.iter().map(|p| (Node::Pane(*p), w))),
+                Node::Container {
+                    tabbed: Some(active),
+                    ..
+                } => mended.push((
+                    Node::Container {
+                        split: Split::Horizontal,
+                        tabbed: Some(active.min(panes.len().saturating_sub(1))),
+                        children: panes.iter().map(|p| (Node::Pane(*p), 1.0)).collect(),
+                    },
+                    w,
+                )),
+                _ => mended.push((column_of_panes(&panes), w)),
+            }
+        }
+        self.root = Some(Node::split(Split::Horizontal, mended));
+        self.settle_row();
+        true
+    }
+
+    /// Leave the strip shape for another layout: column widths become
+    /// weights in proportion to their cells on a `screen`-wide workspace, so
+    /// the row fits the screen.
+    pub fn leave_strip(&mut self, screen: u16, min: u16) {
+        if !self.strip {
+            return;
+        }
+        self.strip = false;
+        if let Some(Node::Container {
+            split: Split::Horizontal,
+            tabbed: None,
+            children,
+        }) = &mut self.root
+        {
+            for (_, w) in children.iter_mut() {
+                *w = crate::strip::cells(*w, screen, min) as f32;
+            }
+        }
+    }
+
+    /// A new column's width, half the screen until an arrange says.
+    fn lone_weight_new(&self) -> f32 {
+        if self.new_width > 0.0 {
+            self.new_width
+        } else {
+            0.5
+        }
+    }
+
+    /// A lone column's width, half the screen until one is known.
+    fn lone_weight(&self) -> f32 {
+        if self.lone_width > 0.0 {
+            self.lone_width
+        } else {
+            0.5
+        }
+    }
+
+    /// Say whether the tree, just replaced, is a strip already: one that is
+    /// not is rebuilt as one, a column per pane, the next time a strip is
+    /// arranged.
+    pub fn mark_strip(&mut self, strip: bool) {
+        self.strip = strip;
+    }
+
+    /// Whether the tree is laid out as a strip now.
+    pub fn is_strip(&self) -> bool {
+        self.strip
+    }
+
+    /// The view's left edge on the strip, in cells.
+    pub fn view(&self) -> u32 {
+        self.view
+    }
+
+    pub fn set_view(&mut self, view: u32) {
+        self.view = view;
+    }
+
+    /// A new column holding `new`, `width` wide, on the `before` (left) or
+    /// right side of the column holding `focused`; at the right end of the
+    /// strip when there is no such column.
+    pub fn strip_open(&mut self, new: PaneId, focused: Option<PaneId>, before: bool, width: f32) {
+        let at = focused.and_then(|f| self.column_of(f));
+        let Some(row) = self.strip_row() else {
+            self.root = Some(Node::Pane(new));
+            self.lone_width = width;
+            return;
+        };
+        let i = match at {
+            Some(c) if before => c,
+            Some(c) => c + 1,
+            None => row.len(),
+        };
+        row.insert(i, (Node::Pane(new), width));
+    }
+
+    /// Column `i`'s weight (its width, see `crate::strip`).
+    pub fn column_weight(&self, i: usize) -> Option<f32> {
+        self.columns().get(i).map(|(_, w)| *w)
+    }
+
+    pub fn set_column_weight(&mut self, i: usize, weight: f32) -> bool {
+        match &mut self.root {
+            Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            }) => match children.get_mut(i) {
+                Some((_, w)) => {
+                    *w = weight;
+                    true
+                }
+                None => false,
+            },
+            Some(_) if i == 0 => {
+                self.lone_width = weight;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Every column back to `width`, and the windows in each column equal.
+    pub fn strip_equalize(&mut self, width: f32) -> bool {
+        let mut changed = false;
+        for i in 0..self.columns().len() {
+            changed |= self.column_weight(i) != Some(width);
+            self.set_column_weight(i, width);
+        }
+        if let Some(root) = self.root.as_mut() {
+            let cols: Vec<&mut Node> = match root {
+                Node::Container {
+                    split: Split::Horizontal,
+                    tabbed: None,
+                    children,
+                } => children.iter_mut().map(|(n, _)| n).collect(),
+                n => vec![n],
+            };
+            for c in cols {
+                if let Node::Container { children, .. } = c {
+                    for (_, w) in children.iter_mut() {
+                        changed |= *w != 1.0;
+                        *w = 1.0;
+                    }
+                }
+            }
+        }
+        changed
+    }
+
+    /// Move the column holding `id` one place left or right along the strip.
+    pub fn move_column(&mut self, id: PaneId, right: bool) -> bool {
+        let Some(i) = self.column_of(id) else {
+            return false;
+        };
+        let n = self.columns().len();
+        let j = if right { i + 1 } else { i.wrapping_sub(1) };
+        if j >= n {
+            return false;
+        }
+        if let Some(row) = self.strip_row() {
+            row.swap(i, j);
+        }
+        self.settle_row();
+        true
+    }
+
+    /// Move `id` one place up or down within its column.
+    pub fn move_in_column(&mut self, id: PaneId, down: bool) -> bool {
+        let Some((Node::Container { children, .. }, idx)) = self.parent_mut(id) else {
+            return false;
+        };
+        let j = if down { idx + 1 } else { idx.wrapping_sub(1) };
+        if j >= children.len() {
+            return false;
+        }
+        children.swap(idx, j);
+        true
+    }
+
+    /// niri's consume-or-expel: alone in its column, `id` joins the column on
+    /// that side, at the bottom (as a tab when that column is a group);
+    /// sharing a column, it leaves into a new column on that side, `width`
+    /// wide. Returns whether anything moved.
+    pub fn consume_or_expel(&mut self, id: PaneId, right: bool, width: f32) -> bool {
+        let Some(i) = self.column_of(id) else {
+            return false;
+        };
+        let alone = self.column_panes(i).len() == 1;
+        let Some(row) = self.strip_row() else {
+            return false;
+        };
+        if alone {
+            let j = if right { i + 1 } else { i.wrapping_sub(1) };
+            if j >= row.len() {
+                self.settle_row();
+                return false;
+            }
+            row.remove(i);
+            let j = if right { j - 1 } else { j };
+            let (target, _) = &mut row[j];
+            match target {
+                Node::Container {
+                    tabbed: Some(active),
+                    children,
+                    ..
+                } => {
+                    children.push((Node::Pane(id), 1.0));
+                    *active = children.len() - 1;
+                }
+                Node::Container { children, .. } => children.push((Node::Pane(id), 1.0)),
+                Node::Pane(p) => {
+                    *target = Node::split(
+                        Split::Vertical,
+                        vec![(Node::Pane(*p), 1.0), (Node::Pane(id), 1.0)],
+                    );
+                }
+            }
+        } else {
+            let (col, _) = &mut row[i];
+            remove_in(col, id);
+            normalize(col);
+            let at = if right { i + 1 } else { i };
+            row.insert(at, (Node::Pane(id), width));
+        }
+        self.settle_row();
+        true
+    }
+
+    /// Grow or shrink `id`'s height within its column by `cells`, the way
+    /// `resize` does in a tree; `column` is the column's rect.
+    pub fn resize_in_column(
+        &mut self,
+        id: PaneId,
+        down: bool,
+        cells: u16,
+        column: Rect,
+        gap: u16,
+    ) -> bool {
+        let Some(i) = self.column_of(id) else {
+            return false;
+        };
+        let mut sub = Tree {
+            root: Some(self.columns()[i].0.clone()),
+            ..Tree::default()
+        };
+        let dir = if down { Dir::Down } else { Dir::Up };
+        if !sub.resize(id, dir, cells, column, gap) {
+            return false;
+        }
+        let new = sub.root.expect("a column");
+        match &mut self.root {
+            Some(Node::Container {
+                split: Split::Horizontal,
+                tabbed: None,
+                children,
+            }) => children[i].0 = new,
+            root => *root = Some(new),
+        }
+        true
+    }
+
+    /// The strip laid out on `area` with the view at `view`: every column at
+    /// its width, `gap` cells apart, columns `min` cells wide at least.
+    pub fn strip_layout(&self, area: Rect, gap: u16, min: u16, view: u32) -> StripLayout {
+        let cols = self.columns();
+        let widths: Vec<u16> = cols
+            .iter()
+            .map(|(_, w)| crate::strip::cells(*w, area.w, min))
+            .collect();
+        let (xs, _) = crate::strip::offsets(&widths, gap);
+        let (beyond_left, beyond_right) = crate::strip::beyond(&xs, &widths, view, area.w);
+        let columns = cols
+            .iter()
+            .zip(xs.iter().zip(&widths))
+            .map(|((node, _), (x, w))| {
+                let mut layout = Layout::default();
+                layout_node(
+                    node,
+                    Rect::new(0, area.y, *w, area.h),
+                    gap,
+                    true,
+                    &mut layout,
+                );
+                StripColumn {
+                    x: *x as i32 - view as i32,
+                    w: *w,
+                    layout,
+                }
+            })
+            .collect();
+        StripLayout {
+            columns,
+            beyond_left,
+            beyond_right,
+        }
     }
 }
 

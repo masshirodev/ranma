@@ -39,6 +39,8 @@ mod query;
 mod rules;
 mod run;
 mod screen;
+mod scroll;
+pub use scroll::{Edge, Peek};
 mod session;
 mod settings;
 mod snapshots;
@@ -112,6 +114,10 @@ pub struct Frame {
     pub tab_bars: Vec<TabBar>,
     /// Where the scratchpad is drawn, when it is shown.
     pub overlay: Option<Rect>,
+    /// In a strip: columns across the screen's edge, drawn cut and dimmed.
+    pub peeks: Vec<Peek>,
+    /// In a strip: the screen's edges with more of the strip beyond them.
+    pub edges: Vec<Edge>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -736,7 +742,7 @@ impl App {
         self.workspace_area().centered(80, 80)
     }
 
-    fn border(&self) -> u16 {
+    pub fn border(&self) -> u16 {
         match self.config.theme.border.style {
             BorderStyle::None => 0,
             _ => 1,
@@ -765,7 +771,27 @@ impl App {
             let full = ws.focused.filter(|f| ws.fullscreen && ws.contains(*f));
             let lay = ws.tree.layout_full(area, gap);
             let monocle = self.config.settings.layout == Layout::Monocle;
+            let strip = self.strip_here() && ws.tree.is_strip();
             match full {
+                None if strip => {
+                    self.strip_frame(&mut f, view);
+                    for (id, r) in &ws.floating {
+                        f.views.push(view(*id, r.clamp_into(area), true));
+                    }
+                }
+                Some(fid) if strip => {
+                    f.views.push(view(fid, area, false));
+                    for (id, r) in self.strip_sizes() {
+                        if id != fid {
+                            f.hidden.push((id, r));
+                        }
+                    }
+                    for (id, r) in &ws.floating {
+                        if *id != fid {
+                            f.hidden.push((*id, r.clamp_into(area).inset(b, b)));
+                        }
+                    }
+                }
                 None if monocle => {
                     let tiles = ws.tree.panes();
                     let shown = self.lone_tile(ws);
@@ -853,6 +879,9 @@ impl App {
                 ws.tree.arrange_master(ratio);
             }
         }
+        // A strip, likewise; and out of one when the layout changed.
+        self.arrange_strips();
+        self.follow_view();
         let frame = self.frame();
         let sizes: Vec<(PaneId, Rect)> = frame
             .views
@@ -875,7 +904,13 @@ impl App {
                 });
             }
         }
-        self.visible = frame.views.iter().map(|v| v.id).collect();
+        // A peek is on screen too: its output is worth a frame.
+        self.visible = frame
+            .views
+            .iter()
+            .map(|v| v.id)
+            .chain(frame.peeks.iter().map(|p| p.id))
+            .collect();
         self.dirty = true;
     }
 
@@ -963,7 +998,11 @@ impl App {
             Layout::Master => Placement::Dwindle,
             // Placed as dwindle would, so the tiling is there to go back to.
             Layout::Monocle => Placement::Dwindle,
+            // Not used: a strip opens a column (below).
+            Layout::Scrolling => Placement::Dwindle,
         };
+        let strip = self.strip_here();
+        let width = self.config.settings.scroll_width.weight();
         let area = self.workspace_area();
         let in_scratch = self.scratch_shown;
         let ws = self.active_mut();
@@ -973,6 +1012,12 @@ impl App {
                 let r = ws.cascade(area, 80, 80);
                 ws.floating.push((id, r));
             }
+            // A strip: a new column beside the focused one; up and down, a
+            // window in its column.
+            (Some(dir @ (Dir::Left | Dir::Right)), f) if strip => {
+                ws.tree.strip_open(id, f, dir == Dir::Left, width);
+            }
+            (None, f) if strip => ws.tree.strip_open(id, f, false, width),
             (Some(dir), Some(f)) => {
                 ws.tree.insert_beside(id, f, dir);
             }
@@ -1385,6 +1430,11 @@ impl App {
 
     /// Fire hooks for whatever the event changed, and refresh state-driven modules.
     fn after_event(&mut self) {
+        // A strip's view follows focus however it moved: a click, a hook, a
+        // switcher. Relaid out, since what is on screen changed.
+        if self.follow_view() {
+            self.relayout();
+        }
         // A nested ranma's report, focus or a pane closing can change which
         // pane is drawn without a border, and so the size of that pane.
         let frameless = self.frameless();
@@ -1833,6 +1883,15 @@ impl App {
     /// Returns true when the click was one of those. A right click on a
     /// workspace opens its menu; everywhere else it is a click like any other.
     fn click_chrome(&mut self, frame: &Frame, x: u16, y: u16, right: bool) -> bool {
+        // A peek is ranma's too: a click focuses it, scrolling it into view,
+        // and the press reaches no program.
+        if let Some(p) = frame.peeks.iter().find(|p| p.outer.contains(x, y)) {
+            let id = p.id;
+            self.active_mut().fullscreen = false;
+            self.focus(id);
+            self.relayout();
+            return true;
+        }
         if let Some(bar) = self.bar_rect()
             && bar.contains(x, y)
         {
@@ -2571,7 +2630,15 @@ impl App {
         let focused = self.focused();
         let floating = focused.is_some_and(|f| self.active().is_floating(f));
         let area = self.workspace_area();
+        if !floating && self.strip_action(&action) {
+            return;
+        }
         match action {
+            // A float has the focus: the strip's own keys have nothing to act on.
+            Action::ConsumeOrExpel(_)
+            | Action::ColumnWidth(_)
+            | Action::CenterColumn
+            | Action::FocusColumn(_) => {}
             Action::NewPane => {
                 if let Err(e) = self.open_pane(None) {
                     self.status = Some(format!("new pane failed: {e:#}"));
@@ -4104,6 +4171,10 @@ impl App {
                 // more: its bar is this one, so its panes are what focus is
                 // among. Its chips focus the pane that holds it.
                 let holder = self.focused();
+                // A strip's chips are its columns, their ground the view.
+                if crate::nestbar::strip_of(&self.nested_path()).is_none() && self.in_strip() {
+                    return self.strip_chips();
+                }
                 let chips: Vec<(Option<PaneId>, String, bool)> =
                     match crate::nestbar::strip_of(&self.nested_path()) {
                         Some(inner) => inner
@@ -6009,6 +6080,179 @@ mod tests {
                 a.handle(ev);
             }
         }
+    }
+
+    /// Board 01 of the scrolling handoff: four columns on 120 cells (zsh ⅓,
+    /// nvim ½, btop over logs ⅓, claude ½), the view at 0, nvim focused.
+    fn strip_board() -> (App, std::sync::mpsc::Receiver<AppEvent>, Vec<PaneId>) {
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(r#"ranma.set { layout = "scrolling", scroll_width = "1/3" }"#),
+        )
+        .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 120, 31);
+        let mut ids = Vec::new();
+        let open = |a: &mut App, word: &str, how: &str| {
+            a.run_action(
+                format!("{how} printf '\\033]2;{word}\\007{word} here'; sleep 30")
+                    .parse()
+                    .unwrap(),
+            );
+            a.focused().unwrap()
+        };
+        for word in ["zsh", "nvim", "btop", "claude"] {
+            ids.push(open(&mut a, word, "exec"));
+        }
+        a.focus(ids[2]);
+        a.run_action("new_pane down".parse().unwrap());
+        let logs = a.focused().unwrap();
+        a.panes
+            .get_mut(&logs)
+            .unwrap()
+            .write(b"printf '\\033]2;logs\\007'\n".to_vec());
+        ids.insert(3, logs);
+        let tree = &mut a.active_mut().tree;
+        tree.set_column_weight(1, 0.5);
+        tree.set_column_weight(3, 0.5);
+        tree.set_view(0);
+        a.focus(ids[1]);
+        a.relayout();
+        pump(&mut a, &rx, |a| {
+            let s = screen(a).join("\n");
+            ["zsh", "nvim", "btop"]
+                .iter()
+                .all(|w| s.contains(&format!("{w} here")))
+                && a.border_title(ids[2]).contains("btop")
+        });
+        (a, rx, ids)
+    }
+
+    /// The cell at (x, y) of a screen as `screen` returns it.
+    fn cell(s: &[String], x: usize, y: usize) -> char {
+        s[y].chars().nth(x).unwrap_or(' ')
+    }
+
+    #[test]
+    fn a_strip_scrolls_to_the_focused_column_and_shows_what_is_beyond() {
+        let (mut a, rx, ids) = strip_board();
+        let s = screen(&a);
+        // View at 0: the strip starts here (solid), and to the right the third
+        // column peeks, cut at the dotted rule: › 2, btop · logs and claude.
+        assert!(s[0].starts_with("╭ zsh "), "{}", s[0]);
+        assert_eq!(cell(&s, 119, 0), '┊');
+        assert_eq!((cell(&s, 119, 14), cell(&s, 119, 15)), ('›', '2'));
+        assert!(s[1].contains("btop here"), "the peek shows what is there");
+        let f = a.frame();
+        assert_eq!(
+            f.peeks.iter().map(|p| p.id).collect::<Vec<_>>(),
+            [ids[2], ids[3]]
+        );
+        assert!(f.views.iter().all(|v| v.outer.right() <= 120));
+        assert_eq!(f.edges.len(), 1);
+        // pane_strip, board 06: a chip per column, its ground the view.
+        let chips: Vec<(String, crate::bar::Style)> = a
+            .segment("pane_strip")
+            .into_iter()
+            .filter(|p| p.text != " ")
+            .map(|p| (p.text.trim().to_string(), p.style))
+            .collect();
+        let styles: Vec<crate::bar::Style> = chips.iter().map(|c| c.1).collect();
+        assert_eq!(
+            styles,
+            [
+                crate::bar::Style::TabInactive,
+                crate::bar::Style::TabActive,
+                crate::bar::Style::TabPeek,
+                crate::bar::Style::Dim,
+            ]
+        );
+        assert!(
+            chips[2].0.contains(" · "),
+            "a stack is one chip: {}",
+            chips[2].0
+        );
+        // Nothing resized to make room: claude, off screen, keeps its width.
+        let claude = f.hidden.iter().find(|(id, _)| *id == ids[4]).unwrap().1;
+        assert_eq!(claude.w, 58, "½ of 120, less its border");
+
+        // → → : claude, the view 80 cells along and no further.
+        a.run_action("focus right".parse().unwrap());
+        a.run_action("focus right".parse().unwrap());
+        assert_eq!(a.focused(), Some(ids[4]));
+        assert_eq!(a.active().tree.view(), 80);
+        pump(&mut a, &rx, |a| a.border_title(ids[1]).contains("nvim"));
+        let s = screen(&a);
+        assert_eq!(cell(&s, 0, 0), '┊');
+        assert_eq!((cell(&s, 0, 14), cell(&s, 0, 15)), ('‹', '2'));
+        assert_eq!(cell(&s, 119, 0), '╮', "the end of the strip: solid");
+        // A left peek names itself: its title moved into what shows.
+        let peek: String = s[0].chars().take(20).collect();
+        assert!(peek.contains(" nvim ") && peek.ends_with("─╮"), "{peek}");
+
+        // A click on a peek focuses it, and the view scrolls to it.
+        a.handle(AppEvent::Input(Event::Mouse(
+            crossterm::event::MouseEvent {
+                kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+                column: 5,
+                row: 5,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            },
+        )));
+        assert_eq!(a.focused(), Some(ids[1]));
+        assert_eq!(a.active().tree.view(), 40);
+    }
+
+    #[test]
+    fn strip_keys_join_leave_widen_and_move_columns() {
+        let (mut a, _rx, ids) = strip_board();
+        let cols = |a: &App| -> Vec<Vec<PaneId>> {
+            (0..a.active().tree.columns().len())
+                .map(|i| a.active().tree.column_panes(i))
+                .collect()
+        };
+        assert_eq!(
+            cols(&a),
+            [
+                vec![ids[0]],
+                vec![ids[1]],
+                vec![ids[2], ids[3]],
+                vec![ids[4]]
+            ]
+        );
+        // nvim, alone, joins zsh's column; then leaves it again.
+        a.run_action("consume_or_expel left".parse().unwrap());
+        assert_eq!(cols(&a)[0], [ids[0], ids[1]]);
+        a.run_action("consume_or_expel right".parse().unwrap());
+        assert_eq!(cols(&a)[..2], [vec![ids[0]], vec![ids[1]]]);
+        // Widths step through the stops (40 · 60 · 80 at 120) and full.
+        let width = |a: &App| a.active().tree.column_weight(1).unwrap();
+        assert_eq!(
+            width(&a),
+            1.0 / 3.0,
+            "a column leaving is scroll_width wide"
+        );
+        a.run_action("column_width next".parse().unwrap());
+        assert_eq!(width(&a), 0.5);
+        a.run_action("column_width full".parse().unwrap());
+        assert_eq!(width(&a), 1.0);
+        a.run_action("column_width full".parse().unwrap());
+        assert_eq!(width(&a), 0.5, "back to what it had");
+        a.run_action("resize right 3".parse().unwrap());
+        assert_eq!(width(&a), 63.0, "sized by hand: cells");
+        // The column moves along the strip, and new panes open beside it.
+        a.run_action("move right".parse().unwrap());
+        assert_eq!(cols(&a)[2], [ids[1]]);
+        a.run_action("new_pane".parse().unwrap());
+        assert_eq!(cols(&a)[3], [a.focused().unwrap()]);
+        // What has no meaning here says so.
+        a.run_action(Action::ToggleSplit);
+        assert!(a.status.as_deref().unwrap().contains("toggle_split"));
+        a.config.settings.layout = Layout::Dwindle;
+        a.relayout();
+        a.run_action("center_column".parse().unwrap());
+        assert!(!a.active().tree.is_strip(), "out of the strip");
     }
 
     #[test]

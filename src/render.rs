@@ -154,6 +154,12 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         }
     }
 
+    for p in &frame.peeks {
+        draw_peek(f, app, p);
+    }
+    for e in &frame.edges {
+        draw_edge(f, app, e);
+    }
     for tb in &frame.tab_bars {
         draw_tab_bar(f, app, tb);
     }
@@ -501,6 +507,138 @@ fn draw_pane(
         shape: c.shape,
         blinking: term.cursor_style().blinking,
     })
+}
+
+/// A column across the strip's edge (`layout = "scrolling"`): the pane
+/// drawn whole, as any pane is, into a buffer of its own size, and the part
+/// on screen copied in, dimmed. A left peek shows a pane's right end, where
+/// its title is not, so the title is moved into the part that shows: a peek
+/// always names itself.
+fn draw_peek(f: &mut Frame, app: &App, p: &crate::app::Peek) {
+    use ratatui::backend::TestBackend;
+    let Some(pane) = app.panes.get(&p.id) else {
+        return;
+    };
+    let b = app.border();
+    let view = PaneView {
+        id: p.id,
+        outer: p.full,
+        inner: p.full.inset(b, b),
+        focused: false,
+        floating: false,
+    };
+    let Ok(mut t) = ratatui::Terminal::new(TestBackend::new(p.full.w, p.full.h));
+    let title = app.border_title(p.id);
+    if t.draw(|tf| {
+        if b > 0 {
+            draw_border(tf, app, &view, &title);
+        }
+        draw_pane(tf, app, &view, pane);
+    })
+    .is_err()
+    {
+        return;
+    }
+    let src = t.backend().buffer();
+    let ground = app
+        .config
+        .theme
+        .panes
+        .inactive_bg
+        .map(color)
+        .filter(|g| matches!(g, Color::Rgb(..)));
+    let dim = |mut cell: ratatui::buffer::Cell| {
+        let bg = match cell.bg {
+            Color::Rgb(..) => Some(cell.bg),
+            _ => ground,
+        };
+        // Halfway to its ground: the dim_unfocused mix at 0.5, whatever that
+        // setting says; the faint attribute where the colours are unknown.
+        match (cell.fg, bg) {
+            (Color::Rgb(r, g, bl), Some(Color::Rgb(r2, g2, b2))) => {
+                let mix = |a: u8, b: u8| ((a as u16 + b as u16) / 2) as u8;
+                cell.fg = Color::Rgb(mix(r, r2), mix(g, g2), mix(bl, b2));
+            }
+            _ => cell.modifier |= Modifier::DIM,
+        }
+        cell
+    };
+    let out = f.buffer_mut();
+    for y in 0..p.outer.h {
+        for x in 0..p.outer.w {
+            let Some(cell) = src.cell((x + p.cut_left, y)) else {
+                continue;
+            };
+            if let Some(o) = out.cell_mut((p.outer.x + x, p.outer.y + y)) {
+                *o = dim(cell.clone());
+            }
+        }
+    }
+    // The title, moved into view: right-aligned before the corner.
+    if p.cut_left > 0 && b > 0 && !title.trim().is_empty() && p.outer.w > 4 {
+        let text = format!(" {} ", title.trim());
+        let room = p.outer.w as usize - 2;
+        let text: String = text.chars().take(room).collect();
+        let start = room - text.width();
+        let edge = src.cell((p.full.w - 1, 0)).cloned().unwrap_or_default();
+        let named = src
+            .cell((2u16.min(p.full.w - 1), 0))
+            .cloned()
+            .unwrap_or_default();
+        // Just before the corner: the top border's own line.
+        let horizontal = src
+            .cell((p.full.w.saturating_sub(2), 0))
+            .map_or("─".to_string(), |c| c.symbol().to_string());
+        let y = p.outer.y;
+        for x in 0..(p.outer.w - 1) {
+            if let Some(o) = out.cell_mut((p.outer.x + x, y)) {
+                let mut cell = edge.clone();
+                cell.set_symbol(&horizontal);
+                *o = dim(cell);
+            }
+        }
+        let style = dim(named).style();
+        out.set_stringn(p.outer.x + start as u16, y, &text, room, style);
+    }
+}
+
+/// An edge of the screen with more of the strip beyond it: a dotted rule
+/// down it, and halfway, an arrow over how many columns are not wholly on
+/// screen that way.
+fn draw_edge(f: &mut Frame, app: &App, e: &crate::app::Edge) {
+    let c = &app.colors();
+    let ascii = app.config.theme.border.style == BorderStyle::Ascii;
+    let (rule, arrow) = match (ascii, e.left) {
+        (true, true) => (":", "<"),
+        (true, false) => (":", ">"),
+        (false, true) => ("┊", "‹"),
+        (false, false) => ("┊", "›"),
+    };
+    let count = if e.count >= 10 {
+        "+".to_string()
+    } else {
+        e.count.to_string()
+    };
+    let mid = e.y + e.h / 2;
+    let buf = f.buffer_mut();
+    for y in e.y..e.y + e.h {
+        let Some(o) = buf.cell_mut((e.x, y)) else {
+            continue;
+        };
+        if y + 1 == mid {
+            o.set_symbol(arrow);
+            o.set_fg(color(c.bar_fg));
+            o.modifier = Modifier::BOLD;
+        } else if y == mid {
+            o.set_symbol(&count);
+            o.set_fg(color(c.bar_fg));
+            o.modifier = Modifier::empty();
+        } else {
+            o.set_symbol(rule);
+            o.set_fg(color(c.bar_dim));
+            o.modifier = Modifier::empty();
+        }
+    }
 }
 
 fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
@@ -907,6 +1045,7 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
                 | bar::Style::WsActive
                 | bar::Style::TabActive
                 | bar::Style::TabInactive
+                | bar::Style::TabPeek
                 | bar::Style::Cap
         );
         let mut style = piece_style(c, st, piece.style);
@@ -949,6 +1088,7 @@ fn draw_which_key(f: &mut Frame, app: &App) {
             table.iter().map(|(c, b)| whichkey::Entry::of(*c, b)),
             order,
             folder,
+            app.in_strip(),
         ),
     };
     let help = app
@@ -1397,6 +1537,7 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
         bar::Style::WsHolder => fg(c.ws_occupied, st.ws_occupied).add_modifier(Modifier::BOLD),
         bar::Style::TabActive => filled(c.tab_active_fg, c.tab_active_bg, st.tab_active),
         bar::Style::TabInactive => filled(c.tab_inactive_fg, c.tab_inactive_bg, st.tab_inactive),
+        bar::Style::TabPeek => filled(c.bar_dim, c.tab_inactive_bg, st.tab_inactive),
         bar::Style::WsInner(accent) => match accent {
             Some([r, g, b]) => Style::default()
                 .fg(Color::Rgb(r, g, b))

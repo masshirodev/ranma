@@ -247,6 +247,14 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] ASCII-art backgrounds behind the panes: the theme's `[background]`
 - [x] Images in panes: the kitty graphics protocol by Unicode placeholders
 
+## 13. Niri's strip
+
+- [x] `layout = "scrolling"`: a strip of columns and a view that follows
+  focus, peeks and edges, four new keys, `pane_strip` columns, saved widths
+  (designed from `doc/briefs/done/SCROLLING_LAYOUT.md`)
+- [ ] A layout per workspace, so one workspace can be a strip and the rest
+  dwindle (the handoff's "worth doing next to it")
+
 ## Later, maybe
 
 - Bar widgets in Lua, on a throttled tick.

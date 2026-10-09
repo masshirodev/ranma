@@ -104,6 +104,11 @@ pub const NOT_IN_PANEL: [&str; 9] = [
     "colors.optional",
 ];
 
+/// Settings the panel leaves to init.lua: `scroll_widths` is a list, and
+/// the panel edits one value per row. The registry test checks every other
+/// setting is an option.
+pub const SET_NOT_IN_PANEL: [&str; 1] = ["scroll_widths"];
+
 /// The colour roles the panel lists: the ones every theme sets.
 pub const COLOR_ROLES: [(&str, &str, &str); 27] = [
     (
@@ -288,9 +293,9 @@ pub fn builtin() -> Vec<Opt> {
             "layout",
             "general",
             "Layout",
-            choices(&["dwindle", "manual", "master", "monocle"]),
+            choices(&["dwindle", "manual", "master", "monocle", "scrolling"]),
             Init,
-            "Where a new pane goes: dwindle splits the focused pane along its longer side, manual the way the last toggle_split said, master keeps one pane on the left and stacks the rest, monocle shows one tiled pane with the others as tabs.",
+            "Where a new pane goes: dwindle splits the focused pane along its longer side, manual the way the last toggle_split said, master keeps one pane on the left and stacks the rest, monocle shows one tiled pane with the others as tabs, scrolling opens a column on a strip wider than the screen.",
         ),
         opt(
             "master_ratio",
@@ -299,6 +304,30 @@ pub fn builtin() -> Vec<Opt> {
             float(0.1, 0.9, 0.05, Unit::Fraction),
             Init,
             "With layout master: the master pane's share of the width, when a master area forms.",
+        ),
+        opt(
+            "scroll_width",
+            "general",
+            "Column width",
+            Kind::Text,
+            Init,
+            "With layout scrolling: a new column's width, a fraction of the screen (\"1/2\") or cells.",
+        ),
+        opt(
+            "scroll_min",
+            "general",
+            "Narrowest column",
+            int(20, 500, 1, false),
+            Init,
+            "With layout scrolling: the narrowest a column gets, border included, in cells.",
+        ),
+        opt(
+            "scroll_center",
+            "general",
+            "Centre column",
+            choices(&["never", "always", "overflow"]),
+            Init,
+            "With layout scrolling: never moves the view the least it can, always centres the focused column, overflow centres it when it and the column it came from do not fit together.",
         ),
         opt(
             "preserve_split",

@@ -33,6 +33,9 @@ pub enum Layout {
     /// whole workspace drawn as a tabbed group. The tree is kept as it is, so
     /// another layout gives the tiling back.
     Monocle,
+    /// niri's: a strip of columns wider than the screen, the view scrolling
+    /// to the focused one (`crate::strip`).
+    Scrolling,
 }
 
 /// What the mouse does outside WM mode.
@@ -146,6 +149,13 @@ pub struct Settings {
     /// With `layout = "master"`: the master's share of the width, for a new
     /// master area (a resized one keeps its size).
     pub master_ratio: f32,
+    /// With `layout = "scrolling"`: the widths `column_width next` steps
+    /// through, a new column's width, the narrowest column, and when the
+    /// view centres the focused column.
+    pub scroll_widths: Vec<crate::strip::Width>,
+    pub scroll_width: crate::strip::Width,
+    pub scroll_min: u16,
+    pub scroll_center: crate::strip::Center,
     pub preserve_split: bool,
     pub shell: Option<String>,
     pub scrollback_lines: usize,
@@ -189,6 +199,10 @@ impl Default for Settings {
             theme: theme::DEFAULT_THEME_NAME.into(),
             layout: Layout::Dwindle,
             master_ratio: 0.55,
+            scroll_widths: crate::strip::DEFAULT_WIDTHS.to_vec(),
+            scroll_width: crate::strip::Width::Frac(1, 2),
+            scroll_min: 40,
+            scroll_center: crate::strip::Center::Never,
             preserve_split: true,
             shell: None,
             scrollback_lines: 10_000,
@@ -222,6 +236,10 @@ struct SettingsPatch {
     theme: Option<String>,
     layout: Option<Layout>,
     master_ratio: Option<f32>,
+    scroll_widths: Option<Vec<crate::strip::WidthSetting>>,
+    scroll_width: Option<crate::strip::WidthSetting>,
+    scroll_min: Option<u16>,
+    scroll_center: Option<crate::strip::Center>,
     preserve_split: Option<bool>,
     shell: Option<String>,
     scrollback_lines: Option<usize>,
@@ -1223,6 +1241,32 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
             ));
         }
         s.master_ratio = r;
+    }
+    if let Some(m) = patch.scroll_min {
+        if !(20..=500).contains(&m) {
+            return Err(format!(
+                "{who}: scroll_min must be between 20 and 500 cells, not {m}"
+            ));
+        }
+        s.scroll_min = m;
+    }
+    if let Some(ws) = patch.scroll_widths {
+        if !(1..=6).contains(&ws.len()) {
+            return Err(format!(
+                "{who}: scroll_widths takes 1 to 6 widths, not {}",
+                ws.len()
+            ));
+        }
+        s.scroll_widths = ws
+            .iter()
+            .map(|w| w.parse(s.scroll_min, &format!("{who}: scroll_widths")))
+            .collect::<Result<_, _>>()?;
+    }
+    if let Some(w) = patch.scroll_width {
+        s.scroll_width = w.parse(s.scroll_min, &format!("{who}: scroll_width"))?;
+    }
+    if let Some(c) = patch.scroll_center {
+        s.scroll_center = c;
     }
     if let Some(p) = patch.preserve_split {
         s.preserve_split = p;
@@ -3899,7 +3943,10 @@ mod tests {
         let mut keys = Vec::new();
         leaf_keys("", &v.layers.default_set, &mut keys);
         for k in &keys {
-            assert!(has(k), "ranma.set's `{k}` is not in the options registry");
+            assert!(
+                has(k) || crate::options::SET_NOT_IN_PANEL.contains(&k.as_str()),
+                "ranma.set's `{k}` is neither in the options registry nor in SET_NOT_IN_PANEL"
+            );
         }
         let mut keys = Vec::new();
         leaf_keys("", &v.layers.default_theme, &mut keys);

@@ -169,7 +169,17 @@ impl App {
                     Split::Vertical => y,
                 };
                 let delta = pos as i32 - last as i32;
-                if delta != 0 {
+                // In a strip a column's right border sets its width in cells.
+                if delta != 0 && split == Split::Horizontal && self.strip_here() {
+                    if self.drag_column(id, delta) {
+                        self.drag = Some(Drag::Edge {
+                            id,
+                            split,
+                            last: pos,
+                        });
+                        self.relayout();
+                    }
+                } else if delta != 0 {
                     let (tarea, gap) = (self.tree_area(), self.config.theme.gaps.inner);
                     if self
                         .active_mut()

@@ -243,12 +243,16 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::ChooseBuffer => (48, 0),
         Action::PasteBuffer(1) => (49, 0),
         Action::PipePane(None) => (50, 0),
+        Action::ConsumeOrExpel(right) => (51, u8::from(*right)),
+        Action::ColumnWidth(crate::action::ColumnWidth::Next) => (52, 0),
+        Action::ColumnWidth(crate::action::ColumnWidth::Full) => (53, 0),
+        Action::CenterColumn => (54, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 51] = [
+const KINDS: [Kind; 55] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -300,7 +304,27 @@ const KINDS: [Kind; 51] = [
     k("history", "copies", Shape::Single),
     k("history", "paste last", Shape::Single),
     k("history", "log pane", Shape::Single),
+    k("layout", "join/leave", Shape::Pair),
+    k("layout", "width", Shape::Single),
+    k("layout", "full width", Shape::Single),
+    k("layout", "centre", Shape::Single),
 ];
+
+/// The strip's own kinds (`layout = "scrolling"`), shown only in a strip,
+/// and the layout kinds a strip cannot run, shown only outside one: split
+/// dir, swap master, next layout.
+const STRIP_ONLY: std::ops::Range<usize> = 51..55;
+const NOT_IN_STRIP: [usize; 3] = [4, 7, 41];
+
+/// Where a kind's rows sort: its place in `KINDS`, except the strip's own,
+/// which follow `split there` as the design draws them.
+fn rank(i: usize) -> (usize, usize) {
+    if STRIP_ONLY.contains(&i) {
+        (3, i)
+    } else {
+        (i, 0)
+    }
+}
 
 /// Binds of one kind under the same modifiers: the kind, the modifiers, and
 /// each member (a direction, a digit, prev or next) with its chord.
@@ -333,6 +357,7 @@ pub fn groups<'a>(
     binds: impl IntoIterator<Item = Entry<'a>>,
     order: &[String],
     folder: Option<&str>,
+    strip: bool,
 ) -> Vec<Group> {
     // (kind, mods) -> members with their chords; the kind's shape decides
     // whether they make one row.
@@ -364,6 +389,14 @@ pub fn groups<'a>(
                     RowKind::Bind,
                     unclaimed,
                 ),
+                // Rows follow the workspace's layout: what cannot run here
+                // is left out.
+                Some(Ok((i, _)))
+                    if (STRIP_ONLY.contains(&i) && !strip)
+                        || (NOT_IN_STRIP.contains(&i) && strip) =>
+                {
+                    continue;
+                }
                 Some(Ok((i, member))) => {
                     if e.desc.is_none() && e.group.is_none() {
                         match known
@@ -388,7 +421,7 @@ pub fn groups<'a>(
     }
     // The bind table is a map: order what came out of it, so the hint is
     // the same every time.
-    known.sort_by_key(|(i, m, _)| (*i, (m.ctrl, m.alt, m.shift, m.super_)));
+    known.sort_by_key(|(i, m, _)| (rank(*i), (m.ctrl, m.alt, m.shift, m.super_)));
     let mut rows: Vec<(usize, Row)> = Vec::new();
     for (i, _, mut members) in known {
         let kind = &KINDS[i];
@@ -487,7 +520,7 @@ pub fn groups<'a>(
         }
     }
     // Stable: within a kind, the family row first, then its odd members.
-    rows.sort_by_key(|(i, _)| *i);
+    rows.sort_by_key(|(i, _)| rank(*i));
     // In a folder every family lands under the folder's name.
     let family_group = |i: usize| folder.unwrap_or(KINDS[i].group);
     let names: Vec<String> = match folder {
@@ -529,7 +562,13 @@ pub fn groups<'a>(
                 all.sort_by_key(listed_order);
                 all
             };
-            Group { name: g, rows }
+            // In a strip the first group is the strip's.
+            let name = if strip && folder.is_none() && g == "layout" {
+                "strip".to_string()
+            } else {
+                g
+            };
+            Group { name, rows }
         })
         .filter(|g| !g.rows.is_empty())
         .collect()
@@ -897,6 +936,7 @@ mod tests {
             table.iter().map(|(c, b)| Entry::of(*c, b)),
             &cfg.group_order,
             name,
+            false,
         )
     }
 
@@ -912,6 +952,7 @@ mod tests {
                 .map(|(c, b)| Entry::of(*c, b)),
             &cfg.group_order,
             None,
+            false,
         )
     }
 
@@ -1035,6 +1076,32 @@ mod tests {
         assert!(layout(&default_groups(), 120, 5, &c, Some("?"), false).is_none());
     }
 
+    /// Board 05 of the scrolling handoff: in a strip the first group is the
+    /// strip's, its four keys in and the three that cannot run out.
+    #[test]
+    fn in_a_strip_the_hint_follows_the_layout() {
+        let cfg = crate::config::load_from(None, None, None).unwrap();
+        let strip = groups(
+            cfg.binds
+                .iter()
+                .filter(|(_, b)| !matches!(b.action, BindAction::Builtin(Action::PasteImage)))
+                .map(|(c, b)| Entry::of(*c, b)),
+            &cfg.group_order,
+            None,
+            true,
+        );
+        let p = layout(&strip, 120, 30, &crumbs(&["ctrl+b"]), Some("?"), false).unwrap();
+        let src = include_str!("../doc/handoffs/done/SCROLLING_LAYOUT_MOCK.txt");
+        same("strip", &p, true, mock(src, "120x30 strip rounded"));
+        // Outside one, the four new keys are left out: the defaults' hint
+        // is the first handoff's (the fixtures above).
+        let flat = default_groups();
+        assert!(
+            flat.iter()
+                .all(|g| g.rows.iter().all(|r| r.name != "width"))
+        );
+    }
+
     /// The configuration the folders handoff draws: the user's own (card
     /// c159), plugins grouped, git behind a folder.
     const C159: &str = r#"
@@ -1136,6 +1203,7 @@ mod tests {
                 })),
             &cfg.group_order,
             None,
+            false,
         );
         check_folders(
             "120x35 empty folder in top rounded",

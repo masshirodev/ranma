@@ -55,6 +55,17 @@ pub enum WorkspaceTarget {
     Last,
 }
 
+/// What `column_width` sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnWidth {
+    /// The next of `scroll_widths`, wrapping.
+    Next,
+    Prev,
+    /// Full width, and back to the width it had.
+    Full,
+    Set(crate::strip::Width),
+}
+
 /// What `pipe_pane` was given.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipeTarget {
@@ -89,6 +100,16 @@ pub enum Action {
     /// Grow the focused pane's edge in that direction by this many cells.
     Resize(Dir, u16),
     ToggleSplit,
+    /// In a strip (`layout = "scrolling"`): alone in its column, the focused
+    /// pane joins the column on that side (`true`: the right); sharing one,
+    /// it leaves into a new column there. niri's consume-or-expel.
+    ConsumeOrExpel(bool),
+    /// In a strip: the focused column's width.
+    ColumnWidth(ColumnWidth),
+    /// In a strip: centre the focused column in the view, once.
+    CenterColumn,
+    /// In a strip: focus the first (`false`) or last column.
+    FocusColumn(bool),
     /// Trade places with the master: the first pane of the tree (the one on the
     /// left in layout "master"); the master trades with the next one.
     SwapMaster,
@@ -324,6 +345,10 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("load_layout", "[name]"),
     ("restore", "[run]"),
     ("swap_master", ""),
+    ("consume_or_expel", "<left|right>"),
+    ("column_width", "<next|prev|full|1/2|cells>"),
+    ("center_column", ""),
+    ("focus_column", "<first|last>"),
     ("sync_toggle", ""),
     ("sync_clear", ""),
     ("toggle_floating", ""),
@@ -538,6 +563,61 @@ impl FromStr for Action {
                 })
             }
             "swap_master" => no_arg(Action::SwapMaster),
+            "consume_or_expel" => match (first, second) {
+                (Some("left"), None) => Ok(Action::ConsumeOrExpel(false)),
+                (Some("right"), None) => Ok(Action::ConsumeOrExpel(true)),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "left or right",
+                }),
+                _ => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "left or right",
+                }),
+            },
+            "column_width" => {
+                const WIDTHS: &str = "next, prev, full, a fraction such as 1/2, or cells";
+                let arg = first.ok_or(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: WIDTHS,
+                })?;
+                let bad = || ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: WIDTHS,
+                };
+                if second.is_some() {
+                    return Err(bad());
+                }
+                Ok(Action::ColumnWidth(match arg {
+                    "next" => ColumnWidth::Next,
+                    "prev" => ColumnWidth::Prev,
+                    "full" => ColumnWidth::Full,
+                    other => {
+                        let setting = match other.parse::<i64>() {
+                            Ok(c) => crate::strip::WidthSetting::Cells(c),
+                            Err(_) => crate::strip::WidthSetting::Text(other.into()),
+                        };
+                        // Cells are checked against scroll_min when it runs.
+                        ColumnWidth::Set(setting.parse(1, "column_width").map_err(|_| bad())?)
+                    }
+                }))
+            }
+            "center_column" => no_arg(Action::CenterColumn),
+            "focus_column" => match (first, second) {
+                (Some("first"), None) => Ok(Action::FocusColumn(false)),
+                (Some("last"), None) => Ok(Action::FocusColumn(true)),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "first or last",
+                }),
+                _ => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "first or last",
+                }),
+            },
             "sync_toggle" => no_arg(Action::SyncToggle),
             "sync_clear" => no_arg(Action::SyncClear),
             "toggle_floating" => no_arg(Action::ToggleFloating),
@@ -862,6 +942,19 @@ impl fmt::Display for Action {
             Action::Restore { run: false } => f.write_str("restore"),
             Action::Restore { run: true } => f.write_str("restore run"),
             Action::SwapMaster => f.write_str("swap_master"),
+            Action::ConsumeOrExpel(right) => write!(
+                f,
+                "consume_or_expel {}",
+                if *right { "right" } else { "left" }
+            ),
+            Action::ColumnWidth(ColumnWidth::Next) => f.write_str("column_width next"),
+            Action::ColumnWidth(ColumnWidth::Prev) => f.write_str("column_width prev"),
+            Action::ColumnWidth(ColumnWidth::Full) => f.write_str("column_width full"),
+            Action::ColumnWidth(ColumnWidth::Set(w)) => write!(f, "column_width {w}"),
+            Action::CenterColumn => f.write_str("center_column"),
+            Action::FocusColumn(last) => {
+                write!(f, "focus_column {}", if *last { "last" } else { "first" })
+            }
             Action::SyncToggle => f.write_str("sync_toggle"),
             Action::SyncClear => f.write_str("sync_clear"),
             Action::ToggleFloating => f.write_str("toggle_floating"),
