@@ -26,6 +26,7 @@ use crate::render::CursorState;
 use crate::theme::{BarPosition, BorderStyle};
 use crate::workspace::Workspace;
 
+mod buffers;
 mod copy;
 mod display;
 mod drag;
@@ -48,6 +49,7 @@ mod watch;
 pub use touch::{ButtonState, SheetLayout};
 pub(crate) mod upgrade;
 
+pub use buffers::KEPT as BUFFERS_KEPT;
 pub use copy::CopyState;
 pub use display::PaneNumbers;
 pub use drag::drop_half;
@@ -307,6 +309,8 @@ pub struct App {
     /// Panes whose program ended and that stayed (`remain_on_exit`), with
     /// its exit status. Enter in one runs it again.
     dead: HashMap<PaneId, Option<i32>>,
+    /// What was copied lately, newest first (see `buffers`).
+    buffers: Vec<String>,
     /// Panes whose program ended and will stay, until the event loop has
     /// read the last of their output.
     exited: HashMap<PaneId, std::process::ExitStatus>,
@@ -456,6 +460,7 @@ impl App {
             waiters: HashMap::new(),
             exit_codes: HashMap::new(),
             dead: HashMap::new(),
+            buffers: Vec::new(),
             exited: HashMap::new(),
             ended: Default::default(),
             return_focus: HashMap::new(),
@@ -2607,6 +2612,8 @@ impl App {
             Action::Hints => self.enter_hints(),
             Action::DisplayPanes => self.show_pane_numbers(),
             Action::MonitorSilence(how) => self.monitor_silence(how),
+            Action::ChooseBuffer => self.open_buffer_picker(),
+            Action::PasteBuffer(n) => self.paste_buffer(n),
             Action::RespawnPane => {
                 if let Some(id) = self.focused() {
                     self.respawn_dead(id);
@@ -5728,5 +5735,26 @@ mod tests {
         let ok = a.focused().expect("a pane");
         pump(&mut a, &rx, |a| !a.panes.contains_key(&ok));
         assert!(!a.dead.contains_key(&ok));
+    }
+
+    #[test]
+    fn copies_become_buffers_and_the_picker_pastes_one() {
+        let mut a = app(None);
+        a.run_action(Action::ChooseBuffer);
+        assert!(a.picker.is_none());
+        assert_eq!(a.status.as_deref(), Some("nothing copied yet"));
+        a.set_host_clipboard("first");
+        a.set_host_clipboard("make test\ncargo build");
+        a.run_action(Action::ChooseBuffer);
+        let items = a.picker.as_ref().expect("open").visible();
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, vec!["make test↵cargo build", "first"]);
+        assert_eq!(
+            items[1].target,
+            crate::picker::Target::Run("paste_buffer 2".into())
+        );
+        a.picker = None;
+        a.run_action("paste_buffer 9".parse().unwrap());
+        assert_eq!(a.status.as_deref(), Some("only 2 copies kept"));
     }
 }

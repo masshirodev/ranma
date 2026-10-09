@@ -181,12 +181,14 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::DisplayPanes => (45, 0),
         Action::FocusLast => (46, 0),
         Action::Workspace(WorkspaceTarget::Last) => (47, 0),
+        Action::ChooseBuffer => (48, 0),
+        Action::PasteBuffer(1) => (49, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 48] = [
+const KINDS: [Kind; 50] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -235,6 +237,8 @@ const KINDS: [Kind; 48] = [
     k("panes", "pane numbers", Shape::Single),
     k("panes", "last pane", Shape::Single),
     k("workspaces", "last one", Shape::Single),
+    k("history", "copies", Shape::Single),
+    k("history", "paste last", Shape::Single),
 ];
 
 /// Binds of one kind under the same modifiers: the kind, the modifiers, and

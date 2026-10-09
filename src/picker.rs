@@ -93,6 +93,8 @@ pub enum Kind {
     Layouts,
     /// A one-line prompt naming the layout `save_layout` writes.
     SaveLayout,
+    /// The paste buffers (`choose_buffer`).
+    Buffers,
     /// A list a plugin opened (`ranma.picker`).
     Lua,
     /// A one-line prompt a plugin opened (`ranma.input`).

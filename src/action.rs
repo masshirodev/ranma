@@ -162,6 +162,12 @@ pub enum Action {
     /// `monitor_silence` setting; a number of seconds watches for that long a
     /// quiet; `off` stops.
     MonitorSilence(Option<Option<u32>>),
+    /// The copies kept lately, newest first; Enter pastes one (tmux's
+    /// `choose-buffer`).
+    ChooseBuffer,
+    /// Paste the `n`th newest copy into the focused pane (tmux's
+    /// `paste-buffer`); 1 is the last.
+    PasteBuffer(usize),
     /// Run a pane's command again, where it started, once it has ended and
     /// stayed (`remain_on_exit`).
     RespawnPane,
@@ -230,6 +236,8 @@ impl Action {
                 | Action::Settings
                 | Action::CopyMode
                 | Action::Hints
+                | Action::ChooseBuffer
+                | Action::PasteBuffer(_)
                 | Action::DisplayPanes
                 | Action::Search
                 | Action::NewSession(_)
@@ -330,6 +338,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("hints", ""),
     ("display_panes", ""),
     ("respawn_pane", ""),
+    ("choose_buffer", ""),
+    ("paste_buffer", "[n]"),
     ("monitor_silence", "[seconds|off]"),
     ("search", ""),
     ("new_session", "[name]"),
@@ -663,6 +673,25 @@ impl FromStr for Action {
             "hints" => no_arg(Action::Hints),
             "display_panes" => no_arg(Action::DisplayPanes),
             "respawn_pane" => no_arg(Action::RespawnPane),
+            "choose_buffer" => no_arg(Action::ChooseBuffer),
+            "paste_buffer" => match (first, second) {
+                (None, _) => Ok(Action::PasteBuffer(1)),
+                (Some(n), None) => n
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|n| (1..=crate::app::BUFFERS_KEPT).contains(n))
+                    .map(Action::PasteBuffer)
+                    .ok_or(ActionError::BadArg {
+                        action: name.into(),
+                        arg: n.into(),
+                        expected: "which copy, 1 (the last) to 50",
+                    }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one number",
+                }),
+            },
             "monitor_silence" => match (first, second) {
                 (None, _) => Ok(Action::MonitorSilence(None)),
                 (Some("off"), None) => Ok(Action::MonitorSilence(Some(None))),
@@ -842,6 +871,9 @@ impl fmt::Display for Action {
             Action::Hints => f.write_str("hints"),
             Action::DisplayPanes => f.write_str("display_panes"),
             Action::RespawnPane => f.write_str("respawn_pane"),
+            Action::ChooseBuffer => f.write_str("choose_buffer"),
+            Action::PasteBuffer(1) => f.write_str("paste_buffer"),
+            Action::PasteBuffer(n) => write!(f, "paste_buffer {n}"),
             Action::MonitorSilence(None) => f.write_str("monitor_silence"),
             Action::MonitorSilence(Some(None)) => f.write_str("monitor_silence off"),
             Action::MonitorSilence(Some(Some(n))) => write!(f, "monitor_silence {n}"),

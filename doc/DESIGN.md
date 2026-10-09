@@ -1114,6 +1114,19 @@ hears the end of the program when it happens, which is what a script waits
 for. A server taking a new build closes these panes first: their PTY was
 dropped with the event loop, and there is nothing to hand over.
 
+**Paste buffers are every copy, and live only in memory.** tmux keeps its
+own buffers beside the system clipboard; ranma has one place copies go
+(`set_host_clipboard`, which writes OSC 52 to the terminal), so remembering
+there makes every copy a buffer without each way of copying having to:
+copy mode, hints, `ranma.copy`, a program's OSC 52. The last 50, an earlier
+copy of the same text moved up rather than kept twice. Not in the snapshot
+and not in the upgrade handover: a clipboard holds passwords, and a history
+of copies is not worth a file, or a pipe, that could leak one. Pasting goes
+the way a terminal paste goes, bracketed when the program asked, and to the
+marked panes when typing would. `choose_buffer` is the picker; its entries
+run `paste_buffer N`, so the picker is one more list of commands, as the
+layouts picker is.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

@@ -377,6 +377,7 @@ impl App {
 
     /// Queue an OSC 52 write setting the host's clipboard.
     pub(super) fn set_host_clipboard(&mut self, text: &str) {
+        self.remember_copy(text);
         let mut seq = b"\x1b]52;c;".to_vec();
         seq.extend_from_slice(base64(text.as_bytes()).as_bytes());
         seq.push(0x07);

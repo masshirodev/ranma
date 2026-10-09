@@ -280,6 +280,13 @@ ranma.bind("o", "hints")
 -- an upload. Not bound outside WM mode by default; one key for it:
 --   ranma.bind("alt+v", "paste_image", { global = true })
 ranma.bind("v", "paste_image")
+-- Paste buffers (tmux's choose-buffer and paste-buffer): every copy (copy mode,
+-- a link from hints, a program's own OSC 52) is kept, the last 50, in memory
+-- only. choose_buffer lists them, newest first, and Enter pastes one;
+-- paste_buffer pastes the last ("paste_buffer 3", the third). Not bound by
+-- default; tmux's keys:
+--   ranma.bind("]", "paste_buffer")
+--   ranma.bind("#", "choose_buffer")
 
 -- The palette. "?" opens it on the keys (help: every bind, filterable, Enter
 -- runs it); ":" on the commands (every action, bound or not; Tab completes one,
