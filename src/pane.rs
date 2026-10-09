@@ -777,6 +777,20 @@ fn split_marker(title: &str) -> Option<(Option<&str>, &str)> {
     Some((host.filter(|h| !h.is_empty()), label))
 }
 
+/// A reply the terminal emulator makes to a program's query, as ranma sends
+/// it. alacritty_terminal answers DA1 with `ESC [ ? 6 c` (a VT102), which
+/// lists no extensions; ranma passes OSC 52 copies on to the host, so it says
+/// so, as a VT220 with ANSI colour (22) and the clipboard (52). nvim turns
+/// its OSC 52 clipboard on only when DA1 lists 52, and over SSH that is the
+/// only clipboard it has.
+pub fn pty_reply(reply: String) -> String {
+    if reply == "\x1b[?6c" {
+        "\x1b[?62;22;52c".to_string()
+    } else {
+        reply
+    }
+}
+
 /// A title without the nested-ranma marker: `⧉ ranma · nvim` is `nvim`, and so
 /// is `⧉ ranma@vps · nvim`.
 pub fn strip_nested_marker(title: &str) -> &str {
@@ -1017,6 +1031,13 @@ fn terminfo_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn device_attributes_say_the_clipboard_is_passed_on() {
+        assert_eq!(pty_reply("\x1b[?6c".into()), "\x1b[?62;22;52c");
+        // Other replies (the cursor's position, say) go as they are.
+        assert_eq!(pty_reply("\x1b[3;1R".into()), "\x1b[3;1R");
+    }
 
     #[test]
     fn a_connection_is_named_for_where_it_goes() {

@@ -1598,7 +1598,7 @@ impl App {
             }
             // Replies to queries the program made (device attributes, cursor
             // position): they go back to the program, not to the host.
-            TermEvent::PtyWrite(s) => pane.write(s.into_bytes()),
+            TermEvent::PtyWrite(s) => pane.write(crate::pane::pty_reply(s).into_bytes()),
             // A program asking for a colour (OSC 4/10/11/12). One it set itself
             // wins; otherwise the host's, since those are what it is drawn with.
             // Unknown stays unanswered, as before.

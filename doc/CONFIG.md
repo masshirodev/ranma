@@ -431,7 +431,10 @@ match first. Every visible match is highlighted, the current one more strongly.
 Copies go to your system clipboard through the terminal (OSC 52): kitty, foot,
 wezterm, alacritty and tmux accept it; some terminals need it allowed in their
 config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,
-say) are passed through too. Reading the clipboard back is not allowed.
+say) are passed through too, and a pane says so when asked: its answer to
+the device-attributes query (DA1) lists 52, which is what nvim waits for
+before it turns its OSC 52 clipboard on (`"+y` over SSH, with no other
+provider). Reading the clipboard back is not allowed.
 
 ## Window rules — `ranma.rule { ... }`
 

@@ -1126,6 +1126,17 @@ marked panes when typing would. `choose_buffer` is the picker; its entries
 run `paste_buffer N`, so the picker is one more list of commands, as the
 layouts picker is.
 
+**A pane says it passes the clipboard on.** alacritty_terminal answers DA1
+as a VT102 (`ESC [ ? 6 c`), listing nothing; nvim reads that answer to
+decide whether to use OSC 52 for its clipboard and, finding no 52, has no
+clipboard at all over SSH, though ranma would carry its copies out. So
+ranma rewrites that one reply to `ESC [ ? 62 ; 22 ; 52 c` (VT220, ANSI
+colour, clipboard) on its way back to the program (`pane::pty_reply`).
+Rewriting the reply rather than answering DA1 itself keeps
+alacritty_terminal the one place queries are answered. XTGETTCAP, the
+other way nvim asks, stays unanswered. A nested ranma reads the longer
+reply as it read the short one.
+
 **A scrollbar is the border, thickened** (`panes.scrollbar`, tmux 3.6's
 `pane-scrollbars`). tmux gives the scrollbar a column of its own; ranma
 already has one beside every pane, the right border, so the thumb is drawn

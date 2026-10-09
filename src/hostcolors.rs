@@ -346,6 +346,10 @@ mod tests {
         assert!(da1_seen(input));
         assert!(!da1_seen(b"\x1b]10;rgb:0/0/0\x07"));
         assert!(!da1_seen(b"\x1b[?62;22"));
+        // What a ranma pane answers, so an inner ranma reads it as well.
+        assert!(da1_seen(
+            crate::pane::pty_reply("\x1b[?6c".into()).as_bytes()
+        ));
     }
 
     #[test]
