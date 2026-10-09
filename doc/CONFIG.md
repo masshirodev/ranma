@@ -1531,6 +1531,7 @@ end)
 | `title_change` | `pane`, `workspace`, `visible`, `title`, `previous` — when a program sets a different title. Spinners set titles often: keep the function cheap. |
 | `bell` | `pane`, `workspace`, `visible`, `title` — every bell, seen or not (an unseen one also toasts, as before) |
 | `pane_idle` | `pane`, `workspace`, `visible`, `title`, `busy` (seconds it had been printing) — a pane that printed has printed nothing for `pane_idle` seconds. An agent or a build that stopped. Once per burst of output. |
+| `click` | `pane`, `line`, `col` (as [pane handles](#pane-handles) number them), `x`, `y`, `button` (`left`, `right`, `middle`), `ctrl`, `alt`, `shift` — a press with **Ctrl or Alt** held in a pane's text. While a `click` hook exists such a press is the hook's and does not reach the program (which would act on it too); plain clicks are untouched. Shift is the terminal's own (selection past the mouse capture), so it never arrives here alone. |
 | `hover` | `pane`, `line`, `col` (as [pane handles](#pane-handles) number them), `x`, `y` — the pointer rested 150 ms on another cell of a pane's text. Needs the mouse on (`mouse` not `"off"`). |
 | `option_change` | `key`, `value`, `previous`, `saved` — the settings panel changed an option: as an edit is made (`saved` false), when it is put back, and once more for each edit saved (`saved` true). `value` is `nil` for unset. |
 | `user:<name>` | whatever `ranma.emit(name, data)` passed — a plugin's own event; see below |

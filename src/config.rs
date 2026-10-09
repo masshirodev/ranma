@@ -342,10 +342,13 @@ pub enum Event {
     OptionChange,
     /// The pointer came to rest on another cell of a pane.
     Hover,
+    /// A click with Ctrl or Alt held in a pane's text: the hook's, not the
+    /// program's.
+    Click,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 16] = [
+pub const EVENTS: [(&str, Event); 17] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -362,6 +365,7 @@ pub const EVENTS: [(&str, Event); 16] = [
     ("pane_idle", Event::PaneIdle),
     ("hover", Event::Hover),
     ("option_change", Event::OptionChange),
+    ("click", Event::Click),
 ];
 
 impl Event {

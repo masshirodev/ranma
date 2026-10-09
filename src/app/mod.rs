@@ -1939,6 +1939,47 @@ impl App {
         {
             return;
         }
+        // A click with Ctrl or Alt in a pane's text is a `click` hook's when
+        // there is one (open the path under it, say), and goes no further:
+        // the program would act on it too.
+        if let MouseEventKind::Down(button) = m.kind
+            && m.modifiers.intersects(
+                crossterm::event::KeyModifiers::CONTROL | crossterm::event::KeyModifiers::ALT,
+            )
+            && self.config.hooks.contains_key(&HookEvent::Click)
+            && let Some(v) = under.filter(|v| v.inner.contains(x, y))
+        {
+            let offset = self
+                .panes
+                .get(&v.id)
+                .map_or(0, |p| p.term.lock().grid().display_offset() as i32);
+            let line = i32::from(y - v.inner.y) - offset;
+            let col = x - v.inner.x;
+            let name = match button {
+                MouseButton::Left => "left",
+                MouseButton::Right => "right",
+                MouseButton::Middle => "middle",
+            };
+            let mods = m.modifiers;
+            self.emit(HookEvent::Click, |t| {
+                t.set("pane", v.id)?;
+                t.set("line", line)?;
+                t.set("col", col)?;
+                t.set("x", x)?;
+                t.set("y", y)?;
+                t.set("button", name)?;
+                t.set(
+                    "ctrl",
+                    mods.contains(crossterm::event::KeyModifiers::CONTROL),
+                )?;
+                t.set("alt", mods.contains(crossterm::event::KeyModifiers::ALT))?;
+                t.set(
+                    "shift",
+                    mods.contains(crossterm::event::KeyModifiers::SHIFT),
+                )
+            });
+            return;
+        }
         // A right press opens the pane's menu: on its border or title bar, or
         // in its text when its program does not use the mouse. A program that
         // asked for the mouse keeps its right clicks.
@@ -6182,5 +6223,30 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn a_click_with_ctrl_is_the_hooks_and_a_plain_one_is_not() {
+        use crossterm::event::KeyModifiers;
+        let mut a = app(Some(
+            r#"ranma.on("click", function(e)
+                 ranma.notify(e.button .. " " .. e.line .. " " .. e.col .. " " .. tostring(e.ctrl))
+               end)"#,
+        ));
+        with_pane(&mut a, 1);
+        a.relayout();
+        let inner = a.frame().views[0].inner;
+        let click = |a: &mut App, mods| {
+            a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: inner.x + 4,
+                row: inner.y + 2,
+                modifiers: mods,
+            })))
+        };
+        click(&mut a, KeyModifiers::NONE);
+        assert_eq!(a.status, None);
+        click(&mut a, KeyModifiers::CONTROL);
+        assert_eq!(a.status.as_deref(), Some("left 2 4 true"));
     }
 }

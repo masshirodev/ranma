@@ -130,6 +130,7 @@ function ranma.unbind_all() end
 ---| "cwd_change"       # { pane, workspace, cwd, previous, host }
 ---| "title_change"     # { pane, workspace, visible, title, previous }
 ---| "bell"             # { pane, workspace, visible, title }
+---| "click"            # { pane, line, col, x, y, button, ctrl, alt, shift }
 ---| "pane_idle"        # { pane, workspace, visible, title, busy }
 ---| "hover"            # { pane, line, col, x, y }
 ---| "option_change"    # { key, value, previous, saved }

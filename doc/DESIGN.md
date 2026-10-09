@@ -1171,6 +1171,20 @@ then among three small built-in patterns; a theme naming art that is not
 there is refused at load, as an unknown key is. The cost is the art's
 cells copied on frames that are drawn anyway; idle stays at zero.
 
+### A click with a modifier is a plugin's (2026-10-09)
+
+The `click` hook hears presses with Ctrl or Alt in a pane's text, and while
+one exists those presses go no further. Plain clicks stay what they were
+(focus, selection, the program's mouse), so nothing a user does today
+changes; a modifier is the cheap, conventional way to say "this click is for
+the terminal, not the program" (Ctrl+click opens a link in most terminals).
+Consuming it is the point: a program that also acted on the click (nvim
+placing its cursor) would fight the plugin. Shift is left out because the
+host terminal keeps Shift+click for its own selection, past the mouse
+capture, so it never reaches ranma. Opening paths is the dotfiles' `openpath`
+plugin, not the core: what "open" means (an editor, a file manager,
+`xdg-open`) is a person's.
+
 ### Modes and commands of the user's (2026-10-09)
 
 **A user mode is WM mode with another key table**, not a third kind of mode:
