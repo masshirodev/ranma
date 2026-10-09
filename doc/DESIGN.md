@@ -1045,6 +1045,21 @@ default** because a ranma server may run on another machine: `xdg-open` there
 opens the link on a screen nobody is looking at, so from a client that came
 over SSH opening copies instead and says so.
 
+### `send -e` presses Enter as its own key (2026-10-09)
+
+`ranma send -e TEXT` used to append `\r` to the text and write both at once.
+A shell does not care, but Claude Code guesses pastes from timing: text and
+Enter in one burst read as a paste, the Enter stays inside it, and the line
+sits in the prompt unsubmitted. That is how `ai send`'s nudges to idle agents
+waited for a person to press Enter. Now the text goes first and Enter follows
+50 ms later as a key (`--keys enter`), encoded for the pane's modes like any
+other; with `--paste` the Enter comes after the paste ends, never inside it.
+Checked against a live Claude Code in a private server: the old form left the
+line in the prompt, the new one submits it. The gap is in the client, not the
+server, so the server never sleeps. A newline *inside* the text is still
+written with it, since splitting text at every newline would change what
+multi-line `send` means to a shell.
+
 ### More from tmux, in order (2026-10-08)
 
 Milestone 12 takes the rest of what a tmux user reaches for daily and ranma

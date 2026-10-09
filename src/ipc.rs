@@ -576,6 +576,29 @@ pub fn send_request(pane: PaneId, input: &SendInput) -> String {
     format!("send\n{pane}\n{kind}\n{payload}")
 }
 
+/// How long `ranma send -e` waits between the text and its Enter.
+pub const ENTER_GAP: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// The inputs `ranma send` makes of some text: the text, then Enter as a key
+/// of its own when `enter` is set. Text and `\r` in one write are one burst,
+/// which Claude Code (and other TUIs that guess pastes from timing) take as a
+/// paste and keep the Enter inside it, so the line is never submitted; the
+/// caller sends the Enter `ENTER_GAP` later. A paste ends before its Enter
+/// for the same reason.
+pub fn typed_inputs(text: String, paste: bool, enter: bool) -> Vec<SendInput> {
+    let mut inputs = vec![if paste {
+        SendInput::Paste(text)
+    } else {
+        SendInput::Text(text)
+    }];
+    if enter {
+        inputs.push(SendInput::Keys(vec![
+            "enter".parse().expect("enter is a key"),
+        ]));
+    }
+    inputs
+}
+
 /// Build an `open` request.
 pub fn open_request(spec: &OpenSpec) -> String {
     let mut s = String::from("open\n");
@@ -871,6 +894,19 @@ mod tests {
             assert_eq!(q(&send_request(3, &input)), Query::Send { pane: 3, input });
         }
         assert_eq!(q("panes\n"), Query::Panes);
+        let enter = SendInput::Keys(vec!["enter".parse().unwrap()]);
+        assert_eq!(
+            typed_inputs("ai inbox".into(), false, true),
+            [SendInput::Text("ai inbox".into()), enter.clone()]
+        );
+        assert_eq!(
+            typed_inputs("a\nb".into(), true, true),
+            [SendInput::Paste("a\nb".into()), enter]
+        );
+        assert_eq!(
+            typed_inputs("ls".into(), false, false),
+            [SendInput::Text("ls".into())]
+        );
         assert_eq!(q("health\n"), Query::Health);
         assert_eq!(
             q("lua\nlocal x = 1\nreturn x + 1\n"),

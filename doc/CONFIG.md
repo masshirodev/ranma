@@ -883,7 +883,7 @@ ranma wait -p "$id"; echo $?             # until it ends; its exit status
 | Command | Does |
 | --- | --- |
 | `ranma panes [--json]` | Every pane in every session: its id (`*` on the focused one of its workspace), `session:workspace` (`S` is the scratchpad), the program in its foreground and its title. `--json` gives one object per pane with `id session workspace focused visible floating title program cwd pid cols rows`. |
-| `ranma send [-p PANE] [-e] TEXT...` | Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and `-e` presses Enter after it. `--paste` sends it as a paste instead, bracketed if the program asked for bracketed paste. |
+| `ranma send [-p PANE] [-e] TEXT...` | Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and `-e` presses Enter after it. `--paste` sends it as a paste instead, bracketed if the program asked for bracketed paste. The Enter from `-e` is a separate key, written 50 ms after the text (and after the paste ends): Claude Code and other TUIs that guess pastes from timing take text and Enter in one burst as a paste, keep the Enter inside it, and never submit the line. A newline inside the text has no such gap, so end a line with `-e`, not `\n`, to submit it to those programs. |
 | `ranma send [-p PANE] --keys KEY...` | Press keys, each spelled as in a bind (`ctrl+c`, `return`, `alt+x`, `up`), encoded for the modes the program asked for. |
 | `ranma capture [-p PANE] [-H N]` | Print the pane's screen, with `N` lines of history above it. Each line is trimmed on the right; blank lines at the end are left out. |
 | `ranma wait [-p PANE]` | Wait until the pane ends and exit with its program's status (1 when there is none, as for a pane closed by ranma). A pane that ended before `wait` asked answers at once, with its status if it was among the last 64 to end. |
@@ -1107,7 +1107,7 @@ the order written, actions and pane methods together:
 | `:focus()` | Show its session and workspace and focus it. |
 | `:close()` | Close it. |
 | `:rename(name)` | As `rename_pane`; no name clears it. |
-| `:send(text)` | Type the text; a newline is Enter. |
+| `:send(text)` | Type the text; a newline is Enter. Programs that guess pastes from timing may take a newline sent with its text as part of a paste and not submit it; `ranma send -e` waits before its Enter for them. |
 | `:paste(text)` | Paste it, bracketed if the program asked for that. |
 | `:keys(chord, ...)` | Press keys, spelled as in binds: `p:keys("ctrl+c")`. |
 | `:scroll_to(line)` | Scroll so the line is on screen: a scrollback line lands mid-view. |

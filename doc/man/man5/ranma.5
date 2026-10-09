@@ -1278,7 +1278,7 @@ ranma wait \-p "$id"; echo $?             # until it ends; its exit status
 Every pane in every session: its id (\fB*\fR on the focused one of its workspace), \fBsession:workspace\fR (\fBS\fR is the scratchpad), the program in its foreground and its title. \fB\-\-json\fR gives one object per pane with \fBid session workspace focused visible floating title program cwd pid cols rows\fR.
 .TP
 \fBranma send [\-p PANE] [\-e] TEXT...\fR
-Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and \fB\-e\fR presses Enter after it. \fB\-\-paste\fR sends it as a paste instead, bracketed if the program asked for bracketed paste.
+Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and \fB\-e\fR presses Enter after it. \fB\-\-paste\fR sends it as a paste instead, bracketed if the program asked for bracketed paste. The Enter from \fB\-e\fR is a separate key, written 50 ms after the text (and after the paste ends): Claude Code and other TUIs that guess pastes from timing take text and Enter in one burst as a paste, keep the Enter inside it, and never submit the line. A newline inside the text has no such gap, so end a line with \fB\-e\fR, not \fB\en\fR, to submit it to those programs.
 .TP
 \fBranma send [\-p PANE] \-\-keys KEY...\fR
 Press keys, each spelled as in a bind (\fBctrl+c\fR, \fBreturn\fR, \fBalt+x\fR, \fBup\fR), encoded for the modes the program asked for.
@@ -1574,7 +1574,7 @@ Close it.
 As \fBrename_pane\fR; no name clears it.
 .TP
 \fB:send(text)\fR
-Type the text; a newline is Enter.
+Type the text; a newline is Enter. Programs that guess pastes from timing may take a newline sent with its text as part of a paste and not submit it; \fBranma send \-e\fR waits before its Enter for them.
 .TP
 \fB:paste(text)\fR
 Paste it, bracketed if the program asked for that.

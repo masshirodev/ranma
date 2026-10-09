@@ -175,7 +175,8 @@ enum Command {
         /// Send the text as a paste, bracketed if the program asked for that.
         #[arg(long)]
         paste: bool,
-        /// Press Enter after the text.
+        /// Press Enter after the text, as a key of its own a moment later, so a
+        /// program that takes a fast burst for a paste still submits the line.
         #[arg(long, short)]
         enter: bool,
         /// The text (arguments joined by spaces), or the keys.
@@ -408,25 +409,24 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             input,
         } => {
             let pane = ipc::pane_or_own(pane)?;
-            let input = if keys {
-                ipc::SendInput::Keys(
+            let inputs = if keys {
+                vec![ipc::SendInput::Keys(
                     input
                         .iter()
                         .map(|k| k.parse().map_err(|e| anyhow::anyhow!("key `{k}`: {e}")))
                         .collect::<anyhow::Result<_>>()?,
-                )
+                )]
             } else {
-                let mut text = input.join(" ");
-                if enter {
-                    text.push('\n');
-                }
-                if paste {
-                    ipc::SendInput::Paste(text)
-                } else {
-                    ipc::SendInput::Text(text)
-                }
+                ipc::typed_inputs(input.join(" "), paste, enter)
             };
-            ipc::send(&ipc::send_request(pane, &input))?
+            let mut reply = String::new();
+            for (i, input) in inputs.iter().enumerate() {
+                if i > 0 {
+                    std::thread::sleep(ipc::ENTER_GAP);
+                }
+                reply = ipc::send(&ipc::send_request(pane, input))?;
+            }
+            reply
         }
         Command::Lua { code } => {
             let code = if code.is_empty() {
