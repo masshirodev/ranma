@@ -219,7 +219,8 @@ features below the line live outside the repository.
   `pane_idle`, `hover`, `user:<name>`
 - [x] Time and processes: `defer`, `every`, `cancel`, `spawn`, `kill`
 - [x] State: `pane.vars`, `ranma.store` (`workspace.vars` left out; DESIGN.md says why)
-- [ ] Keys: which-key groups, user modes, user commands
+- [x] Keys: user modes (`ranma.mode`), user commands (`ranma.command`)
+- [ ] Keys: which-key groups (design first: `doc/briefs/WHICH_KEY_GROUPS.md`)
 - [x] Drawing: `picker` and `input`
 - [x] Design: `doc/briefs/PLUGIN_PANEL.md`, handoff in `doc/handoffs/`
 - [x] Plugin screens: `ranma.screen` (designed from the handoff)

@@ -1171,6 +1171,32 @@ then among three small built-in patterns; a theme naming art that is not
 there is refused at load, as an unknown key is. The cost is the art's
 cells copied on frames that are drawn anyway; idle stays at zero.
 
+### Modes and commands of the user's (2026-10-09)
+
+**A user mode is WM mode with another key table**, not a third kind of mode:
+everything WM mode means (keys are ranma's, unbound keys are swallowed,
+the which-key hint, the bar's chip, stickiness, `exit` per bind) carries
+over, and only the table changes. Esc and Enter leave it even unbound,
+because a mode with no way out is a trap; the leader returns to WM mode's
+own keys rather than sending itself on, since in a user mode the leader
+reads as "back to the usual". `on_enter` and `on_exit` run on every way in
+and out, including a click or a hook that changes mode, because they hang
+off `set_mode`, not off keys. A bind naming a mode no `ranma.mode` declares
+is refused at load, as an unknown action is; the check waits for the end of
+the file, since a bind may come before its mode.
+
+**A user command is a palette entry with a Lua function behind it.** It is
+listed with the actions and its `desc`, a typed line naming it is run
+rather than parsed as an action (so a mistake in it is the function's to
+report), and its `complete` values are offered as its argument is typed:
+fetched once as the palette opens, so typing never calls Lua. Commands are
+not actions: `ranma.bind` takes a function for that, and an action string
+naming a command would make the action grammar depend on what a plugin
+declared. A command cannot take a built-in action's name.
+
+Which-key **groups** (folders in the hint) are left for a design pass: they
+change the hint's handoff layout. See `doc/briefs/WHICH_KEY_GROUPS.md`.
+
 ### The kitty keyboard protocol, both ways (2026-10-09)
 
 ranma re-encodes every key for the pane it goes to, so the protocol is two

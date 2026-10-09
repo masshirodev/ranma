@@ -145,6 +145,10 @@ for _, dir in ipairs { "left", "right", "up", "down" } do
   ranma.bind("alt+" .. dir, "new_pane " .. dir)
 end
 ranma.bind("q", "close_pane")
+-- Modes of your own: WM mode with another key table, entered with "mode NAME"
+-- (doc/CONFIG.md, "Modes"). For example a resize mode on r:
+--   ranma.mode("resize", { binds = { h = "resize left 5", l = "resize right 5" } })
+--   ranma.bind("r", "mode resize")
 -- Pane numbers (tmux's display-panes): every pane on screen gets a large
 -- number; type one to focus that pane, any other key puts them away. Not bound
 -- by default, so the which-key hint keeps its designed layout; one key for it:

@@ -238,6 +238,7 @@ sent them, which it is not asked to.
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
+| `mode <name>` | Enter a mode declared with `ranma.mode`: WM mode with its keys. See [Modes](#modes--ranmamodename-def). |
 | `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile. Not bound by default: `ranma.bind("i", "display_panes")`. |
 | `pipe_pane [off\|command line]` | Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's `pipe-pane`). Bare, it toggles a log at `~/.local/state/ranma/logs/pane<ID>-<YYYYMMDD-HHMMSS>.log` (UTC); with a command line, the output goes into that command's stdin (`pipe_pane cat >> ~/build.log`, `pipe_pane grep --line-buffered error > ~/errors`), run by `sh -c` in the pane's directory; `off` stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. |
 | `choose_buffer` | The copies kept lately, newest first, one line each (`↵` for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's `choose-buffer`). Every copy is kept: copy mode's, a link copied from `hints`, `ranma.copy`, and what a program copies itself with OSC 52. The last 50, the same text once, in memory only: never written to disk, and gone when the server ends or upgrades. |
@@ -1427,6 +1428,53 @@ When the phone and the desk both show a server, the screen follows the one
 last typed in (see [Servers](#servers-closing-the-terminal-does-not-end-ranma)),
 and so does the profile: tapping on the phone brings the mobile view (the tap
 itself only takes the screen), typing at the desk brings the desk's back.
+
+## Modes — `ranma.mode(name, def)`
+
+A mode of your own is WM mode with a key table of its own: a resize mode, a
+git mode, keys that only make sense together. The `mode NAME` action enters
+it; its keys run until Esc or Enter (or a bind with `exit = true`), and the
+leader goes back to WM mode's keys. The bar's mode module says its label.
+
+```lua
+ranma.mode("resize", {
+  label = "RESIZE",                        -- default: the name in capitals
+  binds = {
+    h = "resize left 5", l = "resize right 5",
+    j = "resize down 2", k = "resize up 2",
+    ["="] = { "equalize", exit = true },     -- options after the action
+    x = { function() ranma.notify("x") end, desc = "say x" },
+  },
+  sticky = true,                           -- stay after a bind (default)
+  on_enter = function() end,
+  on_exit = function() end,
+})
+ranma.bind("r", "mode resize")
+```
+
+A bind naming a mode that no `ranma.mode` declares is an error at load. The
+`mode_change` hook hears the mode's name. The which-key hint lists its keys.
+
+## Commands — `ranma.command(name, fn, opts)`
+
+A command of your own in the palette (`leader :`), next to the actions:
+
+```lua
+ranma.command("note", function(arg)
+  ranma.spawn({ "sh", "-c", "echo \"$1\" >> ~/notes.txt", "sh", arg or "" })
+end, { desc = "append to my notes", args = "<text>" })
+
+ranma.command("proj", function(name) ranma.action("session " .. name) end, {
+  args = "<name>",
+  complete = function() return { "kumiko", "wayfarer", "ranma" } end,
+})
+```
+
+`fn` gets what was typed after the name, or `nil`. `desc` shows beside it,
+`args` after its name (`<...>` means Enter completes the name and waits for
+the argument, as for actions). `complete` is a list, or a function called as
+the palette opens, of values offered as the argument is typed. A name that is
+a built-in action's is an error.
 
 ## Profiles — `ranma.profile(name, def)`
 

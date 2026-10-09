@@ -288,6 +288,31 @@ pub struct Bind {
     pub desc: Option<String>,
 }
 
+/// A mode of the user's (`ranma.mode`): WM mode with a key table of its own,
+/// entered with the `mode` action.
+#[derive(Clone)]
+pub struct UserMode {
+    /// What the bar's mode module says while it is on (` RESIZE `).
+    pub label: String,
+    pub binds: HashMap<Chord, Bind>,
+    /// Stay in it after a bind fires (unless the bind says `exit`); Esc and
+    /// Enter leave.
+    pub sticky: bool,
+    pub on_enter: Option<Rc<RegistryKey>>,
+    pub on_exit: Option<Rc<RegistryKey>>,
+}
+
+/// A command of the user's (`ranma.command`), run from the palette.
+#[derive(Clone)]
+pub struct UserCommand {
+    pub func: Rc<RegistryKey>,
+    pub desc: Option<String>,
+    /// What it takes, as the palette shows it (`<name>`, `[n]`).
+    pub args: Option<String>,
+    /// Its argument's values: a list, or a function returning one.
+    pub complete: Option<Rc<RegistryKey>>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Event {
     PaneOpen,
@@ -749,6 +774,8 @@ pub enum Op {
 /// What the `ranma` global writes into while the config runs.
 #[derive(Default, Clone)]
 struct Builder {
+    modes: HashMap<String, UserMode>,
+    commands: std::collections::BTreeMap<String, UserCommand>,
     settings: Settings,
     binds: HashMap<Chord, Bind>,
     global_binds: HashMap<Chord, Bind>,
@@ -780,6 +807,10 @@ struct Builder {
 }
 
 pub struct Config {
+    /// `ranma.mode`s by name.
+    pub modes: HashMap<String, UserMode>,
+    /// `ranma.command`s by name.
+    pub commands: std::collections::BTreeMap<String, UserCommand>,
     pub settings: Settings,
     /// Keys looked up in WM mode, after the leader.
     pub binds: HashMap<Chord, Bind>,
@@ -938,6 +969,86 @@ fn rt_err(msg: impl Into<String>) -> mlua::Error {
 
 /// The error for a function that builds the configuration called once it has
 /// been built: from a bind, hook, module or timer. The traceback names which.
+/// One bind as `ranma.bind` spells it, and each of a `ranma.mode`'s: the
+/// chord, the bind, and whether it is global (`global_ok`: only `ranma.bind`
+/// takes that option).
+fn parse_bind(
+    lua: &Lua,
+    keys: &str,
+    action: Value,
+    opts: Option<&Table>,
+    who: &str,
+    global_ok: bool,
+) -> mlua::Result<(Chord, Bind, bool)> {
+    let chord: Chord = keys
+        .parse()
+        .map_err(|e| rt_err(format!("{who}: key `{keys}`: {e}")))?;
+    let mut exit_override: Option<bool> = None;
+    let mut global = false;
+    let mut desc: Option<String> = None;
+    let expected = if global_ok {
+        "exit, global, desc"
+    } else {
+        "exit, desc"
+    };
+    if let Some(t) = opts {
+        for pair in t.pairs::<String, Value>() {
+            let (k, v) = pair?;
+            match (k.as_str(), v) {
+                ("exit", Value::Boolean(b)) => exit_override = Some(b),
+                ("global", Value::Boolean(b)) if global_ok => global = b,
+                ("desc", Value::String(d)) => desc = Some(d.to_str()?.to_string()),
+                ("desc", other) => {
+                    return Err(rt_err(format!(
+                        "{who}(\"{keys}\"): `desc` must be a string, not {}",
+                        other.type_name()
+                    )));
+                }
+                ("exit", other) | ("global", other) if k != "global" || global_ok => {
+                    return Err(rt_err(format!(
+                        "{who}(\"{keys}\"): `{k}` must be true or false, not {}",
+                        other.type_name()
+                    )));
+                }
+                _ => {
+                    return Err(rt_err(format!(
+                        "{who}: unknown option `{k}` (expected {expected})"
+                    )));
+                }
+            }
+        }
+    }
+    let bind = match action {
+        Value::String(s) => {
+            let s = s.to_str()?.to_string();
+            let parsed: Action = s
+                .parse()
+                .map_err(|e| rt_err(format!("{who}(\"{keys}\"): {e}")))?;
+            Bind {
+                exits_mode: exit_override.unwrap_or(parsed.exits_mode_by_default()),
+                exit: exit_override,
+                action: BindAction::Builtin(parsed),
+                label: s,
+                desc,
+            }
+        }
+        Value::Function(f) => Bind {
+            action: BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
+            exits_mode: exit_override.unwrap_or(false),
+            exit: exit_override,
+            label: "<lua function>".into(),
+            desc,
+        },
+        other => {
+            return Err(rt_err(format!(
+                "{who}(\"{keys}\"): action must be a string or a function, not {}",
+                other.type_name()
+            )));
+        }
+    };
+    Ok((chord, bind, global))
+}
+
 fn loading_only() -> mlua::Error {
     rt_err(
         "this only works while the configuration loads (init.lua or a plugin), \
@@ -1121,39 +1232,8 @@ fn install_api(
         "bind",
         lua.create_function(
             |lua, (keys, action, opts): (String, Value, Option<Table>)| {
-                let chord: Chord = keys
-                    .parse()
-                    .map_err(|e| rt_err(format!("ranma.bind: key `{keys}`: {e}")))?;
-                let mut exit_override: Option<bool> = None;
-                let mut global = false;
-                let mut desc: Option<String> = None;
-                if let Some(t) = &opts {
-                    for pair in t.pairs::<String, Value>() {
-                        let (k, v) = pair?;
-                        match (k.as_str(), v) {
-                            ("exit", Value::Boolean(b)) => exit_override = Some(b),
-                            ("global", Value::Boolean(b)) => global = b,
-                            ("desc", Value::String(d)) => desc = Some(d.to_str()?.to_string()),
-                            ("desc", other) => {
-                                return Err(rt_err(format!(
-                                    "ranma.bind(\"{keys}\"): `desc` must be a string, not {}",
-                                    other.type_name()
-                                )));
-                            }
-                            ("exit" | "global", other) => {
-                                return Err(rt_err(format!(
-                                    "ranma.bind(\"{keys}\"): `{k}` must be true or false, not {}",
-                                    other.type_name()
-                                )));
-                            }
-                            _ => {
-                                return Err(rt_err(format!(
-                                    "ranma.bind: unknown option `{k}` (expected exit, global, desc)"
-                                )));
-                            }
-                        }
-                    }
-                }
+                let (chord, bind, global) =
+                    parse_bind(lua, &keys, action, opts.as_ref(), "ranma.bind", true)?;
                 if global
                     && chord
                         == lua
@@ -1166,40 +1246,129 @@ fn install_api(
                         "ranma.bind(\"{keys}\"): the leader cannot also be a global bind"
                     )));
                 }
-                let bind = match action {
-                    Value::String(s) => {
-                        let s = s.to_str()?.to_string();
-                        let parsed: Action = s
-                            .parse()
-                            .map_err(|e| rt_err(format!("ranma.bind(\"{keys}\"): {e}")))?;
-                        Bind {
-                            exits_mode: exit_override.unwrap_or(parsed.exits_mode_by_default()),
-                            exit: exit_override,
-                            action: BindAction::Builtin(parsed),
-                            label: s,
-                            desc,
-                        }
-                    }
-                    Value::Function(f) => Bind {
-                        action: BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
-                        exits_mode: exit_override.unwrap_or(false),
-                        exit: exit_override,
-                        label: "<lua function>".into(),
-                        desc,
-                    },
-                    other => {
-                        return Err(rt_err(format!(
-                            "ranma.bind(\"{keys}\"): action must be a string or a function, not {}",
-                            other.type_name()
-                        )));
-                    }
-                };
                 let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
                 if global {
                     b.global_binds.insert(chord, bind);
                 } else {
                     b.binds.insert(chord, bind);
                 }
+                Ok(())
+            },
+        )?,
+    )?;
+
+    ranma.set(
+        "mode",
+        lua.create_function(|lua, (name, def): (String, Table)| {
+            let who = format!("ranma.mode(\"{name}\")");
+            if name.is_empty() || name.contains(char::is_whitespace) {
+                return Err(rt_err(format!("{who}: a mode's name is one word")));
+            }
+            let mut mode = UserMode {
+                label: name.to_uppercase(),
+                binds: HashMap::new(),
+                sticky: true,
+                on_enter: None,
+                on_exit: None,
+            };
+            for pair in def.pairs::<String, Value>() {
+                let (k, v) = pair?;
+                match (k.as_str(), v) {
+                    ("label", Value::String(s)) => mode.label = s.to_str()?.to_string(),
+                    ("sticky", Value::Boolean(b)) => mode.sticky = b,
+                    ("on_enter", Value::Function(f)) => {
+                        mode.on_enter = Some(Rc::new(lua.create_registry_value(f)?))
+                    }
+                    ("on_exit", Value::Function(f)) => {
+                        mode.on_exit = Some(Rc::new(lua.create_registry_value(f)?))
+                    }
+                    ("binds", Value::Table(t)) => {
+                        for pair in t.pairs::<String, Value>() {
+                            let (keys, v) = pair?;
+                            // A key's value is its action, or a table with the
+                            // action first and the bind's options after it.
+                            let (action, opts) = match v {
+                                Value::Table(t) => (t.get::<Value>(1)?, Some(t)),
+                                other => (other, None),
+                            };
+                            if let Some(t) = &opts {
+                                t.raw_remove(1)?;
+                            }
+                            let (chord, bind, global) =
+                                parse_bind(lua, &keys, action, opts.as_ref(), &who, false)?;
+                            debug_assert!(!global);
+                            mode.binds.insert(chord, bind);
+                        }
+                    }
+                    (k @ ("label" | "sticky" | "on_enter" | "on_exit" | "binds"), other) => {
+                        return Err(rt_err(format!(
+                            "{who}: `{k}` cannot be {}",
+                            other.type_name()
+                        )));
+                    }
+                    (k, _) => {
+                        return Err(rt_err(format!(
+                            "{who}: unknown key `{k}` (expected binds, label, sticky, on_enter, on_exit)"
+                        )));
+                    }
+                }
+            }
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            b.modes.insert(name, mode);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "command",
+        lua.create_function(
+            |lua, (name, func, opts): (String, Function, Option<Table>)| {
+                let who = format!("ranma.command(\"{name}\")");
+                let ok = !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+                if !ok {
+                    return Err(rt_err(format!(
+                        "{who}: a command's name is letters, digits, _ - and ."
+                    )));
+                }
+                if crate::action::CATALOGUE.iter().any(|(n, _)| *n == name) {
+                    return Err(rt_err(format!(
+                        "{who}: `{name}` is a built-in action already"
+                    )));
+                }
+                let mut cmd = UserCommand {
+                    func: Rc::new(lua.create_registry_value(func)?),
+                    desc: None,
+                    args: None,
+                    complete: None,
+                };
+                if let Some(t) = opts {
+                    for pair in t.pairs::<String, Value>() {
+                        let (k, v) = pair?;
+                        match (k.as_str(), v) {
+                            ("desc", Value::String(s)) => cmd.desc = Some(s.to_str()?.to_string()),
+                            ("args", Value::String(s)) => cmd.args = Some(s.to_str()?.to_string()),
+                            ("complete", v @ (Value::Function(_) | Value::Table(_))) => {
+                                cmd.complete = Some(Rc::new(lua.create_registry_value(v)?))
+                            }
+                            (k @ ("desc" | "args" | "complete"), other) => {
+                                return Err(rt_err(format!(
+                                    "{who}: `{k}` cannot be {}",
+                                    other.type_name()
+                                )));
+                            }
+                            (k, _) => {
+                                return Err(rt_err(format!(
+                                    "{who}: unknown option `{k}` (expected desc, args, complete)"
+                                )));
+                            }
+                        }
+                    }
+                }
+                let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+                b.commands.insert(name, cmd);
                 Ok(())
             },
         )?,
@@ -1983,10 +2152,28 @@ pub fn load_from(
             ..Default::default()
         };
     }
+    // A bind may name a mode declared after it; by now all are, so a name
+    // that is none of them is an error here, as an unknown action is.
+    {
+        let tables = builder
+            .binds
+            .values()
+            .chain(builder.global_binds.values())
+            .chain(builder.modes.values().flat_map(|m| m.binds.values()));
+        for b in tables {
+            if let BindAction::Builtin(Action::Mode(m)) = &b.action
+                && !builder.modes.contains_key(m)
+            {
+                anyhow::bail!("`mode {m}`: no ranma.mode is called {m}");
+            }
+        }
+    }
     jobs.adopt(std::mem::take(&mut builder.timers));
     *user_events.hooks.borrow_mut() = std::mem::take(&mut builder.user_hooks);
 
     Ok(Config {
+        modes: std::mem::take(&mut builder.modes),
+        commands: std::mem::take(&mut builder.commands),
         base: (
             builder.settings.clone(),
             builder.bar.clone(),

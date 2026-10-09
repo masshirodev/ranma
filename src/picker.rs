@@ -131,6 +131,10 @@ pub struct Picker {
     pub touched: bool,
     /// Rows of faces a sheet is scrolled down by (the wheel, a swipe).
     pub scroll: usize,
+    /// The palette's user commands (`ranma.command`), each with the values
+    /// its `complete` offers: a typed line naming one is run, not parsed as
+    /// an action.
+    pub user_commands: Vec<(String, Vec<String>)>,
 }
 
 impl Picker {
@@ -144,6 +148,7 @@ impl Picker {
             selected: 0,
             touched: false,
             scroll: 0,
+            user_commands: Vec::new(),
         }
     }
 
@@ -297,6 +302,37 @@ impl Picker {
         // so a mistake says what is wrong before anything runs.
         if let Some((PaletteMode::Command, rest)) = mode {
             let line = rest.trim();
+            let mut words = rest.trim_start().splitn(2, char::is_whitespace);
+            let first = words.next().unwrap_or("");
+            if let Some((_, values)) = self.user_commands.iter().find(|(n, _)| n == first)
+                && let Some(arg) = words.next()
+            {
+                // A user command's argument: what it completes to, then the
+                // line as typed, which is what Enter runs.
+                let arg = arg.trim_start();
+                let mut front: Vec<Item> = Vec::new();
+                if !arg.trim().is_empty() {
+                    front.push(Item {
+                        label: format!("run: {line}"),
+                        detail: String::new(),
+                        target: Target::Run(line.to_string()),
+                        current: false,
+                    });
+                }
+                front.extend(
+                    values
+                        .iter()
+                        .filter(|v| v.starts_with(arg) && v.as_str() != arg.trim())
+                        .map(|v| Item {
+                            label: format!("{first} {v}"),
+                            detail: String::new(),
+                            target: Target::Run(format!("{first} {v}")),
+                            current: false,
+                        }),
+                );
+                front.extend(out);
+                return front;
+            }
             if line.contains(char::is_whitespace) {
                 let item = match line.parse::<crate::action::Action>() {
                     Ok(_) => Item {

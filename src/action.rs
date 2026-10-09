@@ -182,6 +182,8 @@ pub enum Action {
     /// Run a pane's command again, where it started, once it has ended and
     /// stayed (`remain_on_exit`).
     RespawnPane,
+    /// Enter a `ranma.mode`: WM mode with that mode's keys.
+    Mode(String),
     /// Number the panes on screen; typing a number focuses that pane (tmux's
     /// `display-panes`).
     DisplayPanes,
@@ -348,6 +350,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("copy_mode", ""),
     ("hints", ""),
     ("display_panes", ""),
+    ("mode", "<name>"),
     ("respawn_pane", ""),
     ("choose_buffer", ""),
     ("pipe_pane", "[off|command line]"),
@@ -684,6 +687,18 @@ impl FromStr for Action {
             "copy_mode" => no_arg(Action::CopyMode),
             "hints" => no_arg(Action::Hints),
             "display_panes" => no_arg(Action::DisplayPanes),
+            "mode" => match (first, second) {
+                (Some(n), None) => Ok(Action::Mode(n.to_string())),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a mode's name (from ranma.mode)",
+                }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one mode name",
+                }),
+            },
             "respawn_pane" => no_arg(Action::RespawnPane),
             "choose_buffer" => no_arg(Action::ChooseBuffer),
             "pipe_pane" => Ok(Action::PipePane(rest.map(|r| match r {
@@ -886,6 +901,7 @@ impl fmt::Display for Action {
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Hints => f.write_str("hints"),
             Action::DisplayPanes => f.write_str("display_panes"),
+            Action::Mode(n) => write!(f, "mode {n}"),
             Action::RespawnPane => f.write_str("respawn_pane"),
             Action::ChooseBuffer => f.write_str("choose_buffer"),
             Action::PipePane(None) => f.write_str("pipe_pane"),

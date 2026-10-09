@@ -941,7 +941,7 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
 fn draw_which_key(f: &mut Frame, app: &App) {
     use crate::whichkey::{self, BindKind, Role};
     let screen = f.area();
-    let groups = whichkey::groups(app.config.binds.iter().map(|(c, b)| {
+    let groups = whichkey::groups(app.wm_binds().iter().map(|(c, b)| {
         (
             *c,
             match &b.action {

@@ -85,6 +85,30 @@ function ranma.get(key) end
 ---@param opts? ranma.BindOpts
 function ranma.bind(keys, action, opts) end
 
+---@class ranma.Mode
+---@field binds table<string, string|fun()|{ [1]: string|fun(), desc?: string, exit?: boolean }> Its keys: an action, a function, or either with options.
+---@field label? string What the bar's mode module says while it is on; the name in capitals by default.
+---@field sticky? boolean Stay in it after a bind fires (default true); Esc and Enter leave.
+---@field on_enter? fun()
+---@field on_exit? fun()
+
+---A mode of your own: WM mode with these keys, entered with the action
+---"mode NAME". The leader in it goes back to WM mode's keys.
+---@param name string
+---@param def ranma.Mode
+function ranma.mode(name, def) end
+
+---@class ranma.CommandOpts
+---@field desc? string Shown beside it in the palette.
+---@field args? string What it takes, as the palette shows it: "<name>" (required) or "[n]".
+---@field complete? string[]|fun(): string[] Its argument's values, offered as you type it.
+
+---A command in the palette (leader :), run with what follows its name, or nil.
+---@param name string Letters, digits, _ - and .; not a built-in action's.
+---@param fn fun(arg: string|nil)
+---@param opts? ranma.CommandOpts
+function ranma.command(name, fn, opts) end
+
 ---Drop a bind.
 ---@param keys string
 function ranma.unbind(keys) end

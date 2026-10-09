@@ -347,13 +347,66 @@ impl App {
     pub(super) fn open_palette(&mut self, mode: PaletteMode) {
         let mut items = self.help_items();
         items.extend(self.command_items());
-        self.picker = Some(Picker::palette(items, mode));
+        let completions = self.user_completions();
+        let mut p = Picker::palette(items, mode);
+        p.user_commands = completions;
+        self.picker = Some(p);
         self.dirty = true;
     }
 
-    /// Every action in the catalogue, with its key when one runs it exactly.
+    /// Each user command's name with what its `complete` offers now: a list
+    /// as given, or what its function returns (called once, as the palette
+    /// opens).
+    fn user_completions(&mut self) -> Vec<(String, Vec<String>)> {
+        let specs: Vec<(String, Option<std::rc::Rc<mlua::RegistryKey>>)> = self
+            .config
+            .commands
+            .iter()
+            .map(|(n, c)| (n.clone(), c.complete.clone()))
+            .collect();
+        specs
+            .into_iter()
+            .map(|(name, complete)| {
+                let values = complete
+                    .and_then(|key| {
+                        let v = self.config.lua.registry_value::<mlua::Value>(&key).ok()?;
+                        match v {
+                            mlua::Value::Function(f) => {
+                                self.call_lua(|_| f.call::<Vec<String>>(()))
+                            }
+                            mlua::Value::Table(t) => t
+                                .sequence_values::<String>()
+                                .collect::<mlua::Result<Vec<_>>>()
+                                .ok(),
+                            _ => None,
+                        }
+                    })
+                    .unwrap_or_default();
+                (name, values)
+            })
+            .collect()
+    }
+
+    /// Every action in the catalogue, with its key when one runs it exactly,
+    /// and the user's commands with what they say they do.
     fn command_items(&self) -> Vec<Item> {
         let keys = self.bound_keys();
+        let user = self.config.commands.iter().map(|(name, c)| {
+            let args = c.args.as_deref().unwrap_or("");
+            Item {
+                label: if args.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{name} {args}")
+                },
+                detail: c.desc.clone().unwrap_or_default(),
+                target: Target::Action {
+                    name: name.clone(),
+                    needs_arg: crate::action::needs_arg(args),
+                },
+                current: false,
+            }
+        });
         crate::action::CATALOGUE
             .iter()
             .map(|(name, hint)| Item {
@@ -369,6 +422,7 @@ impl App {
                 },
                 current: false,
             })
+            .chain(user)
             .collect()
     }
 
@@ -797,6 +851,22 @@ impl App {
     /// Run a command line from the palette, as `ranma action` would. Like a bind
     /// from help, it leaves ranma in normal mode: the palette is not a mode.
     fn run_command(&mut self, line: &str) {
+        let line = line.trim();
+        let (name, arg) = match line.split_once(char::is_whitespace) {
+            Some((n, a)) => (n, Some(a.trim())),
+            None => (line, None),
+        };
+        if let Some(key) = self.config.commands.get(name).map(|c| c.func.clone()) {
+            // A user command gets what follows its name, or nil.
+            if let Ok(f) = self.config.lua.registry_value::<mlua::Function>(&key) {
+                let arg = arg.filter(|a| !a.is_empty()).map(str::to_string);
+                self.call_lua(|_| f.call::<()>(arg));
+            }
+            if self.mode == super::Mode::Wm {
+                self.set_mode(super::Mode::Normal);
+            }
+            return;
+        }
         match line.parse::<crate::action::Action>() {
             Ok(a) => self.run_action(a),
             Err(e) => self.status = Some(e.to_string()),

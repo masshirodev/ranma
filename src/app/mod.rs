@@ -157,6 +157,7 @@ struct Observed {
     held: Option<PaneId>,
     workspace: u8,
     mode_wm: bool,
+    user_mode: Option<String>,
     title: String,
     /// The host a ranma in the focused pane names: it goes into our own title.
     inner_host: Option<String>,
@@ -331,6 +332,8 @@ pub struct App {
     synced: HashSet<PaneId>,
     /// Labelled links over the focused pane, waiting for a label (see `hints`).
     hints: Option<HintState>,
+    /// The `ranma.mode` WM mode is in, if one is: its keys are looked up.
+    user_mode: Option<String>,
     /// Numbers over the panes, waiting for one to be typed (see `display`).
     numbers: Option<PaneNumbers>,
     /// Where a right-click menu was opened: it is drawn there.
@@ -480,6 +483,7 @@ impl App {
             synced: HashSet::new(),
             hints: None,
             numbers: None,
+            user_mode: None,
             menu_at: None,
             hint_due: None,
             pending_paste: None,
@@ -1414,6 +1418,7 @@ impl App {
             held: self.held_focus(),
             workspace: self.current,
             mode_wm: self.mode == Mode::Wm,
+            user_mode: self.user_mode.clone(),
             title: self.focused_title().unwrap_or("").to_string(),
             inner_host: self
                 .focused()
@@ -1470,10 +1475,14 @@ impl App {
                 t.set("previous", before.workspace)
             });
         }
-        if now.mode_wm != before.mode_wm {
-            self.emit(HookEvent::ModeChange, |t| {
-                t.set("mode", if now.mode_wm { "wm" } else { "normal" })
-            });
+        if now.mode_wm != before.mode_wm || now.user_mode != before.user_mode {
+            // A user mode by its name; WM mode's own is "wm".
+            let mode = match (&now.user_mode, now.mode_wm) {
+                (Some(m), _) => m.clone(),
+                (None, true) => "wm".into(),
+                (None, false) => "normal".into(),
+            };
+            self.emit(HookEvent::ModeChange, |t| t.set("mode", mode));
         }
         self.render_state_modules();
         self.dirty = true;
@@ -2190,8 +2199,26 @@ impl App {
         let Some(chord) = chord else {
             return;
         };
+        // In a mode of the user's, its own keys; Esc and Enter leave it, and
+        // the leader goes back to WM mode's keys.
+        if self.user_mode.is_some() && !self.wm_binds().contains_key(&chord) {
+            let bare = chord.mods == crate::keys::Mods::default();
+            if bare
+                && matches!(
+                    chord.key,
+                    crate::keys::Key::Escape | crate::keys::Key::Return
+                )
+            {
+                self.set_mode(Mode::Normal);
+                return;
+            }
+            if chord == leader {
+                self.leave_user_mode();
+                return;
+            }
+        }
         // The outer leader again, unbound: one level down, to the ranma inside.
-        if chord == outer && !self.config.binds.contains_key(&chord) {
+        if chord == outer && !self.wm_binds().contains_key(&chord) {
             if let Some(p) = self.focused_pane()
                 && let Some(bytes) = chord_bytes(outer, p.modes())
             {
@@ -2200,7 +2227,7 @@ impl App {
             self.set_mode(Mode::Normal);
             return;
         }
-        if !self.config.binds.contains_key(&chord) && chord != leader {
+        if !self.wm_binds().contains_key(&chord) && chord != leader {
             // Unbound keys are swallowed: WM mode is a mode, and typing into a pane
             // by accident while in it is worse than a dead key.
             self.status = Some(format!("{chord} is not bound"));
@@ -2208,8 +2235,8 @@ impl App {
         }
         // An explicit `exit` decides alone; unset, the action's default and
         // `wm_mode.sticky` do.
-        let explicit = self.config.binds.get(&chord).and_then(|b| b.exit);
-        let exits = if chord == leader && !self.config.binds.contains_key(&chord) {
+        let explicit = self.wm_binds().get(&chord).and_then(|b| b.exit);
+        let exits = if chord == leader && !self.wm_binds().contains_key(&chord) {
             // The leader pressed again goes through to the program, tmux style.
             self.run_action(Action::SendLeader);
             true
@@ -2217,7 +2244,7 @@ impl App {
             self.run_bind(chord, false)
         };
         // Only from WM mode: the bind may have entered copy mode or opened a picker.
-        let ends = explicit.unwrap_or(exits || !self.config.settings.wm_mode_sticky);
+        let ends = explicit.unwrap_or(exits || !self.sticky_now());
         if ends && self.mode == Mode::Wm {
             self.set_mode(Mode::Normal);
         }
@@ -2245,7 +2272,7 @@ impl App {
         let table = if global {
             &self.config.global_binds
         } else {
-            &self.config.binds
+            self.wm_binds()
         };
         let Some(bind) = table.get(&chord) else {
             return false;
@@ -2309,6 +2336,7 @@ impl App {
     /// WM mode, opened by `chord` (the leader, or the outer leader): the hint
     /// is due after the configured pause.
     fn enter_wm(&mut self, chord: crate::keys::Chord) {
+        self.leave_user_mode();
         self.set_mode(Mode::Wm);
         self.wm_chord = Some(chord);
         self.hint_due = self
@@ -2334,10 +2362,68 @@ impl App {
         self.wm_chord.unwrap_or(self.config.settings.leader)
     }
 
+    /// The keys WM mode looks up now: a user mode's while one is on.
+    pub fn wm_binds(&self) -> &HashMap<crate::keys::Chord, config::Bind> {
+        self.user_mode
+            .as_ref()
+            .and_then(|m| self.config.modes.get(m))
+            .map_or(&self.config.binds, |m| &m.binds)
+    }
+
+    /// Whether a bind leaves WM mode on: the user mode's `sticky`, else
+    /// `wm_mode.sticky`.
+    fn sticky_now(&self) -> bool {
+        self.user_mode
+            .as_ref()
+            .and_then(|m| self.config.modes.get(m))
+            .map_or(self.config.settings.wm_mode_sticky, |m| m.sticky)
+    }
+
+    /// The label the bar's mode module shows for a user mode that is on.
+    pub fn user_mode_label(&self) -> Option<&str> {
+        let m = self.config.modes.get(self.user_mode.as_ref()?)?;
+        Some(&m.label)
+    }
+
+    /// `mode NAME`: WM mode with that mode's keys, after its `on_enter`.
+    fn enter_user_mode(&mut self, name: &str) {
+        let Some(mode) = self.config.modes.get(name) else {
+            self.status = Some(format!("no mode called {name}"));
+            return;
+        };
+        let enter = mode.on_enter.clone();
+        self.leave_user_mode();
+        self.exit_copy_mode();
+        self.exit_hints();
+        self.hide_pane_numbers();
+        self.set_mode(Mode::Wm);
+        self.user_mode = Some(name.to_string());
+        if let Some(key) = enter
+            && let Ok(f) = self.config.lua.registry_value::<Function>(&key)
+        {
+            self.call_lua(|_| f.call::<()>(()));
+        }
+        self.dirty = true;
+    }
+
+    /// Out of a user mode, into plain WM mode, after its `on_exit`.
+    fn leave_user_mode(&mut self) {
+        let Some(name) = self.user_mode.take() else {
+            return;
+        };
+        if let Some(key) = self.config.modes.get(&name).and_then(|m| m.on_exit.clone())
+            && let Ok(f) = self.config.lua.registry_value::<Function>(&key)
+        {
+            self.call_lua(|_| f.call::<()>(()));
+        }
+        self.dirty = true;
+    }
+
     fn set_mode(&mut self, mode: Mode) {
         if mode != Mode::Wm {
             self.hint_due = None;
             self.hint_on = false;
+            self.leave_user_mode();
         }
         self.mode = mode;
         self.drag = None;
@@ -2638,6 +2724,7 @@ impl App {
             Action::CopyMode => self.enter_copy_mode(None),
             Action::Hints => self.enter_hints(),
             Action::DisplayPanes => self.show_pane_numbers(),
+            Action::Mode(name) => self.enter_user_mode(&name),
             Action::MonitorSilence(how) => self.monitor_silence(how),
             Action::ChooseBuffer => self.open_buffer_picker(),
             Action::PipePane(how) => self.pipe_pane(how),
@@ -3746,7 +3833,10 @@ impl App {
                 vec![Piece::new(format!(" {chip} "), Style::Mode)]
             }
             "mode" => match self.mode {
-                Mode::Wm => vec![Piece::new(" WM ", Style::Mode)],
+                Mode::Wm => match self.user_mode_label() {
+                    Some(l) => vec![Piece::new(format!(" {l} "), Style::Mode)],
+                    None => vec![Piece::new(" WM ", Style::Mode)],
+                },
                 Mode::Copy => {
                     let searching = self
                         .copy
@@ -5998,5 +6088,99 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_user_mode_has_its_own_keys_and_a_user_command_runs_from_the_palette() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(Some(
+            r#"
+            log = {}
+            ranma.mode("resize", {
+              label = "RESIZE",
+              binds = {
+                h = "resize left 5",
+                x = { function() table.insert(log, "x") end, desc = "mark", exit = true },
+              },
+              on_enter = function() table.insert(log, "in") end,
+              on_exit = function() table.insert(log, "out") end,
+            })
+            ranma.bind("r", "mode resize")
+            ranma.command("greet", function(arg) ranma.notify("hi " .. (arg or "nobody")) end,
+              { desc = "say hi", args = "[name]", complete = { "alice", "bob" } })
+            "#,
+        ));
+        let leader = |a: &mut App| {
+            a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+                KeyCode::Char('b'),
+                KeyModifiers::CONTROL,
+            ))))
+        };
+        let log = |a: &App| -> Vec<String> { a.config.lua.load("return log").eval().unwrap() };
+        leader(&mut a);
+        key(&mut a, KeyCode::Char('r'));
+        assert_eq!(a.segment("mode"), vec![Piece::new(" RESIZE ", Style::Mode)]);
+        key(&mut a, KeyCode::Char('h'));
+        assert_eq!(a.mode, Mode::Wm, "sticky: still in it");
+        key(&mut a, KeyCode::Char('q'));
+        assert!(
+            a.panes.is_empty(),
+            "WM mode's own q (close_pane) is not here"
+        );
+        assert_eq!(a.mode, Mode::Wm);
+        key(&mut a, KeyCode::Char('x'));
+        assert_eq!(a.mode, Mode::Normal, "exit = true");
+        assert_eq!(log(&a), vec!["in", "x", "out"]);
+        leader(&mut a);
+        key(&mut a, KeyCode::Char('r'));
+        key(&mut a, KeyCode::Esc);
+        assert_eq!(a.mode, Mode::Normal);
+        leader(&mut a);
+        key(&mut a, KeyCode::Char('r'));
+        leader(&mut a);
+        assert_eq!(
+            a.segment("mode"),
+            vec![Piece::new(" WM ", Style::Mode)],
+            "the leader: WM's keys"
+        );
+        assert_eq!(log(&a).len(), 7);
+        a.set_mode(Mode::Normal);
+
+        a.run_action(Action::CommandPalette);
+        typed(&mut a, "greet a");
+        let shown: Vec<String> = a
+            .picker
+            .as_ref()
+            .unwrap()
+            .visible()
+            .into_iter()
+            .map(|i| i.label)
+            .collect();
+        assert_eq!(
+            shown[..2],
+            ["run: greet a".to_string(), "greet alice".to_string()]
+        );
+        key(&mut a, KeyCode::Enter);
+        assert_eq!(a.status.as_deref(), Some("hi a"));
+        a.run_action(Action::CommandPalette);
+        typed(&mut a, "gre");
+        let first = a.picker.as_ref().unwrap().visible().remove(0);
+        assert_eq!(
+            (first.label.as_str(), first.detail.as_str()),
+            ("greet [name]", "say hi")
+        );
+        key(&mut a, KeyCode::Enter);
+        assert_eq!(a.status.as_deref(), Some("hi nobody"));
+
+        for bad in [
+            r#"ranma.bind("r", "mode nope")"#,
+            r#"ranma.command("quit", function() end)"#,
+            r#"ranma.mode("m", { keys = {} })"#,
+        ] {
+            assert!(
+                crate::config::load_from(None, None, Some(bad)).is_err(),
+                "{bad}"
+            );
+        }
     }
 }
