@@ -190,9 +190,13 @@ here: this is a Cargo repo, and `core.hooksPath` does the same job without a
 
 | Hook | Runs | Skip flags |
 | --- | --- | --- |
-| `pre-commit` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | `SKIP_FORMAT` `SKIP_LINT` `SKIP_ALL` |
+| `pre-commit` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `agent-docs-budget --check .` (when the dotfiles put it on `PATH`) | `SKIP_FORMAT` `SKIP_LINT` `SKIP_AGENT_DOCS` `SKIP_ALL` |
 | `pre-push` | `cargo test`, `scripts/smoke.sh` | `SKIP_TESTS` `SKIP_SMOKE` `SKIP_ALL` |
 | `commit-msg` | refuses `Co-Authored-By` trailers, `Claude-Session` references and 🤖 | `SKIP_COAUTHOR` `SKIP_ALL` |
+
+`agent-docs-budget` keeps `AGENTS.md` and `CLAUDE.md` under the agents' read
+limits (32 KB a file for Codex, 150 KB in total for Claude Code). It lives in the
+dotfiles, so a machine without them skips the step rather than failing it.
 
 The split is by cost: fmt and clippy are seconds on a warm `target/`, the smoke
 is about fifteen, and pushes are rarer than commits. The smoke runs on every

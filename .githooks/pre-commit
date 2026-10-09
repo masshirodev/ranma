@@ -7,7 +7,7 @@
 # (scripts/hooks.sh arms it). See doc/TESTING.md, "Git hooks".
 #
 # Skip flags (set to any non-empty value):
-#   SKIP_LINT SKIP_FORMAT SKIP_ALL
+#   SKIP_LINT SKIP_FORMAT SKIP_AGENT_DOCS SKIP_ALL
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,7 +28,7 @@ if [ -n "$SKIP_ALL" ]; then
 fi
 
 printf "${BOLD}pre-commit: running checks${RESET}\n"
-printf "${DIM}  skip flags: SKIP_LINT SKIP_FORMAT SKIP_ALL${RESET}\n"
+printf "${DIM}  skip flags: SKIP_LINT SKIP_FORMAT SKIP_AGENT_DOCS SKIP_ALL${RESET}\n"
 
 # The working tree, not the index: rustfmt and clippy work on the crate, and a
 # crate is not something the index alone can build. Commit what you checked.
@@ -52,6 +52,22 @@ else
 		exit 1
 	fi
 	ok "lint passed"
+fi
+
+# Agent instruction files have hard size limits (32 KB a file for Codex,
+# 150 KB in total for Claude Code). The checker lives in the dotfiles, so a
+# machine without them skips rather than fails.
+if [ -n "$SKIP_AGENT_DOCS" ]; then
+	skip "agent instruction file budget"
+elif command -v agent-docs-budget >/dev/null 2>&1; then
+	step "agent instruction file budget"
+	if ! agent-docs-budget --check .; then
+		fail "an agent instruction file is over budget"
+		exit 1
+	fi
+	ok "instruction files within budget"
+else
+	skip "agent-docs-budget not installed"
 fi
 
 printf "\n${GREEN}${BOLD}[ok] pre-commit checks passed${RESET}\n"
