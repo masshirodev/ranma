@@ -237,7 +237,7 @@ regex goto, link hover tooltips, agent integrations, autorun commands.
 DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 
 - [x] Pane numbers: `display_panes`
-- [ ] The last workspace and the last pane
+- [x] The last workspace and the last pane: `workspace last`, `focus last`
 - [ ] Activity and silence marks on workspaces
 - [ ] Panes that stay when their program ends (`remain_on_exit`)
 - [ ] Paste buffers and a picker over them

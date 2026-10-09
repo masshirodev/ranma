@@ -1069,6 +1069,16 @@ puts them away, and the key is swallowed: it was typed at the numbers. Not
 bound by default, so the which-key hint keeps its designed layout (as
 `settings`); `ranma.bind("i", "display_panes")` gives it a key.
 
+**The last workspace and the last pane are read off what changed**, not
+recorded by the actions that move focus: the state observer that fires
+`focus_change` and `workspace_change` notes the workspace shown before (per
+session, so switching sessions is neither) and, per workspace and for the
+scratchpad, the pane focused before. A click, a hook, a switcher and a key
+all count, and a new way of moving focus cannot forget to. They are spelled
+as targets of what already exists, `workspace last` and `focus last`, so
+`move_to_workspace last` comes free. Kept across `ranma upgrade`; not in
+the snapshot, which is about bringing a layout back, not where you were.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

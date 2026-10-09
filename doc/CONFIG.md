@@ -182,6 +182,7 @@ does not matter; it is ignored.
 | `close_pane` | Close the focused pane. |
 | `focus <dir>` | Focus the pane in that direction (`left right up down`). In `monocle`, `left` and `right` go through the tabs. |
 | `focus next` / `focus prev` | Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping. |
+| `focus last` | Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's `last-pane`, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key. Not bound by default (tmux's key: `ranma.bind(";", "focus last")`). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
@@ -201,7 +202,7 @@ does not matter; it is ignored.
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |
 | `group_next` / `group_prev` | Cycle the tabs of the group around the focused pane. |
 | `fullscreen` | Toggle the focused pane filling the workspace. |
-| `workspace <ws>` | Go to a workspace: `1`-`99`, `next`, `prev` (wrapping in 1-10), `empty`. |
+| `workspace <ws>` | Go to a workspace: `1`-`99`, `next`, `prev` (wrapping in 1-10), `empty`, or `last`: the one shown before this, in this session (tmux's `last-window`; again comes back). Each session remembers its own. Not bound by default (tmux's key: `ranma.bind("l", "workspace last")`). |
 | `move_to_workspace <ws>` | Send the focused pane there and follow it. |
 | `move_to_workspace_silent <ws>` | Send it there and stay. |
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |

@@ -65,6 +65,8 @@ pub struct State {
     pub return_focus: Vec<(PaneId, PaneId)>,
     pub reports: Vec<(PaneId, Report)>,
     pub last_focused: Option<PaneId>,
+    #[serde(default)]
+    pub last_workspace: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -137,6 +139,7 @@ impl App {
             return_focus: self.return_focus.iter().map(|(a, b)| (*a, *b)).collect(),
             reports: self.reports.iter().map(|(a, b)| (*a, b.clone())).collect(),
             last_focused: self.last_focused,
+            last_workspace: self.last_workspace,
         }
     }
 
@@ -194,6 +197,7 @@ impl App {
         app.return_focus = state.return_focus.into_iter().collect();
         app.reports = state.reports.into_iter().collect();
         app.last_focused = state.last_focused;
+        app.last_workspace = state.last_workspace;
         app.relayout();
         Ok(app)
     }

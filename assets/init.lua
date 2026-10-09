@@ -206,6 +206,12 @@ end
 ranma.bind("ctrl+right", "workspace next")
 ranma.bind("ctrl+left", "workspace prev")
 ranma.bind("ctrl+down", "workspace empty")
+-- Back and forth (tmux's last-window and last-pane): "workspace last" goes to
+-- the workspace shown before this one, "focus last" to the pane focused before
+-- this one here. Not bound by default (the which-key hint keeps its designed
+-- layout); tmux's keys for them:
+--   ranma.bind("l", "workspace last")
+--   ranma.bind(";", "focus last")
 
 -- Scratchpad (Hyprland's special workspace). Alt+S also shows and hides it
 -- without the leader (a global bind, below); in WM mode Alt+S sends the focused

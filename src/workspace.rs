@@ -24,6 +24,10 @@ pub struct Workspace {
     /// steps on from.
     #[serde(default)]
     pub preset: Option<crate::layout::Preset>,
+    /// The pane focused here before the one focused now: where `focus last`
+    /// goes (tmux's `last-pane`).
+    #[serde(default)]
+    pub last_pane: Option<PaneId>,
 }
 
 impl Workspace {

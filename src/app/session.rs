@@ -20,6 +20,10 @@ pub struct Session {
     pub current: u8,
     /// Set by `session_accent` or `ranma open --accent`; over the config's.
     pub accent: Option<crate::theme::Color>,
+    /// The workspace shown before `current`, while this session is in the
+    /// background (the shown session's is `App::last_workspace`).
+    #[serde(default)]
+    pub last: Option<u8>,
 }
 
 impl Session {
@@ -31,6 +35,7 @@ impl Session {
             workspaces,
             current: 1,
             accent: None,
+            last: None,
         }
     }
 }
@@ -101,9 +106,11 @@ impl App {
         let slot = &mut self.sessions[prev];
         std::mem::swap(&mut slot.workspaces, &mut self.workspaces);
         slot.current = self.current;
+        slot.last = self.last_workspace;
         let next = &mut self.sessions[i];
         std::mem::swap(&mut next.workspaces, &mut self.workspaces);
         self.current = next.current;
+        self.last_workspace = next.last;
         self.active_session = i;
         self.scratch_shown = false;
         self.workspaces.entry(self.current).or_default();
@@ -275,6 +282,7 @@ impl App {
                         workspaces: BTreeMap::new(),
                         current: n,
                         accent: None,
+                        last: None,
                     });
                     self.sessions.len() - 1
                 }

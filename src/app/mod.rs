@@ -248,6 +248,8 @@ pub struct App {
     /// The last pane that had focus anywhere. A new session or an empty
     /// scratchpad has no focused pane of its own, and still starts where you were.
     last_focused: Option<PaneId>,
+    /// The shown session's workspace before this one: `workspace last`.
+    last_workspace: Option<u8>,
     /// The host terminal's colours, asked once at startup (see `hostcolors`).
     pub host_colors: crate::hostcolors::HostColors,
     pub toasts: crate::toast::Toasts,
@@ -361,6 +363,7 @@ impl App {
                 workspaces: BTreeMap::new(),
                 current: 1,
                 accent: None,
+                last: None,
             }],
             active_session: 0,
             scratch: Workspace::default(),
@@ -411,6 +414,7 @@ impl App {
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
             last_focused: None,
+            last_workspace: None,
             host_colors: Default::default(),
             toasts: Default::default(),
             drop_preview: None,
@@ -1150,8 +1154,30 @@ impl App {
         self.relayout();
     }
 
+    /// Remember where `workspace last` and `focus last` go back to: the
+    /// workspace shown before, within one session, and per layer the pane
+    /// focused before. Read off what changed, so a click, a hook or a
+    /// switcher counts as much as a key.
+    fn note_last(&mut self, before: &Observed, now: &Observed) {
+        if before.session != now.session {
+            return;
+        }
+        if before.workspace != now.workspace {
+            self.last_workspace = Some(before.workspace);
+            return;
+        }
+        if let (Some(was), Some(is)) = (before.focus, now.focus)
+            && was != is
+            && self.active().contains(was)
+            && self.active().contains(is)
+        {
+            self.active_mut().last_pane = Some(was);
+        }
+    }
+
     fn resolve(&self, t: &WorkspaceTarget) -> u8 {
         match t {
+            WorkspaceTarget::Last => self.last_workspace.unwrap_or(self.current),
             WorkspaceTarget::Index(n) => *n,
             // Relative moves stay among 1-10, wrapping, like a row of keys.
             WorkspaceTarget::Next => {
@@ -1363,6 +1389,7 @@ impl App {
         if now.focus.is_some() {
             self.last_focused = now.focus;
         }
+        self.note_last(&before, &now);
 
         // Programs that asked for focus events get them, as in any terminal.
         // A held pane counts as focused: it hears nothing while the scratchpad
@@ -2278,6 +2305,20 @@ impl App {
                 }
             }
             Action::FocusCycle { forward } => self.focus_cycle(forward),
+            Action::FocusLast => {
+                let ws = self.active();
+                match ws
+                    .last_pane
+                    .filter(|p| ws.contains(*p) && ws.focused != Some(*p))
+                {
+                    Some(p) => {
+                        self.active_mut().fullscreen = false;
+                        self.focus(p);
+                        self.relayout();
+                    }
+                    None => self.status = Some("no last pane here".into()),
+                }
+            }
             // Monocle shows one tile: sideways is through the tabs.
             Action::Focus(dir @ (Dir::Left | Dir::Right))
                 if self.config.settings.layout == Layout::Monocle && !self.scratch_shown =>
@@ -5319,5 +5360,41 @@ mod tests {
         key(&mut a, KeyCode::Char('7'));
         assert!(a.pane_numbers().is_none());
         assert!(a.status.as_deref().is_some_and(|s| s.contains("no pane 7")));
+    }
+
+    #[test]
+    fn last_goes_back_to_the_workspace_and_the_pane_before() {
+        let mut a = app(None);
+        for id in 1..=2 {
+            with_pane(&mut a, id);
+        }
+        a.after_event();
+        a.run_action("workspace last".parse().unwrap());
+        assert_eq!(a.current, 1, "nothing to go back to yet");
+        a.run_action("workspace 3".parse().unwrap());
+        a.after_event();
+        a.run_action("workspace 5".parse().unwrap());
+        a.after_event();
+        a.run_action("workspace last".parse().unwrap());
+        a.after_event();
+        assert_eq!(a.current, 3);
+        a.run_action("workspace last".parse().unwrap());
+        a.after_event();
+        assert_eq!(a.current, 5, "and forth");
+        a.run_action("workspace 1".parse().unwrap());
+        a.after_event();
+
+        // Focus moved by anything counts: here, a pane focused directly.
+        assert_eq!(a.focused(), Some(2));
+        a.focus(1);
+        a.after_event();
+        a.run_action("focus last".parse().unwrap());
+        a.after_event();
+        assert_eq!(a.focused(), Some(2));
+        a.run_action("focus last".parse().unwrap());
+        a.after_event();
+        assert_eq!(a.focused(), Some(1));
+        // A workspace switch is not a pane change.
+        assert_eq!(a.active().last_pane, Some(2));
     }
 }

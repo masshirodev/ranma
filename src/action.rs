@@ -51,6 +51,8 @@ pub enum WorkspaceTarget {
     Prev,
     /// The first workspace with no panes, like Hyprland's `workspace empty`.
     Empty,
+    /// The one shown before this, in this session (tmux's `last-window`).
+    Last,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +74,8 @@ pub enum Action {
     FocusCycle {
         forward: bool,
     },
+    /// Focus the pane focused before this one, here (tmux's `last-pane`).
+    FocusLast,
     /// Swap the focused pane with its neighbour in that direction.
     Move(Dir),
     /// Grow the focused pane's edge in that direction by this many cells.
@@ -277,7 +281,7 @@ pub enum ActionError {
 pub const CATALOGUE: &[(&str, &str)] = &[
     ("new_pane", "[left|right|up|down]"),
     ("close_pane", ""),
-    ("focus", "<left|right|up|down|next|prev>"),
+    ("focus", "<left|right|up|down|next|prev|last>"),
     ("move", "<left|right|up|down>"),
     ("resize", "<left|right|up|down> [cells]"),
     ("toggle_split", ""),
@@ -304,9 +308,9 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("group_next", ""),
     ("group_prev", ""),
     ("fullscreen", ""),
-    ("workspace", "<1-99|next|prev|empty>"),
-    ("move_to_workspace", "<1-99|next|prev|empty>"),
-    ("move_to_workspace_silent", "<1-99|next|prev|empty>"),
+    ("workspace", "<1-99|next|prev|empty|last>"),
+    ("move_to_workspace", "<1-99|next|prev|empty|last>"),
+    ("move_to_workspace_silent", "<1-99|next|prev|empty|last>"),
     ("scratchpad_toggle", ""),
     ("move_to_scratchpad", ""),
     ("pane_switcher", ""),
@@ -350,7 +354,7 @@ pub fn needs_arg(hint: &str) -> bool {
 }
 
 const DIR: &str = "a direction (left, right, up, down)";
-const WS: &str = "a workspace (1-99, next, prev, empty)";
+const WS: &str = "a workspace (1-99, next, prev, empty, last)";
 
 fn parse_dir(action: &str, arg: Option<&str>) -> Result<Dir, ActionError> {
     let arg = arg.ok_or(ActionError::MissingArg {
@@ -384,6 +388,7 @@ fn parse_ws(action: &str, arg: Option<&str>) -> Result<WorkspaceTarget, ActionEr
         "next" | "+1" => Ok(WorkspaceTarget::Next),
         "prev" | "-1" => Ok(WorkspaceTarget::Prev),
         "empty" => Ok(WorkspaceTarget::Empty),
+        "last" => Ok(WorkspaceTarget::Last),
         n => match n.parse::<u8>() {
             Ok(i @ 1..=99) => Ok(WorkspaceTarget::Index(i)),
             _ => Err(ActionError::BadArg {
@@ -424,6 +429,7 @@ impl FromStr for Action {
             "focus" => match first {
                 Some("next") => Ok(Action::FocusCycle { forward: true }),
                 Some("prev") => Ok(Action::FocusCycle { forward: false }),
+                Some("last") => Ok(Action::FocusLast),
                 _ => Ok(Action::Focus(parse_dir(name, first)?)),
             },
             "move" => Ok(Action::Move(parse_dir(name, first)?)),
@@ -738,6 +744,7 @@ impl fmt::Display for WorkspaceTarget {
             WorkspaceTarget::Next => f.write_str("next"),
             WorkspaceTarget::Prev => f.write_str("prev"),
             WorkspaceTarget::Empty => f.write_str("empty"),
+            WorkspaceTarget::Last => f.write_str("last"),
         }
     }
 }
@@ -751,6 +758,7 @@ impl fmt::Display for Action {
             Action::Focus(d) => write!(f, "focus {d}"),
             Action::FocusCycle { forward: true } => f.write_str("focus next"),
             Action::FocusCycle { forward: false } => f.write_str("focus prev"),
+            Action::FocusLast => f.write_str("focus last"),
             Action::Move(d) => write!(f, "move {d}"),
             Action::Resize(d, n) => write!(f, "resize {d} {n}"),
             Action::ToggleSplit => f.write_str("toggle_split"),
