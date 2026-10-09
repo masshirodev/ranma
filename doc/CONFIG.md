@@ -223,6 +223,7 @@ does not matter; it is ignored.
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
+| `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile. Not bound by default: `ranma.bind("i", "display_panes")`. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |

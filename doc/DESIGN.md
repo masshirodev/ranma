@@ -1045,6 +1045,30 @@ default** because a ranma server may run on another machine: `xdg-open` there
 opens the link on a screen nobody is looking at, so from a client that came
 over SSH opening copies instead and says so.
 
+### More from tmux, in order (2026-10-08)
+
+Milestone 12 takes the rest of what a tmux user reaches for daily and ranma
+did not have, one feature at a time, each a card on the board in the order
+built: pane numbers, the last workspace and pane, activity and silence marks,
+panes that stay when their program ends, paste buffers, scrollbars, logging a
+pane, and ASCII-art backgrounds (which tmux does not have; asked for along the
+way). Animations were asked for in the same breath and stay out ("Rendering
+rules"): tmux has none either, and what looks like it in someone's tmux is
+their terminal emulator's (a shader, a cursor trail), drawn outside the grid.
+
+**Pane numbers are tmux's `display-panes`** (`display_panes`): a number over
+every pane of the active layer, typed to focus that pane. Drawn large, as
+tmux does, in a five-row font of filled cells (spaces on a background, so
+no font needs a glyph), two cells per block so a digit looks square; one
+cell per block in a narrow pane, and a plain pill in one too short for five
+rows. Numbers are as wide as the largest (`01`-`12`), so none starts another
+and the second digit never waits on a timer. Numbered in drawing order, not
+by `{index}`: the scratchpad's floats have indices of their own that would
+repeat the workspace's. Any other key, a click, or focus moving another way
+puts them away, and the key is swallowed: it was typed at the numbers. Not
+bound by default, so the which-key hint keeps its designed layout (as
+`settings`); `ranma.bind("i", "display_panes")` gives it a key.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

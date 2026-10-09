@@ -232,6 +232,20 @@ features below the line live outside the repository.
 Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
 regex goto, link hover tooltips, agent integrations, autorun commands.
 
+## 12. More from tmux
+
+DESIGN.md, "More from tmux, in order". Built in this order, one card each.
+
+- [x] Pane numbers: `display_panes`
+- [ ] The last workspace and the last pane
+- [ ] Activity and silence marks on workspaces
+- [ ] Panes that stay when their program ends (`remain_on_exit`)
+- [ ] Paste buffers and a picker over them
+- [ ] Pane scrollbars
+- [ ] Logging a pane's output (`pipe_pane`)
+- [ ] ASCII-art backgrounds behind the panes
+- [ ] Images in panes (the kitty graphics protocol)
+
 ## Later, maybe
 
 - Bar widgets in Lua, on a throttled tick.

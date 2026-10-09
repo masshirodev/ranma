@@ -130,6 +130,10 @@ for _, dir in ipairs { "left", "right", "up", "down" } do
   ranma.bind("alt+" .. dir, "new_pane " .. dir)
 end
 ranma.bind("q", "close_pane")
+-- Pane numbers (tmux's display-panes): every pane on screen gets a large
+-- number; type one to focus that pane, any other key puts them away. Not bound
+-- by default, so the which-key hint keeps its designed layout; one key for it:
+--   ranma.bind("i", "display_panes")
 ranma.bind("w", "toggle_floating")
 -- Floats are free: they overlap, and new ones cascade from the last. f raises
 -- the next one, cycling through the pile.

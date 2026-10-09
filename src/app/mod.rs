@@ -27,6 +27,7 @@ use crate::theme::{BarPosition, BorderStyle};
 use crate::workspace::Workspace;
 
 mod copy;
+mod display;
 mod drag;
 mod hints;
 mod layouts;
@@ -48,6 +49,7 @@ pub use touch::{ButtonState, SheetLayout};
 pub(crate) mod upgrade;
 
 pub use copy::CopyState;
+pub use display::PaneNumbers;
 pub use drag::drop_half;
 pub use hints::HintState;
 pub use run::{run, run_server, run_server_resume};
@@ -303,6 +305,8 @@ pub struct App {
     synced: HashSet<PaneId>,
     /// Labelled links over the focused pane, waiting for a label (see `hints`).
     hints: Option<HintState>,
+    /// Numbers over the panes, waiting for one to be typed (see `display`).
+    numbers: Option<PaneNumbers>,
     /// Where a right-click menu was opened: it is drawn there.
     menu_at: Option<(u16, u16)>,
     /// When the which-key hint shows, if WM mode is still waiting then.
@@ -438,6 +442,7 @@ impl App {
             return_focus: HashMap::new(),
             synced: HashSet::new(),
             hints: None,
+            numbers: None,
             menu_at: None,
             hint_due: None,
             pending_paste: None,
@@ -1328,6 +1333,13 @@ impl App {
         {
             self.exit_hints();
         }
+        if self
+            .numbers
+            .as_ref()
+            .is_some_and(|n| n.from != self.focused())
+        {
+            self.hide_pane_numbers();
+        }
         let now = Observed {
             engaged: self.engaged(),
             session: self.session_name().to_string(),
@@ -1632,6 +1644,20 @@ impl App {
                 _ => {}
             }
             return;
+        }
+        // Pane numbers take the next key, as hints do: a number focuses its
+        // pane, anything else (or a click) puts them away.
+        if self.numbers.is_some() {
+            match ev {
+                Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    return self.pane_number_key(&key);
+                }
+                Event::Mouse(m) if matches!(m.kind, MouseEventKind::Down(_)) => {
+                    self.hide_pane_numbers()
+                }
+                Event::Paste(_) => return,
+                _ => {}
+            }
         }
         // Hints take the keyboard until a label is typed or Esc; any click,
         // or focus moving away, ends them.
@@ -2208,6 +2234,7 @@ impl App {
             && self.picker.is_none()
             && self.copy.is_none()
             && self.hints.is_none()
+            && self.numbers.is_none()
     }
 
     /// The chord the hint is titled with.
@@ -2482,6 +2509,7 @@ impl App {
             Action::Leader => {
                 self.exit_copy_mode();
                 self.exit_hints();
+                self.hide_pane_numbers();
                 self.enter_wm(self.config.settings.leader);
             }
             Action::SendLeader => {
@@ -2503,6 +2531,7 @@ impl App {
             Action::Settings => self.open_settings(),
             Action::CopyMode => self.enter_copy_mode(None),
             Action::Hints => self.enter_hints(),
+            Action::DisplayPanes => self.show_pane_numbers(),
             // Backward: the most recent match first, which is what searching
             // history usually wants.
             Action::Search => self.enter_copy_mode(Some(true)),
@@ -3385,6 +3414,7 @@ impl App {
                 // Keys are going to a ranma inside the focused pane. One that
                 // draws no bar of its own says its mode here.
                 Mode::Normal if self.hints.is_some() => vec![Piece::new(" LINK ", Style::Mode)],
+                Mode::Normal if self.numbers.is_some() => vec![Piece::new(" PANE ", Style::Mode)],
                 Mode::Normal if self.latches.any() => self
                     .latch_label()
                     .map(|l| vec![Piece::new(format!(" {l} "), Style::Mode)])
@@ -5245,5 +5275,49 @@ mod tests {
             a.host_out.last().map(Vec::as_slice),
             Some(&b"\x1b]52;c;aGk=\x07"[..])
         );
+    }
+
+    #[test]
+    fn pane_numbers_focus_the_pane_typed_and_any_other_key_puts_them_away() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        for id in 1..=3 {
+            with_pane(&mut a, id);
+        }
+        a.relayout();
+        a.run_action(Action::DisplayPanes);
+        let n = a.pane_numbers().expect("shown");
+        assert_eq!(
+            n.panes.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(),
+            vec!["1", "2", "3"]
+        );
+        // Drawn large: a five-row digit is a run of filled cells in each pane.
+        let views = a.frame().views;
+        let mut t = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+        t.draw(|f| {
+            crate::render::draw(f, &a);
+        })
+        .unwrap();
+        let buf = t.backend().buffer().clone();
+        for v in &views {
+            let filled = (v.inner.y..v.inner.y + v.inner.h)
+                .flat_map(|y| (v.inner.x..v.inner.x + v.inner.w).map(move |x| (x, y)))
+                .filter(|&(x, y)| buf[(x, y)].bg != ratatui::style::Color::Reset)
+                .count();
+            assert!(filled >= 5, "pane {} has its number: {filled}", v.id);
+        }
+        let first = views[0].id;
+        key(&mut a, KeyCode::Char('1'));
+        assert!(a.pane_numbers().is_none());
+        assert_eq!(a.focused(), Some(first));
+
+        a.run_action(Action::DisplayPanes);
+        key(&mut a, KeyCode::Char('x'));
+        assert!(a.pane_numbers().is_none(), "any other key puts them away");
+        assert_eq!(a.focused(), Some(first));
+        a.run_action(Action::DisplayPanes);
+        key(&mut a, KeyCode::Char('7'));
+        assert!(a.pane_numbers().is_none());
+        assert!(a.status.as_deref().is_some_and(|s| s.contains("no pane 7")));
     }
 }

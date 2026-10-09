@@ -154,6 +154,15 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     {
         draw_hints(f, app, v, h);
     }
+    if let Some(n) = app.pane_numbers() {
+        for (label, id) in &n.panes {
+            if label.starts_with(n.typed.as_str())
+                && let Some(v) = frame.views.iter().find(|v| v.id == *id)
+            {
+                draw_pane_number(f, app, v, label);
+            }
+        }
+    }
     // Where a dragged tile would land: an outline over that half of the target.
     if let Some((target, dir)) = app.drop_preview()
         && let Some(v) = frame.views.iter().find(|v| v.id == target)
@@ -583,6 +592,75 @@ fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintSta
         let done = h.typed.chars().count() as u16;
         if done < inner.w - col {
             buf.set_stringn(x + done, y, rest, room - done as usize, label);
+        }
+    }
+}
+
+/// Digits five rows tall, three columns of blocks each (tmux's
+/// `display-panes` font); a set bit is a filled block.
+const DIGITS: [[u8; 5]; 10] = [
+    [0b111, 0b101, 0b101, 0b101, 0b111],
+    [0b001, 0b001, 0b001, 0b001, 0b001],
+    [0b111, 0b001, 0b111, 0b100, 0b111],
+    [0b111, 0b001, 0b111, 0b001, 0b111],
+    [0b101, 0b101, 0b111, 0b001, 0b001],
+    [0b111, 0b100, 0b111, 0b001, 0b111],
+    [0b111, 0b100, 0b111, 0b101, 0b111],
+    [0b111, 0b001, 0b001, 0b001, 0b001],
+    [0b111, 0b101, 0b111, 0b101, 0b111],
+    [0b111, 0b101, 0b111, 0b001, 0b111],
+];
+
+/// A pane's number in the middle of it: large when it fits (a block two cells
+/// wide, so the digits look square), narrower when not, and as text in a
+/// pill when the pane is too short for either. Filled cells are spaces on a
+/// background, so no font has to have the glyph. The focused pane's is in
+/// `border_active`, the others in the mode colour.
+fn draw_pane_number(f: &mut Frame, app: &App, view: &PaneView, label: &str) {
+    let c = &app.colors();
+    let ink = if view.focused {
+        c.border_active
+    } else {
+        c.mode_bg
+    };
+    let inner = view.inner;
+    let n = label.len() as u16;
+    let buf = f.buffer_mut();
+    // Cells per block: two if the whole number fits so, else one.
+    let fits = |px: u16| inner.h >= 5 && inner.w >= n * (3 * px + px) - px;
+    let px = [2, 1].into_iter().find(|px| fits(*px));
+    let Some(px) = px else {
+        let text = format!(" {label} ");
+        let w = text.len() as u16;
+        if inner.w == 0 || inner.h == 0 {
+            return;
+        }
+        let x = inner.x + inner.w.saturating_sub(w) / 2;
+        let y = inner.y + inner.h / 2;
+        let style = Style::default()
+            .fg(color(c.mode_fg))
+            .bg(color(ink))
+            .add_modifier(Modifier::BOLD);
+        buf.set_stringn(x, y, &text, inner.w as usize, style);
+        return;
+    };
+    let width = n * 4 * px - px;
+    let x0 = inner.x + (inner.w - width) / 2;
+    let y0 = inner.y + (inner.h - 5) / 2;
+    let filled = Style::default().bg(color(ink));
+    for (i, d) in label.bytes().enumerate() {
+        let glyph = DIGITS[(d - b'0') as usize];
+        let gx = x0 + i as u16 * 4 * px;
+        for (row, bits) in glyph.iter().enumerate() {
+            for col in 0..3u16 {
+                if bits & (0b100 >> col) != 0 {
+                    for k in 0..px {
+                        buf[(gx + col * px + k, y0 + row as u16)]
+                            .set_symbol(" ")
+                            .set_style(filled);
+                    }
+                }
+            }
         }
     }
 }

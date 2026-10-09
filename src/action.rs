@@ -153,6 +153,9 @@ pub enum Action {
     /// Label the links on the focused pane's screen; typing a label copies it,
     /// in capitals opens it.
     Hints,
+    /// Number the panes on screen; typing a number focuses that pane (tmux's
+    /// `display-panes`).
+    DisplayPanes,
     /// Search the focused pane's history (copy mode with the search prompt open).
     Search,
     /// Create a session (named, or numbered) and switch to it.
@@ -215,6 +218,7 @@ impl Action {
                 | Action::Settings
                 | Action::CopyMode
                 | Action::Hints
+                | Action::DisplayPanes
                 | Action::Search
                 | Action::NewSession(_)
                 | Action::MoveWorkspaceToSession(_)
@@ -312,6 +316,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("settings", ""),
     ("copy_mode", ""),
     ("hints", ""),
+    ("display_panes", ""),
     ("search", ""),
     ("new_session", "[name]"),
     ("session", "<name|next|prev>"),
@@ -640,6 +645,7 @@ impl FromStr for Action {
             "settings" => no_arg(Action::Settings),
             "copy_mode" => no_arg(Action::CopyMode),
             "hints" => no_arg(Action::Hints),
+            "display_panes" => no_arg(Action::DisplayPanes),
             "search" => no_arg(Action::Search),
             "new_session" => Ok(Action::NewSession(rest.map(str::to_string))),
             "rename_session" => Ok(Action::RenameSession(rest.map(str::to_string))),
@@ -796,6 +802,7 @@ impl fmt::Display for Action {
             Action::Settings => f.write_str("settings"),
             Action::CopyMode => f.write_str("copy_mode"),
             Action::Hints => f.write_str("hints"),
+            Action::DisplayPanes => f.write_str("display_panes"),
             Action::Search => f.write_str("search"),
             Action::NewSession(None) => f.write_str("new_session"),
             Action::NewSession(Some(n)) => write!(f, "new_session {n}"),
