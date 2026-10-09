@@ -158,7 +158,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 | --- | --- |
 | `exit` | Whether WM mode ends after the bind fires. Given, it decides alone, over `wm_mode.sticky` too: `{ exit = false }` keeps WM mode after a resize even with `sticky = false`, and `{ exit = true }` ends a sticky one. Left out, it follows the action (`new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it), and `sticky = false` ends the mode after any bind. |
 | `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+s` to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used `M-s` spell-word), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
-| `desc` | A short name for the bind in the which-key hint (up to 16 cells show). A Lua function has no action to be named by, so without it the hint calls it `lua`. |
+| `desc` | A short name for the bind in the which-key hint (up to 16 cells show). A Lua function has no action to be named by, so without it the hint calls it `lua` and help (`leader ?`) `<lua function>`; with it, both show the `desc`. |
 
 ### Keys
 

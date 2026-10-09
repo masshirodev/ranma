@@ -542,8 +542,14 @@ impl App {
                 } else {
                     format!("{leader} {chord}")
                 };
+                // A Lua bind has no action text to show; its `desc` says
+                // what it does, as it does in the which-key hint.
+                let what = match (&bind.action, &bind.desc) {
+                    (crate::config::BindAction::Lua(_), Some(d)) => d.as_str(),
+                    _ => bind.label.as_str(),
+                };
                 items.push(Item {
-                    label: format!("{keys:<22} {}", bind.label),
+                    label: format!("{keys:<22} {what}"),
                     detail: if global {
                         "global".into()
                     } else {
@@ -941,5 +947,32 @@ mod tests {
         assert_eq!(app.switch_requested.as_deref(), Some("3"));
         app.run_action("attach 7".parse().unwrap());
         assert_eq!(app.switch_requested.as_deref(), Some("7"));
+    }
+
+    #[test]
+    fn help_names_a_lua_bind_by_its_desc() {
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(
+                r#"ranma.bind("h", function() end, { desc = "history" })
+ranma.bind("y", function() end)"#,
+            ),
+        )
+        .unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let a = App::new(config, tx, 80, 24);
+        let labels: Vec<String> = a.help_items().into_iter().map(|i| i.label).collect();
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.contains(" h ") && l.ends_with("history")),
+            "{labels:?}"
+        );
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.contains(" y ") && l.ends_with("<lua function>"))
+        );
     }
 }
