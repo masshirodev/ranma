@@ -55,8 +55,8 @@ else
   bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
 fi
 bin="$bin_dir/ranma"
-# Beside bin/, where man-db looks for a PATH directory's pages: `man ranma`
-# finds them with no MANPATH set.
+# Beside bin/. man-db looks there for any PATH directory's pages; mandoc
+# (the VPS's man) does not, and needs MANPATH="$man_dir:" (said below).
 man_dir="$(dirname "$bin_dir")/share/man"
 
 if [ "$uninstall" -eq 1 ]; then
@@ -121,8 +121,17 @@ for page in doc/man/man*/*; do
   mkdir -p "$man_dir/$(basename "$(dirname "$page")")"
   cp "$page" "$man_dir/${page#doc/man/}"
 done
+# mandoc reads an index of its own, and warns of an outdated one without it.
+if command -v makewhatis >/dev/null; then
+  makewhatis "$man_dir" 2>/dev/null || true
+fi
 say "man pages in $man_dir: man ranma, man 5 ranma, man ranma-keys"
-command -v man >/dev/null || say "note: man is not installed (man-db); the pages are there for when it is"
+if ! command -v man >/dev/null; then
+  say "note: man is not installed (man-db or mandoc); the pages are there for when it is"
+elif ! man -w ranma >/dev/null 2>&1; then
+  say "note: man does not look in $man_dir; add to your shell's startup:"
+  printf '    export MANPATH="%s:$MANPATH"\n' "$man_dir"
+fi
 
 # ---- after ---------------------------------------------------------------------
 case ":$PATH:" in

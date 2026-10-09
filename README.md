@@ -52,7 +52,9 @@ ranma --dump-config    # the default init.lua, which documents every option
 ranma --check-config   # validate ~/.config/ranma/init.lua and its theme
 ```
 
-The install also puts man pages beside the binary, where `man` finds them:
+The install also puts man pages beside the binary, in `~/.cargo/share/man`
+(man-db finds them there by itself; with mandoc, the install says what to
+add to `MANPATH`):
 `man ranma` (the commands), `man 5 ranma` (the configuration, which is
 `doc/CONFIG.md`) and `man ranma-keys` (the default keys). They are generated
 and committed in [`doc/man/`](doc/man).

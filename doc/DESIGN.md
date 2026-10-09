@@ -1352,8 +1352,11 @@ crate's, not `--version`'s, which carries the commit and would make every
 page stale at every commit; the date is left empty for the same reason.
 
 `install.sh` copies them to `share/man` beside the binary's `bin/`
-(`~/.cargo/share/man`), which man-db searches for any PATH directory, so
-no MANPATH is needed.
+(`~/.cargo/share/man`). man-db searches there for any PATH directory;
+mandoc (Arch's `mandoc` package, on the VPS) does not, so the install
+indexes the directory with `makewhatis` when it can and, if `man -w ranma`
+still finds nothing, prints the line to add: `MANPATH="$HOME/.cargo/share/man:"`.
+The trailing colon keeps the system's pages, in both man-db and mandoc.
 
 ### A scrolling layout: niri's strip (2026-10-09)
 
