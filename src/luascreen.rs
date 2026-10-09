@@ -87,6 +87,9 @@ pub struct ScreenSpec {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Update {
     pub title: Option<String>,
+    /// The query shown (a plugin answering its own filter changes the
+    /// search: a preset, a recent pattern).
+    pub query: Option<String>,
     pub status: Option<Option<(String, Role)>>,
     pub subtitle: Option<Option<String>>,
     pub count: Option<Option<String>>,
@@ -101,6 +104,9 @@ impl Update {
     pub fn apply(self, s: &mut Screen, hooks: &mut Hooks) {
         if let Some(t) = self.title {
             s.title = t;
+        }
+        if let Some(q) = self.query {
+            s.query = q;
         }
         if let Some(v) = self.status {
             s.status = v;
@@ -537,14 +543,15 @@ impl UserData for Handle {
             only(
                 &t,
                 &[
-                    "title", "status", "subtitle", "count", "body", "keys", "card", "on_query",
-                    "on_close",
+                    "title", "query", "status", "subtitle", "count", "body", "keys", "card",
+                    "on_query", "on_close",
                 ],
                 &who,
             )?;
             let mut hooks = Hooks::default();
             let mut up = Update {
                 title: t.get("title")?,
+                query: t.get("query")?,
                 ..Update::default()
             };
             if t.contains_key("status")? {
@@ -692,6 +699,11 @@ mod tests {
         .unwrap();
         let Op::Screen(h) = &opened[0] else { panic!() };
         assert_eq!(h.screen.query, "panic", "a screen opens answering a query");
+        let set = open("local s = ranma.screen { title = 'h' } s:set { query = 'links' }").unwrap();
+        let Op::ScreenSet(_, up) = &set[1] else {
+            panic!()
+        };
+        assert_eq!(up.query.as_deref(), Some("links"));
         assert!(matches!(ops[2], Op::ScreenClose(id) if id == spec.id));
     }
 

@@ -1145,7 +1145,7 @@ gets the selected row's id (`nil` with nothing selected). The footer shows the
 selected row's keys, then the screen's, dropping from the end; `? keys` always
 stays. The mouse selects a row and the wheel moves through them.
 
-`s:set { ... }` changes what it names (`title`, `status`, `subtitle`, `count`,
+`s:set { ... }` changes what it names (`title`, `query`, `status`, `subtitle`, `count`,
 `body`, `keys`, `card`, `on_query`, `on_close`), up to a few times a second.
 The screen is redrawn at most every 100 ms whatever the rate. The selection
 follows its row's `id`; a row that goes hands it to the row taking its place.

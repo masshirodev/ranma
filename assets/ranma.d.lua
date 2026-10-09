@@ -388,8 +388,8 @@ function ranma.input(spec) end
 ---@class ranma.Screen
 local Screen = {}
 
----Change what it names: title, status, subtitle, count, body, keys, card,
----on_query, on_close. The selection follows its row's id.
+---Change what it names: title, query, status, subtitle, count, body, keys,
+---card, on_query, on_close. The selection follows its row's id.
 ---@param t table
 function Screen:set(t) end
 
