@@ -422,6 +422,31 @@ fn draw_pane(
                 None => style.add_modifier(Modifier::REVERSED),
             };
         }
+        // An image placeholder names the program's id in its colour: the
+        // host knows the image by ranma's id (see `graphics`). One naming an
+        // image this server does not know (sent before an upgrade, or
+        // never) is left blank rather than shown as another image.
+        if cell.c == crate::graphics::PLACEHOLDER {
+            use crate::graphics::{Fg, placeholder_id};
+            let marks: &[char] = cell.zerowidth().unwrap_or(&[]);
+            let fg = match cell.fg {
+                AColor::Spec(c) => Fg::Rgb(c.r, c.g, c.b),
+                AColor::Indexed(i) => Fg::Indexed(i),
+                AColor::Named(_) => Fg::Default,
+            };
+            match placeholder_id(fg, marks).and_then(|p| app.graphics.host_id(view.id, p)) {
+                Some(h) => {
+                    let mut s = String::with_capacity(12);
+                    s.push(crate::graphics::PLACEHOLDER);
+                    s.extend(marks.iter().take(2));
+                    out.set_symbol(&s);
+                    style.fg = Some(Color::Rgb((h >> 16) as u8, (h >> 8) as u8, h as u8));
+                }
+                None => {
+                    out.set_char(' ');
+                }
+            }
+        }
         out.set_style(style);
     }
 

@@ -1171,6 +1171,48 @@ then among three small built-in patterns; a theme naming art that is not
 there is refused at load, as an unknown key is. The cost is the art's
 cells copied on frames that are drawn anyway; idle stays at zero.
 
+### Images in panes (2026-10-09)
+
+**Unicode placeholders, not placements.** The kitty graphics protocol has
+two ways to show an image: a placement at the cursor, which the terminal
+tracks in pixels outside the text, or a virtual placement shown by
+placeholder cells (U+10EEEE, the image id in the foreground colour, row and
+column in combining marks). A multiplexer that passes placements through
+must translate every cursor position, clip to panes, and redo all of it on
+every scroll and layout change; placeholders are cells, so the pane's grid
+already does all of that, and so do scrollback, detach and reattach. tmux
+users get images the same way. Direct placements are refused (`EINVAL`), not
+guessed at. Sixel stays out: it has no cell model to hang on.
+
+**What ranma does is the transmission.** The APC is caught on the PTY path
+by the scanner that already finds OSC 133 (alacritty_terminal drops APCs),
+and it stays a cheap scan: a graphics command, mostly base64, is taken up
+to its ESC in one slice rather than byte by byte, and anything that is not
+`G` is skipped. Then `graphics`:
+
+- Ids are per pane on the way in and ranma's on the way out: a pane's
+  `(pane, id)` gets a host id (24 bits, so a placeholder's colour holds it
+  whole), and the renderer rewrites a placeholder cell's colour to it,
+  dropping the high-byte mark. A placeholder naming an image ranma does not
+  know is drawn blank, never as whatever the host has under that id.
+- The host is told `q=2`: its answers would arrive at ranma as typed keys.
+  ranma answers the program instead, OK for what it sent and for queries
+  when a terminal attached can show images. That is known by asking each
+  terminal once at its start, with the colour queries and before the DA1
+  that ends them, so it costs no extra round trip.
+- File, temporary-file and shared-memory transmissions are read where the
+  program runs and sent as data, because the terminal may be on another
+  machine. What kitty refuses to read, ranma refuses.
+- What was sent is kept, to the last 32 MiB, and replayed to a terminal
+  that attaches: its terminal has none of the images. Only terminals that
+  answered the query are sent images at all.
+
+A ranma inside a ranma needs nothing more: the inner one's output to its
+terminal is a pane's output to the outer one, which catches it again and
+maps the inner's host ids as that pane's ids. Images do not survive an
+upgrade's exec (the map is not handed over); placeholders from before draw
+blank rather than wrong.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

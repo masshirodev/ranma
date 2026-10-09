@@ -255,6 +255,7 @@ pub fn run(config: Config) -> Result<()> {
         app.host_colors = replies.colors;
         app.set_outer(replies.outer);
         app.set_outer_colors(replies.outer_colors);
+        app.host_graphics = replies.graphics;
         let _ipc = listen(&mut app, &tx, None);
         app.driven_by(crate::client::mobile_env(), crate::pane::over_ssh());
         app.open_pane(None).context("starting the first pane")?;
@@ -630,7 +631,12 @@ fn event_loop(
                         }
                     }
                     let joining = !clients.list.is_empty();
-                    clients.list.push(Client::new(id, writer, (*hello).clone()));
+                    let mut client = Client::new(id, writer, (*hello).clone());
+                    // Its terminal has none of the images the panes show.
+                    if hello.graphics && !app.graphics.is_empty() {
+                        client.send(&ToClient::Output(app.graphics.replay().concat()));
+                    }
+                    clients.list.push(client);
                     last_active = now_secs();
                     if joining {
                         // A peek moves nothing: the screen keeps the size of the
@@ -733,6 +739,25 @@ fn event_loop(
                 out.write_all(&bytes)?;
             }
             out.flush()?;
+        }
+        // Images go only to terminals that can show them: to one that
+        // cannot, they would be bytes on screen.
+        if server.is_some() {
+            app.host_graphics = clients.list.iter().any(|c| c.hello.graphics);
+        }
+        if !app.graphics_out.is_empty() {
+            let bytes = app.graphics_out.concat();
+            app.graphics_out.clear();
+            if server.is_some() {
+                let out = ToClient::Output(bytes);
+                for c in clients.list.iter_mut().filter(|c| c.hello.graphics) {
+                    c.send(&out);
+                }
+            } else if app.host_graphics {
+                let out = term.backend_mut();
+                out.write_all(&bytes)?;
+                out.flush()?;
+            }
         }
         if app.quit {
             break;
@@ -963,6 +988,7 @@ mod tests {
                 outer_colors: None,
                 steal: false,
                 mobile: false,
+                graphics: false,
             },
         )
     }

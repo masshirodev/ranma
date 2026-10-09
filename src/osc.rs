@@ -36,7 +36,13 @@ pub enum Mark {
     RanmaReport(String),
     /// A ranma in the pane asks this one to run `paste_image` for it.
     RanmaPasteImage,
+    /// A kitty graphics command (`ESC _ G ... ESC \`), its body from the
+    /// `G` (see `graphics`).
+    Graphics(Vec<u8>),
 }
+
+/// Longer than any graphics command a program sends (they chunk at 4 KiB).
+const APC_MAX: usize = 8 << 20;
 
 #[derive(Debug, Default)]
 enum State {
@@ -51,6 +57,10 @@ enum State {
     /// An OSC too long to be one of ours: skipped to its end.
     Skip,
     SkipEsc,
+    /// Inside `ESC _`, collecting a graphics command (the `G` checked
+    /// first: any other APC is skipped).
+    Apc,
+    ApcEsc,
 }
 
 #[derive(Debug, Default)]
@@ -78,6 +88,24 @@ impl Scanner {
                 }
                 continue;
             }
+            // A graphics command is mostly base64: taken whole up to the
+            // next ESC, not byte by byte.
+            if matches!(self.state, State::Apc) {
+                let rest = &bytes[i..];
+                let end = rest.iter().position(|b| *b == 0x1b).unwrap_or(rest.len());
+                if self.payload.len() + end <= APC_MAX {
+                    self.payload.extend_from_slice(&rest[..end]);
+                } else {
+                    self.state = State::Skip;
+                    continue;
+                }
+                i += end;
+                if i < bytes.len() {
+                    i += 1;
+                    self.state = State::ApcEsc;
+                }
+                continue;
+            }
             let b = bytes[i];
             i += 1;
             self.state = match std::mem::take(&mut self.state) {
@@ -85,6 +113,10 @@ impl Scanner {
                 State::Esc if b == b']' => {
                     self.payload.clear();
                     State::Osc
+                }
+                State::Esc if b == b'_' => {
+                    self.payload.clear();
+                    State::Apc
                 }
                 State::Esc if b == 0x1b => State::Esc,
                 State::Esc => State::Ground,
@@ -109,6 +141,25 @@ impl Scanner {
                     self.payload.push(b);
                     State::Osc
                 }
+                State::Apc => unreachable!("handled above"),
+                State::ApcEsc if b == b'\\' => {
+                    if self.payload.first() == Some(&b'G') {
+                        out.push(Mark::Graphics(std::mem::take(&mut self.payload)));
+                    }
+                    self.payload.clear();
+                    State::Ground
+                }
+                // An ESC inside the command that does not end it: as with an
+                // OSC, a new sequence starts.
+                State::ApcEsc if b == b'_' => {
+                    self.payload.clear();
+                    State::Apc
+                }
+                State::ApcEsc if b == b']' => {
+                    self.payload.clear();
+                    State::Osc
+                }
+                State::ApcEsc => State::Ground,
                 State::Skip | State::SkipEsc if b == 0x07 => State::Ground,
                 State::SkipEsc if b == b'\\' => State::Ground,
                 State::Skip if b == 0x1b => State::SkipEsc,
@@ -339,6 +390,27 @@ mod tests {
         assert!(
             s.feed(b"\x1b]7;http://x/y\x07\x1b]7;file://nohost\x07", t)
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_graphics_command_is_caught_whole_across_reads() {
+        let mut s = Scanner::default();
+        let now = Instant::now();
+        assert!(s.feed(b"x\x1b_Ga=t,i=1;AAA", now).is_empty());
+        assert!(s.feed(b"ABBB\x1b", now).is_empty());
+        assert_eq!(
+            s.feed(b"\\y", now),
+            vec![Mark::Graphics(b"Ga=t,i=1;AAAABBB".to_vec())]
+        );
+        // Another APC is not ours; an OSC after it still is.
+        assert!(s.feed(b"\x1b_Xfoo\x1b\\", now).is_empty());
+        assert_eq!(
+            s.feed(b"\x1b]9;hi\x07", now),
+            vec![Mark::Notify {
+                title: String::new(),
+                body: "hi".into()
+            }]
         );
     }
 }

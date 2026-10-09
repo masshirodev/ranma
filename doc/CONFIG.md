@@ -658,7 +658,42 @@ after its last session closes, so a quick reconnect is instant too. It
 applies to every ssh from that machine, not only ranma's; `ssh -O exit
 HOST` closes a master that has gone stale.
 
-## Toasts and `ranma notify`
+## Images in panes
+
+Programs that draw images with the kitty graphics protocol through **Unicode
+placeholders** show them inside ranma, in a terminal that can show them
+(kitty, ghostty; and a ranma inside a ranma whose terminal can). Placeholders
+are text, so an image scrolls, clips to its pane, goes into scrollback and
+comes back with it, and moves with its pane through any layout.
+
+- `kitten icat --unicode-placeholder picture.png`
+- yazi's previews with its `kgp` adapter (kitty 0.28 and later), which uses them.
+- Anything that sends `a=T,U=1` or `a=p,U=1` and prints U+10EEEE cells.
+
+Images sent for **direct placement** (no `U=1`) are kept but not shown, and
+`a=p` without `U=1` is answered `EINVAL`: the host would draw them at its
+own cursor, which is not where the pane's is. Programs that only place
+directly (`kitten icat` without the flag) show nothing inside ranma, as
+inside tmux.
+
+What ranma does with an image:
+
+- It answers the program's graphics query itself: OK when a terminal showing
+  this server can show images, `ENOTSUPPORTED` when none can. A terminal
+  says so once, when its client starts (it is asked, as it is asked for its
+  colours).
+- Each pane's image ids become ids of ranma's own on the terminal, so two
+  panes using the same id show their own images.
+- A file, temporary file or shared memory object the program names is read
+  by ranma, on the machine the program runs on, and its bytes sent: this
+  works when the terminal is across ssh. Files under `/proc`, `/sys` and
+  `/dev` are refused, as kitty refuses them.
+- Images are sent only to terminals that can show them, and the last 32 MiB
+  of them again to a terminal that attaches later.
+- Closing a pane deletes its images. After `ranma upgrade` the images on
+  screen stay, but placeholders printed before it are drawn blank: the new
+  build does not know which image they named.
+
 
 Toasts are short notifications stacked at the top right, gone after five seconds
 or when clicked. They come from three places:

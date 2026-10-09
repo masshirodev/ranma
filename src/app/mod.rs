@@ -309,6 +309,13 @@ pub struct App {
     /// Panes whose program ended and that stayed (`remain_on_exit`), with
     /// its exit status. Enter in one runs it again.
     dead: HashMap<PaneId, Option<i32>>,
+    /// Images programs sent (see `graphics`), and what of them is still to
+    /// go to the terminals that can show them.
+    pub(crate) graphics: crate::graphics::Graphics,
+    pub(crate) graphics_out: Vec<Vec<u8>>,
+    /// A terminal showing this server can show images (it answered the
+    /// graphics query at its start): set by the event loop.
+    pub(crate) host_graphics: bool,
     /// Panes whose output `pipe_pane` sends somewhere, and where.
     pipes: HashMap<PaneId, crate::pipe::Sink>,
     /// What was copied lately, newest first (see `buffers`).
@@ -464,6 +471,9 @@ impl App {
             dead: HashMap::new(),
             buffers: Vec::new(),
             pipes: HashMap::new(),
+            graphics: Default::default(),
+            graphics_out: Vec::new(),
+            host_graphics: false,
             exited: HashMap::new(),
             ended: Default::default(),
             return_focus: HashMap::new(),
@@ -1619,6 +1629,15 @@ impl App {
                 self.nested_mark(id, m);
             }
             crate::osc::Mark::RanmaPasteImage => self.paste_image_asked(id),
+            crate::osc::Mark::Graphics(body) => {
+                let out = self.graphics.handle(id, &body, self.host_graphics);
+                if !out.reply.is_empty() {
+                    pane.write(out.reply);
+                }
+                self.graphics_out.extend(out.host);
+                // Placeholders already on screen may name this image now.
+                self.dirty = true;
+            }
             crate::osc::Mark::CommandStarted => {
                 let workspace = self.workspace_of(id);
                 let visible = self.visible.contains(&id);
@@ -5882,5 +5901,58 @@ mod tests {
         };
         assert!(format!("{e:#}").contains("background `nope`"), "{e:#}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_program_is_answered_and_its_placeholder_drawn_with_the_hosts_id() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let mut a = App::new(config, tx, 40, 10);
+        a.host_graphics = true;
+        // Asks, reads the answer with its escapes made visible, sends a
+        // one-pixel image as id 7 and prints a placeholder for it in colour 7
+        // (U+10EEEE and two row/column marks, as UTF-8 bytes).
+        a.run_action(
+            r#"exec stty -echo raw; printf '\033_Gi=31,a=q;AAAA\033\\'; head -c 12 | tr '\033' E; printf '\033_Ga=t,i=7,f=24,s=1,v=1,q=2;AAAA\033\\'; printf '\r\n\033[38;5;7m\364\216\273\256\314\205\314\205\033[0m'; sleep 5"#
+                .parse()
+                .unwrap(),
+        );
+        let id = a.focused().unwrap();
+        pump(&mut a, &rx, |a| a.graphics.host_id(id, 7).is_some());
+        let host = a.graphics.host_id(id, 7).unwrap();
+        assert!(
+            a.graphics_out.concat().windows(4).any(|w| w == b"q=2;"),
+            "the host is sent the image, told to keep quiet"
+        );
+        pump(&mut a, &rx, |a| {
+            screen(a).join("\n").contains("E_Gi=31;OKE")
+        });
+        // Drawn: the placeholder's colour is the host's id now.
+        let mut t = ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 10)).unwrap();
+        let mut found = None;
+        let end = Instant::now() + Duration::from_secs(5);
+        while found.is_none() && Instant::now() < end {
+            if let Ok(ev) = rx.recv_timeout(Duration::from_millis(50)) {
+                a.handle(ev);
+            }
+            t.draw(|f| {
+                crate::render::draw(f, &a);
+            })
+            .unwrap();
+            let buf = t.backend().buffer().clone();
+            found = buf
+                .content()
+                .iter()
+                .find(|c| c.symbol().starts_with(crate::graphics::PLACEHOLDER))
+                .map(|c| c.fg);
+        }
+        assert_eq!(
+            found,
+            Some(ratatui::style::Color::Rgb(
+                (host >> 16) as u8,
+                (host >> 8) as u8,
+                host as u8
+            ))
+        );
     }
 }

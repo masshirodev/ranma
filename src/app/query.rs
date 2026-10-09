@@ -56,6 +56,8 @@ impl App {
         self.activity.remove(&id);
         self.silence.remove(&id);
         self.pipes.remove(&id);
+        let gone = self.graphics.forget(id);
+        self.graphics_out.extend(gone);
         self.badges.remove(&id);
         self.forget_watches(id);
         if self.tooltip.as_ref().is_some_and(|(t, _)| t.pane == id) {

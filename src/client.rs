@@ -202,6 +202,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
         typed_early,
         outer,
         outer_colors,
+        graphics,
     } = crate::hostcolors::query_all(Duration::from_millis(300));
     let inside = std::env::var(ipc::ENV).ok();
     // Only the first server is stolen: a switch later joins whoever is there.
@@ -222,6 +223,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
                 outer_colors: outer_colors.clone(),
                 steal,
                 mobile,
+                graphics,
             }),
         )?;
         Ok(())

@@ -86,8 +86,8 @@ pub fn leftover_input(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < input.len() {
-        if input[i..].starts_with(b"\x1b]") {
-            // An OSC reply: up to BEL or ST.
+        if input[i..].starts_with(b"\x1b]") || input[i..].starts_with(b"\x1b_") {
+            // An OSC reply, or the graphics query's (an APC): up to BEL or ST.
             let rest = &input[i + 2..];
             let end = rest
                 .iter()
@@ -171,6 +171,7 @@ pub fn query_all(timeout: Duration) -> Replies {
         q.push_str(&format!("\x1b]4;{i};?\x1b\\"));
     }
     q.push_str(crate::nestbar::HELLO);
+    q.push_str(GRAPHICS_QUERY);
     q.push_str("\x1b[c");
     let mut stdout = std::io::stdout();
     if stdout
@@ -212,7 +213,22 @@ pub fn query_all(timeout: Duration) -> Replies {
         typed_early: leftover_input(&buf),
         outer: crate::nestbar::outer_in(&buf),
         outer_colors: crate::nestbar::outer_colors_in(&buf),
+        graphics: graphics_in(&buf),
     }
+}
+
+/// Whether the terminal shows kitty graphics: a one-pixel image it is asked
+/// to check and not keep (`a=q`), answered OK by kitty, ghostty and an outer
+/// ranma whose own terminal does. One that does not know it says nothing.
+pub const GRAPHICS_QUERY: &str = "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
+
+/// Whether the replies hold the graphics query's OK.
+pub fn graphics_in(input: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(input);
+    text.split("\x1b_G").skip(1).any(|r| {
+        let body = &r[..r.find('\x1b').unwrap_or(r.len())];
+        body.starts_with("i=31") && body.ends_with(";OK")
+    })
 }
 
 /// What the terminal answered at start (`query_all`).
@@ -225,6 +241,8 @@ pub struct Replies {
     pub outer: Option<u32>,
     /// Its theme's colours, if it sent them (see `nestbar::colors_osc`).
     pub outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
+    /// It answered the graphics query: it can show images.
+    pub graphics: bool,
 }
 
 /// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.
@@ -349,5 +367,14 @@ mod tests {
         );
         assert_eq!(c.get(232), Some(Rgb { r: 8, g: 8, b: 8 }));
         assert_eq!(c.get(196), Some(Rgb { r: 255, g: 0, b: 0 }));
+    }
+
+    #[test]
+    fn the_graphics_answer_is_read_and_not_typed() {
+        let input = b"\x1b]11;rgb:00/00/00\x1b\\\x1b_Gi=31;OK\x1b\\ls\x1b[?62;c";
+        assert!(graphics_in(input));
+        assert_eq!(leftover_input(input), b"ls");
+        assert!(!graphics_in(b"\x1b_Gi=31;ENOTSUPPORTED\x1b\\\x1b[?62;c"));
+        assert!(!graphics_in(b"\x1b[?62;c"));
     }
 }

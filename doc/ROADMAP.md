@@ -244,7 +244,7 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] Pane scrollbars: `panes.scrollbar`
 - [x] Logging a pane's output (`pipe_pane`)
 - [x] ASCII-art backgrounds behind the panes: the theme's `[background]`
-- [ ] Images in panes (the kitty graphics protocol)
+- [x] Images in panes: the kitty graphics protocol by Unicode placeholders
 
 ## Later, maybe
 

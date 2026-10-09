@@ -56,6 +56,10 @@ pub struct Hello {
     /// profile. Defaulted like `inside`.
     #[serde(default)]
     pub mobile: bool,
+    /// The terminal answered the graphics query: it can show images (see
+    /// `graphics`). Defaulted like `inside`: an older client gets none.
+    #[serde(default)]
+    pub graphics: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -192,6 +196,7 @@ mod tests {
             outer_colors: None,
             steal: true,
             mobile: true,
+            graphics: true,
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -248,8 +253,10 @@ mod tests {
             outer_colors: None,
             steal: false,
             mobile: false,
+            graphics: false,
         })
         .unwrap();
+        old.as_object_mut().unwrap().remove("graphics");
         old.as_object_mut().unwrap().remove("inside");
         old.as_object_mut().unwrap().remove("remote");
         old.as_object_mut().unwrap().remove("outer");
