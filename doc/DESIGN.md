@@ -404,7 +404,7 @@ there and follows. The silent variant is left unbound, with the config showing h
 to put it on `ctrl+<digit>` for terminals that report that.
 
 **Synchronized input** (2026-09-29, from tuios's multifocus and tmux's
-synchronize-panes): `sync_toggle` marks panes, and typing into a marked pane
+synchronize-panes; on `x a` and `x A` since 2026-10-09): `sync_toggle` marks panes, and typing into a marked pane
 types into every marked pane of the workspace. It is marks, not a mode: one
 unmarked pane in the same workspace stays a normal pane, so a scratch shell
 can sit beside the synced ones. Each pane gets the keys encoded for its own
@@ -681,9 +681,9 @@ stopped: at 50 ms, an error a tick would bury the bar.
 
 Where it departs from the handoff:
 
-- No default key. A `p` bind would add a row to the which-key hint, whose
-  layout is pinned to its own handoff. `:settings` and the action reach it,
-  and `init.lua` binds it in one line.
+- No default key at first: a `p` bind would have added a row to the
+  which-key hint, whose layout was pinned to its own handoff. `p` since
+  2026-10-09 (see "Every action has a key").
 - The registry is ranma's, not the mock's: real ranges (scrollback to
   1 000 000, not 100 000) and real descriptions. The mock's `mpris` and
   `battery` groups were samples of how plugin groups look.
@@ -1065,9 +1065,8 @@ rows. Numbers are as wide as the largest (`01`-`12`), so none starts another
 and the second digit never waits on a timer. Numbered in drawing order, not
 by `{index}`: the scratchpad's floats have indices of their own that would
 repeat the workspace's. Any other key, a click, or focus moving another way
-puts them away, and the key is swallowed: it was typed at the numbers. Not
-bound by default, so the which-key hint keeps its designed layout (as
-`settings`); `ranma.bind("i", "display_panes")` gives it a key.
+puts them away, and the key is swallowed: it was typed at the numbers. On
+`i` since 2026-10-09 (see "Every action has a key").
 
 **The last workspace and the last pane are read off what changed**, not
 recorded by the actions that move focus: the state observer that fires
@@ -1266,6 +1265,61 @@ open path beside the mode and clears it on every mode change.
 
 **Not done**: folders in `ranma.mode` tables and global folders (both refused
 at load); a folder's own `desc`; nothing reads a folder's keys back to Lua.
+
+### Every action has a key (2026-10-09)
+
+Until folders, an action added after the which-key handoff stayed unbound
+"so the hint keeps its designed layout": `settings`, `display_panes`, the
+last workspace and pane, the paste buffers, logging, snapping, saved
+layouts. Each was a line to uncomment in `init.lua`, so out of the box ranma
+could not open its own settings from a key. Folders put the rare ones one
+row deep, so the rule went and the defaults were decided as a set:
+
+| Key | Action | Why there |
+| --- | --- | --- |
+| `p` | `settings` | free; preferences |
+| `i` | `display_panes` | free; tmux's is `q`, close here |
+| `l`, `;` | `workspace last`, `focus last` | tmux's keys |
+| `]` | `paste_buffer` | tmux's key |
+| `V` | `choose_buffer` | beside `v` (paste image); tmux's `#` is Shift+3, which moves with the layout, as the digits do |
+| `x` | `+pane` folder | arrows snap to a half, `c` the middle, `z` 80%; `a`/`A` sync; `r` respawn, `l` log, `s` watch silence, `m` menu |
+| `y` | `+layouts` folder | `s` save, `l` load |
+
+Left unbound: actions that need an argument only the user knows (`exec`,
+`attach NAME`, `profile`, `session_accent`, `toolbar`), `send_leader` (the
+leader again does it), `latch`, and `move_to_workspace_silent` (Ctrl+digit
+reaches ranma only on terminals with the kitty protocol).
+
+**The hint's two sizes decided where rows go.** At 80×24 every shown group
+must keep its heading: the panel is at most half the screen, so a group gets
+nine rows, and one of ten makes the whole hint fall back to flowed rows. Layout
+and panes already had nine each. At 120×35, ranma (now holding `p settings`)
+shows only while history stacks under sessions, which allows twelve rows
+between them. So:
+
+- *Sync input moved from `a`/`A` to `x a`/`x A`.* It is the one existing bind
+  that moved: the panes group needed a slot for the `x` folder, and sync is a
+  mode you set up rarely, not a key you press in runs.
+- *Snapping lives in `x`*, not a float folder of its own, for the same slot.
+- *`;` last pane sits under workspaces*, beside `l`, as tmux's back-and-forth
+  pair; sessions could not take it without pushing ranma off at 120×35.
+- *`+layouts` is listed under ranma*, the one group with room at 120×35.
+- In a strip at 120×30, ranma no longer fits (history grew by `V` and `]`);
+  its frame names it.
+
+The fixtures were redrawn by the handoff's own port of the layout
+(`WHICH_KEY_FOLDERS/wk.py`, now with `fixtures.py` writing all three files),
+which reproduced the old fixtures exactly before its rows were changed. The
+Rust hint matches it cell for cell, and
+`the_defaults_keep_their_headings_at_80x24` guards the nine-row limit.
+
+**A default folder must be replaceable.** Before this, rebinding `y` to an
+action left the defaults' `y s` in a folder that was gone, and load failed:
+a user's config rejected, and the shell falling back to a plain one. Now
+binding a key to anything but a folder, or unbinding it, drops the keys
+recorded behind it so far (`Builder::forget_behind`). A folder bound on the
+key keeps them, so "keys before their folder" still works in one file;
+`ranma.unbind` first starts it empty.
 
 ### A scrolling layout: niri's strip (2026-10-09)
 
@@ -2100,10 +2154,8 @@ says why. A file over 50 MB, or a folder (it would need packing, and the
 far side unpacking), fails the whole paste before anything is sent. An upgrade does not carry an
 upload in flight: the original text is typed before the handover.
 
-The which-key hint lists `v paste image` under history. Its tests pin the
-panel to the which-key handoff's drawing, which predates the bind, so they
-build it from the defaults without it, and a test of its own checks the bind
-is listed; the handoff is not redrawn for one row.
+The which-key hint lists `v paste image` under history. Its fixtures left it
+out until the defaults were redrawn on 2026-10-09; they include it now.
 
 **Not covered:** the phone. Termux reaches the VPS ranma directly, with no
 ranma on the clipboard's side to do the upload. That would need a Termux-side

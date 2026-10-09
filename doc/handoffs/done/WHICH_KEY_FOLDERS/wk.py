@@ -114,13 +114,20 @@ def draw(p,border=True):
             if x+i<w: g[y][x+i]=ch; r[y][x+i]=role
     return g,r
 
+# The default binds' rows, as src/whichkey.rs groups them. Redrawn 2026-10-09
+# when the defaults gained settings, the tmux extras and two folders.
 D_LAYOUT=('layout',[('←↓↑→','focus','bind'),('shift+←↓↑→','resize','bind'),('ctrl+shift+←↓↑→','move','bind'),('alt+←↓↑→','split there','bind'),('j','split dir','bind'),('=','equalize','bind'),('alt+⏎','fullscreen','bind'),('M','swap master','bind'),('spc','next layout','bind')])
-D_PANES=('panes',[('t','new pane','bind'),('q','close','bind'),('w','float','bind'),('f','next float','bind'),('g','group','bind'),('ctrl+h/l','prev/next tab','bind'),(',','rename','bind'),('a','sync input','bind'),('A','unsync all','bind')])
-D_WS=('workspaces',[('1-0','workspace','bind'),('alt+1-0','send pane','bind'),('ctrl+←→','prev/next','bind'),('ctrl+↓','empty one','bind'),('.','rename','bind'),('s','scratchpad','bind'),('alt+s','to scratchpad','bind')])
+D_STRIP=('strip',[('←↓↑→','focus','bind'),('shift+←↓↑→','resize','bind'),('ctrl+shift+←↓↑→','move','bind'),('alt+←↓↑→','split there','bind'),('{ }','join/leave','bind'),('e','width','bind'),('E','full width','bind'),('c','centre','bind'),('=','equalize','bind'),('alt+⏎','fullscreen','bind')])
+D_PANES=('panes',[('t','new pane','bind'),('q','close','bind'),('w','float','bind'),('f','next float','bind'),('g','group','bind'),('ctrl+h/l','prev/next tab','bind'),(',','rename','bind'),('i','pane numbers','bind'),('x','+pane','folder')])
+D_WS=('workspaces',[('1-0','workspace','bind'),('alt+1-0','send pane','bind'),('ctrl+←→','prev/next','bind'),('ctrl+↓','empty one','bind'),('.','rename','bind'),('s','scratchpad','bind'),('alt+s','to scratchpad','bind'),(';','last pane','bind'),('l','last one','bind')])
 D_SESS=('sessions',[('tab','pane list','bind'),('bksp','session list','bind'),('N','new session','bind'),('( )','prev/next','bind'),('$','rename','bind'),('m','move workspace','bind')])
-D_HIST=('history',[('/','search','bind'),('[','copy mode','bind'),('o','links','bind')])
-D_RANMA=('ranma',[(':','commands','bind'),('r','reload config','bind'),('d','detach','bind'),('S','servers','bind'),('U','update','bind'),('Del','quit','bind'),('esc','leave WM','bind')])
+D_HIST=('history',[('/','search','bind'),('[','copy mode','bind'),('o','links','bind'),('v','paste image','bind'),('V','copies','bind'),(']','paste last','bind')])
+D_RANMA=('ranma',[(':','commands','bind'),('p','settings','bind'),('r','reload config','bind'),('d','detach','bind'),('S','servers','bind'),('U','update','bind'),('Del','quit','bind'),('esc','leave WM','bind'),('y','+layouts','folder')])
+# The default folders, opened.
+F_PANE=[('pane',[('a','sync input','bind'),('A','unsync all','bind'),('c','centre','bind'),('l','log pane','bind'),('m','menu','bind'),('r','respawn','bind'),('s','watch silence','bind'),('z','size 80%','bind'),('←↓↑→','snap half','bind')])]
+F_LAYOUTS=[('layouts',[('l','load layout','bind'),('s','save layout','bind')])]
 DEFAULTS=[D_LAYOUT,D_PANES,D_WS,D_SESS,D_HIST,D_RANMA]
+STRIP=[D_STRIP,D_PANES,D_WS,D_SESS,D_HIST,D_RANMA]
 
 def text(p,border=True):
     g,_=draw(p,border); return [''.join(r) for r in g]

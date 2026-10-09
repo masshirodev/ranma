@@ -1431,6 +1431,12 @@ fn install_api(
                 {
                     b.group_order.push(g.clone());
                 }
+                // A key that stops being a folder takes the keys recorded
+                // behind it so far with it: rebinding a default folder's key
+                // must not leave its keys pointing into nothing.
+                if !global && !matches!(bind.action, BindAction::Folder(_)) {
+                    b.forget_behind(&path);
+                }
                 if path.len() > 1 {
                     // Put in its folder once the file is done: the folder
                     // may be declared after its keys.
@@ -1590,6 +1596,7 @@ fn install_api(
                 })
                 .collect::<mlua::Result<_>>()?;
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            b.forget_behind(&path);
             match path.as_slice() {
                 [] => return Err(rt_err("ranma.unbind: no key given")),
                 [chord] => {
@@ -2775,6 +2782,15 @@ fn sorted_entries(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+impl Builder {
+    /// Drop the folder keys recorded so far behind `path` (`"y s"` behind
+    /// `y`): the key at `path` is no longer the folder they were bound in.
+    fn forget_behind(&mut self, path: &[Chord]) {
+        self.nested
+            .retain(|(_, p, _)| !(p.len() > path.len() && p.starts_with(path)));
+    }
+}
+
 /// Bind (or, with `None`, unbind) `path` inside its folders: every chord but
 /// the last must be a folder by now.
 fn put_nested(
@@ -3037,19 +3053,49 @@ mod tests {
         let path: Vec<Chord> = ["g", "b"].iter().map(|k| k.parse().unwrap()).collect();
         let branches = folder_binds(&cfg.binds, &path).unwrap();
         assert_eq!(branches.len(), 1, "d was unbound");
-        assert_eq!(cfg.group_order, vec!["tools", "plugins"]);
+        // After the groups the default folders name (ranma, panes).
+        assert!(
+            cfg.group_order
+                .ends_with(&["tools".into(), "plugins".into()])
+        );
         assert!(
             !cfg.binds[&g].exits_mode,
             "opening a folder stays in WM mode"
         );
     }
 
+    /// The defaults bind keys inside their folders (`x`, `y`); a user's own
+    /// bind on the folder's key, or an unbind of it, takes those keys with it
+    /// instead of leaving them in a folder that no longer exists.
+    #[test]
+    fn a_default_folder_key_can_be_rebound_or_unbound() {
+        let x: Chord = "x".parse().unwrap();
+        let y: Chord = "y".parse().unwrap();
+        let cfg = with_user(r#"ranma.bind("y", "detach") ranma.unbind("x")"#).unwrap();
+        assert_eq!(builtin(&cfg, "y"), Some(Action::Detach));
+        assert!(!cfg.binds.contains_key(&x));
+        // A folder of the user's own on the key keeps the defaults' keys in
+        // it; unbinding the key first starts it empty.
+        let cfg = with_user(r#"ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#)
+            .unwrap();
+        let mine = cfg.binds[&y].folder().unwrap();
+        assert_eq!((mine.name.as_str(), mine.binds.len()), ("mine", 3));
+        let cfg = with_user(
+            r#"ranma.unbind("y") ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.binds[&y].folder().unwrap().binds.len(), 1);
+        // Inside a folder too: "x c" rebound as a key drops nothing else.
+        let cfg = with_user(r#"ranma.bind("x c", "detach")"#).unwrap();
+        assert_eq!(cfg.binds[&x].folder().unwrap().binds.len(), 12);
+    }
+
     #[test]
     fn folders_and_groups_are_parsed_strictly() {
         let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
         assert!(
-            err(r#"ranma.bind("x", { folder = "scratch" })"#)
-                .contains(r#"folder "scratch" on x has no keys"#)
+            err(r#"ranma.bind("z", { folder = "scratch" })"#)
+                .contains(r#"folder "scratch" on z has no keys"#)
         );
         assert!(
             err(r#"ranma.bind("g", "detach") ranma.bind("g s", "detach")"#)
@@ -3112,6 +3158,29 @@ mod tests {
         );
         assert!(cfg.binds[&"t".parse().unwrap()].exits_mode);
         assert!(!cfg.binds[&"left".parse().unwrap()].exits_mode);
+        // Everything ranma has gets a key, the rare ones in folders.
+        assert_eq!(builtin(&cfg, "p"), Some(Action::Settings));
+        assert_eq!(builtin(&cfg, "i"), Some(Action::DisplayPanes));
+        assert_eq!(builtin(&cfg, ";"), Some(Action::FocusLast));
+        assert_eq!(
+            builtin(&cfg, "l"),
+            Some(Action::Workspace(WorkspaceTarget::Last))
+        );
+        assert_eq!(builtin(&cfg, "]"), Some(Action::PasteBuffer(1)));
+        assert_eq!(builtin(&cfg, "shift+v"), Some(Action::ChooseBuffer));
+        let inside = |folder: &str, key: &str| {
+            let path = [folder.parse().unwrap()];
+            match &folder_binds(&cfg.binds, &path).unwrap()[&key.parse().unwrap()].action {
+                BindAction::Builtin(a) => a.clone(),
+                _ => panic!("{folder} {key} is a builtin"),
+            }
+        };
+        assert_eq!(inside("x", "a"), Action::SyncToggle);
+        assert_eq!(inside("x", "shift+a"), Action::SyncClear);
+        assert_eq!(inside("x", "r"), Action::RespawnPane);
+        assert_eq!(inside("x", "c"), Action::Snap(crate::action::Snap::Center));
+        assert_eq!(inside("y", "s"), Action::SaveLayout(None));
+        assert!(!cfg.binds.contains_key(&"a".parse().unwrap()));
     }
 
     #[test]

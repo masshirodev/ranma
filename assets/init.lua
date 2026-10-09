@@ -163,19 +163,17 @@ ranma.bind("q", "close_pane")
 --   ranma.mode("resize", { binds = { h = "resize left 5", l = "resize right 5" } })
 --   ranma.bind("r", "mode resize")
 -- Pane numbers (tmux's display-panes): every pane on screen gets a large
--- number; type one to focus that pane, any other key puts them away. Not bound
--- by default, so the which-key hint keeps its designed layout; one key for it:
---   ranma.bind("i", "display_panes")
+-- number; type one to focus that pane, any other key puts them away.
+ranma.bind("i", "display_panes")
 ranma.bind("w", "toggle_floating")
 -- Floats are free: they overlap, and new ones cascade from the last. f raises
 -- the next one, cycling through the pile.
 ranma.bind("f", "cycle_floats")
 -- Floats can be sized in percent and snapped to halves, quarters or the middle
--- (a tile is floated first). Not bound by default; the palette (leader :) has
--- them, or bind a few:
---   ranma.bind("alt+c", "snap center")
---   ranma.bind("alt+shift+left", "snap left")
---   ranma.bind("alt+shift+f", "float_size 80 80")
+-- (a tile is floated first). In the x folder (below): an arrow snaps the pane
+-- to that half, c to the middle, z makes it 80% of the screen. The quarters
+-- ("snap top_left") and other sizes ("float_size 60 40") are in the palette
+-- (leader :), or bind them in the folder: ranma.bind("x q", "snap top_left").
 ranma.bind("j", "toggle_split")
 -- Every split in the workspace back to equal shares, however it was resized.
 ranma.bind("=", "equalize")
@@ -186,10 +184,12 @@ ranma.bind("space", "next_layout")
 -- Saved layouts: a workspace's splits with each pane's directory and command.
 -- save_layout NAME writes the current workspace to ~/.local/state/ranma/layouts;
 -- load_layout NAME brings one back (on an empty workspace it opens the panes
--- and types their commands in), and without a name picks from a list. Not
--- bound by default (leader : has them); for example:
---   ranma.bind("shift+l", "load_layout")
---   ranma.bind("shift+w", "save_layout")
+-- and types their commands in), and without a name picks from a list. In the
+-- y folder: s saves (asking for a name), l loads (from the list). The hint
+-- lists it under ranma: the layout and panes groups are full at 80x24.
+ranma.bind("y", { folder = "layouts", group = "ranma" })
+ranma.bind("y s", "save_layout")
+ranma.bind("y l", "load_layout")
 -- Or declare one here, a container's panes in its list part:
 --   ranma.layout("kumiko", {
 --     split = "horizontal",
@@ -210,11 +210,25 @@ ranma.bind("}", "consume_or_expel right")
 ranma.bind("e", "column_width next")
 ranma.bind("shift+e", "column_width full")
 ranma.bind("c", "center_column")
--- Synchronized input: a marks the focused pane (⇉ on its border); typing in a
--- marked pane types into every marked pane of the workspace, each as if at
--- its own keyboard (several SSH shells at once, say). A (shift+a) unmarks all.
-ranma.bind("a", "sync_toggle")
-ranma.bind("shift+a", "sync_clear")
+-- The focused pane's rarer tools are in the x folder: snapping a float (above),
+-- synchronized input, r to restart its program (tmux's respawn-pane), l to
+-- log it (pipe_pane, below), s to watch it for silence (a toast when a build
+-- goes quiet), m for its menu.
+ranma.bind("x", { folder = "pane", group = "panes" })
+for dir, side in pairs { left = "left", down = "bottom", up = "top", right = "right" } do
+  ranma.bind("x " .. dir, "snap " .. side)
+end
+ranma.bind("x c", "snap center")
+ranma.bind("x z", "float_size 80 80", { desc = "size 80%" })
+-- Synchronized input: x a marks the focused pane (⇉ on its border); typing in
+-- a marked pane types into every marked pane of the workspace, each as if at
+-- its own keyboard (several SSH shells at once, say). x A unmarks all.
+ranma.bind("x a", "sync_toggle")
+ranma.bind("x shift+a", "sync_clear")
+ranma.bind("x r", "respawn_pane")
+ranma.bind("x l", "pipe_pane")
+ranma.bind("x s", "monitor_silence")
+ranma.bind("x m", "pane_menu")
 
 -- Groups (tabbed containers)
 ranma.bind("g", "toggle_group")
@@ -250,10 +264,9 @@ ranma.bind("ctrl+left", "workspace prev")
 ranma.bind("ctrl+down", "workspace empty")
 -- Back and forth (tmux's last-window and last-pane): "workspace last" goes to
 -- the workspace shown before this one, "focus last" to the pane focused before
--- this one here. Not bound by default (the which-key hint keeps its designed
--- layout); tmux's keys for them:
---   ranma.bind("l", "workspace last")
---   ranma.bind(";", "focus last")
+-- this one here. tmux's keys for them.
+ranma.bind("l", "workspace last")
+ranma.bind(";", "focus last")
 
 -- Scratchpad (Hyprland's special workspace). Alt+S also shows and hides it
 -- without the leader (a global bind, below); in WM mode Alt+S sends the focused
@@ -310,16 +323,17 @@ ranma.bind("v", "paste_image")
 -- Paste buffers (tmux's choose-buffer and paste-buffer): every copy (copy mode,
 -- a link from hints, a program's own OSC 52) is kept, the last 50, in memory
 -- only. choose_buffer lists them, newest first, and Enter pastes one;
--- paste_buffer pastes the last ("paste_buffer 3", the third). Not bound by
--- default; tmux's keys:
---   ranma.bind("]", "paste_buffer")
---   ranma.bind("#", "choose_buffer")
+-- paste_buffer pastes the last ("paste_buffer 3", the third). ] is tmux's;
+-- the list is V, beside v, rather than tmux's #, which is Shift+3 and so a
+-- different key on every keyboard layout.
+ranma.bind("]", "paste_buffer")
+ranma.bind("shift+v", "choose_buffer")
 -- Logging a pane (tmux's pipe-pane): pipe_pane starts copying what the
 -- focused pane's program writes, escapes and all, to
 -- ~/.local/state/ranma/logs/pane<ID>-<time>.log, and stops when run again.
 -- "pipe_pane <command>" sends it into a command's stdin instead
 -- ("pipe_pane grep --line-buffered ERROR >> ~/errors"); "pipe_pane off" stops.
---   ranma.bind("shift+p", "pipe_pane")
+-- It is x l, in the pane folder above.
 
 -- The palette. "?" opens it on the keys (help: every bind, filterable, Enter
 -- runs it); ":" on the commands (every action, bound or not; Tab completes one,
@@ -328,9 +342,8 @@ ranma.bind("v", "paste_image")
 -- and ">" is ":" for hands used to other palettes.
 ranma.bind("?", "help")
 ranma.bind(":", "command_palette")
--- The settings panel (every option, edited in place and saved to settings.toml)
--- has no key by default, so the hint's layout stays the one designed for these
--- binds; it is ":settings" in the palette, or bind it: ranma.bind("p", "settings")
+-- The settings panel: every option, edited in place and saved to settings.toml.
+ranma.bind("p", "settings")
 
 -- Global binds -------------------------------------------------------------------
 -- { global = true } binds a key outside WM mode, with no leader. The program in

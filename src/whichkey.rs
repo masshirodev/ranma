@@ -7,7 +7,7 @@
 //! families of binds that differ only in a direction or a digit collapse into
 //! one row (`←↓↑→ focus`, `1-0 workspace`), and prev/next pairs into one.
 
-use crate::action::{Action, Dir, SessionTarget, WorkspaceTarget};
+use crate::action::{Action, Dir, SessionTarget, Snap, WorkspaceTarget};
 use crate::keys::{Chord, Key, Mods};
 
 /// Names are cut to this many cells, with `…`.
@@ -247,12 +247,20 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::ColumnWidth(crate::action::ColumnWidth::Next) => (52, 0),
         Action::ColumnWidth(crate::action::ColumnWidth::Full) => (53, 0),
         Action::CenterColumn => (54, 0),
+        Action::Snap(Snap::Left) => (55, 0),
+        Action::Snap(Snap::Bottom) => (55, 1),
+        Action::Snap(Snap::Top) => (55, 2),
+        Action::Snap(Snap::Right) => (55, 3),
+        Action::Snap(Snap::Center) => (56, 0),
+        Action::RespawnPane => (57, 0),
+        Action::MonitorSilence(None) => (58, 0),
+        Action::PaneMenu => (59, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 55] = [
+const KINDS: [Kind; 60] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -299,7 +307,7 @@ const KINDS: [Kind; 55] = [
     k("layout", "save layout", Shape::Single),
     k("ranma", "settings", Shape::Single),
     k("panes", "pane numbers", Shape::Single),
-    k("panes", "last pane", Shape::Single),
+    k("workspaces", "last pane", Shape::Single),
     k("workspaces", "last one", Shape::Single),
     k("history", "copies", Shape::Single),
     k("history", "paste last", Shape::Single),
@@ -308,6 +316,11 @@ const KINDS: [Kind; 55] = [
     k("layout", "width", Shape::Single),
     k("layout", "full width", Shape::Single),
     k("layout", "centre", Shape::Single),
+    k("panes", "snap half", Shape::Dirs),
+    k("panes", "centre", Shape::Single),
+    k("panes", "respawn", Shape::Single),
+    k("panes", "watch silence", Shape::Single),
+    k("panes", "menu", Shape::Single),
 ];
 
 /// The strip's own kinds (`layout = "scrolling"`), shown only in a strip,
@@ -317,10 +330,13 @@ const STRIP_ONLY: std::ops::Range<usize> = 51..55;
 const NOT_IN_STRIP: [usize; 3] = [4, 7, 41];
 
 /// Where a kind's rows sort: its place in `KINDS`, except the strip's own,
-/// which follow `split there` as the design draws them.
+/// which follow `split there` as the design draws them, and settings, which
+/// follows commands: the two ways into everything ranma can do.
 fn rank(i: usize) -> (usize, usize) {
     if STRIP_ONLY.contains(&i) {
         (3, i)
+    } else if i == 44 {
+        (34, 1)
     } else {
         (i, 0)
     }
@@ -922,7 +938,7 @@ fn frame(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BindAction, Config};
+    use crate::config::Config;
 
     /// The groups of a configuration's top level, or of the folder at `path`.
     fn groups_of(cfg: &Config, path: &[&str]) -> Vec<Group> {
@@ -940,37 +956,40 @@ mod tests {
         )
     }
 
-    /// The default binds as the handoff drew them: binds added since (only
-    /// `paste_image` so far) would redraw the mock, which pins the layout, not
-    /// the bind table. `the_defaults_list_paste_image` covers those.
+    /// The default binds' top level. The fixtures are redrawn from
+    /// `WHICH_KEY_FOLDERS/fixtures.py` when they change.
     fn default_groups() -> Vec<Group> {
-        let cfg = crate::config::load_from(None, None, None).unwrap();
-        groups(
-            cfg.binds
-                .iter()
-                .filter(|(_, b)| !matches!(b.action, BindAction::Builtin(Action::PasteImage)))
-                .map(|(c, b)| Entry::of(*c, b)),
-            &cfg.group_order,
-            None,
-            false,
-        )
+        groups_of(&crate::config::load_from(None, None, None).unwrap(), &[])
     }
 
     #[test]
-    fn the_defaults_list_paste_image() {
+    fn the_defaults_are_all_known() {
         let cfg = crate::config::load_from(None, None, None).unwrap();
-        let all = groups_of(&cfg, &[]);
-        let history = all.iter().find(|g| g.name == "history").unwrap();
-        assert!(
-            history
-                .rows
-                .iter()
-                .any(|r| r.key == "v" && r.name == "paste image")
-        );
-        assert!(
-            all.iter().all(|g| g.name != "yours"),
-            "nothing of the defaults is unknown"
-        );
+        for path in [&[][..], &["x"], &["y"]] {
+            let all = groups_of(&cfg, path);
+            assert!(
+                all.iter().all(|g| g.name != "yours"),
+                "nothing of the defaults is unknown"
+            );
+        }
+    }
+
+    /// Every group the 80x24 hint shows must keep its heading there: at most
+    /// nine rows each, the most half of 24 rows leaves. A default bind that
+    /// would make a tenth goes in a folder or another group instead.
+    #[test]
+    fn the_defaults_keep_their_headings_at_80x24() {
+        let p = layout(
+            &default_groups(),
+            80,
+            24,
+            &crumbs(&["ctrl+b"]),
+            Some("?"),
+            false,
+        )
+        .unwrap();
+        assert!(!p.flowed);
+        assert_eq!(p.dropped, vec!["sessions", "history", "ranma"]);
     }
 
     /// The panel as text, with the frame the design draws for a border style.
@@ -1064,6 +1083,16 @@ mod tests {
     }
 
     #[test]
+    fn the_default_folders_open() {
+        let cfg = crate::config::load_from(None, None, None).unwrap();
+        for (key, name) in [("x", "80x24 pane rounded"), ("y", "80x24 layouts rounded")] {
+            let g = groups_of(&cfg, &[key]);
+            let p = layout(&g, 80, 24, &crumbs(&["ctrl+b", key]), Some("?"), true).unwrap();
+            same(name, &p, true, mock(FIRST, name));
+        }
+    }
+
+    #[test]
     fn a_small_screen_flows_and_a_tiny_one_shows_nothing() {
         let c = crumbs(&["ctrl+b"]);
         check("40x15 flowed", 40, 15, true);
@@ -1082,10 +1111,7 @@ mod tests {
     fn in_a_strip_the_hint_follows_the_layout() {
         let cfg = crate::config::load_from(None, None, None).unwrap();
         let strip = groups(
-            cfg.binds
-                .iter()
-                .filter(|(_, b)| !matches!(b.action, BindAction::Builtin(Action::PasteImage)))
-                .map(|(c, b)| Entry::of(*c, b)),
+            cfg.binds.iter().map(|(c, b)| Entry::of(*c, b)),
             &cfg.group_order,
             None,
             true,
@@ -1093,8 +1119,7 @@ mod tests {
         let p = layout(&strip, 120, 30, &crumbs(&["ctrl+b"]), Some("?"), false).unwrap();
         let src = include_str!("../doc/handoffs/done/SCROLLING_LAYOUT_MOCK.txt");
         same("strip", &p, true, mock(src, "120x30 strip rounded"));
-        // Outside one, the four new keys are left out: the defaults' hint
-        // is the first handoff's (the fixtures above).
+        // Outside one, the four strip keys are left out.
         let flat = default_groups();
         assert!(
             flat.iter()
@@ -1187,13 +1212,13 @@ mod tests {
     #[test]
     fn an_empty_folder_is_dim_and_says_so_when_opened() {
         let cfg = c159();
-        let x: Chord = "x".parse().unwrap();
+        let z: Chord = "z".parse().unwrap();
         let top = groups(
             cfg.binds
                 .iter()
                 .map(|(c, b)| Entry::of(*c, b))
                 .chain(std::iter::once(Entry {
-                    chord: x,
+                    chord: z,
                     kind: BindKind::Folder {
                         name: "scratch",
                         empty: true,
@@ -1217,7 +1242,7 @@ mod tests {
         let roles: Vec<Role> = p
             .pieces
             .iter()
-            .filter(|(_, _, t, _)| t == "x" || t == "+scratch")
+            .filter(|(_, _, t, _)| t == "z" || t == "+scratch")
             .map(|(.., r)| *r)
             .collect();
         assert_eq!(roles, [Role::Empty, Role::Empty], "the whole row is dim");
@@ -1227,7 +1252,7 @@ mod tests {
             &open,
             80,
             24,
-            &["ctrl+b", "x"],
+            &["ctrl+b", "z"],
             true,
         );
     }

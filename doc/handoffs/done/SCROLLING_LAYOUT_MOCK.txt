@@ -1,19 +1,19 @@
 # The scrolling layout's handoff: the which-key hint in a strip (board 05),
 # cell for cell. The boards' panes hold real programs' output; the tests
 # check their structure (src/app/mod.rs, strip tests) rather than their text.
+# Redrawn 2026-10-09 over the new default binds by WHICH_KEY_FOLDERS/fixtures.py.
 
 ## 120x30 strip rounded
-╭ ctrl+b ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ strip                        panes                   workspaces             sessions             ranma             │
-│            ←↓↑→ focus               t new pane           1-0 workspace       tab pane list         : commands      │
-│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list      r reload config │
-│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session       d detach        │
-│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next         S servers       │
-│             { } join/leave          g group                . rename            $ rename            U update        │
-│               e width        ctrl+h/l prev/next tab        s scratchpad        m move workspace  Del quit          │
-│               E full width          , rename           alt+s to scratchpad                       esc leave WM      │
-│               c centre              a sync input                            history                                │
-│               = equalize            A unsync all                               / search                            │
-│           alt+⏎ fullscreen                                                     [ copy mode                         │
-│                                                                                o links                             │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
+╭ ctrl+b ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ strip                        panes                   workspaces             sessions             history       │
+│            ←↓↑→ focus               t new pane           1-0 workspace       tab pane list       / search      │
+│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list    [ copy mode   │
+│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session     o links       │
+│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next       v paste image │
+│             { } join/leave          g group                . rename            $ rename          V copies      │
+│               e width        ctrl+h/l prev/next tab        s scratchpad        m move workspace  ] paste last  │
+│               E full width          , rename           alt+s to scratchpad                                     │
+│               c centre              i pane numbers         ; last pane                                         │
+│               = equalize            x +pane                l last one                                          │
+│           alt+⏎ fullscreen                                                                                     │
+╰ +ranma ─────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯

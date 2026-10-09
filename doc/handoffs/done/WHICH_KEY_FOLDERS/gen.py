@@ -1,14 +1,14 @@
 import html,sys
 from wk import *
 B=lambda k,n:(k,n,'bind'); Fo=lambda k,n:(k,'+'+n,'folder')
-D_PANES_U=('panes',[r for r in D_PANES[1] if r[0]!='g'])
-D_HIST_V=('history',D_HIST[1]+[('v','paste image','bind')])
+# c159 binds g and i itself: its git folder and the agents plugin.
+D_PANES_U=('panes',[r for r in D_PANES[1] if r[0] not in ('g','i')])
 PLUGINS=('plugins',[B('h','history'),B('n','notes'),Fo('i','agents')])
 YOURS=('yours',[B('c','editor'),B('e','files'),Fo('g','git')])
-TOP=[D_LAYOUT,D_PANES_U,D_WS,PLUGINS,YOURS,D_SESS,D_HIST_V,D_RANMA]
+TOP=[D_LAYOUT,D_PANES_U,D_WS,PLUGINS,YOURS,D_SESS,D_HIST,D_RANMA]
 GIT=[('git',[B('c','commit'),B('d','diff'),B('l','log'),B('p','push'),B('P','pull'),B('s','status'),Fo('b','branches')])]
 BR=[('branches',[B('b','switch'),B('d','delete'),B('m','merge'),B('n','new')])]
-EMPTY_TOP=[D_LAYOUT,D_PANES_U,D_WS,('plugins',[B('h','history'),B('n','notes'),Fo('i','agents'),('x','+scratch','empty')]),YOURS,D_SESS,D_HIST_V,D_RANMA]
+EMPTY_TOP=[D_LAYOUT,D_PANES_U,D_WS,('plugins',[B('h','history'),B('n','notes'),Fo('i','agents'),('z','+scratch','empty')]),YOURS,D_SESS,D_HIST,D_RANMA]
 EMPTY=[('scratch',[('','nothing bound','empty')])]
 LEFT=['~/src/ranma $ cargo test whichkey','   Compiling ranma v0.31.0','    Finished test profile in 6.2s','running 7 tests','test tests::short_spellings ... ok','test tests::at_80x24_three_groups ... ok','test tests::at_120x35_history ... ok','test tests::at_200x50_every_group ... ok','test tests::folders_open_in_place ... ok','test result: ok. 7 passed; 0 failed','~/src/ranma $ ']
 RIGHT=['~/notes $ ls','inbox.md  ranma.md  todo.md','~/notes $ ']
@@ -71,7 +71,7 @@ boards={
  'git40': screen(40,15,layout(GIT,40,15,CR+['g'],back=True)),
  'top40': screen(40,15,layout(TOP,40,15,CR)),
  'emptytop': screen(120,35,layout(EMPTY_TOP,120,35,CR)),
- 'empty80': screen(80,24,layout(EMPTY,80,24,CR+['x'],back=True)),
+ 'empty80': screen(80,24,layout(EMPTY,80,24,CR+['z'],back=True)),
  'def80': screen(80,24,layout(DEFAULTS,80,24,CR)),
 }
 if __name__=='__main__':

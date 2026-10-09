@@ -1,6 +1,8 @@
-# The which-key hint's panels, cell for cell, as the design handoff draws them
-# (doc/handoffs/done/Which-key hint grid alignment.zip, rendered with its own script).
-# src/whichkey.rs tests its layout against these. Regenerate only from a new handoff.
+# The which-key hint's panels for the default binds, cell for cell.
+# Drawn first by the design handoff (Which-key hint grid alignment.zip);
+# redrawn 2026-10-09 by its own layout, WHICH_KEY_FOLDERS/wk.py, when the
+# defaults gained settings, the tmux extras and two folders.
+# Regenerate with WHICH_KEY_FOLDERS/fixtures.py; src/whichkey.rs tests these.
 ## 80x24 rounded
 ╭ ctrl+b ────────────────────────────────────────────────────────────────────╮
 │ layout                       panes                   workspaces            │
@@ -11,8 +13,8 @@
 │               j split dir           g group                . rename        │
 │               = equalize     ctrl+h/l prev/next tab        s scratchpad    │
 │           alt+⏎ fullscreen          , rename           alt+s to scratchpad │
-│               M swap master         a sync input                           │
-│             spc next layout         A unsync all                           │
+│               M swap master         i pane numbers         ; last pane     │
+│             spc next layout         x +pane                l last one      │
 ╰ +sessions · history · ranma ────────────────────────────────── ? all keys ─╯
 ## 80x24 none
   ctrl+b                                                                      
@@ -24,37 +26,40 @@
                 j split dir           g group                . rename         
                 = equalize     ctrl+h/l prev/next tab        s scratchpad     
             alt+⏎ fullscreen          , rename           alt+s to scratchpad  
-                M swap master         a sync input                            
-              spc next layout         A unsync all                            
+                M swap master         i pane numbers         ; last pane      
+              spc next layout         x +pane                l last one       
   +sessions · history · ranma                                    ? all keys   
 ## 120x35 rounded
 ╭ ctrl+b ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ layout                       panes                   workspaces             sessions             ranma             │
 │            ←↓↑→ focus               t new pane           1-0 workspace       tab pane list         : commands      │
-│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list      r reload config │
-│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session       d detach        │
-│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next         S servers       │
-│               j split dir           g group                . rename            $ rename            U update        │
-│               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace  Del quit          │
-│           alt+⏎ fullscreen          , rename           alt+s to scratchpad                       esc leave WM      │
-│               M swap master         a sync input                            history                                │
-│             spc next layout         A unsync all                               / search                            │
+│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list      p settings      │
+│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session       r reload config │
+│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next         d detach        │
+│               j split dir           g group                . rename            $ rename            S servers       │
+│               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace    U update        │
+│           alt+⏎ fullscreen          , rename           alt+s to scratchpad                       Del quit          │
+│               M swap master         i pane numbers         ; last pane      history              esc leave WM      │
+│             spc next layout         x +pane                l last one          / search            y +layouts      │
 │                                                                                [ copy mode                         │
 │                                                                                o links                             │
+│                                                                                v paste image                       │
+│                                                                                V copies                            │
+│                                                                                ] paste last                        │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
 ## 200x50 rounded
-╭ ctrl+b ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ layout                       panes                   workspaces             sessions             history      ranma             │
-│            ←↓↑→ focus               t new pane           1-0 workspace       tab pane list       / search       : commands      │
-│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list    [ copy mode    r reload config │
-│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session     o links        d detach        │
-│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next                      S servers       │
-│               j split dir           g group                . rename            $ rename                         U update        │
-│               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace               Del quit          │
-│           alt+⏎ fullscreen          , rename           alt+s to scratchpad                                    esc leave WM      │
-│               M swap master         a sync input                                                                                │
-│             spc next layout         A unsync all                                                                                │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
+╭ ctrl+b ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ layout                       panes                   workspaces             sessions             history        ranma             │
+│            ←↓↑→ focus               t new pane           1-0 workspace       tab pane list       / search         : commands      │
+│      shift+←↓↑→ resize              q close          alt+1-0 send pane      bksp session list    [ copy mode      p settings      │
+│ ctrl+shift+←↓↑→ move                w float          ctrl+←→ prev/next         N new session     o links          r reload config │
+│        alt+←↓↑→ split there         f next float      ctrl+↓ empty one       ( ) prev/next       v paste image    d detach        │
+│               j split dir           g group                . rename            $ rename          V copies         S servers       │
+│               = equalize     ctrl+h/l prev/next tab        s scratchpad        m move workspace  ] paste last     U update        │
+│           alt+⏎ fullscreen          , rename           alt+s to scratchpad                                      Del quit          │
+│               M swap master         i pane numbers         ; last pane                                          esc leave WM      │
+│             spc next layout         x +pane                l last one                                             y +layouts      │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ? all keys ─╯
 ## 40x15 flowed
 ╭ ctrl+b ──────────────────────────────╮
 │ ←↓↑→ focus  t new pane               │
@@ -63,3 +68,22 @@
 │ shift+←↓↑→ resize  q close           │
 │ alt+1-0 send pane  bksp session list │
 ╰───────────────────────── ? all keys ─╯
+## 80x24 pane rounded
+╭ ctrl+b › x ──────────────────╮
+│ pane                         │
+│    a sync input              │
+│    A unsync all              │
+│    c centre                  │
+│    l log pane                │
+│    m menu                    │
+│    r respawn                 │
+│    s watch silence           │
+│    z size 80%                │
+│ ←↓↑→ snap half               │
+╰ bksp back ────── ? all keys ─╯
+## 80x24 layouts rounded
+╭ ctrl+b › y ──────────────────╮
+│ layouts                      │
+│ l load layout                │
+│ s save layout                │
+╰ bksp back ────── ? all keys ─╯

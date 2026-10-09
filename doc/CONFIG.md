@@ -192,6 +192,16 @@ ranma.bind("i", { folder = "agents", group = "plugins" })   -- a folder in a gro
   `init.lua` both), so the order of the lines does not matter; a key bound to
   anything else strands its keys, and the error names it. `ranma.unbind("g s")`
   drops one.
+- **Rebinding a folder's key to something else, or unbinding it, takes the
+  keys bound behind it so far with it.** That is what makes the default
+  folders yours to replace: `ranma.bind("x", "exec htop")` drops `x a`, `x r`
+  and the rest. A folder of your own on the key keeps them (`ranma.unbind("x")`
+  first to start it empty), and keys you bind behind it afterwards still
+  need it to be a folder by the end.
+- **The defaults have two**: `x` (`+pane`, the focused pane's rarer tools:
+  snapping a float, synchronized input, respawn, logging, watching for
+  silence, its menu) and `y` (`+layouts`: save and load). `ranma
+  --dump-config` lists their keys.
 - **A bind inside a folder fires and closes it**: you are back at WM mode's
   top level, still in WM mode when it is sticky. A folder is a prefix, not a
   place; keys that should repeat belong in a mode (`ranma.mode`), and a
@@ -204,7 +214,7 @@ ranma.bind("i", { folder = "agents", group = "plugins" })   -- a folder in a gro
   with none up it waits for the usual pause, so `leader g s` typed quickly
   draws nothing. Inside, the folder's keys are under its own name, then
   under the groups they name.
-- **A folder with no keys** is an error at load (`folder "scratch" on x has
+- **A folder with no keys** is an error at load (`folder "scratch" on z has
   no keys`). One left empty because the plugin that bound its keys failed to
   load is kept, drawn dim, and opens on `nothing bound`: that plugin's error
   is already reported, and an empty folder is better shown than a key that
@@ -247,22 +257,22 @@ sent them, which it is not asked to.
 | `close_pane` | Close the focused pane. |
 | `focus <dir>` | Focus the pane in that direction (`left right up down`). In `monocle`, `left` and `right` go through the tabs. In a strip, `left` and `right` go to the next column, on screen or not, and `up` and `down` stay in the column. |
 | `focus next` / `focus prev` | Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping. |
-| `focus last` | Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's `last-pane`, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key. Not bound by default (tmux's key: `ranma.bind(";", "focus last")`). |
+| `focus last` | Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's `last-pane`, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key (`leader ;`, tmux's key). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
 | `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
-| `sync_toggle` | Mark or unmark the focused pane for synchronized input (`leader a`). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show `⇉` on their border, and the `mode` module shows ` ⇉ sync N ` in the urgent style while any are marked, so it is never on by accident. |
-| `sync_clear` | Unmark every pane (`leader A`). |
+| `sync_toggle` | Mark or unmark the focused pane for synchronized input (`leader x a`, in the pane folder). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show `⇉` on their border, and the `mode` module shows ` ⇉ sync N ` in the urgent style while any are marked, so it is never on by accident. |
+| `sync_clear` | Unmark every pane (`leader x A`). |
 | `swap_master` | Trade places with the master, the first pane of the tree (the one on the left in `layout = "master"`); on the master itself, trade with the next one (`leader M`). |
 | `equalize` | Give every split in the workspace equal shares, at every depth, however it was resized (`leader =`). |
 | `select_layout <preset>` | Rebuild the workspace's tiles, in tree order, into one of tmux's presets: `even-horizontal` (side by side), `even-vertical` (stacked), `main-vertical` (the first pane on the left, the rest stacked on the right), `main-horizontal` (the first on top, the rest side by side below) or `tiled` (a grid). The main pane takes `master_ratio`. Groups are flattened, floats stay where they are, fullscreen ends. Applied once: the next pane opened is placed by `layout` as usual. Under `layout = "master"` only `main-vertical` is accepted, since the master shape would undo the others. |
 | `next_layout` | The preset after the one this workspace showed last, in tmux's order (`leader space`, tmux's `Space`). |
-| `save_layout [name]` | Save the workspace's tiles as a [layout](#layouts--ranmalayoutname-def): splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered). A name `init.lua` declares is refused. |
+| `save_layout [name]` | Save the workspace's tiles as a [layout](#layouts--ranmalayoutname-def): splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered; `leader y s`). A name `init.lua` declares is refused. |
 | `restore [run]` | Bring back the snapshot this server set aside when it started (see [After a reboot](#after-a-reboot)): each pane's command typed and waiting on its prompt, or run with `restore run`. |
-| `load_layout [name]` | Apply a [layout](#layouts--ranmalayoutname-def) to the workspace. Without a name, pick one from every layout, declared and saved. |
+| `load_layout [name]` | Apply a [layout](#layouts--ranmalayoutname-def) to the workspace. Without a name, pick one from every layout, declared and saved (`leader y l`). |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
-| `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. |
-| `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). |
+| `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. `leader x z` is `float_size 80 80`. |
+| `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). The halves and the middle are in the pane folder: `leader x` then an arrow, or `c`. |
 | `consume_or_expel <left\|right>` | In a strip: alone in its column, the focused pane joins the column on that side, at the bottom (as a tab when that column is a group); sharing a column, it leaves into a new column on that side (`leader {` and `leader }`). |
 | `column_width <next\|prev\|full\|width>` | In a strip: the focused column's width. `next` (`leader e`) steps to the next of `scroll_widths`, wrapping (a column sized by hand goes to the first stop wider than it); `prev` back; `full` (`leader E`) makes it the screen's width and, again, gives back the width it had; `1/2` or a number of cells sets one. |
 | `center_column` | In a strip: centre the focused column in the view, once (`leader c`). |
@@ -271,14 +281,14 @@ sent them, which it is not asked to.
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |
 | `group_next` / `group_prev` | Cycle the tabs of the group around the focused pane. |
 | `fullscreen` | Toggle the focused pane filling the workspace. |
-| `workspace <ws>` | Go to a workspace: `1`-`99`, `next`, `prev` (wrapping in 1-10), `empty`, or `last`: the one shown before this, in this session (tmux's `last-window`; again comes back). Each session remembers its own. Not bound by default (tmux's key: `ranma.bind("l", "workspace last")`). |
+| `workspace <ws>` | Go to a workspace: `1`-`99`, `next`, `prev` (wrapping in 1-10), `empty`, or `last`: the one shown before this, in this session (tmux's `last-window`; again comes back). Each session remembers its own. `workspace last` is `leader l`, tmux's key. |
 | `move_to_workspace <ws>` | Send the focused pane there and follow it. |
 | `move_to_workspace_silent <ws>` | Send it there and stay. |
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
 | `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
 | `workspace_switcher` | The shown session's workspaces, filterable, the current one marked `●`, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers `new workspace: NAME`, which opens an empty one by that name. |
-| `pane_menu` | The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key. Centred, or a sheet on a touch screen. |
+| `pane_menu` | The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (`leader x m`). Centred, or a sheet on a touch screen. |
 | `session_switcher` | The sessions, filterable, opened on the current one (marked `●`). A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |
 | `session <name>` / `session next` / `session prev` | Switch sessions. |
@@ -289,17 +299,17 @@ sent them, which it is not asked to.
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | The palette in help mode (`?`, `leader ?`): every bind, filterable by key or action; `Enter` runs the selected one. |
 | `command_palette` | The palette in command mode (`:`, `leader :`): every action, bound or not, with its argument and key. `Tab` completes one into the query; type its argument and the line heads the list as `run: …`, or as the parser's error if it would not parse. `Enter` runs it (one that needs an argument completes instead). The query's first character is the mode: `?` keys, `:` or `>` commands; typing it switches, `Ctrl+U` clears the rest. |
-| `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. No key by default (`:settings`, or `ranma.bind("p", "settings")`). See [The settings panel](#the-settings-panel). |
+| `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. `leader p`, or `:settings` in the palette. See [The settings panel](#the-settings-panel). |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
 | `mode <name>` | Enter a mode declared with `ranma.mode`: WM mode with its keys. See [Modes](#modes--ranmamodename-def). |
-| `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile. Not bound by default: `ranma.bind("i", "display_panes")`. |
-| `pipe_pane [off\|command line]` | Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's `pipe-pane`). Bare, it toggles a log at `~/.local/state/ranma/logs/pane<ID>-<YYYYMMDD-HHMMSS>.log` (UTC); with a command line, the output goes into that command's stdin (`pipe_pane cat >> ~/build.log`, `pipe_pane grep --line-buffered error > ~/errors`), run by `sh -c` in the pane's directory; `off` stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. |
-| `choose_buffer` | The copies kept lately, newest first, one line each (`↵` for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's `choose-buffer`). Every copy is kept: copy mode's, a link copied from `hints`, `ranma.copy`, and what a program copies itself with OSC 52. The last 50, the same text once, in memory only: never written to disk, and gone when the server ends or upgrades. |
-| `paste_buffer [n]` | Paste the last copy into the focused pane, or the `n`th newest (tmux's `paste-buffer`), as a paste: bracketed when the program asked for that. |
-| `respawn_pane` | In a pane that stayed after its program ended (`remain_on_exit`), run the same command again where it first started. A pane still running is left alone. |
-| `monitor_silence [seconds\|off]` | Watch the focused pane for silence (tmux's `monitor-silence`): once it has printed and then stays quiet for the `monitor_silence` setting's seconds (or the number given), a toast says `quiet: <title>`, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles; `off` stops. A build or a log you want to hear the end of. |
+| `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile (`leader i`). |
+| `pipe_pane [off\|command line]` | Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's `pipe-pane`). Bare, it toggles a log at `~/.local/state/ranma/logs/pane<ID>-<YYYYMMDD-HHMMSS>.log` (UTC); with a command line, the output goes into that command's stdin (`pipe_pane cat >> ~/build.log`, `pipe_pane grep --line-buffered error > ~/errors`), run by `sh -c` in the pane's directory; `off` stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. Bare, it is `leader x l`. |
+| `choose_buffer` | The copies kept lately, newest first, one line each (`↵` for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's `choose-buffer`). Every copy is kept: copy mode's, a link copied from `hints`, `ranma.copy`, and what a program copies itself with OSC 52. The last 50, the same text once, in memory only: never written to disk, and gone when the server ends or upgrades (`leader V`, beside `v`; not tmux's `#`, which is Shift+3 and so moves with the keyboard layout). |
+| `paste_buffer [n]` | Paste the last copy into the focused pane, or the `n`th newest (tmux's `paste-buffer`), as a paste: bracketed when the program asked for that (`leader ]`, tmux's key). |
+| `respawn_pane` | In a pane that stayed after its program ended (`remain_on_exit`), run the same command again where it first started. A pane still running is left alone (`leader x r`). |
+| `monitor_silence [seconds\|off]` | Watch the focused pane for silence (tmux's `monitor-silence`): once it has printed and then stays quiet for the `monitor_silence` setting's seconds (or the number given), a toast says `quiet: <title>`, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles (`leader x s`); `off` stops. A build or a log you want to hear the end of. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
 | `exit_mode` | Leave WM mode. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
