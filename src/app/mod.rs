@@ -6695,7 +6695,11 @@ mod tests {
                 .unwrap(),
         );
         let id = a.focused().unwrap();
-        pump(&mut a, &rx, |a| screen(a).join("\n").contains("after"));
+        // The image reaches the app as an event of its own, which under load
+        // can come after the text that followed it: wait for both.
+        pump(&mut a, &rx, |a| {
+            screen(a).join("\n").contains("after") && a.graphics.host_id(id, 5).is_some()
+        });
         assert!(a.graphics.host_id(id, 5).is_some());
         assert!(
             a.graphics_out.concat().windows(3).any(|w| w == b"U=1"),
