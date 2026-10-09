@@ -192,6 +192,17 @@ function ranma.action(action) end
 ---@param text string
 function ranma.notify(text) end
 
+---JSON, for plugins that read command-line tools' output.
+ranma.json = {}
+
+---@param text string
+---@return any
+function ranma.json.decode(text) end
+
+---@param value any
+---@return string
+function ranma.json.encode(value) end
+
 ---Put text on the clipboard of the terminal driving ranma (OSC 52, as
 ---copy mode's yank does), over SSH too.
 ---@param text string

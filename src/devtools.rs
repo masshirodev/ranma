@@ -131,6 +131,8 @@ mod tests {
         for line in TYPES.lines() {
             if let Some(rest) = line.strip_prefix("function ranma.") {
                 let name = &rest[..rest.find('(').unwrap()];
+                // `json.decode`: the table it lives in is the key.
+                let name = name.split('.').next().unwrap_or(name);
                 assert!(
                     keys.iter().any(|k| k == name),
                     "ranma.{name} is described but does not exist"

@@ -858,6 +858,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
 | `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. |
+| `ranma.json.decode(text)`, `ranma.json.encode(value)` | JSON both ways, for plugins that read tools' output (`ranma.spawn({ "ai", "peers", "--json" }, ...)`). Works at load too. |
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |

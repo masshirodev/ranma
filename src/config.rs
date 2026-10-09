@@ -1501,6 +1501,28 @@ fn install_api(
 
     // The runtime half: only meaningful while ranma is calling into Lua. During
     // config load there is no window manager to act on, so these refuse.
+    // JSON for plugins that talk to command-line tools (`ai peers --json`,
+    // `gh ... --json`): serde both ways, null as nil.
+    let json = lua.create_table()?;
+    json.set(
+        "decode",
+        lua.create_function(|lua, text: String| {
+            let v: serde_json::Value = serde_json::from_str(&text)
+                .map_err(|e| rt_err(format!("ranma.json.decode: {e}")))?;
+            lua.to_value(&v)
+        })?,
+    )?;
+    json.set(
+        "encode",
+        lua.create_function(|lua, v: Value| {
+            let j: serde_json::Value = lua
+                .from_value(v)
+                .map_err(|e| rt_err(format!("ranma.json.encode: {e}")))?;
+            Ok(j.to_string())
+        })?,
+    )?;
+    ranma.set("json", json)?;
+
     ranma.set(
         "copy",
         lua.create_function(|lua, text: String| {
@@ -3457,5 +3479,29 @@ mod tests {
             )
             .contains("settings.toml")
         );
+    }
+
+    #[test]
+    fn plugins_read_and_write_json() {
+        let cfg = load_from(None, None, None).unwrap();
+        let v: i64 = cfg
+            .lua
+            .load(r#"local t = ranma.json.decode('[{"pane": "5", "n": 3, "busy": true}]') return t[1].n"#)
+            .eval()
+            .unwrap();
+        assert_eq!(v, 3);
+        let s: String = cfg
+            .lua
+            .load(r#"return ranma.json.encode({ a = 1 })"#)
+            .eval()
+            .unwrap();
+        assert_eq!(s, r#"{"a":1}"#);
+        let e = cfg
+            .lua
+            .load("ranma.json.decode('{oops')")
+            .exec()
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("ranma.json.decode"), "{e}");
     }
 }
