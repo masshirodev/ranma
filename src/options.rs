@@ -551,6 +551,36 @@ pub fn builtin() -> Vec<Opt> {
             Theme,
             "How far the text of panes you are not in fades toward their background. 0 is off.",
         ),
+        Opt {
+            unset: Some("none".into()),
+            ..opt(
+                "background.art",
+                "looks",
+                "Background",
+                Kind::Text,
+                Theme,
+                "Text art behind the panes: a name in ~/.config/ranma/backgrounds (<name>.txt), a built-in (dots, grid, waves), or a path. Unset: none.",
+            )
+        },
+        opt(
+            "background.align",
+            "looks",
+            "Background at",
+            choices(&[
+                "center",
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "top_left",
+                "top_right",
+                "bottom_left",
+                "bottom_right",
+                "tile",
+            ]),
+            Theme,
+            "Where the background art sits, or tile to repeat it across the workspace.",
+        ),
         opt(
             "panes.scrollbar",
             "looks",

@@ -650,6 +650,11 @@ impl App {
 
     /// The area panes are laid out in: the screen minus the bar and outer gaps.
     fn workspace_area(&self) -> Rect {
+        self.desk_area().inset_sides(self.config.theme.gaps.outer())
+    }
+
+    /// The workspace before its outer gaps: what the background covers.
+    pub fn desk_area(&self) -> Rect {
         // What the bar, toolbars and monocle strip leave (see `chrome`). A
         // yielded bar keeps no row: focus coming and going must not resize the
         // panes, so the bar is drawn over them when it shows at all.
@@ -667,7 +672,7 @@ impl App {
             }
             let _ = ph;
         }
-        a.inset_sides(self.config.theme.gaps.outer())
+        a
     }
 
     /// Where the splash goes, and the keys it names: on a shown workspace
@@ -5828,6 +5833,54 @@ mod tests {
         a.run_action("pipe_pane off".parse().unwrap());
         assert!(a.pipes.is_empty());
         assert!(!a.panes[&id].piping());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_background_fills_the_empty_workspace_and_the_keys_sit_under_it() {
+        let mut a = themed(
+            "background",
+            r#"
+            [background]
+            art = "dots"
+            align = "tile"
+            [gaps]
+            outer_horizontal = 2
+            "#,
+            "",
+        );
+        a.screen = Rect::new(0, 0, 40, 10);
+        let rows = screen(&a);
+        assert!(rows[0].starts_with("·   ·"), "{rows:#?}");
+        assert!(rows[1].starts_with("  ·"), "the gaps too: {rows:#?}");
+        assert!(
+            rows.iter().all(|r| !r.contains("___")),
+            "no logo over the art"
+        );
+        let keys = rows.iter().position(|r| r.contains("open a shell"));
+        assert!(keys.is_some_and(|k| k >= 5), "at the bottom: {rows:#?}");
+
+        // A pane covers it.
+        with_pane(&mut a, 1);
+        a.relayout();
+        let rows = screen(&a);
+        assert!(
+            rows[0].starts_with("·"),
+            "the outer gap shows it: {rows:#?}"
+        );
+        let inside: String = rows[3].chars().skip(3).take(27).collect();
+        assert!(!inside.contains('·'), "the pane does not: {rows:#?}");
+
+        // A missing one is an error naming it.
+        let dir = std::env::temp_dir().join(format!("ranma-bg-missing-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::write(dir.join("themes/t.toml"), "[background]\nart = \"nope\"\n").unwrap();
+        let Err(e) =
+            crate::config::load_from(Some(&dir), None, Some("ranma.set { theme = \"t\" }"))
+        else {
+            panic!("refused");
+        };
+        assert!(format!("{e:#}").contains("background `nope`"), "{e:#}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

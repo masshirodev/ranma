@@ -243,7 +243,7 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] Paste buffers and a picker over them: `choose_buffer`, `paste_buffer`
 - [x] Pane scrollbars: `panes.scrollbar`
 - [x] Logging a pane's output (`pipe_pane`)
-- [ ] ASCII-art backgrounds behind the panes
+- [x] ASCII-art backgrounds behind the panes: the theme's `[background]`
 - [ ] Images in panes (the kitty graphics protocol)
 
 ## Later, maybe

@@ -35,16 +35,7 @@ pub type Line = Vec<(String, Part)>;
 /// centres the block. `keys` are (key, what it does), in order.
 pub fn lines(w: u16, h: u16, keys: &[(String, &str)]) -> Vec<Line> {
     let (w, h) = (w as usize, h as usize);
-    let key_w = keys.iter().map(|(k, _)| k.width()).max().unwrap_or(0);
-    let tips: Vec<Line> = keys
-        .iter()
-        .map(|(k, what)| {
-            vec![
-                (format!("{k:>key_w$}"), Part::Key),
-                (format!("   {what}"), Part::Text),
-            ]
-        })
-        .collect();
+    let tips = tips(keys);
     let tips_w = tips.iter().map(line_width).max().unwrap_or(0);
     let logo_w = LOGO.iter().map(|l| l.width()).max().unwrap_or(0);
     // The logo and the keys are separated by one blank row.
@@ -67,6 +58,20 @@ pub fn lines(w: u16, h: u16, keys: &[(String, &str)]) -> Vec<Line> {
         return with(vec![vec![("ranma".to_string(), Part::Logo)]]);
     }
     Vec::new()
+}
+
+/// The keys alone, right-aligned so what they do starts in one column: the
+/// splash under a background, where the art stands in for the logo.
+pub fn tips(keys: &[(String, &str)]) -> Vec<Line> {
+    let key_w = keys.iter().map(|(k, _)| k.width()).max().unwrap_or(0);
+    keys.iter()
+        .map(|(k, what)| {
+            vec![
+                (format!("{k:>key_w$}"), Part::Key),
+                (format!("   {what}"), Part::Text),
+            ]
+        })
+        .collect()
 }
 
 pub fn line_width(l: &Line) -> usize {

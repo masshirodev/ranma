@@ -106,7 +106,10 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     let mut cursor = None;
     let mut overlay_cleared = false;
 
-    // Under everything: a scratchpad shown over an empty workspace covers it.
+    // Under everything: the background, then the splash; panes cover both.
+    if let Some(art) = &app.config.theme.art {
+        draw_background(f, app, app.desk_area(), art);
+    }
     if let Some((area, keys)) = app.splash() {
         draw_splash(f, app, area, &keys);
     }
@@ -124,6 +127,10 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
                 }
                 _ => f.render_widget(Clear, rrect(view.outer)),
             }
+        } else if app.config.theme.art.is_some() {
+            // Panes write every cell but patch its attributes: a bold or
+            // reversed cell of art under one would leak into the program's.
+            f.render_widget(Clear, rrect(view.outer));
         }
         let Some(pane) = app.panes.get(&view.id) else {
             continue;
@@ -208,9 +215,70 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
 }
 
 /// The logo and the keys, centred as one block on the empty workspace.
+/// The theme's background art over `area`, placed by `background.align`.
+/// Cells the art leaves blank are not touched, so the terminal's own ground
+/// (or `background_bg`) shows; colours the art does not set are the
+/// background's own.
+fn draw_background(f: &mut Frame, app: &App, area: Rect, art: &crate::art::Art) {
+    let c = &app.config.theme.colors;
+    let align = app.config.theme.background.align;
+    let (fg, bg) = (c.background_fg(), c.background_bg);
+    let buf = f.buffer_mut();
+    if let Some(bg) = bg {
+        buf.set_style(rrect(area), Style::default().bg(color(bg)));
+    }
+    for y in 0..area.h {
+        for x in 0..area.w {
+            let Some((ax, ay)) = crate::art::place(art, align, area.w, area.h, x, y) else {
+                continue;
+            };
+            let Some(cell) = art.at(ax, ay) else {
+                continue;
+            };
+            if cell.is_clear() || cell.ch == '\0' {
+                continue;
+            }
+            // A wide character cut off by the edge would spill past it.
+            let wide = art.at(ax + 1, ay).is_some_and(|n| n.ch == '\0');
+            if wide && x + 1 >= area.w {
+                continue;
+            }
+            let mut style = Style::default().fg(color(cell.fg.unwrap_or(fg)));
+            if let Some(b) = cell.bg.or(bg) {
+                style = style.bg(color(b));
+            }
+            for (on, m) in [
+                (cell.bold, Modifier::BOLD),
+                (cell.dim, Modifier::DIM),
+                (cell.italic, Modifier::ITALIC),
+                (cell.underline, Modifier::UNDERLINED),
+                (cell.reverse, Modifier::REVERSED),
+            ] {
+                if on {
+                    style = style.add_modifier(m);
+                }
+            }
+            let mut tmp = [0u8; 4];
+            buf[(area.x + x, area.y + y)]
+                .set_symbol(cell.ch.encode_utf8(&mut tmp))
+                .set_style(style);
+        }
+    }
+}
+
 fn draw_splash(f: &mut Frame, app: &App, area: Rect, keys: &[(String, &str)]) {
     use crate::splash::{self, Part};
-    let lines = splash::lines(area.w, area.h, keys);
+    // Over a background the art is the picture: the keys alone, at the
+    // bottom, where they cover the least of it.
+    let under_art = app.config.theme.art.is_some();
+    let lines = if under_art {
+        let t = splash::tips(keys);
+        let fits = t.iter().map(splash::line_width).max().unwrap_or(0) <= area.w as usize
+            && area.h as usize > t.len() + 1;
+        if fits { t } else { Vec::new() }
+    } else {
+        splash::lines(area.w, area.h, keys)
+    };
     if lines.is_empty() {
         return;
     }
@@ -234,7 +302,11 @@ fn draw_splash(f: &mut Frame, app: &App, area: Rect, keys: &[(String, &str)]) {
         area.x + area.w.saturating_sub(w) / 2
     };
     let (logo_x, keys_x) = (block_x(true), block_x(false));
-    let y = area.y + area.h.saturating_sub(lines.len() as u16) / 2;
+    let y = if under_art {
+        area.bottom().saturating_sub(lines.len() as u16 + 1)
+    } else {
+        area.y + area.h.saturating_sub(lines.len() as u16) / 2
+    };
     let buf = f.buffer_mut();
     for (i, line) in lines.iter().enumerate() {
         let logo = line.iter().any(|(_, p)| *p == Part::Logo);

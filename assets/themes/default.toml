@@ -49,6 +49,10 @@ tab_inactive_bg = "#313244"
 # button_latched_fg / _bg = mode_fg / mode_bg
 # button_disabled_fg = bar_dim
 
+# Background art (see [background]) where it sets no colour of its own: its
+# text, and its ground. Unset here on purpose: bar_dim on the terminal's own.
+# background_fg = ...    background_bg = ...
+
 # A workspace that printed while not shown (monitor_activity). Unset here on
 # purpose: bar_accent.
 # ws_activity = ...
@@ -117,6 +121,17 @@ dim_unfocused = 0.0
 # (tmux's pane-scrollbars): "scrolled" only while you are scrolled back, "on"
 # whenever there is history, "off" never. Drawn in the border's colour.
 scrollbar = "scrolled"
+
+[background]
+# Text art drawn behind the panes, where none covers the workspace: the gaps,
+# an empty workspace, around floats. A name is looked up as
+# ~/.config/ranma/backgrounds/<name>.txt, then the built-ins (dots, grid,
+# waves); a path works too. Plain text or coloured with escapes, as chafa,
+# jp2a --colors or lolcat -f write it. Unset: none.
+# art = "dots"
+# center | top | bottom | left | right | top_left | top_right | bottom_left |
+# bottom_right, or tile: repeated across the whole area.
+align = "center"
 
 [styles]
 # Text attributes per role: bold, dim, italic, underline, reverse,

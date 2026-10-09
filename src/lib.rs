@@ -5,6 +5,7 @@
 
 pub mod action;
 pub mod app;
+pub mod art;
 pub mod bar;
 pub mod chrome;
 pub mod client;

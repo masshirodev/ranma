@@ -160,6 +160,12 @@ pub struct Colors {
     pub module_bg: Option<Color>,
     #[serde(default)]
     pub module_fg: Option<Color>,
+    // Background art's own colour where the art sets none; unset, `bar_dim`
+    // on the terminal's ground.
+    #[serde(default)]
+    pub background_fg: Option<Color>,
+    #[serde(default)]
+    pub background_bg: Option<Color>,
     // A workspace that printed while not shown; unset, `bar_accent`.
     #[serde(default)]
     pub ws_activity: Option<Color>,
@@ -191,6 +197,10 @@ impl Colors {
         serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or_else(|_| self.clone())
     }
 
+    /// Background art where it sets no colour: `bar_dim`.
+    pub fn background_fg(&self) -> Color {
+        self.background_fg.unwrap_or(self.bar_dim)
+    }
     /// A workspace that printed while not shown: `bar_accent`.
     pub fn ws_activity(&self) -> Color {
         self.ws_activity.unwrap_or(self.bar_accent)
@@ -590,6 +600,41 @@ pub struct Theme {
     pub bar: Bar,
     pub panes: Panes,
     pub styles: Styles,
+    #[serde(default)]
+    pub background: Background,
+    /// `background.art`, read and parsed as the theme loads.
+    #[serde(skip)]
+    pub art: Option<std::sync::Arc<crate::art::Art>>,
+}
+
+/// Text art behind the panes: where no pane covers the workspace (the gaps,
+/// an empty workspace, around floats). See `art`.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Background {
+    /// A name (`~/.config/ranma/backgrounds/<name>.txt`, else a built-in) or
+    /// a path. Unset: no background.
+    #[serde(default)]
+    pub art: Option<String>,
+    #[serde(default)]
+    pub align: BackgroundAlign,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundAlign {
+    #[default]
+    Center,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    /// Repeated from the top left corner across the whole area.
+    Tile,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -758,6 +803,15 @@ pub fn load_over_unset(
         bail!("{what}: panes.dim_unfocused must be 0-1, not {dim}");
     }
     check(&theme).map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
+    if let Some(name) = &theme.background.art {
+        // Backgrounds sit beside the themes: ~/.config/ranma/backgrounds.
+        let art_dirs: Vec<PathBuf> = dirs
+            .iter()
+            .filter_map(|d| d.parent().map(|p| p.join("backgrounds")))
+            .collect();
+        let art = crate::art::Art::load(name, &art_dirs).with_context(|| what.clone())?;
+        theme.art = Some(std::sync::Arc::new(art));
+    }
     Ok((theme, resolved))
 }
 

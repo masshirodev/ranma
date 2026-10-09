@@ -1151,6 +1151,26 @@ process, so `respawn_pane` keeps it; a server's upgrade does not carry it,
 since the thread writing is gone with the old process, and saying so is
 better than a log that silently stops.
 
+**Backgrounds are text, drawn under everything** (the theme's
+`[background]`; tmux has none, it was asked for). A terminal cannot show a
+picture behind its cells without a graphics protocol, but it can show
+cells, and text art is cells: plain, or coloured as `chafa` turns an image
+into. The file is parsed once when the theme loads, SGR only (colours and
+attributes; anything else, a cursor move above all, is dropped so the file
+cannot draw outside its place), into cells that drawing only copies. It
+covers the workspace before its outer gaps, under the splash and the
+panes, so it shows where nothing else is: the gaps, an empty workspace,
+around floats. Blank cells of the art are left alone, so the terminal's
+ground (or `background_bg`) shows through them. Over an empty workspace
+the splash drops its logo, since the art is the picture now, and keeps its
+keys at the bottom where they cover least. Tiles are cleared before they
+draw when there is a background: a pane writes every cell but patches its
+attributes, and a bold cell of art under it would otherwise leak into the
+program's text. A name is looked up beside the themes, in `backgrounds/`,
+then among three small built-in patterns; a theme naming art that is not
+there is refused at load, as an unknown key is. The cost is the art's
+cells copied on frames that are drawn anyway; idle stays at zero.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`
