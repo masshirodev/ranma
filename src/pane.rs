@@ -137,6 +137,12 @@ struct ScanReader {
     file: std::fs::File,
     scanner: crate::osc::Scanner,
     proxy: Proxy,
+    /// Turns direct image placements into placeholder cells (`graphics`).
+    placer: crate::graphics::Placer,
+    /// Placeholder text to hand the emulator before anything else, and the
+    /// output read after the placement, not yet looked at.
+    out: Vec<u8>,
+    raw: Vec<u8>,
 }
 
 /// While set, no pane reads its PTY: a server handing over to a new build
@@ -144,24 +150,79 @@ struct ScanReader {
 /// read (see `upgrade`).
 pub static HOLD_OUTPUT: AtomicBool = AtomicBool::new(false);
 
+impl ScanReader {
+    /// `pipe_pane`'s copy. Never waits: a sink behind by a full queue loses
+    /// this read, and one that is gone stops being sent to.
+    fn tee(&self, bytes: &[u8]) {
+        if !bytes.is_empty()
+            && let Ok(mut tee) = self.tee.lock()
+            && let Some(tx) = tee.as_ref()
+            && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) = tx.try_send(bytes.to_vec())
+        {
+            *tee = None;
+        }
+    }
+}
+
 impl std::io::Read for ScanReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if HOLD_OUTPUT.load(Ordering::Acquire) {
             return Err(std::io::ErrorKind::WouldBlock.into());
         }
-        let n = self.file.read(buf)?;
-        for m in self.scanner.feed(&buf[..n], std::time::Instant::now()) {
-            self.proxy.mark(m);
+        // An image's placeholders go first, then what the program wrote
+        // after placing it (see below).
+        if !self.out.is_empty() {
+            let k = self.out.len().min(buf.len());
+            buf[..k].copy_from_slice(&self.out[..k]);
+            self.out.drain(..k);
+            return Ok(k);
         }
-        // Never waits: a sink behind by a full queue loses this read, and
-        // one that is gone stops being sent to.
-        if n > 0
-            && let Ok(mut tee) = self.tee.lock()
-            && let Some(tx) = tee.as_ref()
-            && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
-                tx.try_send(buf[..n].to_vec())
-        {
-            *tee = None;
+        let mut n = if self.raw.is_empty() {
+            let n = self.file.read(buf)?;
+            self.tee(&buf[..n]);
+            n
+        } else {
+            let k = self.raw.len().min(buf.len());
+            buf[..k].copy_from_slice(&self.raw[..k]);
+            self.raw.drain(..k);
+            k
+        };
+        let now = std::time::Instant::now();
+        let mut at = 0;
+        while at < n {
+            let (marks, used) = self.scanner.feed_until_graphics(&buf[at..n], now);
+            at += used;
+            let mut placed = None;
+            for m in marks {
+                match m {
+                    crate::osc::Mark::Graphics(body) => {
+                        let (body, text) = self.placer.place(&body);
+                        self.proxy.mark(crate::osc::Mark::Graphics(body));
+                        placed = text;
+                    }
+                    m => self.proxy.mark(m),
+                }
+            }
+            // A direct placement: the placeholder cells go into the output
+            // right after it, so they land at the cursor the program placed
+            // the image at, before whatever it writes next. In the buffer
+            // when they fit (the event loop's is large); otherwise the rest
+            // waits for the next read, which the loop makes at once unless
+            // it has just read its fill.
+            if let Some(text) = placed {
+                if n + text.len() <= buf.len() {
+                    buf.copy_within(at..n, at + text.len());
+                    buf[at..at + text.len()].copy_from_slice(&text);
+                    at += text.len();
+                    n += text.len();
+                } else {
+                    self.out = text;
+                    let mut rest = buf[at..n].to_vec();
+                    rest.append(&mut self.raw);
+                    self.raw = rest;
+                    return Ok(at);
+                }
+            }
         }
         Ok(n)
     }
@@ -466,6 +527,9 @@ impl Pane {
         let pty = ScanPty {
             reader: ScanReader {
                 tee: tee.clone(),
+                placer: Default::default(),
+                out: Vec::new(),
+                raw: Vec::new(),
                 file: master,
                 scanner: Default::default(),
                 proxy: proxy.clone(),

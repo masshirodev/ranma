@@ -75,6 +75,20 @@ impl Scanner {
     /// Feed bytes as read from the PTY; returns what they finished saying.
     pub fn feed(&mut self, bytes: &[u8], now: Instant) -> Vec<Mark> {
         let mut out = Vec::new();
+        let mut at = 0;
+        while at < bytes.len() {
+            let (marks, used) = self.feed_until_graphics(&bytes[at..], now);
+            out.extend(marks);
+            at += used;
+        }
+        out
+    }
+
+    /// [`feed`](Self::feed), stopping right after a graphics command: what
+    /// was said, and how many bytes were looked at. The PTY reader puts an
+    /// image's placeholders into the output at exactly that point.
+    pub fn feed_until_graphics(&mut self, bytes: &[u8], now: Instant) -> (Vec<Mark>, usize) {
+        let mut out = Vec::new();
         let mut i = 0;
         while i < bytes.len() {
             if matches!(self.state, State::Ground) {
@@ -84,7 +98,7 @@ impl Scanner {
                         i += p + 1;
                         self.state = State::Esc;
                     }
-                    None => return out,
+                    None => return (out, bytes.len()),
                 }
                 continue;
             }
@@ -145,6 +159,8 @@ impl Scanner {
                 State::ApcEsc if b == b'\\' => {
                     if self.payload.first() == Some(&b'G') {
                         out.push(Mark::Graphics(std::mem::take(&mut self.payload)));
+                        self.state = State::Ground;
+                        return (out, i);
                     }
                     self.payload.clear();
                     State::Ground
@@ -166,7 +182,7 @@ impl Scanner {
                 State::Skip | State::SkipEsc => State::Skip,
             };
         }
-        out
+        (out, bytes.len())
     }
 
     fn finish(&mut self, now: Instant, out: &mut Vec<Mark>) {

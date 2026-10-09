@@ -256,6 +256,9 @@ pub fn run(config: Config) -> Result<()> {
         app.set_outer(replies.outer);
         app.set_outer_colors(replies.outer_colors);
         app.host_graphics = replies.graphics;
+        if let Some((w, h)) = crate::client::cell_px() {
+            crate::graphics::set_cell_px(w, h);
+        }
         if replies.kitty_keys {
             crate::input::push_keyboard_flags();
         }
@@ -855,6 +858,9 @@ fn drive(
 ) -> Result<()> {
     restart(term, buffer, hello.cols, hello.rows)?;
     app.host_colors = hello.colors.clone();
+    if let Some((w, h)) = hello.cell_px {
+        crate::graphics::set_cell_px(w, h);
+    }
     app.client_inside = hello.inside.clone();
     app.set_outer(hello.outer);
     app.set_outer_colors(hello.outer_colors.clone());
@@ -993,6 +999,7 @@ mod tests {
                 steal: false,
                 mobile: false,
                 graphics: false,
+                cell_px: None,
             },
         )
     }

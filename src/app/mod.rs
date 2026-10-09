@@ -6249,4 +6249,40 @@ mod tests {
         click(&mut a, KeyModifiers::CONTROL);
         assert_eq!(a.status.as_deref(), Some("left 2 4 true"));
     }
+
+    #[test]
+    fn a_direct_placement_is_drawn_as_placeholders_where_the_cursor_was() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let mut a = App::new(config, tx, 40, 10);
+        a.host_graphics = true;
+        crate::graphics::set_cell_px(10, 20);
+        // A 20x40 image (2 x 2 cells at 10x20) shown where the cursor is,
+        // then text, which must come after the image, not under it.
+        a.run_action(
+            r#"exec printf 'ab\033_Ga=T,i=5,f=24,s=20,v=40,q=2;AAAA\033\\after'; sleep 5"#
+                .parse()
+                .unwrap(),
+        );
+        let id = a.focused().unwrap();
+        pump(&mut a, &rx, |a| screen(a).join("\n").contains("after"));
+        assert!(a.graphics.host_id(id, 5).is_some());
+        assert!(
+            a.graphics_out.concat().windows(3).any(|w| w == b"U=1"),
+            "made a virtual placement"
+        );
+        let rows = screen(&a);
+        let at = |r: usize| {
+            rows[r]
+                .chars()
+                .filter(|c| *c == crate::graphics::PLACEHOLDER)
+                .count()
+        };
+        assert_eq!((at(1), at(2)), (2, 2), "{rows:#?}");
+        assert!(rows[1].contains("ab"), "{rows:#?}");
+        assert!(
+            rows[2].contains("after"),
+            "after the image's last cell: {rows:#?}"
+        );
+    }
 }

@@ -672,21 +672,23 @@ HOST` closes a master that has gone stale.
 
 ## Images in panes
 
-Programs that draw images with the kitty graphics protocol through **Unicode
-placeholders** show them inside ranma, in a terminal that can show them
-(kitty, ghostty; and a ranma inside a ranma whose terminal can). Placeholders
-are text, so an image scrolls, clips to its pane, goes into scrollback and
-comes back with it, and moves with its pane through any layout.
+Programs that draw images with the kitty graphics protocol show them inside
+ranma, in a terminal that can show them (kitty, ghostty; and a ranma inside a
+ranma whose terminal can). ranma shows every image through **Unicode
+placeholders**: text cells, so an image scrolls, clips to its pane, goes into
+scrollback and comes back with it, and moves with its pane through any
+layout.
 
-- `kitten icat --unicode-placeholder picture.png`
-- yazi's previews with its `kgp` adapter (kitty 0.28 and later), which uses them.
-- Anything that sends `a=T,U=1` or `a=p,U=1` and prints U+10EEEE cells.
-
-Images sent for **direct placement** (no `U=1`) are kept but not shown, and
-`a=p` without `U=1` is answered `EINVAL`: the host would draw them at its
-own cursor, which is not where the pane's is. Programs that only place
-directly (`kitten icat` without the flag) show nothing inside ranma, as
-inside tmux.
+- Programs that print placeholders themselves (`kitten icat
+  --unicode-placeholder`, yazi's `kgp` adapter) work as they do in kitty.
+- Programs that **place directly** at the cursor (plain `kitten icat`, timg,
+  chafa's kitty output) work too: ranma turns the placement into a virtual
+  one and writes the placeholder cells into the pane at the cursor, as many
+  as the image needs (its `c`/`r`, else its size in pixels over the
+  terminal's cell size), and the cursor ends after them as kitty leaves it
+  (`C=1` keeps it where it was). An image whose size ranma cannot learn (an
+  `I=` number with no id, a format it cannot read the size of) is answered
+  `EINVAL` instead.
 
 What ranma does with an image:
 

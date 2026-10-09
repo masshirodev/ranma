@@ -60,6 +60,11 @@ pub struct Hello {
     /// `graphics`). Defaulted like `inside`: an older client gets none.
     #[serde(default)]
     pub graphics: bool,
+    /// The size of its terminal's cell in pixels, if the terminal says
+    /// (TIOCGWINSZ): how many cells an image placed directly takes.
+    /// Defaulted like `inside`.
+    #[serde(default)]
+    pub cell_px: Option<(u16, u16)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -197,6 +202,7 @@ mod tests {
             steal: true,
             mobile: true,
             graphics: true,
+            cell_px: Some((10, 20)),
         };
         let mut buf = Vec::new();
         send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
@@ -254,9 +260,11 @@ mod tests {
             steal: false,
             mobile: false,
             graphics: false,
+            cell_px: None,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("graphics");
+        old.as_object_mut().unwrap().remove("cell_px");
         old.as_object_mut().unwrap().remove("inside");
         old.as_object_mut().unwrap().remove("remote");
         old.as_object_mut().unwrap().remove("outer");

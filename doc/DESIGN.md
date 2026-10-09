@@ -1245,8 +1245,22 @@ column in combining marks). A multiplexer that passes placements through
 must translate every cursor position, clip to panes, and redo all of it on
 every scroll and layout change; placeholders are cells, so the pane's grid
 already does all of that, and so do scrollback, detach and reattach. tmux
-users get images the same way. Direct placements are refused (`EINVAL`), not
-guessed at. Sixel stays out: it has no cell model to hang on.
+users get images the same way. Sixel stays out: it has no cell model to hang
+on.
+
+**Direct placements become placeholders on the PTY reader's thread.** A
+program that places at the cursor expects the image there, before whatever
+it prints next. The UI thread hears of the placement only after the emulator
+may have parsed that next output, so the conversion is the reader's: the
+scanner stops right after the graphics command (`feed_until_graphics`), the
+reader's `Placer` rewrites it into a virtual placement and returns the
+placeholder text, and the text is spliced into the read buffer at that byte,
+so the emulator parses output, placeholders, output, in order. The size in
+cells is the command's `c`/`r`, else the image's pixels (its `s`/`v`, or the
+PNG header in its first chunk or file) over the driving terminal's cell size,
+which each client measures (TIOCGWINSZ) and sends in its hello. The reader
+learns sizes from the transmissions it sees, so nothing is shared with the UI
+thread but the cell size.
 
 **What ranma does is the transmission.** The APC is caught on the PTY path
 by the scanner that already finds OSC 133 (alacritty_terminal drops APCs),

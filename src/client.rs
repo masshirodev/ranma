@@ -182,6 +182,15 @@ pub fn run(name: Option<&str>, steal: bool, mobile: bool) -> Result<ExitCode> {
     }
 }
 
+/// The terminal's cell in pixels, from its window size, if it reports one.
+pub fn cell_px() -> Option<(u16, u16)> {
+    let w = crossterm::terminal::window_size().ok()?;
+    if w.width == 0 || w.height == 0 || w.columns == 0 || w.rows == 0 {
+        return None;
+    }
+    Some((w.width / w.columns, w.height / w.rows))
+}
+
 /// `RANMA_MOBILE` set to anything but empty or `0`: this terminal is a phone or
 /// a tablet (DESIGN.md, "A mobile view").
 pub fn mobile_env() -> bool {
@@ -229,6 +238,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
                 steal,
                 mobile,
                 graphics,
+                cell_px: crate::client::cell_px(),
             }),
         )?;
         Ok(())

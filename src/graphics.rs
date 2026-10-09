@@ -18,8 +18,10 @@
 //!   answers, which would arrive as typed keys;
 //! - keeps what it sent, to send again to a terminal that attaches later.
 //!
-//! Direct placements (no `U=1`) are not shown: the host would draw them at
-//! its own cursor, which is not where the pane's is.
+//! Direct placements (no `U=1`) are turned into virtual ones by the PTY
+//! reader ([`Placer`]): it writes the placeholder cells into the pane's
+//! output where the program placed the image, so they land at the pane's
+//! cursor, in order with what the program prints next.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -57,6 +59,140 @@ pub const DIACRITICS: [u32; 297] = [
     0xFE20, 0xFE21, 0xFE22, 0xFE23, 0xFE24, 0xFE25, 0xFE26, 0x10A0F, 0x10A38, 0x1D185, 0x1D186,
     0x1D187, 0x1D188, 0x1D189, 0x1D1AA, 0x1D1AB, 0x1D1AC, 0x1D1AD, 0x1D242, 0x1D243, 0x1D244,
 ];
+
+/// The host terminal's cell in pixels (width << 16 | height), from the
+/// terminal that drives the screen; 0 while unknown. Read by every pane's
+/// PTY reader, so it is a global rather than state the UI thread owns.
+static CELL_PX: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+pub fn set_cell_px(w: u16, h: u16) {
+    CELL_PX.store(
+        (w as u32) << 16 | h as u32,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// The cell size, or a common one when no terminal said.
+fn cell_px() -> (u32, u32) {
+    let v = CELL_PX.load(std::sync::atomic::Ordering::Relaxed);
+    let (w, h) = (v >> 16, v & 0xffff);
+    if w == 0 || h == 0 { (8, 16) } else { (w, h) }
+}
+
+/// Turns a pane's direct placements into virtual ones, on the PTY reader's
+/// thread: [`Placer::place`] says what the command becomes and what text to
+/// put into the pane's output right after it.
+#[derive(Debug, Default)]
+pub struct Placer {
+    /// Each image's size in pixels, by the program's id, as its
+    /// transmission said.
+    sizes: HashMap<u32, (u32, u32)>,
+}
+
+impl Placer {
+    /// A graphics command from the pane: the command to hand on (rewritten
+    /// when it is a direct placement) and the placeholder text that shows it.
+    pub fn place(&mut self, body: &[u8]) -> (Vec<u8>, Option<Vec<u8>>) {
+        let Some(mut cmd) = Command::parse(body) else {
+            return (body.to_vec(), None);
+        };
+        let action = cmd.action();
+        let id = cmd.num("i").filter(|i| *i != 0);
+        if matches!(action, 't' | 'T')
+            && let Some(id) = id
+            && let Some(size) = image_size(&cmd)
+        {
+            self.sizes.insert(id, size);
+        }
+        let direct = matches!(action, 'T' | 'p') && cmd.get("U") != Some("1");
+        let Some(id) = id.filter(|_| direct) else {
+            return (body.to_vec(), None);
+        };
+        let (cw, ch) = cell_px();
+        let pixels = self.sizes.get(&id).copied();
+        let (cols, rows) = match (cmd.num("c"), cmd.num("r"), pixels) {
+            (Some(c), Some(r), _) => (c, r),
+            (Some(c), None, Some((w, h))) => (c, (h * c * cw).div_ceil(w.max(1) * ch)),
+            (None, Some(r), Some((w, h))) => ((w * r * ch).div_ceil(h.max(1) * cw), r),
+            (None, None, Some((w, h))) => (w.div_ceil(cw), h.div_ceil(ch)),
+            _ => return (body.to_vec(), None),
+        };
+        // As many as the marks can number.
+        let (cols, rows) = (cols.clamp(1, 297), rows.clamp(1, 297));
+        cmd.set("U", 1);
+        cmd.set("c", cols);
+        cmd.set("r", rows);
+        let keep_cursor = cmd.get("C") == Some("1");
+        cmd.remove("C");
+        let text = placeholders(id, cols, rows, keep_cursor);
+        let mut out = cmd.encode();
+        // `encode` frames it; the reader hands on the body, as the scanner
+        // gave it.
+        out.drain(..2);
+        out.truncate(out.len() - 2);
+        (out, Some(text))
+    }
+}
+
+/// An image's size in pixels from its transmission: `s`/`v` for raw pixels,
+/// else the PNG header at the start of its data (or of the file it names).
+fn image_size(cmd: &Command) -> Option<(u32, u32)> {
+    let format = cmd.num("f").unwrap_or(32);
+    if format != 100 {
+        return Some((cmd.num("s")?, cmd.num("v")?));
+    }
+    let head = match cmd.get("t").unwrap_or("d") {
+        "d" => unbase64(&cmd.payload[..cmd.payload.len().min(64)])?,
+        "f" | "t" => {
+            use std::io::Read;
+            let path = String::from_utf8(unbase64(&cmd.payload)?).ok()?;
+            let mut buf = [0u8; 24];
+            std::fs::File::open(path).ok()?.read_exact(&mut buf).ok()?;
+            buf.to_vec()
+        }
+        _ => return None,
+    };
+    // The signature, then IHDR's width and height, big-endian.
+    if head.len() < 24 || &head[..8] != b"\x89PNG\r\n\x1a\n" {
+        return None;
+    }
+    let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+    Some((be(&head[16..20]), be(&head[20..24])))
+}
+
+/// `rows` rows of `cols` placeholder cells for image `id`, from the cursor
+/// down, each row starting at the cursor's column; the cursor ends after the
+/// last cell, or where it was when `keep_cursor`.
+pub fn placeholders(id: u32, cols: u32, rows: u32, keep_cursor: bool) -> Vec<u8> {
+    let mark = |n: u32| char::from_u32(DIACRITICS[n as usize]).unwrap_or('\u{305}');
+    let mut s = String::new();
+    if keep_cursor {
+        s.push_str("\x1b7");
+    }
+    let (r, g, b) = ((id >> 16) & 0xff, (id >> 8) & 0xff, id & 0xff);
+    s.push_str(&format!("\x1b[38;2;{r};{g};{b}m"));
+    let high = id >> 24;
+    for row in 0..rows {
+        if row > 0 {
+            // Down a line (scrolling when at the bottom) and back by the
+            // row's width.
+            s.push_str(&format!("\n\x1b[{cols}D"));
+        }
+        for col in 0..cols {
+            s.push(PLACEHOLDER);
+            s.push(mark(row));
+            s.push(mark(col));
+            if high != 0 {
+                s.push(mark(high));
+            }
+        }
+    }
+    s.push_str("\x1b[39m");
+    if keep_cursor {
+        s.push_str("\x1b8");
+    }
+    s.into_bytes()
+}
 
 /// What is kept to send again, at most; the oldest images go first.
 const STORE_CAP: usize = 32 << 20;
@@ -760,5 +896,42 @@ mod tests {
             Some(2 << 24 | 1)
         );
         assert_eq!(placeholder_id(Fg::Default, &[]), None);
+    }
+
+    #[test]
+    fn a_direct_placement_becomes_placeholders_sized_by_the_image() {
+        set_cell_px(10, 20);
+        let mut p = Placer::default();
+        // A 100x40 raw image, then shown where the cursor is.
+        let (body, text) = p.place(b"Ga=t,i=9,f=24,s=100,v=40;AAAA");
+        assert_eq!(body, b"Ga=t,i=9,f=24,s=100,v=40;AAAA");
+        assert!(text.is_none(), "a transmission alone shows nothing");
+        let (body, text) = p.place(b"Ga=p,i=9");
+        assert_eq!(text_of(&body), "Ga=p,i=9,U=1,c=10,r=2");
+        let text = String::from_utf8(text.unwrap()).unwrap();
+        assert_eq!(text.matches(PLACEHOLDER).count(), 20, "10 x 2 cells");
+        assert!(text.starts_with("\x1b[38;2;0;0;9m"));
+        assert!(text.contains("\n\x1b[10D"), "back to the start for row 2");
+        // Columns given: rows follow the aspect; a virtual one is left alone.
+        let (body, _) = p.place(b"Ga=p,i=9,c=5");
+        assert_eq!(text_of(&body), "Ga=p,i=9,c=5,U=1,r=1");
+        let (body, text) = p.place(b"Ga=p,U=1,i=9,c=4,r=2");
+        assert_eq!(text_of(&body), "Ga=p,U=1,i=9,c=4,r=2");
+        assert!(text.is_none());
+        // Unknown size, nothing to go on: left for the app to refuse.
+        assert!(p.place(b"Ga=p,i=77").1.is_none());
+    }
+
+    #[test]
+    fn a_pngs_size_is_read_from_its_header() {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend(300u32.to_be_bytes());
+        png.extend(150u32.to_be_bytes());
+        let c = Command::parse(format!("Ga=T,i=1,f=100;{}", base64(&png)).as_bytes()).unwrap();
+        assert_eq!(image_size(&c), Some((300, 150)));
+    }
+
+    fn text_of(b: &[u8]) -> String {
+        String::from_utf8_lossy(b).into_owned()
     }
 }
