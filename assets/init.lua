@@ -287,6 +287,12 @@ ranma.bind("v", "paste_image")
 -- default; tmux's keys:
 --   ranma.bind("]", "paste_buffer")
 --   ranma.bind("#", "choose_buffer")
+-- Logging a pane (tmux's pipe-pane): pipe_pane starts copying what the
+-- focused pane's program writes, escapes and all, to
+-- ~/.local/state/ranma/logs/pane<ID>-<time>.log, and stops when run again.
+-- "pipe_pane <command>" sends it into a command's stdin instead
+-- ("pipe_pane grep --line-buffered ERROR >> ~/errors"); "pipe_pane off" stops.
+--   ranma.bind("shift+p", "pipe_pane")
 
 -- The palette. "?" opens it on the keys (help: every bind, filterable, Enter
 -- runs it); ":" on the commands (every action, bound or not; Tab completes one,

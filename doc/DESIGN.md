@@ -1138,6 +1138,19 @@ least a cell and touches the top only at the top. It costs a lock of the
 pane's grid per frame the pane is drawn, as the cursor already does, and
 nothing while idle.
 
+**Logging a pane never slows it** (`pipe_pane`, tmux's `pipe-pane`). The
+copy is taken where the OSC scanner already looks at every read, before the
+emulator, so it is the program's bytes as written. The reader hands each
+read to a bounded queue with `try_send` and goes on: a sink that falls
+behind (a slow disk, a command that stopped reading) loses output, and a
+sink that is gone is dropped, but the pane is never held up for either. A
+thread per sink writes. Bare, it logs to a file under the state directory,
+because the common wish is "keep this", and a command line is there for
+the rest (`grep`, `tee`, a remote). The sink belongs to the pane, not its
+process, so `respawn_pane` keeps it; a server's upgrade does not carry it,
+since the thread writing is gone with the old process, and saying so is
+better than a log that silently stops.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

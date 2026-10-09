@@ -127,7 +127,11 @@ struct ScanPty<P> {
     reader: ScanReader,
 }
 
+/// Where `pipe_pane` sends what a pane's program writes, while it does.
+pub type Tee = Arc<std::sync::Mutex<Option<std::sync::mpsc::SyncSender<Vec<u8>>>>>;
+
 struct ScanReader {
+    tee: Tee,
     /// The PTY's own descriptor, duplicated: the event loop polls the
     /// original and reads through this one, which is the same open file.
     file: std::fs::File,
@@ -148,6 +152,16 @@ impl std::io::Read for ScanReader {
         let n = self.file.read(buf)?;
         for m in self.scanner.feed(&buf[..n], std::time::Instant::now()) {
             self.proxy.mark(m);
+        }
+        // Never waits: a sink behind by a full queue loses this read, and
+        // one that is gone stops being sent to.
+        if n > 0
+            && let Ok(mut tee) = self.tee.lock()
+            && let Some(tx) = tee.as_ref()
+            && let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
+                tx.try_send(buf[..n].to_vec())
+        {
+            *tee = None;
         }
         Ok(n)
     }
@@ -261,6 +275,8 @@ pub struct Pane {
     /// A descriptor of the PTY master, open for as long as the pane: what a
     /// server keeps across its exec to take a new build.
     pub master_fd: std::os::fd::RawFd,
+    /// `pipe_pane`'s sink, shared with the PTY reader.
+    tee: Tee,
     /// The PTY's I/O thread; it drops the PTY (hanging up the child) as it ends.
     io_thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -444,8 +460,10 @@ impl Pane {
             pid,
         } = parts;
         let master_fd = master.as_raw_fd();
+        let tee: Tee = Arc::default();
         let pty = ScanPty {
             reader: ScanReader {
+                tee: tee.clone(),
                 file: master,
                 scanner: Default::default(),
                 proxy: proxy.clone(),
@@ -481,6 +499,7 @@ impl Pane {
             pid,
             command: None,
             start_cwd: None,
+            tee,
             master_fd,
             io_thread,
         })
@@ -617,6 +636,24 @@ impl Pane {
 
     /// Called when a frame including this pane is about to be drawn: the next
     /// output wakes the UI again.
+    /// Send what the program writes to `sink` from now on, or stop (`None`).
+    pub fn pipe(&self, sink: Option<std::sync::mpsc::SyncSender<Vec<u8>>>) {
+        if let Ok(mut t) = self.tee.lock() {
+            *t = sink;
+        }
+    }
+
+    /// Where `pipe_pane` sends, for a pane taking this one's place.
+    pub fn pipe_sender(&self) -> Option<std::sync::mpsc::SyncSender<Vec<u8>>> {
+        self.tee.lock().ok().and_then(|t| t.clone())
+    }
+
+    /// Whether `pipe_pane` is still sending somewhere: false once the sink
+    /// went away by itself (a command that ended).
+    pub fn piping(&self) -> bool {
+        self.tee.lock().is_ok_and(|t| t.is_some())
+    }
+
     pub fn drawn(&self) {
         self.wakeup_pending.store(false, Ordering::Release);
     }

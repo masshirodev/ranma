@@ -309,6 +309,8 @@ pub struct App {
     /// Panes whose program ended and that stayed (`remain_on_exit`), with
     /// its exit status. Enter in one runs it again.
     dead: HashMap<PaneId, Option<i32>>,
+    /// Panes whose output `pipe_pane` sends somewhere, and where.
+    pipes: HashMap<PaneId, crate::pipe::Sink>,
     /// What was copied lately, newest first (see `buffers`).
     buffers: Vec<String>,
     /// Panes whose program ended and will stay, until the event loop has
@@ -461,6 +463,7 @@ impl App {
             exit_codes: HashMap::new(),
             dead: HashMap::new(),
             buffers: Vec::new(),
+            pipes: HashMap::new(),
             exited: HashMap::new(),
             ended: Default::default(),
             return_focus: HashMap::new(),
@@ -2613,6 +2616,7 @@ impl App {
             Action::DisplayPanes => self.show_pane_numbers(),
             Action::MonitorSilence(how) => self.monitor_silence(how),
             Action::ChooseBuffer => self.open_buffer_picker(),
+            Action::PipePane(how) => self.pipe_pane(how),
             Action::PasteBuffer(n) => self.paste_buffer(n),
             Action::RespawnPane => {
                 if let Some(id) = self.focused() {
@@ -2965,6 +2969,52 @@ impl App {
         match self.respawn(id, command.as_deref(), cwd, &[]) {
             Ok(()) => self.relayout(),
             Err(e) => self.status = Some(e),
+        }
+    }
+
+    /// `pipe_pane`: start or stop sending the focused pane's output. Bare,
+    /// it toggles a log file; a command replaces whatever was there.
+    fn pipe_pane(&mut self, how: Option<crate::action::PipeTarget>) {
+        use crate::action::PipeTarget;
+        use crate::pipe::Sink;
+        let Some(id) = self.focused() else {
+            return;
+        };
+        // A command that ended stopped the pipe on its own.
+        if self.panes.get(&id).is_some_and(|p| !p.piping()) {
+            self.pipes.remove(&id);
+        }
+        let sink = match how {
+            Some(PipeTarget::Off) => None,
+            None if self.pipes.contains_key(&id) => None,
+            None => match crate::pipe::default_log(id) {
+                Some(p) => Some(Sink::File(p)),
+                None => {
+                    self.status = Some("pipe_pane: no state directory for the log".into());
+                    return;
+                }
+            },
+            Some(PipeTarget::Command(c)) => Some(Sink::Command(c)),
+        };
+        let Some(p) = self.panes.get(&id) else {
+            return;
+        };
+        let Some(sink) = sink else {
+            p.pipe(None);
+            self.status = Some(match self.pipes.remove(&id) {
+                Some(s) => format!("stopped piping to {s}"),
+                None => "not piping".into(),
+            });
+            return;
+        };
+        let cwd = p.cwd().or_else(|| p.start_cwd.clone());
+        match crate::pipe::start(&sink, cwd.as_deref()) {
+            Ok(tx) => {
+                p.pipe(Some(tx));
+                self.status = Some(format!("piping to {sink}"));
+                self.pipes.insert(id, sink);
+            }
+            Err(e) => self.status = Some(format!("pipe_pane: {e:#}")),
         }
     }
 
@@ -5756,5 +5806,28 @@ mod tests {
         a.picker = None;
         a.run_action("paste_buffer 9".parse().unwrap());
         assert_eq!(a.status.as_deref(), Some("only 2 copies kept"));
+    }
+
+    #[test]
+    fn pipe_pane_sends_a_panes_output_into_a_command() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let mut a = App::new(config, tx, 80, 24);
+        let dir = std::env::temp_dir().join(format!("ranma-pipe-app-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("out");
+        a.run_action("exec sleep 0.3; printf piped-out; sleep 2".parse().unwrap());
+        let id = a.focused().unwrap();
+        a.run_action(Action::PipePane(Some(crate::action::PipeTarget::Command(
+            format!("cat > {}", out.display()),
+        ))));
+        assert!(a.pipes.contains_key(&id), "{:?}", a.status);
+        pump(&mut a, &rx, |_| {
+            std::fs::read_to_string(&out).is_ok_and(|s| s.contains("piped-out"))
+        });
+        a.run_action("pipe_pane off".parse().unwrap());
+        assert!(a.pipes.is_empty());
+        assert!(!a.panes[&id].piping());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

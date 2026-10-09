@@ -55,6 +55,7 @@ impl App {
         self.cwds.remove(&id);
         self.activity.remove(&id);
         self.silence.remove(&id);
+        self.pipes.remove(&id);
         self.badges.remove(&id);
         self.forget_watches(id);
         if self.tooltip.as_ref().is_some_and(|(t, _)| t.pane == id) {
@@ -343,6 +344,8 @@ impl App {
         let mut new = crate::pane::Pane::spawn(id, size, &opts, self.tx.clone())
             .map_err(|e| format!("respawning pane {id}: {e:#}"))?;
         new.name = name;
+        // A pane piping goes on piping: the sink is the pane's, not the process's.
+        new.pipe(old.pipe_sender());
         if let Some(old) = self.panes.insert(id, new) {
             old.retire();
         }

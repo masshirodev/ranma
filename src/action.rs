@@ -55,6 +55,14 @@ pub enum WorkspaceTarget {
     Last,
 }
 
+/// What `pipe_pane` was given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PipeTarget {
+    Off,
+    /// A shell command line that reads the output on its stdin.
+    Command(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionTarget {
     Name(String),
@@ -162,6 +170,9 @@ pub enum Action {
     /// `monitor_silence` setting; a number of seconds watches for that long a
     /// quiet; `off` stops.
     MonitorSilence(Option<Option<u32>>),
+    /// Copy what the focused pane's program writes to a log file, or into a
+    /// command (tmux's `pipe-pane`); bare toggles the log, `off` stops.
+    PipePane(Option<PipeTarget>),
     /// The copies kept lately, newest first; Enter pastes one (tmux's
     /// `choose-buffer`).
     ChooseBuffer,
@@ -339,6 +350,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("display_panes", ""),
     ("respawn_pane", ""),
     ("choose_buffer", ""),
+    ("pipe_pane", "[off|command line]"),
     ("paste_buffer", "[n]"),
     ("monitor_silence", "[seconds|off]"),
     ("search", ""),
@@ -674,6 +686,10 @@ impl FromStr for Action {
             "display_panes" => no_arg(Action::DisplayPanes),
             "respawn_pane" => no_arg(Action::RespawnPane),
             "choose_buffer" => no_arg(Action::ChooseBuffer),
+            "pipe_pane" => Ok(Action::PipePane(rest.map(|r| match r {
+                "off" => PipeTarget::Off,
+                cmd => PipeTarget::Command(cmd.to_string()),
+            }))),
             "paste_buffer" => match (first, second) {
                 (None, _) => Ok(Action::PasteBuffer(1)),
                 (Some(n), None) => n
@@ -872,6 +888,9 @@ impl fmt::Display for Action {
             Action::DisplayPanes => f.write_str("display_panes"),
             Action::RespawnPane => f.write_str("respawn_pane"),
             Action::ChooseBuffer => f.write_str("choose_buffer"),
+            Action::PipePane(None) => f.write_str("pipe_pane"),
+            Action::PipePane(Some(PipeTarget::Off)) => f.write_str("pipe_pane off"),
+            Action::PipePane(Some(PipeTarget::Command(c))) => write!(f, "pipe_pane {c}"),
             Action::PasteBuffer(1) => f.write_str("paste_buffer"),
             Action::PasteBuffer(n) => write!(f, "paste_buffer {n}"),
             Action::MonitorSilence(None) => f.write_str("monitor_silence"),
