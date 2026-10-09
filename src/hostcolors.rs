@@ -100,13 +100,14 @@ pub fn leftover_input(input: &[u8]) -> Vec<u8> {
                 .unwrap_or(rest.len());
             i += 2 + end;
         } else if input[i..].starts_with(b"\x1b[?") {
-            // The DA1 reply: ESC [ ? digits and ; then c.
+            // The DA1 reply (ESC [ ? digits and ; then c), or the keyboard
+            // protocol's (ESC [ ? digits u).
             let rest = &input[i + 3..];
             let n = rest
                 .iter()
                 .take_while(|b| b.is_ascii_digit() || **b == b';')
                 .count();
-            if rest.get(n) == Some(&b'c') {
+            if matches!(rest.get(n), Some(b'c' | b'u')) {
                 i += 3 + n + 1;
             } else {
                 out.push(input[i]);
@@ -172,6 +173,9 @@ pub fn query_all(timeout: Duration) -> Replies {
     }
     q.push_str(crate::nestbar::HELLO);
     q.push_str(GRAPHICS_QUERY);
+    // The kitty keyboard protocol: answered `CSI ? flags u` by a terminal
+    // that speaks it.
+    q.push_str("\x1b[?u");
     q.push_str("\x1b[c");
     let mut stdout = std::io::stdout();
     if stdout
@@ -214,6 +218,7 @@ pub fn query_all(timeout: Duration) -> Replies {
         outer: crate::nestbar::outer_in(&buf),
         outer_colors: crate::nestbar::outer_colors_in(&buf),
         graphics: graphics_in(&buf),
+        kitty_keys: kitty_keys_in(&buf),
     }
 }
 
@@ -243,6 +248,16 @@ pub struct Replies {
     pub outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
     /// It answered the graphics query: it can show images.
     pub graphics: bool,
+    /// It answered `CSI ? u`: it speaks the kitty keyboard protocol.
+    pub kitty_keys: bool,
+}
+
+/// Whether the replies hold an answer to `CSI ? u` (`CSI ? <digits> u`).
+pub fn kitty_keys_in(buf: &[u8]) -> bool {
+    (0..buf.len()).any(|i| {
+        buf[i..].starts_with(b"\x1b[?")
+            && buf[i + 3..].iter().find(|b| !b.is_ascii_digit()) == Some(&b'u')
+    })
 }
 
 /// Whether a DA1 reply (`ESC [ ? <digits and ;> c`) has arrived.
@@ -376,5 +391,13 @@ mod tests {
         assert_eq!(leftover_input(input), b"ls");
         assert!(!graphics_in(b"\x1b_Gi=31;ENOTSUPPORTED\x1b\\\x1b[?62;c"));
         assert!(!graphics_in(b"\x1b[?62;c"));
+    }
+
+    #[test]
+    fn the_keyboard_protocols_answer_is_read_and_not_typed() {
+        let input = b"\x1b[?0uq\x1b[?62;22c";
+        assert!(kitty_keys_in(input));
+        assert_eq!(leftover_input(input), b"q");
+        assert!(!kitty_keys_in(b"\x1b[?62;22c"));
     }
 }

@@ -176,6 +176,17 @@ everywhere, which is why the defaults use it. **Symbols bind as themselves:** `"
 `"$"`, `"("` — not `"shift+/"`. Whether the terminal also reports Shift with them
 does not matter; it is ignored.
 
+**In a terminal that speaks the kitty keyboard protocol** (kitty, ghostty,
+foot, WezTerm with it on; ranma asks at start), ranma takes the keys that
+way, so chords legacy encoding folds together arrive apart: `ctrl+i` is not
+`tab`, `ctrl+m` not `return`, `ctrl+h` not `backspace`, `alt+[` not the start of
+an escape. Binds read the same either way. **Programs in panes get the
+protocol too:** one that asks for it (nvim, helix, kakoune, fish 4) gets its
+keys encoded the kitty way, with the flags it pushed (disambiguation, every
+key as an escape code, the shifted key, the text); one that does not gets the
+legacy bytes as before. Key releases reach a program only if ranma's terminal
+sent them, which it is not asked to.
+
 ### Actions
 
 | Action | Does |

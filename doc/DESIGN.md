@@ -1171,6 +1171,30 @@ then among three small built-in patterns; a theme naming art that is not
 there is refused at load, as an unknown key is. The cost is the art's
 cells copied on frames that are drawn anyway; idle stays at zero.
 
+### The kitty keyboard protocol, both ways (2026-10-09)
+
+ranma re-encodes every key for the pane it goes to, so the protocol is two
+separate questions. **Toward programs**, it is the pane's emulator that
+knows what a program pushed (`CSI > flags u`; alacritty_terminal tracks the
+stack once `kitty_keyboard` is on in its config) and `input::encode_kitty`
+that writes keys for those flags: disambiguation, every key as an escape
+code, event types, the shifted key, the text. A program that pushed nothing
+gets legacy bytes, byte for byte as before. The flags go into an upgrade's
+snapshot like the DEC modes, after the alternate screen, which has a stack
+of its own.
+
+**From the terminal**, ranma asks `CSI ? u` with its other startup queries
+(before the DA1 that ends them, so it costs no round trip) and, answered,
+pushes disambiguation and alternate keys, popped on exit and on a panic.
+Disambiguation is the point: Ctrl+I, Tab and the rest arrive apart, for
+binds and for programs. Alternate keys is what keeps binds as they were:
+without it a shifted key arrives as its base key with Shift (`alt+shift+1`),
+with it crossterm reports the symbol (`alt+!`), which is what the defaults
+and the "Digits" rule above bind. Event types are not asked for: releases
+would have to be threaded through every path that takes a key, for the few
+programs that want them. A ranma inside a ranma asks its pane, which is the
+outer's emulator, and gets the protocol from it.
+
 ### Images in panes (2026-10-09)
 
 **Unicode placeholders, not placements.** The kitty graphics protocol has

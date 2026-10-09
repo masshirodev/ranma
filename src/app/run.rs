@@ -256,6 +256,9 @@ pub fn run(config: Config) -> Result<()> {
         app.set_outer(replies.outer);
         app.set_outer_colors(replies.outer_colors);
         app.host_graphics = replies.graphics;
+        if replies.kitty_keys {
+            crate::input::push_keyboard_flags();
+        }
         let _ipc = listen(&mut app, &tx, None);
         app.driven_by(crate::client::mobile_env(), crate::pane::over_ssh());
         app.open_pane(None).context("starting the first pane")?;
@@ -270,6 +273,7 @@ pub fn run(config: Config) -> Result<()> {
         app.watcher = watch_config(tx);
         event_loop(&mut app, &rx, &mut term, None, None, Vec::new())
     })();
+    crate::input::pop_keyboard_flags();
     let out = term.backend_mut();
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(

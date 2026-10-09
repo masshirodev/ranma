@@ -76,6 +76,50 @@ pub struct PaneModes {
     pub alt_screen: bool,
     /// On the alternate screen, turn the wheel into arrow keys (1007).
     pub alternate_scroll: bool,
+    /// The kitty keyboard protocol's flags the program pushed (`CSI > n u`):
+    /// 1 disambiguate, 2 event types, 4 alternate keys, 8 every key as an
+    /// escape code, 16 associated text. 0 is the legacy encoding.
+    pub kitty: u8,
+}
+
+static PUSHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Ask the host terminal for the kitty keyboard protocol, as much of it as
+/// ranma reads: chords legacy encoding folds together (Ctrl+I and Tab, Esc
+/// and Alt) kept apart, and a shifted key reported as the symbol it types,
+/// so `alt+!` is still `alt+!`. Only for a terminal that answered `CSI ? u`.
+pub fn push_keyboard_flags() {
+    use crossterm::event::{KeyboardEnhancementFlags as F, PushKeyboardEnhancementFlags};
+    let flags = F::DISAMBIGUATE_ESCAPE_CODES | F::REPORT_ALTERNATE_KEYS;
+    if crossterm::execute!(std::io::stdout(), PushKeyboardEnhancementFlags(flags)).is_ok()
+        && !PUSHED.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        // A panic must not leave the terminal speaking it to the shell.
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            pop_keyboard_flags();
+            previous(info);
+        }));
+    }
+}
+
+/// Give the host terminal its keyboard back, if `push_keyboard_flags` took it.
+pub fn pop_keyboard_flags() {
+    if PUSHED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::event::PopKeyboardEnhancementFlags
+        );
+    }
+}
+
+/// The kitty keyboard protocol's flags.
+pub mod kitty {
+    pub const DISAMBIGUATE: u8 = 1;
+    pub const EVENT_TYPES: u8 = 2;
+    pub const ALTERNATE_KEYS: u8 = 4;
+    pub const ALL_KEYS: u8 = 8;
+    pub const TEXT: u8 = 16;
 }
 
 impl PaneModes {
@@ -94,6 +138,9 @@ fn mod_param(m: KeyModifiers) -> u8 {
 /// Encode a key event for a pane, xterm style. `None` for events that produce
 /// nothing (releases, bare modifiers, keys legacy encoding cannot express).
 pub fn encode_key(ev: &KeyEvent, modes: PaneModes) -> Option<Vec<u8>> {
+    if modes.kitty != 0 {
+        return encode_kitty(ev, modes.kitty);
+    }
     if ev.kind == KeyEventKind::Release {
         return None;
     }
@@ -173,6 +220,113 @@ pub fn encode_key(ev: &KeyEvent, modes: PaneModes) -> Option<Vec<u8>> {
         _ => return None,
     }
     Some(out)
+}
+
+/// A key as the kitty keyboard protocol has it, for a program that pushed
+/// these `flags` (https://sw.kovidgoyal.net/kitty/keyboard-protocol/). What
+/// ranma cannot know is left out: the base layout key (crossterm gives the
+/// shifted one), and releases unless the host terminal sends them.
+pub fn encode_kitty(ev: &KeyEvent, flags: u8) -> Option<Vec<u8>> {
+    use KeyEventKind::{Press, Release, Repeat};
+    let events = flags & kitty::EVENT_TYPES != 0;
+    let all = flags & kitty::ALL_KEYS != 0;
+    if ev.kind == Release && !events {
+        return None;
+    }
+    let m = ev.modifiers;
+    let bits = m.contains(KeyModifiers::SHIFT) as u32
+        | (m.contains(KeyModifiers::ALT) as u32) << 1
+        | (m.contains(KeyModifiers::CONTROL) as u32) << 2
+        | (m.contains(KeyModifiers::SUPER) as u32) << 3
+        | (m.contains(KeyModifiers::HYPER) as u32) << 4
+        | (m.contains(KeyModifiers::META) as u32) << 5;
+    let kind = match ev.kind {
+        Press => 1,
+        Repeat => 2,
+        Release => 3,
+    };
+    // `;mods[:type]`, or nothing for a press without modifiers.
+    let params = |bits: u32| -> String {
+        let t = if events && kind != 1 {
+            format!(":{kind}")
+        } else {
+            String::new()
+        };
+        if bits == 0 && t.is_empty() {
+            String::new()
+        } else {
+            format!(";{}{t}", bits + 1)
+        }
+    };
+    let csi_u = |code: u32, alt: Option<u32>, bits: u32, text: Option<char>| -> Vec<u8> {
+        let alt = alt.map(|a| format!(":{a}")).unwrap_or_default();
+        let mut p = params(bits);
+        if let Some(t) = text.filter(|_| flags & kitty::TEXT != 0) {
+            if p.is_empty() {
+                p.push_str(";1");
+            }
+            p.push_str(&format!(";{}", t as u32));
+        }
+        format!("\x1b[{code}{alt}{p}u").into_bytes()
+    };
+    // Keys with a legacy letter or tilde form keep it, in CSI.
+    let letter = |l: char| -> Vec<u8> {
+        let p = params(bits);
+        if p.is_empty() {
+            format!("\x1b[{l}").into_bytes()
+        } else {
+            format!("\x1b[1{p}{l}").into_bytes()
+        }
+    };
+    let tilde = |n: u32| format!("\x1b[{n}{}~", params(bits)).into_bytes();
+    let plain = bits & !1 == 0 && kind != 3;
+    Some(match ev.code {
+        KeyCode::Char(c) => {
+            let base = c.to_lowercase().next().unwrap_or(c);
+            // Text typed with no modifier but Shift stays text, unless every
+            // key is asked for as an escape code.
+            if plain && !all {
+                let mut buf = [0u8; 4];
+                return Some(c.encode_utf8(&mut buf).as_bytes().to_vec());
+            }
+            let shifted = (base != c && flags & kitty::ALTERNATE_KEYS != 0).then_some(c as u32);
+            let text = (plain && kind != 3).then_some(c);
+            csi_u(base as u32, shifted, bits, text)
+        }
+        KeyCode::Esc => csi_u(27, None, bits, None),
+        KeyCode::Enter | KeyCode::Tab | KeyCode::Backspace if bits == 0 && kind != 3 && !all => {
+            return encode_key(
+                ev,
+                PaneModes {
+                    kitty: 0,
+                    ..PaneModes::default()
+                },
+            );
+        }
+        KeyCode::Enter => csi_u(13, None, bits, None),
+        KeyCode::Tab => csi_u(9, None, bits, None),
+        KeyCode::BackTab => csi_u(9, None, bits | 1, None),
+        KeyCode::Backspace => csi_u(127, None, bits, None),
+        KeyCode::Up => letter('A'),
+        KeyCode::Down => letter('B'),
+        KeyCode::Right => letter('C'),
+        KeyCode::Left => letter('D'),
+        KeyCode::Home => letter('H'),
+        KeyCode::End => letter('F'),
+        KeyCode::F(1) => letter('P'),
+        KeyCode::F(2) => letter('Q'),
+        KeyCode::F(3) => tilde(13),
+        KeyCode::F(4) => letter('S'),
+        KeyCode::Insert => tilde(2),
+        KeyCode::Delete => tilde(3),
+        KeyCode::PageUp => tilde(5),
+        KeyCode::PageDown => tilde(6),
+        KeyCode::F(n @ 5..=12) => {
+            const CODES: [u32; 8] = [15, 17, 18, 19, 20, 21, 23, 24];
+            tilde(CODES[(n - 5) as usize])
+        }
+        _ => return None,
+    })
 }
 
 /// The C0 byte Ctrl produces with this key, as xterm maps it.
@@ -387,5 +541,57 @@ mod tests {
         };
         let out = encode_paste("x\x1b[201~rm -rf", modes);
         assert_eq!(out, b"\x1b[200~xrm -rf\x1b[201~");
+    }
+
+    #[test]
+    fn kitty_keys_for_a_program_that_asked() {
+        use crossterm::event::KeyEventState;
+        let k = |code, m| KeyEvent::new(code, m);
+        let enc = |ev: KeyEvent, f: u8| String::from_utf8(encode_kitty(&ev, f).unwrap()).unwrap();
+        let none = KeyModifiers::NONE;
+        let ctrl = KeyModifiers::CONTROL;
+        // Disambiguate: text stays text, chords and Esc become CSI u.
+        assert_eq!(enc(k(KeyCode::Char('a'), none), 1), "a");
+        assert_eq!(enc(k(KeyCode::Char('A'), KeyModifiers::SHIFT), 1), "A");
+        assert_eq!(
+            enc(k(KeyCode::Char('i'), ctrl), 1),
+            "\x1b[105;5u",
+            "not Tab"
+        );
+        assert_eq!(
+            enc(k(KeyCode::Char('a'), KeyModifiers::ALT), 1),
+            "\x1b[97;3u"
+        );
+        assert_eq!(enc(k(KeyCode::Esc, none), 1), "\x1b[27u");
+        assert_eq!(enc(k(KeyCode::Enter, none), 1), "\r");
+        assert_eq!(enc(k(KeyCode::Enter, ctrl), 1), "\x1b[13;5u");
+        assert_eq!(
+            enc(k(KeyCode::BackTab, KeyModifiers::SHIFT), 1),
+            "\x1b[9;2u"
+        );
+        assert_eq!(enc(k(KeyCode::Up, none), 1), "\x1b[A");
+        assert_eq!(enc(k(KeyCode::Up, ctrl), 1), "\x1b[1;5A");
+        assert_eq!(enc(k(KeyCode::F(5), none), 1), "\x1b[15~");
+        // Every key as an escape code, with its text, and the shifted key.
+        assert_eq!(enc(k(KeyCode::Char('a'), none), 8), "\x1b[97u");
+        assert_eq!(enc(k(KeyCode::Char('a'), none), 8 | 16), "\x1b[97;1;97u");
+        assert_eq!(
+            enc(k(KeyCode::Char('A'), KeyModifiers::SHIFT), 8 | 4),
+            "\x1b[97:65;2u"
+        );
+        assert_eq!(enc(k(KeyCode::Enter, none), 8), "\x1b[13u");
+        // Event types: repeats and releases say so; without the flag a
+        // release is nothing.
+        let mut rel = k(KeyCode::Char('a'), none);
+        rel.kind = KeyEventKind::Release;
+        rel.state = KeyEventState::NONE;
+        assert_eq!(enc(rel, 1 | 2), "\x1b[97;1:3u");
+        assert!(encode_kitty(&rel, 1).is_none());
+        // Legacy when the program asked for nothing.
+        let modes = PaneModes::default();
+        assert_eq!(
+            encode_key(&k(KeyCode::Char('i'), ctrl), modes).unwrap(),
+            b"\t"
+        );
     }
 }

@@ -327,6 +327,7 @@ impl Pane {
 
         let config = term::Config {
             scrolling_history: opts.scrollback_lines,
+            kitty_keyboard: true,
             ..Default::default()
         };
         let term = Arc::new(FairMutex::new(Term::new(config, &size, proxy.clone())));
@@ -416,6 +417,7 @@ impl Pane {
         };
         let config = term::Config {
             scrolling_history: scrollback_lines,
+            kitty_keyboard: true,
             ..Default::default()
         };
         let mut t = Term::new(config, &size, proxy.clone());
@@ -615,6 +617,7 @@ impl Pane {
             mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
             alt_screen: mode.contains(TermMode::ALT_SCREEN),
             alternate_scroll: mode.contains(TermMode::ALTERNATE_SCROLL),
+            kitty: kitty_flags(mode),
         }
     }
 
@@ -839,6 +842,21 @@ pub fn foreground_ssh_host(pid: u32) -> Option<String> {
 }
 
 /// The argv of the `ssh` in the foreground of that terminal, if one is there.
+/// The kitty keyboard flags a terminal mode holds, as the protocol numbers them.
+pub fn kitty_flags(mode: TermMode) -> u8 {
+    [
+        TermMode::DISAMBIGUATE_ESC_CODES,
+        TermMode::REPORT_EVENT_TYPES,
+        TermMode::REPORT_ALTERNATE_KEYS,
+        TermMode::REPORT_ALL_KEYS_AS_ESC,
+        TermMode::REPORT_ASSOCIATED_TEXT,
+    ]
+    .iter()
+    .enumerate()
+    .filter(|(_, m)| mode.contains(**m))
+    .fold(0, |acc, (i, _)| acc | 1 << i)
+}
+
 pub fn foreground_ssh_argv(pid: u32) -> Option<Vec<String>> {
     let fg = foreground_pid(pid);
     if std::fs::read_to_string(format!("/proc/{fg}/comm"))

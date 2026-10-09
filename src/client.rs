@@ -154,6 +154,7 @@ pub fn run(name: Option<&str>, steal: bool, mobile: bool) -> Result<ExitCode> {
     // onto the next and scrolled the screen. Off, they are cut at its edge.
     let _ = execute!(out, DisableLineWrap);
     let result = attach(stream, &name, steal, mobile);
+    crate::input::pop_keyboard_flags();
     let _ = out.write_all(b"\x1b[23;0t");
     let _ = execute!(
         out,
@@ -203,7 +204,11 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
         outer,
         outer_colors,
         graphics,
+        kitty_keys,
     } = crate::hostcolors::query_all(Duration::from_millis(300));
+    if kitty_keys {
+        crate::input::push_keyboard_flags();
+    }
     let inside = std::env::var(ipc::ENV).ok();
     // Only the first server is stolen: a switch later joins whoever is there.
     let greet = |stream: &mut UnixStream, typed_early: Vec<u8>, steal: bool| -> Result<()> {

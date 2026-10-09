@@ -91,6 +91,12 @@ pub fn take<T: alacritty_terminal::event::EventListener>(term: &mut Term<T>) -> 
         modes.push_str("\x1b[?1049h");
         term.swap_alt();
     }
+    // The kitty keyboard flags the program pushed, on the screen it pushed
+    // them on (each screen has its own): after the switch above.
+    let kitty = crate::pane::kitty_flags(mode);
+    if kitty != 0 {
+        modes.push_str(&format!("\x1b[>{kitty}u"));
+    }
     Snapshot { screen, modes }
 }
 
@@ -264,6 +270,7 @@ mod tests {
     fn term(cols: usize, rows: usize) -> Term<VoidListener> {
         let config = Config {
             scrolling_history: 1000,
+            kitty_keyboard: true,
             ..Default::default()
         };
         Term::new(config, &Size(cols, rows), VoidListener)
@@ -323,7 +330,7 @@ mod tests {
         // SGR mouse; it draws something there.
         feed(
             &mut t,
-            "\x1b[?1049h\x1b[?1h\x1b[?2004h\x1b[?1000h\x1b[?1006h\x1b[Hnvim screen",
+            "\x1b[?1049h\x1b[?1h\x1b[?2004h\x1b[?1000h\x1b[?1006h\x1b[>1u\x1b[Hnvim screen",
         );
         let snap = take(&mut t);
         let mut back = term(30, 6);
@@ -332,6 +339,7 @@ mod tests {
         assert!(m.contains(TermMode::ALT_SCREEN));
         assert!(m.contains(TermMode::APP_CURSOR | TermMode::BRACKETED_PASTE));
         assert!(m.contains(TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE));
+        assert_eq!(crate::pane::kitty_flags(m), 1, "its kitty keyboard flags");
         // The program's own screen is empty (it redraws on SIGWINCH); the
         // shell's comes back when it leaves.
         feed(&mut back, "\x1b[?1049l");
