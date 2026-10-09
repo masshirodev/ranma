@@ -704,6 +704,8 @@ pub enum Op {
     ScreenSet(u64, Box<crate::luascreen::Update>),
     ScreenClose(u64),
     Tooltip(Option<crate::luaui::TooltipSpec>),
+    /// Put text on the clipboard of the terminal driving ranma (OSC 52).
+    Copy(String),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1499,6 +1501,17 @@ fn install_api(
 
     // The runtime half: only meaningful while ranma is calling into Lua. During
     // config load there is no window manager to act on, so these refuse.
+    ranma.set(
+        "copy",
+        lua.create_function(|lua, text: String| {
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.copy only works inside binds, hooks, modules and timers, not at config load")
+            })?;
+            rt.ops.push(Op::Copy(text));
+            Ok(())
+        })?,
+    )?;
+
     ranma.set(
         "action",
         lua.create_function(|lua, spec: String| {

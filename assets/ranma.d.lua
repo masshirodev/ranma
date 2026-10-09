@@ -192,6 +192,11 @@ function ranma.action(action) end
 ---@param text string
 function ranma.notify(text) end
 
+---Put text on the clipboard of the terminal driving ranma (OSC 52, as
+---copy mode's yank does), over SSH too.
+---@param text string
+function ranma.copy(text) end
+
 ---A toast.
 ---@param text string
 ---@param opts? { urgent?: boolean, timeout?: number }
@@ -375,6 +380,7 @@ function ranma.input(spec) end
 ---@field card? { [1]: string, [2]: string, [3]: string? }[] The keys card: key, what it does, the state it is for.
 ---@field options? boolean `o` opens settings on this plugin's options.
 ---@field group? string Which options group `o` shows (the title when left out).
+---@field query? string The filter it opens with (a pattern a prompt asked for); `/` edits it.
 ---@field body? ranma.Block[]
 ---@field empty? string What an empty body says.
 ---@field on_close? fun() The user (or another screen) closed it.

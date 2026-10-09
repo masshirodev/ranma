@@ -2701,6 +2701,7 @@ impl App {
                         config::Op::Screen(spec) => self.open_plugin_screen(*spec),
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
+                        config::Op::Copy(text) => self.set_host_clipboard(&text),
                         config::Op::Tooltip(spec) => {
                             self.tooltip = spec.and_then(|t| {
                                 let offset =
@@ -5204,5 +5205,15 @@ mod tests {
         a.set_mode(Mode::Wm);
         press(&mut a, KeyCode::Char('y'), KeyModifiers::NONE);
         assert_eq!(a.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn ranma_copy_puts_text_on_the_terminals_clipboard() {
+        let mut a = app(None);
+        lua(&mut a, "ranma.copy('hi')");
+        assert_eq!(
+            a.host_out.last().map(Vec::as_slice),
+            Some(&b"\x1b]52;c;aGk=\x07"[..])
+        );
     }
 }

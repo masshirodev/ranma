@@ -854,6 +854,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
 | `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. |
+| `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
@@ -1149,6 +1150,9 @@ stays. The mouse selects a row and the wheel moves through them.
 The screen is redrawn at most every 100 ms whatever the rate. The selection
 follows its row's `id`; a row that goes hands it to the row taking its place.
 Nothing marks what changed: say it with roles, and with the status.
+
+A screen may open already answering a query (`query = "panic"`, with
+`filter = "plugin"`): the pattern a prompt asked for, which `/` then edits.
 
 One screen at a time, in one slot shared with the settings panel: opening a
 screen closes settings (which asks first about unsaved edits) or the screen

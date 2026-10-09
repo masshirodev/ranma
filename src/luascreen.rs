@@ -432,9 +432,9 @@ fn status(t: Option<Table>, who: &str) -> mlua::Result<Option<(String, Role)>> {
     }
 }
 
-const SPEC_FIELDS: [&str; 15] = [
+const SPEC_FIELDS: [&str; 16] = [
     "title", "chip", "filter", "detail", "status", "subtitle", "count", "keys", "card", "options",
-    "body", "empty", "on_query", "on_close", "group",
+    "body", "empty", "on_query", "on_close", "group", "query",
 ];
 
 /// Read `ranma.screen`'s table.
@@ -502,6 +502,9 @@ fn read_spec(lua: &Lua, t: &Table) -> mlua::Result<(Screen, Hooks)> {
         card,
         body,
         empty: t.get("empty")?,
+        // A screen may open already answering a query (the pattern a
+        // prompt asked for); `/` then edits it.
+        query: t.get::<Option<String>>("query")?.unwrap_or_default(),
         ..Screen::default()
     };
     Ok((screen, hooks))
@@ -683,6 +686,12 @@ mod tests {
         );
         assert!(spec.hooks.on_change.contains_key("vol"));
         assert!(matches!(ops[1], Op::ScreenSet(id, _) if id == spec.id));
+        let opened = open(
+            "ranma.screen { title = 'h', filter = 'plugin', on_query = print, query = 'panic' }",
+        )
+        .unwrap();
+        let Op::Screen(h) = &opened[0] else { panic!() };
+        assert_eq!(h.screen.query, "panic", "a screen opens answering a query");
         assert!(matches!(ops[2], Op::ScreenClose(id) if id == spec.id));
     }
 
