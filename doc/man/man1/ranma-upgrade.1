@@ -1,0 +1,21 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-UPGRADE 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-upgrade \- Move running servers to the installed build without closing anything: every shell, pane and scrollback stays. \fBinstall.sh\fR runs \fB\-\-all\fR
+.SH SYNOPSIS
+\fBranma upgrade\fR [\fB\-\-all\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fINAME\fR] 
+.SH DESCRIPTION
+Move running servers to the installed build without closing anything: every shell, pane and scrollback stays. \fBinstall.sh\fR runs \fB\-\-all\fR
+.SH OPTIONS
+.TP
+\fB\-\-all\fR
+Every server
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fINAME\fR]
+The server (as \fBranma ls\fR names it); the one this runs in when left out
+.SH "SEE ALSO"
+\fBranma\fR(1)

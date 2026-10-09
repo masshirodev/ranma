@@ -222,6 +222,7 @@ features below the line live outside the repository.
 - [x] Keys: user modes (`ranma.mode`), user commands (`ranma.command`)
 - [x] Keys: which-key folders and groups (designed from `doc/briefs/done/WHICH_KEY_GROUPS.md`)
 - [x] Every action has a default key: settings, the tmux extras, and the `x` (pane) and `y` (layouts) folders
+- [x] Man pages, generated: ranma(1) and a page per command, ranma(5) from CONFIG.md, ranma-keys(7) from the defaults
 - [x] Drawing: `picker` and `input`
 - [x] Design: `doc/briefs/PLUGIN_PANEL.md`, handoff in `doc/handoffs/`
 - [x] Plugin screens: `ranma.screen` (designed from the handoff)

@@ -4,6 +4,16 @@ use clap::{Parser, Subcommand};
 use ranma::{config, ipc, theme};
 
 /// A tiling window manager for the terminal: i3's tree, Hyprland's dwindle, in a PTY.
+///
+/// Without a command, ranma attaches this terminal to a server: the most
+/// recently used one no terminal shows, or a new one. Closing the terminal
+/// only detaches; `ranma ls` lists the servers and `ranma attach NAME`
+/// returns to one.
+///
+/// Press the leader (ctrl+b) for WM mode, where single keys split, focus,
+/// float and move panes; pause there and a hint lists them. ranma-keys(7)
+/// lists the default keys and ranma(5) the configuration, read from
+/// ~/.config/ranma/init.lua.
 #[derive(Parser)]
 #[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("RANMA_GIT_SHA"), ")"))]
 struct Cli {
@@ -39,6 +49,11 @@ struct Cli {
     #[arg(long, hide = true, value_name = "FILE")]
     check_handover: Option<std::path::PathBuf>,
 
+    /// Write the man pages under DIR (man1/, man5/, man7/): what `doc/man/`
+    /// holds, regenerated with `cargo run -- --dump-man doc/man`.
+    #[arg(long, hide = true, value_name = "DIR")]
+    dump_man: Option<std::path::PathBuf>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -58,10 +73,14 @@ enum Command {
         /// This terminal is a phone or a tablet, as `RANMA_MOBILE=1` says.
         #[arg(long)]
         mobile: bool,
+        /// The server's name, as `ranma ls` lists it.
         name: String,
     },
     /// Quit the server NAME and everything in it, without asking.
-    Kill { name: String },
+    Kill {
+        /// The server's name, as `ranma ls` lists it.
+        name: String,
+    },
     /// Run a server (what `ranma` starts; not for use by hand).
     #[command(hide = true)]
     Server {
@@ -98,11 +117,13 @@ enum Command {
     /// Pull ranma's source and install it; with --check, only say whether there
     /// is anything new.
     Update {
+        /// Only say whether the source has anything new; install nothing.
         #[arg(long)]
         check: bool,
     },
     /// Run an action, spelled as in a bind: `ranma action "workspace 3"`.
     Action {
+        /// The action and its arguments (joined by spaces), as a bind spells it.
         #[arg(required = true)]
         action: Vec<String>,
     },
@@ -127,11 +148,13 @@ enum Command {
     /// Run COMMAND (your shell when left out) with a `tmux` on its PATH that
     /// answers in this ranma: `ranma tmux-shim -- claude`. See CONFIG.md.
     TmuxShim {
+        /// The command and its arguments, after `--`.
         #[arg(last = true)]
         command: Vec<String>,
     },
     /// The tmux shim asked for by name: `ranma tmux list-panes -F '#{pane_id}'`.
     Tmux {
+        /// What tmux would be given: a command and its flags.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -162,20 +185,26 @@ enum Command {
     /// Evaluate Lua in the running ranma's configuration and print what it
     /// returns: `ranma lua 'ranma.state()'`. The code is the arguments joined
     /// by spaces, or stdin when there are none. It runs as a bind does.
-    Lua { code: Vec<String> },
+    Lua {
+        /// The Lua code; stdin when there is none.
+        code: Vec<String>,
+    },
     /// Say what loaded and what runs: the config, each plugin and whether it
     /// failed, the hooks, timers and jobs.
     Health,
     /// Print a pane's text: its screen, and with --history that many lines of
     /// scrollback above it.
     Capture {
+        /// The pane (from `ranma panes`); the one this runs in when left out.
         #[arg(long, short)]
         pane: Option<u64>,
+        /// Lines of scrollback to print above the screen.
         #[arg(long, short = 'H', default_value_t = 0)]
         history: usize,
     },
     /// Wait for a pane to end, and exit with its program's status.
     Wait {
+        /// The pane (from `ranma panes`); the one this runs in when left out.
         #[arg(long, short)]
         pane: Option<u64>,
     },
@@ -587,6 +616,19 @@ fn pane_table(panes: &[ipc::PaneInfo]) -> String {
         .collect()
 }
 
+fn dump_man(dir: &std::path::Path) -> anyhow::Result<()> {
+    use anyhow::Context;
+    for (path, roff) in ranma::man::pages(<Cli as clap::CommandFactory>::command())? {
+        let file = dir.join(path);
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
+        std::fs::write(&file, roff).with_context(|| format!("writing {}", file.display()))?;
+    }
+    Ok(())
+}
+
 fn main() -> ExitCode {
     // Called as `tmux` (the shim's link): answer, or hand the call on.
     let mut argv = std::env::args();
@@ -595,6 +637,16 @@ fn main() -> ExitCode {
         return ranma::tmux::main_as_tmux(argv.collect());
     }
     let mut cli = Cli::parse();
+
+    if let Some(dir) = &cli.dump_man {
+        return match dump_man(dir) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("ranma: {e:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     if let Some(file) = &cli.check_handover {
         return match ranma::app::check_handover(file) {
@@ -737,6 +789,63 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+
+    /// Every argument a user can see says what it is: `--help` and the man
+    /// pages both show the text, and an empty one reads as an omission.
+    #[test]
+    fn every_argument_has_help() {
+        fn walk(cmd: &clap::Command, path: &str, missing: &mut Vec<String>) {
+            for a in cmd.get_arguments() {
+                if a.is_hide_set()
+                    || a.get_help().is_none() && ["help", "version"].contains(&a.get_id().as_str())
+                {
+                    continue;
+                }
+                if a.get_help().is_none() {
+                    missing.push(format!("{path} {}", a.get_id()));
+                }
+            }
+            for s in cmd.get_subcommands().filter(|s| !s.is_hide_set()) {
+                walk(s, &format!("{path} {}", s.get_name()), missing);
+            }
+        }
+        let mut cmd = <super::Cli as clap::CommandFactory>::command();
+        cmd.build();
+        let mut missing = Vec::new();
+        walk(&cmd, "ranma", &mut missing);
+        assert!(missing.is_empty(), "no help: {missing:?}");
+    }
+
+    /// `doc/man/` is the generated pages, committed: this fails when the CLI,
+    /// CONFIG.md or the default binds changed without them.
+    #[test]
+    fn the_committed_man_pages_are_current() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("doc/man");
+        let pages = ranma::man::pages(<super::Cli as clap::CommandFactory>::command()).unwrap();
+        let mut stale = Vec::new();
+        for (path, roff) in &pages {
+            if std::fs::read_to_string(root.join(path)).ok().as_deref() != Some(roff.as_str()) {
+                stale.push(path.clone());
+            }
+        }
+        // And nothing left over from a command that is gone.
+        for sec in ["man1", "man5", "man7"] {
+            for e in std::fs::read_dir(root.join(sec))
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                let rel = format!("{sec}/{}", e.file_name().to_string_lossy());
+                if !pages.iter().any(|(p, _)| *p == rel) {
+                    stale.push(format!("{rel} (not generated any more)"));
+                }
+            }
+        }
+        assert!(
+            stale.is_empty(),
+            "stale man pages, regenerate with `rm -r doc/man && cargo run -- --dump-man doc/man`: {stale:?}"
+        );
+    }
 
     #[test]
     fn commented_defaults_run_as_nothing() {

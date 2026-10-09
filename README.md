@@ -52,6 +52,11 @@ ranma --dump-config    # the default init.lua, which documents every option
 ranma --check-config   # validate ~/.config/ranma/init.lua and its theme
 ```
 
+The install also puts man pages beside the binary, where `man` finds them:
+`man ranma` (the commands), `man 5 ranma` (the configuration, which is
+`doc/CONFIG.md`) and `man ranma-keys` (the default keys). They are generated
+and committed in [`doc/man/`](doc/man).
+
 - [`doc/DESIGN.md`](doc/DESIGN.md): what ranma is, what it refuses to be, and why
 - [`doc/CONFIG.md`](doc/CONFIG.md): the configuration and theme reference
 - [`doc/ROADMAP.md`](doc/ROADMAP.md): milestones

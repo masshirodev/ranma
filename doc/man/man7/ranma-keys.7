@@ -1,0 +1,294 @@
+.TH RANMA-KEYS 7 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-keys \- the default keys
+.SH DESCRIPTION
+These are the keys ranma binds before your \fIinit.lua\fR runs, as its which\-key hint
+shows them; \fBranma \-\-dump\-config\fR prints the binds themselves. Rebind a key to
+override it, \fBranma.unbind\fR it to drop it (a folder's key takes its keys with it).
+.PP
+Press the leader, \fBctrl+b\fR, to enter WM mode; the keys below are pressed in it.
+WM mode stays until \fBesc\fR unless \fIwm_mode.sticky\fR is off. The leader again sends
+it to the program. In WM mode, \fB?\fR lists every bind, filterable, and \fB:\fR every action.
+.SH NOTATION
+A capital letter is that letter with Shift (\fBM\fR is shift+m). \fB\(<-\(da\(ua\(->\fR
+are the arrows, one action in four directions; \fB1\-0\fR the number row, workspaces 1 to 10;
+\fB⏎\fR is Return, \fBbksp\fR Backspace, \fBDel\fR Delete, \fBspc\fR Space. Two keys
+with a slash or a space between them (\fBctrl+h/l\fR, \fB( )\fR) are previous and next.
+A name starting with \fB+\fR is a folder: its key opens more keys, listed under FOLDERS.
+.SH "WM MODE"
+.SS layout
+.PD 0
+.TP 18
+\fB←↓↑→\fR
+focus
+.TP 18
+\fBshift+←↓↑→\fR
+resize
+.TP 18
+\fBctrl+shift+←↓↑→\fR
+move
+.TP 18
+\fBalt+←↓↑→\fR
+split there
+.TP 18
+\fBj\fR
+split dir
+.TP 18
+\fB=\fR
+equalize
+.TP 18
+\fBalt+⏎\fR
+fullscreen
+.TP 18
+\fBM\fR
+swap master
+.TP 18
+\fBspc\fR
+next layout
+.PD
+.SS panes
+.PD 0
+.TP 18
+\fBt\fR
+new pane
+.TP 18
+\fBq\fR
+close
+.TP 18
+\fBw\fR
+float
+.TP 18
+\fBf\fR
+next float
+.TP 18
+\fBg\fR
+group
+.TP 18
+\fBctrl+h/l\fR
+prev/next tab
+.TP 18
+\fB,\fR
+rename
+.TP 18
+\fBi\fR
+pane numbers
+.TP 18
+\fBx\fR
++pane
+.PD
+.SS workspaces
+.PD 0
+.TP 18
+\fB1\-0\fR
+workspace
+.TP 18
+\fBalt+1\-0\fR
+send pane
+.TP 18
+\fBctrl+←→\fR
+prev/next
+.TP 18
+\fBctrl+↓\fR
+empty one
+.TP 18
+\fB\&.\fR
+rename
+.TP 18
+\fBs\fR
+scratchpad
+.TP 18
+\fBalt+s\fR
+to scratchpad
+.TP 18
+\fB;\fR
+last pane
+.TP 18
+\fBl\fR
+last one
+.PD
+.SS sessions
+.PD 0
+.TP 18
+\fBtab\fR
+pane list
+.TP 18
+\fBbksp\fR
+session list
+.TP 18
+\fBN\fR
+new session
+.TP 18
+\fB( )\fR
+prev/next
+.TP 18
+\fB$\fR
+rename
+.TP 18
+\fBm\fR
+move workspace
+.PD
+.SS history
+.PD 0
+.TP 18
+\fB/\fR
+search
+.TP 18
+\fB[\fR
+copy mode
+.TP 18
+\fBo\fR
+links
+.TP 18
+\fBv\fR
+paste image
+.TP 18
+\fBV\fR
+copies
+.TP 18
+\fB]\fR
+paste last
+.PD
+.SS ranma
+.PD 0
+.TP 18
+\fB:\fR
+commands
+.TP 18
+\fBp\fR
+settings
+.TP 18
+\fBr\fR
+reload config
+.TP 18
+\fBd\fR
+detach
+.TP 18
+\fBS\fR
+servers
+.TP 18
+\fBU\fR
+update
+.TP 18
+\fBDel\fR
+quit
+.TP 18
+\fBesc\fR
+leave WM
+.TP 18
+\fBy\fR
++layouts
+.PD
+.SH FOLDERS
+.SS "x +pane"
+\fBctrl+b x\fR, then:
+.PD 0
+.TP 18
+\fBa\fR
+sync input
+.TP 18
+\fBA\fR
+unsync all
+.TP 18
+\fBc\fR
+centre
+.TP 18
+\fBl\fR
+log pane
+.TP 18
+\fBm\fR
+menu
+.TP 18
+\fBr\fR
+respawn
+.TP 18
+\fBs\fR
+watch silence
+.TP 18
+\fBz\fR
+size 80%
+.TP 18
+\fB←↓↑→\fR
+snap half
+.PD
+.SS "y +layouts"
+\fBctrl+b y\fR, then:
+.PD 0
+.TP 18
+\fBl\fR
+load layout
+.TP 18
+\fBs\fR
+save layout
+.PD
+.SH "WITHOUT THE LEADER"
+These work outside WM mode; the program in the pane never sees them.
+.SS layout
+.PD 0
+.TP 18
+\fBalt+←↓↑→\fR
+focus
+.TP 18
+\fBalt+shift+←↓↑→\fR
+move
+.PD
+.SS workspaces
+.PD 0
+.TP 18
+\fBalt+1\-0\fR
+workspace
+.TP 18
+\fBalt+!\fR
+send pane 1
+.TP 18
+\fBalt+@\fR
+send pane 2
+.TP 18
+\fBalt+#\fR
+send pane 3
+.TP 18
+\fBalt+$\fR
+send pane 4
+.TP 18
+\fBalt+%\fR
+send pane 5
+.TP 18
+\fBalt+^\fR
+send pane 6
+.TP 18
+\fBalt+¨\fR
+send pane 6
+.TP 18
+\fBalt+&\fR
+send pane 7
+.TP 18
+\fBalt+*\fR
+send pane 8
+.TP 18
+\fBalt+(\fR
+send pane 9
+.TP 18
+\fBalt+)\fR
+send pane 10
+.TP 18
+\fBalt+s\fR
+scratchpad
+.PD
+.SH "SCROLLING LAYOUT"
+With \fIlayout = "scrolling"\fR the hint's layout group is the strip's, and these replace
+split dir, swap master and next layout:
+.PD 0
+.TP 18
+\fB{ }\fR
+join/leave
+.TP 18
+\fBe\fR
+width
+.TP 18
+\fBE\fR
+full width
+.TP 18
+\fBc\fR
+centre
+.PD
+.SH "SEE ALSO"
+\fBranma\fR(1), \fBranma\fR(5)

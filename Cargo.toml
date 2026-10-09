@@ -15,6 +15,7 @@ exclude = ["doc/briefs/", "doc/handoffs/", "doc/screenshot.png", "scripts/", ".g
 alacritty_terminal = "0.26"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+clap_mangen = "0.3.3"
 crossterm = { version = "0.29", features = ["serde"] }
 dirs = "7"
 libc = "0.2"

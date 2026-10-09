@@ -20,7 +20,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `ipc` | every request and query round-trips through its text form; malformed ones are refused with the reason |
 | `hints` | URLs found in text without the punctuation around them, wrapped URLs as one link, OSC 8 links over text, labels (letters, then pairs, never one a prefix of another) |
 | `osc` | OSC 133 C as a started command and C/D timed into a finished one (once, and not for a D alone); OSC 7 as a host and a decoded path (`file:///` with no host; other URLs and a path-less one ignored); sequences split across reads, OSC 9 and 777 notifications (not ConEmu progress), a nested ranma's hello, report and paste-image request, long and unrelated sequences passed without keeping state |
-| `whichkey` | the hint's panel at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, cell for cell against the design handoff's own rendering (`doc/handoffs/done/WHICH_KEY_MOCK.txt`); short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
+| `whichkey` | the hint's panel for the default binds at 80×24 (rounded and borderless), 120×35, 200×50 and the flowed 40×15, and their `x` and `y` folders opened, cell for cell against the handoff's own layout (`doc/handoffs/done/WHICH_KEY_MOCK.txt`, written by `WHICH_KEY_FOLDERS/fixtures.py`); every default group keeping its heading at 80×24; short key spellings; families, a rebound member on its own row, custom and Lua binds in "yours" |
 | `nestbar` | the nested bar at 80 and 200 columns, one and two levels, focused-only and expand-all, and every step of the overflow ladder, cell for cell against the design handoff's own rendering (`doc/handoffs/done/NESTED_BAR_MOCK.txt`); an older or unknown report looks as today; urgency bubbling to a holder; a shown inner scratchpad's `S` coloured as current; a ranma in a scratchpad expanding `S` while shown (and with expand-all), counted while hidden, on the path one level in, clicked through holder 0, counted and urgent in the compact label, and a report without the field still parsing; "you are here" twice; clicks through a holder; the hello, its answer, and a report round-tripping through its OSC; the compact label on an unfocused pane's border at 100, 60 and 40 columns (urgent, WM, two sessions, two levels) and all 21 strips of its ladder, cell for cell against `doc/handoffs/done/UNFOCUSED_BAR_MOCK.txt`, its colours and clicks, and the no-border fallback; the hello answer a version-1 build still reads; the outer's colours ahead of its answer, found, leaving no input behind, and none or a non-object read as none; the pane strip taken from the innermost ranma with two panes, skipping one with a single pane, and a report without `panes` parsing |
 | `snapshot` | a pane's screen as text and back: history, colours, wide characters and wrapped rows cell for cell, the cursor; the shell kept behind a full-screen program, and its modes; palette changes |
 | `sysstat` | CPU usage from two /proc/stat samples, memory in use from /proc/meminfo, malformed input refused |
@@ -48,9 +48,24 @@ Everything that can be pure is, and is tested without a terminal:
 | `app::copy` | base64 for OSC 52 |
 | `app` (nested) | an inner ranma under an outer of protocol 1 overlays its bar while unfocused and reports in version 1; under protocol 2 it draws none; an answer it does not speak is no outer; the outer's colours taken only with `theme_colors = "outer"`, passed on as drawn, and dropped when a terminal without them attaches; `outer` in `ranma.client()` and `driver_change`; the report carrying the current workspace's panes as the strip names them |
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
+| `man` | Markdown into roff: code, strong and emphasis as fonts, a code span across a line break, links as their text, headings as sections, lists, fences, tables as tagged paragraphs; no line starting a request; the keys page listing the folders, the keys outside WM mode and the strip's; the config page carrying every `##` section of `CONFIG.md` |
+| `main` (man pages) | `doc/man/` equal to what `--dump-man` writes now, and nothing in it that is not generated any more; every argument the CLI shows having help text |
 | `paste` | which pastes are nothing but paths of files that exist (one or several; quoted, escaped, `file://`, a plain path with spaces, Windows under WSL) and which are text; a `text/uri-list` read for its local files; names made inert and paths quoted as words; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload of two files through a stand-in ssh that runs the far side's real shell, and a folder refused |
 
 Seconds to run. Run them on every change.
+
+**When a man-page test fails**, the CLI, `doc/CONFIG.md` or the default binds
+changed and `doc/man/` did not: regenerate it and commit the result.
+
+```sh
+rm -r doc/man && cargo run -- --dump-man doc/man
+```
+
+**When a which-key fixture test fails** after a change to the default binds,
+update the rows in `doc/handoffs/done/WHICH_KEY_FOLDERS/wk.py` to what the hint
+should now show, then run `python3 fixtures.py` in that directory. The Rust
+hint must then match the redrawn panels; a group past nine rows will not fit
+at 80×24.
 
 ## Smoke test — `scripts/smoke.sh`
 

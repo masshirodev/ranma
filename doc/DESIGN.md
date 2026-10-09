@@ -1321,6 +1321,40 @@ recorded behind it so far (`Builder::forget_behind`). A folder bound on the
 key keeps them, so "keys before their folder" still works in one file;
 `ranma.unbind` first starts it empty.
 
+### Man pages, generated (2026-10-09)
+
+`man ranma` had nothing to find. The pages are now made from what they
+describe, never written twice:
+
+- **ranma(1) and ranma-*command*(1)** from the CLI's own definition, through
+  `clap_mangen`, so `--help` and the page say the same. ranma(1) adds FILES,
+  ENVIRONMENT and SEE ALSO. Writing them found ten arguments with no help
+  at all; a test now refuses one.
+- **ranma(5) is `doc/CONFIG.md`**, converted by `man::markdown`. A small
+  converter of our own rather than pandoc at build time: CONFIG.md uses five
+  shapes (headings, paragraphs, flat lists, fences, pipe tables), and a
+  build that needs pandoc is one more thing an install can lack. Tables
+  become tagged paragraphs, the first cell the tag, middle cells
+  `Header: value` and the last the text, because a boxed `tbl` table of
+  120-character cells is unreadable at 80 columns.
+- **ranma-keys(7)** from the default bind table, grouped and named the way
+  the which-key hint does (`whichkey::groups`), folders and the keys outside
+  WM mode included. Its notation is the hint's (`M` for shift+m, `←↓↑→`), so
+  the page and the screen read alike.
+
+**Committed, not built at install.** `doc/man/` holds the roff, written by
+`ranma --dump-man DIR` (a hidden flag), and a test fails when it differs
+from what the code would write now, or holds a page no command makes any
+more. The cost is a regenerated file in the diff when CONFIG.md changes;
+the gain is pages readable from a checkout, and a stale one caught by
+`cargo test` instead of found by a reader. The version in a page is the
+crate's, not `--version`'s, which carries the commit and would make every
+page stale at every commit; the date is left empty for the same reason.
+
+`install.sh` copies them to `share/man` beside the binary's `bin/`
+(`~/.cargo/share/man`), which man-db searches for any PATH directory, so
+no MANPATH is needed.
+
 ### A scrolling layout: niri's strip (2026-10-09)
 
 Designed from `doc/briefs/done/SCROLLING_LAYOUT.md`; the handoff is

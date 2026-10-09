@@ -55,12 +55,18 @@ else
   bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
 fi
 bin="$bin_dir/ranma"
+# Beside bin/, where man-db looks for a PATH directory's pages: `man ranma`
+# finds them with no MANPATH set.
+man_dir="$(dirname "$bin_dir")/share/man"
 
 if [ "$uninstall" -eq 1 ]; then
   command -v cargo >/dev/null || fail "cargo is not installed"
   cargo uninstall ranma "${root_args[@]}"
   rm -f "$bin.previous"
-  say "removed $bin"
+  for page in doc/man/man*/*; do
+    rm -f "$man_dir/${page#doc/man/}"
+  done
+  say "removed $bin and its man pages"
   say "a shell startup that runs ranma (e.g. .zshrc_startup) skips it when it is not installed"
   exit 0
 fi
@@ -109,6 +115,14 @@ fi
 rm -f "$backup"
 say "installed $("$bin" --version), and it accepts your config"
 printf '%s\n' "$out" | sed 's/^/    /'
+
+# ---- man pages: the committed ones in doc/man, current by test ------------------
+for page in doc/man/man*/*; do
+  mkdir -p "$man_dir/$(basename "$(dirname "$page")")"
+  cp "$page" "$man_dir/${page#doc/man/}"
+done
+say "man pages in $man_dir: man ranma, man 5 ranma, man ranma-keys"
+command -v man >/dev/null || say "note: man is not installed (man-db); the pages are there for when it is"
 
 # ---- after ---------------------------------------------------------------------
 case ":$PATH:" in

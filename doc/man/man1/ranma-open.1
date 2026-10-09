@@ -1,0 +1,51 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-OPEN 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-open \- Open a pane somewhere, e.g. \fBranma open \-\-session ai \-\-workspace empty \-\-cwd ~/projects/x \-\-name x \-\- \*(Aqai; exec zsh\*(Aq\fR. One argument after \fB\-\-\fR is a command line for the shell; several are a command and its arguments
+.SH SYNOPSIS
+\fBranma open\fR [\fB\-\-session\fR] [\fB\-\-workspace\fR] [\fB\-\-name\fR] [\fB\-\-workspace\-name\fR] [\fB\-\-cwd\fR] [\fB\-\-accent\fR] [\fB\-\-beside\fR] [\fB\-\-side\fR] [\fB\-d\fR|\fB\-\-background\fR] [\fB\-\-float\fR] [\fB\-P\fR|\fB\-\-print\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fICOMMAND\fR] 
+.SH DESCRIPTION
+Open a pane somewhere, e.g. \fBranma open \-\-session ai \-\-workspace empty \-\-cwd ~/projects/x \-\-name x \-\- \*(Aqai; exec zsh\*(Aq\fR. One argument after \fB\-\-\fR is a command line for the shell; several are a command and its arguments
+.SH OPTIONS
+.TP
+\fB\-\-session\fR \fI<SESSION>\fR
+Switch to this session, creating it if there is none
+.TP
+\fB\-\-workspace\fR \fI<WORKSPACE>\fR
+Then to this workspace: a number, next, prev or empty
+.TP
+\fB\-\-name\fR \fI<NAME>\fR
+Name the pane
+.TP
+\fB\-\-workspace\-name\fR \fI<WORKSPACE_NAME>\fR
+Name the workspace it lands in
+.TP
+\fB\-\-cwd\fR \fI<CWD>\fR
+Start in this directory instead of the focused pane\*(Aqs
+.TP
+\fB\-\-accent\fR \fI<ACCENT>\fR
+Colour the session it lands in: #rrggbb, 0\-255 or an ANSI name
+.TP
+\fB\-\-beside\fR \fI<BESIDE>\fR
+Open it beside this pane (an id from \fBranma panes\fR), in that pane\*(Aqs session and workspace, on the \-\-side given
+.TP
+\fB\-\-side\fR \fI<SIDE>\fR
+With \-\-beside: left, right, up or down (default right)
+.TP
+\fB\-d\fR, \fB\-\-background\fR
+Leave focus, the session and the workspace as they are
+.TP
+\fB\-\-float\fR \fI<WIDTH>\fR\fI \fR\fI<HEIGHT>\fR
+Float it, centred: width and height in percent of the workspace
+.TP
+\fB\-P\fR, \fB\-\-print\fR
+Print the new pane\*(Aqs id
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fICOMMAND\fR]
+What to run; the shell when left out
+.SH "SEE ALSO"
+\fBranma\fR(1)

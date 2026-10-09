@@ -1,0 +1,27 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-POPUP 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-popup \- Run a command in a float over this pane and print what it prints: \fBcd "$(ranma popup \-\- \*(Aqls ~/projects | fzf\*(Aq)"\fR. Waits for it, exits with its status, and gives focus back when it closes
+.SH SYNOPSIS
+\fBranma popup\fR [\fB\-W\fR|\fB\-\-width\fR] [\fB\-H\fR|\fB\-\-height\fR] [\fB\-t\fR|\fB\-\-title\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fICOMMAND\fR> 
+.SH DESCRIPTION
+Run a command in a float over this pane and print what it prints: \fBcd "$(ranma popup \-\- \*(Aqls ~/projects | fzf\*(Aq)"\fR. Waits for it, exits with its status, and gives focus back when it closes
+.SH OPTIONS
+.TP
+\fB\-W\fR, \fB\-\-width\fR \fI<WIDTH>\fR [default: 60]
+Width in percent of the workspace
+.TP
+\fB\-H\fR, \fB\-\-height\fR \fI<HEIGHT>\fR [default: 60]
+Height in percent of the workspace
+.TP
+\fB\-t\fR, \fB\-\-title\fR \fI<TITLE>\fR
+Name shown on its border
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fICOMMAND\fR>
+The command. Its stdout is what \fBranma popup\fR prints, so the program must draw on the terminal itself (as fzf does), not on stdout
+.SH "SEE ALSO"
+\fBranma\fR(1)

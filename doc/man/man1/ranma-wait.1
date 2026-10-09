@@ -1,0 +1,18 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-WAIT 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-wait \- Wait for a pane to end, and exit with its program\*(Aqs status
+.SH SYNOPSIS
+\fBranma wait\fR [\fB\-p\fR|\fB\-\-pane\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Wait for a pane to end, and exit with its program\*(Aqs status
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\-pane\fR \fI<PANE>\fR
+The pane (from \fBranma panes\fR); the one this runs in when left out
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH "SEE ALSO"
+\fBranma\fR(1)

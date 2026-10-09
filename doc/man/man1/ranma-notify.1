@@ -1,0 +1,24 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-NOTIFY 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-notify \- Show a toast, e.g. \fBmake && ranma notify "build done"\fR
+.SH SYNOPSIS
+\fBranma notify\fR [\fB\-u\fR|\fB\-\-urgent\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITEXT\fR> 
+.SH DESCRIPTION
+Show a toast, e.g. \fBmake && ranma notify "build done"\fR
+.SH OPTIONS
+.TP
+\fB\-u\fR, \fB\-\-urgent\fR
+Draw it in the urgent style
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR \fI<TIMEOUT>\fR
+Seconds before it goes (default 5)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fITEXT\fR>
+The message
+.SH "SEE ALSO"
+\fBranma\fR(1)

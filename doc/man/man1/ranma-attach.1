@@ -1,0 +1,24 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-ATTACH 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-attach \- Attach this terminal to the server NAME, sharing it with any terminal already showing it, or start one by that name
+.SH SYNOPSIS
+\fBranma attach\fR [\fB\-\-steal\fR] [\fB\-\-mobile\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINAME\fR> 
+.SH DESCRIPTION
+Attach this terminal to the server NAME, sharing it with any terminal already showing it, or start one by that name
+.SH OPTIONS
+.TP
+\fB\-\-steal\fR
+Send every other terminal showing it away instead of sharing
+.TP
+\fB\-\-mobile\fR
+This terminal is a phone or a tablet, as \fBRANMA_MOBILE=1\fR says
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fINAME\fR>
+The server\*(Aqs name, as \fBranma ls\fR lists it
+.SH "SEE ALSO"
+\fBranma\fR(1)

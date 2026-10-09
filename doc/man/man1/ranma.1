@@ -1,0 +1,129 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma \- A tiling window manager for the terminal: i3\*(Aqs tree, Hyprland\*(Aqs dwindle, in a PTY
+.SH SYNOPSIS
+\fBranma\fR [\fB\-\-dump\-config\fR] [\fB\-\-commented\fR] [\fB\-\-check\-config\fR] [\fB\-\-dump\-theme\fR] [\fB\-\-dump\-types\fR] [\fB\-\-standalone\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+A tiling window manager for the terminal: i3\*(Aqs tree, Hyprland\*(Aqs dwindle, in a PTY.
+.PP
+Without a command, ranma attaches this terminal to a server: the most recently used one no terminal shows, or a new one. Closing the terminal only detaches; \fBranma ls\fR lists the servers and \fBranma attach NAME\fR returns to one.
+.PP
+Press the leader (ctrl+b) for WM mode, where single keys split, focus, float and move panes; pause there and a hint lists them. ranma\-keys(7) lists the default keys and ranma(5) the configuration, read from ~/.config/ranma/init.lua.
+.SH OPTIONS
+.TP
+\fB\-\-dump\-config\fR
+Print the built\-in default init.lua and exit. It is also the reference for every option
+.TP
+\fB\-\-commented\fR
+With \-\-dump\-config: comment out every line, for pasting into your own init.lua as a reference that changes nothing until you uncomment it
+.TP
+\fB\-\-check\-config\fR
+Load the config and theme, report any error, and exit
+.TP
+\fB\-\-dump\-theme\fR
+Print the built\-in default theme and exit
+.TP
+\fB\-\-dump\-types\fR
+Print the Lua API as LuaLS annotations, for an editor to complete and check \fBranma.*\fR in init.lua and plugins
+.TP
+\fB\-\-standalone\fR
+Run in this terminal only, without a server: closing the terminal ends it. For tests, and for when a server is not wanted
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.SH SUBCOMMANDS
+.TP
+ranma\-ls(1)
+List the ranma servers, and which ones a terminal is showing
+.TP
+ranma\-attach(1)
+Attach this terminal to the server NAME, sharing it with any terminal already showing it, or start one by that name
+.TP
+ranma\-kill(1)
+Quit the server NAME and everything in it, without asking
+.TP
+ranma\-upgrade(1)
+Move running servers to the installed build without closing anything: every shell, pane and scrollback stays. \fBinstall.sh\fR runs \fB\-\-all\fR
+.TP
+ranma\-notify(1)
+Show a toast, e.g. \fBmake && ranma notify "build done"\fR
+.TP
+ranma\-update(1)
+Pull ranma\*(Aqs source and install it; with \-\-check, only say whether there is anything new
+.TP
+ranma\-action(1)
+Run an action, spelled as in a bind: \fBranma action "workspace 3"\fR
+.TP
+ranma\-popup(1)
+Run a command in a float over this pane and print what it prints: \fBcd "$(ranma popup \-\- \*(Aqls ~/projects | fzf\*(Aq)"\fR. Waits for it, exits with its status, and gives focus back when it closes
+.TP
+ranma\-tmux\-shim(1)
+Run COMMAND (your shell when left out) with a \fBtmux\fR on its PATH that answers in this ranma: \fBranma tmux\-shim \-\- claude\fR. See CONFIG.md
+.TP
+ranma\-tmux(1)
+The tmux shim asked for by name: \fBranma tmux list\-panes \-F \*(Aq#{pane_id}\*(Aq\fR
+.TP
+ranma\-panes(1)
+List every pane in every session: id, where it is, what runs in it
+.TP
+ranma\-send(1)
+Type into a pane as if at its keyboard: \fBranma send \-p 3 \-e \*(Aqmake test\*(Aq\fR
+.TP
+ranma\-lua(1)
+Evaluate Lua in the running ranma\*(Aqs configuration and print what it returns: \fBranma lua \*(Aqranma.state()\*(Aq\fR. The code is the arguments joined by spaces, or stdin when there are none. It runs as a bind does
+.TP
+ranma\-health(1)
+Say what loaded and what runs: the config, each plugin and whether it failed, the hooks, timers and jobs
+.TP
+ranma\-capture(1)
+Print a pane\*(Aqs text: its screen, and with \-\-history that many lines of scrollback above it
+.TP
+ranma\-wait(1)
+Wait for a pane to end, and exit with its program\*(Aqs status
+.TP
+ranma\-open(1)
+Open a pane somewhere, e.g. \fBranma open \-\-session ai \-\-workspace empty \-\-cwd ~/projects/x \-\-name x \-\- \*(Aqai; exec zsh\*(Aq\fR. One argument after \fB\-\-\fR is a command line for the shell; several are a command and its arguments
+.SH VERSION
+v0.1.0
+.SH FILES
+.TP
+\fI~/.config/ranma/init.lua\fR
+Your configuration, run after the built\-in defaults and any plugins. See \fBranma\fR(5).
+.TP
+\fI~/.config/ranma/settings.toml\fR
+What the settings panel saves; applied after \fIinit.lua\fR.
+.TP
+\fI~/.config/ranma/themes/\fR\fINAME\fR\fI.toml\fR
+A theme, chosen with \fBranma.set { theme = "NAME" }\fR.
+.TP
+\fI~/.config/ranma/plugin/*.lua\fR, \fI~/.config/ranma/pack/*/start/*/plugin/*.lua\fR
+Plugins, run after the defaults and before \fIinit.lua\fR; \fIlua/\fR is on require's path.
+.TP
+\fI$XDG_RUNTIME_DIR/ranma/\fR\fINAME\fR\fI.sock\fR
+A server's socket, private to you.
+.TP
+\fI~/.local/state/ranma/\fR
+Saved layouts (\fIlayouts/\fR), server snapshots (\fIservers/\fR), plugin stores (\fIstore/\fR) and pane logs (\fIlogs/\fR).
+.SH ENVIRONMENT
+.TP
+\fBRANMA_CONFIG_DIR\fR
+The configuration directory, instead of \fI$XDG_CONFIG_HOME/ranma\fR.
+.TP
+\fBRANMA_MOBILE\fR
+Set (and not 0), this terminal is a phone or a tablet: the mobile profile applies.
+.TP
+\fBRANMA_SOURCE_DIR\fR
+The checkout \fBranma update\fR pulls and installs, instead of the one ranma was built from.
+.TP
+\fBRANMA_NO_UPDATE_CHECK\fR
+Set, the server never checks for updates.
+.TP
+\fBRANMA\fR, \fBRANMA_PANE\fR, \fBRANMA_SOCKET\fR
+Set by ranma in every pane: the server's process id, the pane's id and the socket that commands like \fBranma notify\fR talk to.
+.SH "SEE ALSO"
+\fBranma\fR(5), \fBranma\-keys\fR(7), \fBranma\-ls\fR(1), \fBranma\-attach\fR(1), \fBranma\-kill\fR(1), \fBranma\-upgrade\fR(1), \fBranma\-notify\fR(1), \fBranma\-update\fR(1), \fBranma\-action\fR(1), \fBranma\-popup\fR(1), \fBranma\-tmux\-shim\fR(1), \fBranma\-tmux\fR(1), \fBranma\-panes\fR(1), \fBranma\-send\fR(1), \fBranma\-lua\fR(1), \fBranma\-health\fR(1), \fBranma\-capture\fR(1), \fBranma\-wait\fR(1), \fBranma\-open\fR(1)

@@ -1,0 +1,21 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-CAPTURE 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-capture \- Print a pane\*(Aqs text: its screen, and with \-\-history that many lines of scrollback above it
+.SH SYNOPSIS
+\fBranma capture\fR [\fB\-p\fR|\fB\-\-pane\fR] [\fB\-H\fR|\fB\-\-history\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Print a pane\*(Aqs text: its screen, and with \-\-history that many lines of scrollback above it
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\-pane\fR \fI<PANE>\fR
+The pane (from \fBranma panes\fR); the one this runs in when left out
+.TP
+\fB\-H\fR, \fB\-\-history\fR \fI<HISTORY>\fR [default: 0]
+Lines of scrollback to print above the screen
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH "SEE ALSO"
+\fBranma\fR(1)

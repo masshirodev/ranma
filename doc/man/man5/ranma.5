@@ -1,0 +1,2494 @@
+.TH RANMA 5 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma \- configuration: init.lua, themes, plugins and the Lua API
+.SH DESCRIPTION
+.PP
+ranma reads \fB~/.config/ranma/init.lua\fR (or \fB$XDG_CONFIG_HOME/ranma/init.lua\fR;
+\fB$RANMA_CONFIG_DIR\fR overrides the directory). The built\-in defaults run first, so
+your file only needs what you change.
+.PP
+.RS 4
+.nf
+ranma \-\-dump\-config   # the built\-in init.lua: every option and default bind
+ranma \-\-dump\-config \-\-commented >> ~/.config/ranma/init.lua
+                      # the same, all commented out: a reference inside your
+                      # own file that changes nothing until you uncomment it
+ranma \-\-dump\-theme    # the built\-in theme
+ranma \-\-dump\-types    # the Lua API as LuaLS annotations, for your editor
+ranma \-\-check\-config  # load your config and theme, report errors, exit
+.fi
+.RE
+.PP
+Every mistake is an error at load, with the file and line: unknown settings, keys,
+actions, events, bind options, modules, theme keys and colours. Nothing is
+silently ignored.
+.PP
+\fBSymlinks are fine.\fR Dotfile setups often make \fBinit.lua\fR, \fBthemes/\fR or a
+plugin directory a link into a repository; ranma watches the real files behind the links, so saving
+through them reloads as well.
+.PP
+\fBReloading is automatic.\fR ranma watches the config directory (inotify, so it
+costs nothing while idle) and reloads a moment after \fBinit.lua\fR or a theme is
+saved. A config that fails to load is reported in the bar and the old one stays in
+force, so a typo never takes the session down. \fBreload_config\fR (\fBr\fR in WM mode)
+does the same by hand. The directory must exist when ranma starts for it to be
+watched.
+.SH "SERVERS: CLOSING THE TERMINAL DOES NOT END RANMA"
+.PP
+\fBranma\fR in a terminal is a client of a ranma \fBserver\fR, which holds your panes,
+sessions and everything running in them. Closing the terminal, or losing an SSH
+connection, only detaches: the next \fBranma\fR finds the server again, screen and
+shells as you left them.
+.TP
+\fBranma\fR
+Attach to the most recently used server no terminal is showing; start a new one when every server is on screen (so a second terminal gets its own).
+.TP
+\fBranma ls\fR
+List the servers: attached (\fBattached×2\fR when two terminals show it) or detached, panes, sessions, when last used.
+.TP
+\fBranma attach NAME\fR
+Attach to server NAME, sharing it with any terminal that already shows it (or start one by that name).
+.TP
+\fBranma attach \-\-steal NAME\fR
+The same, but every other terminal showing it is sent away (and told).
+.TP
+\fBranma attach \-\-mobile NAME\fR
+Say this terminal is a phone or a tablet, as \fBRANMA_MOBILE=1\fR does for plain \fBranma\fR and \fBattach\fR. \fBinit.lua\fR reads it in \fBranma.client()\fR and \fBdriver_change\fR, to switch to a touch layout; ranma itself changes nothing for it.
+.TP
+\fBranma kill NAME\fR
+Quit server NAME and everything in it, without asking.
+.TP
+\fBranma upgrade [NAME]\fR / \fB\-\-all\fR
+Move a server (the one this runs in, when no name is given) or all of them to the installed build \fBwithout closing anything\fR: shells, panes, scrollback and the terminal attached all stay. \fBinstall.sh\fR does \fB\-\-all\fR after every good install.
+.TP
+\fBranma update\fR / \fB\-\-check\fR
+Pull ranma's source and install it (\fB\-\-check\fR only says how far behind it is). \fBleader U\fR does the same in a floating pane. See Updating\fR.
+.TP
+\fBranma \-\-standalone\fR
+No server: ranma in this terminal only, ending with it.
+.TP
+\fBleader d\fR (\fBdetach\fR)
+Leave this terminal; the server keeps running.
+.TP
+\fBleader S\fR (\fBserver_switcher\fR)
+The servers, from inside ranma: \fBEnter\fR moves this terminal to one, \fBCtrl+X\fR kills one.
+.TP
+\fBleader Delete\fR (\fBquit\fR)
+End this server and every shell in it.
+.SS "Updating"
+.PP
+ranma updates from a clone of its own, \fB~/.local/share/ranma/repo\fR
+(\fB$XDG_DATA_HOME/ranma/repo\fR), made from \fBhttps://github.com/masshirodev/ranma\fR
+the first time it checks or updates. It is not your development checkout and
+need not be anywhere in particular: a binary built in one place and copied to
+another machine, or a checkout moved after installing, updates all the same.
+An update is that clone's \fBgit pull \-\-ff\-only && ./install.sh\fR; servers move to
+the new build in place.
+.PP
+\fBRANMA_SOURCE_DIR=/path/to/checkout ranma update\fR pulls and installs from
+another checkout instead, to try a branch not pushed yet. It must be a ranma
+checkout (it has \fBCargo.toml\fR and \fB.git\fR), and is never cloned or moved. It is a
+variable rather than a setting so it cannot be set once and forgotten.
+.PP
+A build from commits the source has never seen (one installed from a
+development checkout, ahead of what is pushed) is behind nothing.
+.PP
+Servers are named 1, 2, 3...; their sockets are in \fB$XDG_RUNTIME_DIR/ranma/\fR and
+their logs in \fB~/.cache/ranma/\fR.
+.PP
+\fBOn WSL, turn lingering on\fR (\fBsudo loginctl enable\-linger $USER\fR). With
+\fBsystemd=true\fR in \fB/etc/wsl.conf\fR, a Windows Terminal shell is not a logind
+session, so nothing keeps \fB/run/user/$UID\fR for it: the directory is in whatever
+state WSL left it at boot, and logind mounts a fresh tmpfs over it when an SSH
+login starts and removes it when the last one ends. Every server's socket is
+hidden under that mount while it lasts (\fBranma ls\fR answers "no ranma servers
+running", and a new terminal starts a new server instead of attaching), and
+anything that has to create a directory there, such as \fBranma tmux\-shim\fR
+making \fBtmux\-bin/\fR, can fail with \fIpermission denied\fR. Lingering makes logind
+keep the directory from boot, owned by you, with or without a session.
+.PP
+\fBUpgrading keeps everything.\fR A server takes a new build by executing it in
+its own place: the shells keep running, unaware (they are still its children,
+their PTYs never close), every pane comes back with its screen and scrollback,
+and the terminal attached only redraws. A full\-screen program (nvim, htop) is
+asked to draw itself again. What resets is what a config reload resets, plus
+open pickers, toasts and WM mode. Before anything happens the new build reads
+what it is given, in a process of its own; if it cannot, nothing is done, and a
+toast (and \fBranma upgrade\fR) says why. If it fails after all, the server goes
+back to the old build, which it kept aside, so no upgrade can close a shell.
+A server from before this existed does not know how: \fBranma upgrade\fR names it,
+and it takes one last restart (\fBleader Delete\fR, or \fBranma kill\fR). A standalone
+ranma is simply restarted. A newer \fBranma\fR attaching to an older server still
+says so.
+.PP
+\fBTwo terminals can show one server.\fR \fBranma attach 1\fR from a tablet while the
+PC shows server 1 shares it: both show the same screen, and either can type.
+The screen takes the size of the terminal \fBlast typed in\fR, so a look from the
+tablet leaves the PC's layout alone until you type there, and typing on the PC
+takes it back. A terminal that is not driving shows the screen at the other's
+size, cut off if it is smaller. A click in it only takes the screen: it was aimed at
+what that terminal showed before the screen moved to its size, so it does
+nothing else, and the next click works as usual. \fBleader d\fR detaches only the terminal you
+pressed it in. A terminal that stops reading for a second (a tablet asleep
+behind SSH) is dropped, so it cannot freeze the other.
+.PP
+\fBEvery terminal gets its own server\fR, so the session switcher of one does not
+show the sessions of another: sessions live in a server. Opening a second
+terminal (or SSHing in) while the desktop's terminal shows server 2 starts
+server 1 rather than taking 2 away. To reach server 2's sessions from there,
+\fBleader S\fR and pick it: the terminal moves to server 2, the desktop's terminal is
+told it was taken over, and the server you left keeps running, detached.
+.SH "SETTINGS — \fBranma.set { ... }\fR"
+.PP
+Each call changes only the fields it names; call it as often as you like.
+.TP
+\fBleader\fR
+Default: \fB"ctrl+b"\fR
+.br
+The chord that enters WM mode.
+.TP
+\fBtheme\fR
+Default: \fB"default"\fR
+.br
+Theme name; see Themes\fR.
+.TP
+\fBlayout\fR
+Default: \fB"dwindle"\fR
+.br
+Placement of new panes: \fBdwindle\fR (Hyprland), \fBmanual\fR (i3), or \fBmaster\fR: one master pane on the left and the others stacked on the right. In \fBmaster\fR a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. \fBmonocle\fR: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a \fB◇\fR tab after the tiles and still float over it). New panes are placed as in \fBdwindle\fR, and the tree is kept, so switching back to another layout (a profile\fR, say) gives the tiling back. \fBscrolling\fR: niri's strip of columns, see A scrolling layout\fR.
+.TP
+\fBmaster_ratio\fR
+Default: \fB0.55\fR
+.br
+With \fBlayout = "master"\fR: the master's share of the width when a master area forms (0.1\-0.9). Resizing it afterwards sticks.
+.TP
+\fBscroll_widths\fR
+Default: \fB{ "1/3", "1/2", "2/3" }\fR
+.br
+With \fBlayout = "scrolling"\fR: the widths \fBcolumn_width next\fR (\fBleader e\fR) steps through, 1 to 6 of them, each a fraction of the screen (\fB"a/b"\fR, at most 1) or whole cells (at least \fBscroll_min\fR). Not in the settings panel, which edits one value per row.
+.TP
+\fBscroll_width\fR
+Default: \fB"1/2"\fR
+.br
+With \fBlayout = "scrolling"\fR: a new column's width, anything \fBscroll_widths\fR takes.
+.TP
+\fBscroll_min\fR
+Default: \fB40\fR
+.br
+With \fBlayout = "scrolling"\fR: the narrowest a column gets, its border included, in cells (20\-500). Fractions round to the nearest cell and never go under it, so a third of 80 is 40, not 26. A workspace narrower than this makes every column its full width.
+.TP
+\fBscroll_center\fR
+Default: \fB"never"\fR
+.br
+With \fBlayout = "scrolling"\fR: \fBnever\fR moves the view the least that shows the focused column whole; \fBalways\fR centres it; \fBoverflow\fR centres it only when it and the column focus came from do not fit on screen together (niri's \fBon\-overflow\fR).
+.TP
+\fBpreserve_split\fR
+Default: \fBtrue\fR
+.br
+Keep a split's direction across resizes.
+.TP
+\fBsplash\fR
+Default: \fBtrue\fR
+.br
+An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to \fBhelp\fR lists every bind. It is drawn in \fBbar_accent\fR (the logo), \fBbar_fg\fR (the keys) and \fBbar_dim\fR; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. \fBfalse\fR leaves an empty workspace blank.
+.TP
+\fBshell\fR
+Default: \fBnil\fR
+.br
+Program for new panes; \fBnil\fR means \fB$SHELL\fR, then \fB/bin/sh\fR.
+.TP
+\fBscrollback_lines\fR
+Default: \fB10000\fR
+.br
+Scrollback per pane.
+.TP
+\fBwm_mode.sticky\fR
+Default: \fBtrue\fR
+.br
+Stay in WM mode until \fBEsc\fR or \fBEnter\fR (\fBfalse\fR: every bind is one\-shot, except one bound with \fB{ exit = false }\fR).
+.TP
+\fBwm_mode.hint\fR
+Default: \fB0.5\fR
+.br
+Seconds of pause in WM mode before the which\-key hint shows (below), or \fBfalse\fR for never.
+.TP
+\fBpaste.upload\fR
+Default: \fBtrue\fR
+.br
+A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running \fBssh\fR, is uploaded and the far paths typed instead. See Pasting files over ssh\fR.
+.TP
+\fBpaste.image_command\fR
+Default: unset
+.br
+What \fBpaste_image\fR reads an image off the clipboard with: a shell command writing PNG to stdout (\fB"pngpaste \-"\fR on macOS). It reads images only. Unset: \fBpowershell.exe\fR under WSL, \fBwl\-paste\fR on Wayland, \fBxclip\fR on X11, which read copied files first.
+.TP
+\fBtheme_colors\fR
+Default: \fB"own"\fR
+.br
+\fB"outer"\fR: inside another ranma, draw with its \fB[colors]\fR rather than this theme's. See ranma inside ranma\fR.
+.TP
+\fBrestore\fR
+Default: \fB"ask"\fR
+.br
+\fB"ask"\fR: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see After a reboot\fR). \fB"off"\fR: no snapshots, no question.
+.TP
+\fBpane_idle\fR
+Default: \fB5\fR
+.br
+Seconds a pane that was printing must stay quiet before the \fBpane_idle\fR hook hears of it, 0.5\-3600. See Hooks\fR.
+.TP
+\fBremain_on_exit\fR
+Default: \fB"off"\fR
+.br
+tmux's \fBremain\-on\-exit\fR: whether a pane stays when its program ends. \fB"off"\fR closes it; \fB"failed"\fR keeps it when the status is not 0 or a signal ended it; \fB"on"\fR always. A pane that stays keeps what it printed, with \fB[exited 3]\fR (or \fB[killed by signal 9]\fR) under it; in it, Enter runs the same command again in the directory it first started in, \fBq\fR closes it, other keys go nowhere. \fBranma wait\fR answers when the program ends, not when the pane closes. Panes that stayed close when the server upgrades: their PTY is gone.
+.TP
+\fBmonitor_activity\fR
+Default: \fBfalse\fR
+.br
+tmux's \fBmonitor\-activity\fR: a workspace whose panes print while it is not shown is drawn in \fBcolors.ws_activity\fR (else \fBbar_accent\fR) in the workspaces module until you go there. Costs one wakeup per hidden pane until it is shown again.
+.TP
+\fBmonitor_silence\fR
+Default: \fB10\fR
+.br
+Seconds a pane watched with the \fBmonitor_silence\fR action must stay quiet, after printing, before ranma says so. 1\-86400.
+.TP
+\fBmouse\fR
+Default: \fB"click"\fR
+.br
+Outside WM mode: \fBclick\fR focuses the pane clicked, \fBhover\fR focuses the pane under the pointer, \fBoff\fR leaves the mouse to your terminal. See Mouse\fR.
+.SH "BINDS — \fBranma.bind(keys, action, opts)\fR"
+.PP
+Binds are keys pressed \fBin WM mode\fR, after the leader, unless they are
+\fBglobal\fR. Binding a key again replaces it.
+.PP
+.RS 4
+.nf
+ranma.bind("t", "new_pane")
+ranma.bind("c", "exec nvim")
+ranma.bind("n", function() os.execute("notify\-send hi") end, { exit = true })
+ranma.bind("alt+h", "focus left", { global = true })
+ranma.unbind("q")
+ranma.unbind_all()   \-\- drop every default, WM and global, and start from nothing
+.fi
+.RE
+.TP
+\fBexit\fR
+Whether WM mode ends after the bind fires. Given, it decides alone, over \fBwm_mode.sticky\fR too: \fB{ exit = false }\fR keeps WM mode after a resize even with \fBsticky = false\fR, and \fB{ exit = true }\fR ends a sticky one. Left out, it follows the action (\fBnew_pane\fR, \fBexec\fR, \fBscratchpad_toggle\fR, the switchers, \fBsend_leader\fR, \fBexit_mode\fR and \fBquit\fR end the mode; everything else, and every Lua function, keeps it), and \fBsticky = false\fR ends the mode after any bind.
+.TP
+\fBglobal\fR
+Bind the key \fBoutside\fR WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are \fBalt+left/right/up/down\fR to focus a neighbouring pane and \fBalt+1\fR…\fBalt+0\fR to go to workspaces 1\-10 (in WM mode, \fBalt+<digit>\fR moves the pane there instead), \fBalt+s\fR to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used \fBM\-s\fR spell\-word), \fBalt+shift+arrows\fR to move the focused pane, and \fBalt+shift+<digit>\fR to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (\fBalt+!\fR, \fBalt+@\fR, …) for the US and ABNT2 layouts; see the table in \fB\-\-dump\-config\fR to add another layout's. The leader itself cannot be global.
+.TP
+\fBdesc\fR
+A short name for the bind in the which\-key hint (up to 16 cells show), for an action as well as a Lua function: \fB{ desc = "status" }\fR reads better than \fBexec lazygit\fR. A Lua function has no action to be named by, so without it the hint calls it \fBlua\fR and help (\fBleader ?\fR) \fB<lua function>\fR; with it, both show the \fBdesc\fR.
+.TP
+\fBgroup\fR
+The which\-key heading the bind is listed under, up to 16 cells. A built\-in group's name (\fBpanes\fR, \fBhistory\fR, …) puts the row after that group's own; a new name makes a heading of its own, after \fBworkspaces\fR, in the order the configuration first names them. Without it, a bind ranma knows goes in its usual group and anything else in \fByours\fR.
+.SS "Folders — keys behind a key"
+.PP
+A folder is a key with more keys behind it, as in Neovim's which\-key:
+\fBleader g\fR opens it, then \fBs\fR runs what \fBg s\fR is bound to. In the hint it is
+one row, \fBg +git\fR; opened, the hint shows its keys instead, titled with the
+keys pressed so far (\fBctrl+b › g\fR).
+.PP
+.RS 4
+.nf
+ranma.bind("g", { folder = "git" })                \-\- a folder on g
+ranma.bind("g s", "exec lazygit", { desc = "status" })
+ranma.bind("g c", "exec git commit", { desc = "commit" })
+ranma.bind("g b", { folder = "branches" })         \-\- folders nest
+ranma.bind("g b n", new_branch, { desc = "new" })
+
+ranma.bind("h", history_open, { desc = "history", group = "plugins" })
+ranma.bind("i", { folder = "agents", group = "plugins" })   \-\- a folder in a group
+.fi
+.RE
+.IP \(bu 2
+\fB\fB{ folder = NAME }\fB in the action's place\fR makes the key a folder. It
+takes \fBgroup\fR and nothing else: its name is its description, and opening
+one never ends WM mode.
+.IP \(bu 2
+\fBKeys separated by spaces\fR bind inside the folder on the first ones. Each
+leading key must be a folder by the end of the configuration (plugins and
+\fBinit.lua\fR both), so the order of the lines does not matter; a key bound to
+anything else strands its keys, and the error names it. \fBranma.unbind("g s")\fR
+drops one.
+.IP \(bu 2
+\fBRebinding a folder's key to something else, or unbinding it, takes the
+keys bound behind it so far with it.\fR That is what makes the default
+folders yours to replace: \fBranma.bind("x", "exec htop")\fR drops \fBx a\fR, \fBx r\fR
+and the rest. A folder of your own on the key keeps them (\fBranma.unbind("x")\fR
+first to start it empty), and keys you bind behind it afterwards still
+need it to be a folder by the end.
+.IP \(bu 2
+\fBThe defaults have two\fR: \fBx\fR (\fB+pane\fR, the focused pane's rarer tools:
+snapping a float, synchronized input, respawn, logging, watching for
+silence, its menu) and \fBy\fR (\fB+layouts\fR: save and load). \fBranma
+\-\-dump\-config\fR lists their keys.
+.IP \(bu 2
+\fBA bind inside a folder fires and closes it\fR: you are back at WM mode's
+top level, still in WM mode when it is sticky. A folder is a prefix, not a
+place; keys that should repeat belong in a mode (\fBranma.mode\fR), and a
+folder's key can open one.
+.IP \(bu 2
+\fBIn a folder\fR: \fBbksp\fR goes up a level (it cannot be bound inside one),
+\fBesc\fR and \fB⏎\fR leave WM mode, the leader goes back to the top level, and \fB?\fR
+opens help with the folder's keys first. Any other key it does not bind is
+swallowed, and the folder stays open.
+.IP \(bu 2
+\fBThe hint\fR: a folder opened while the hint is up replaces it at once;
+with none up it waits for the usual pause, so \fBleader g s\fR typed quickly
+draws nothing. Inside, the folder's keys are under its own name, then
+under the groups they name.
+.IP \(bu 2
+\fBA folder with no keys\fR is an error at load (\fBfolder "scratch" on z has
+no keys\fR). One left empty because the plugin that bound its keys failed to
+load is kept, drawn dim, and opens on \fBnothing bound\fR: that plugin's error
+is already reported, and an empty folder is better shown than a key that
+silently does nothing.
+.IP \(bu 2
+Folders and \fBgroup\fR are for WM mode's keys: a global bind or a
+\fBranma.mode\fR's keys cannot be one.
+.SS "Keys"
+.PP
+\fBmod+mod+key\fR, case\-insensitive. Modifiers: \fBctrl\fR, \fBalt\fR (also \fBmeta\fR, \fBopt\fR),
+\fBshift\fR, \fBsuper\fR. Keys: a single character, \fBleft right up down\fR, \fBreturn\fR
+(\fBenter\fR), \fBtab\fR, \fBbackspace\fR, \fBescape\fR (\fBesc\fR), \fBspace\fR, \fBdelete\fR, \fBhome\fR, \fBend\fR,
+\fBpageup\fR, \fBpagedown\fR, \fBf1\fR\-\fBf24\fR, and \fBplus minus comma period slash\fR. \fB"ctrl++"\fR
+is Ctrl and the plus key.
+.PP
+\fBDo not bind \fBshift+<digit>\fB; bind the symbol.\fR Terminals report Shift+1 as the character your
+layout puts there (\fB!\fR on US and ABNT2), and even the kitty keyboard protocol, as
+decoded here, does not recover the key. \fBalt+<digit>\fR arrives as the digit
+everywhere, which is why the defaults use it. \fBSymbols bind as themselves:\fR \fB"?"\fR,
+\fB"$"\fR, \fB"("\fR — not \fB"shift+/"\fR. Whether the terminal also reports Shift with them
+does not matter; it is ignored.
+.PP
+\fBIn a terminal that speaks the kitty keyboard protocol\fR (kitty, ghostty,
+foot, WezTerm with it on; ranma asks at start), ranma takes the keys that
+way, so chords legacy encoding folds together arrive apart: \fBctrl+i\fR is not
+\fBtab\fR, \fBctrl+m\fR not \fBreturn\fR, \fBctrl+h\fR not \fBbackspace\fR, \fBalt+[\fR not the start of
+an escape. Binds read the same either way. \fBPrograms in panes get the
+protocol too:\fR one that asks for it (nvim, helix, kakoune, fish 4) gets its
+keys encoded the kitty way, with the flags it pushed (disambiguation, every
+key as an escape code, the shifted key, the text); one that does not gets the
+legacy bytes as before. Key releases reach a program only if ranma's terminal
+sent them, which it is not asked to.
+.SS "Actions"
+.TP
+\fBnew_pane\fR
+Open a pane with the shell, placed by the layout, in the directory the focused pane's shell is in.
+.TP
+\fBnew_pane <dir>\fR
+The same, on that side of the focused pane (\fBleader Alt+arrow\fR): \fBnew_pane down\fR opens below.
+.TP
+\fBclose_pane\fR
+Close the focused pane.
+.TP
+\fBfocus <dir>\fR
+Focus the pane in that direction (\fBleft right up down\fR). In \fBmonocle\fR, \fBleft\fR and \fBright\fR go through the tabs. In a strip, \fBleft\fR and \fBright\fR go to the next column, on screen or not, and \fBup\fR and \fBdown\fR stay in the column.
+.TP
+\fBfocus next\fR / \fBfocus prev\fR
+Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping.
+.TP
+\fBfocus last\fR
+Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's \fBlast\-pane\fR, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key (\fBleader ;\fR, tmux's key).
+.TP
+\fBmove <dir>\fR
+Tiled: swap with the neighbour that way. Floating: shift the pane.
+.TP
+\fBresize <dir> [n]\fR
+Like Hyprland's \fBresizeactive\fR: \fBright\fR/\fBdown\fR grow the pane by \fBn\fR cells (default 2), \fBleft\fR/\fBup\fR shrink it.
+.TP
+\fBtoggle_split\fR
+Flip the focused container between horizontal and vertical (tuios's rotate; \fBleader j\fR). The direction stays: dwindle only chooses one for a new split.
+.TP
+\fBsync_toggle\fR
+Mark or unmark the focused pane for synchronized input (\fBleader x a\fR, in the pane folder). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show \fB⇉\fR on their border, and the \fBmode\fR module shows \fB⇉ sync N\fR in the urgent style while any are marked, so it is never on by accident.
+.TP
+\fBsync_clear\fR
+Unmark every pane (\fBleader x A\fR).
+.TP
+\fBswap_master\fR
+Trade places with the master, the first pane of the tree (the one on the left in \fBlayout = "master"\fR); on the master itself, trade with the next one (\fBleader M\fR).
+.TP
+\fBequalize\fR
+Give every split in the workspace equal shares, at every depth, however it was resized (\fBleader =\fR).
+.TP
+\fBselect_layout <preset>\fR
+Rebuild the workspace's tiles, in tree order, into one of tmux's presets: \fBeven\-horizontal\fR (side by side), \fBeven\-vertical\fR (stacked), \fBmain\-vertical\fR (the first pane on the left, the rest stacked on the right), \fBmain\-horizontal\fR (the first on top, the rest side by side below) or \fBtiled\fR (a grid). The main pane takes \fBmaster_ratio\fR. Groups are flattened, floats stay where they are, fullscreen ends. Applied once: the next pane opened is placed by \fBlayout\fR as usual. Under \fBlayout = "master"\fR only \fBmain\-vertical\fR is accepted, since the master shape would undo the others.
+.TP
+\fBnext_layout\fR
+The preset after the one this workspace showed last, in tmux's order (\fBleader space\fR, tmux's \fBSpace\fR).
+.TP
+\fBsave_layout [name]\fR
+Save the workspace's tiles as a layout\fR: splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered; \fBleader y s\fR). A name \fBinit.lua\fR declares is refused.
+.TP
+\fBrestore [run]\fR
+Bring back the snapshot this server set aside when it started (see After a reboot\fR): each pane's command typed and waiting on its prompt, or run with \fBrestore run\fR.
+.TP
+\fBload_layout [name]\fR
+Apply a layout\fR to the workspace. Without a name, pick one from every layout, declared and saved (\fBleader y l\fR).
+.TP
+\fBtoggle_floating\fR
+Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one.
+.TP
+\fBfloat_size <w%> [h%]\fR
+Size the focused pane as a float, in percent of the workspace (\fBfloat_size 60 40\fR; one number is both), keeping its centre. A tile is floated first. \fBleader x z\fR is \fBfloat_size 80 80\fR.
+.TP
+\fBsnap <where>\fR
+Put the focused pane, floated first if it tiles, on a half (\fBleft right top bottom\fR), a quarter (\fBtop_left top_right bottom_left bottom_right\fR), or in the middle at its own size (\fBcenter\fR). The halves and the middle are in the pane folder: \fBleader x\fR then an arrow, or \fBc\fR.
+.TP
+\fBconsume_or_expel <left\e|right>\fR
+In a strip: alone in its column, the focused pane joins the column on that side, at the bottom (as a tab when that column is a group); sharing a column, it leaves into a new column on that side (\fBleader {\fR and \fBleader }\fR).
+.TP
+\fBcolumn_width <next\e|prev\e|full\e|width>\fR
+In a strip: the focused column's width. \fBnext\fR (\fBleader e\fR) steps to the next of \fBscroll_widths\fR, wrapping (a column sized by hand goes to the first stop wider than it); \fBprev\fR back; \fBfull\fR (\fBleader E\fR) makes it the screen's width and, again, gives back the width it had; \fB1/2\fR or a number of cells sets one.
+.TP
+\fBcenter_column\fR
+In a strip: centre the focused column in the view, once (\fBleader c\fR).
+.TP
+\fBfocus_column <first\e|last>\fR
+In a strip: focus the first or last column.
+.TP
+\fBcycle_floats\fR
+Raise the bottom\-most floating pane and focus it (\fBleader f\fR); repeated, it walks through the pile.
+.TP
+\fBtoggle_group\fR
+Make the container holding the focused pane tabbed, or split again.
+.TP
+\fBgroup_next\fR / \fBgroup_prev\fR
+Cycle the tabs of the group around the focused pane.
+.TP
+\fBfullscreen\fR
+Toggle the focused pane filling the workspace.
+.TP
+\fBworkspace <ws>\fR
+Go to a workspace: \fB1\fR\-\fB99\fR, \fBnext\fR, \fBprev\fR (wrapping in 1\-10), \fBempty\fR, or \fBlast\fR: the one shown before this, in this session (tmux's \fBlast\-window\fR; again comes back). Each session remembers its own. \fBworkspace last\fR is \fBleader l\fR, tmux's key.
+.TP
+\fBmove_to_workspace <ws>\fR
+Send the focused pane there and follow it.
+.TP
+\fBmove_to_workspace_silent <ws>\fR
+Send it there and stay.
+.TP
+\fBscratchpad_toggle\fR
+Show or hide the scratchpad. An empty one opens a shell.
+.TP
+\fBmove_to_scratchpad\fR
+Send the focused pane to the scratchpad.
+.TP
+\fBpane_switcher\fR
+Every pane in every session, filterable; picking one goes there.
+.TP
+\fBworkspace_switcher\fR
+The shown session's workspaces, filterable, the current one marked \fB●\fR, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers \fBnew workspace: NAME\fR, which opens an empty one by that name.
+.TP
+\fBpane_menu\fR
+The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (\fBleader x m\fR). Centred, or a sheet on a touch screen.
+.TP
+\fBsession_switcher\fR
+The sessions, filterable, opened on the current one (marked \fB●\fR). A name that does not exist offers to create it; \fBCtrl+R\fR renames the selected one.
+.TP
+\fBnew_session [name]\fR
+Create a session and switch to it; without a name it is numbered.
+.TP
+\fBsession <name>\fR / \fBsession next\fR / \fBsession prev\fR
+Switch sessions.
+.TP
+\fBrename_session [name]\fR
+Rename the current session; without a name, ask for one.
+.TP
+\fBsession_accent <colour>\fR / \fBsession_accent none\fR
+Colour the current session: its focused border, its current workspace in the bar and its name there (see Sessions\fR). \fBnone\fR goes back to the config's accent for it, else the theme's.
+.TP
+\fBmove_workspace_to_session [name]\fR / \fB... next\fR / \fB... prev\fR
+Send the current workspace, with every pane in it, to another session and follow it (\fBm\fR). Without a target it asks, like the session switcher; a name no session has creates it, as \fBranma open \-\-session\fR does. The workspace keeps its number unless that session uses it, then takes the lowest free one. A session left without panes ends. The scratchpad belongs to every session and does not move.
+.TP
+\fBrename_workspace [name]\fR
+Name the current workspace, shown as \fB3:name\fR in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask.
+.TP
+\fBrename_pane [name]\fR
+Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title.
+.TP
+\fBhelp\fR
+The palette in help mode (\fB?\fR, \fBleader ?\fR): every bind, filterable by key or action; \fBEnter\fR runs the selected one.
+.TP
+\fBcommand_palette\fR
+The palette in command mode (\fB:\fR, \fBleader :\fR): every action, bound or not, with its argument and key. \fBTab\fR completes one into the query; type its argument and the line heads the list as \fBrun: …\fR, or as the parser's error if it would not parse. \fBEnter\fR runs it (one that needs an argument completes instead). The query's first character is the mode: \fB?\fR keys, \fB:\fR or \fB>\fR commands; typing it switches, \fBCtrl+U\fR clears the rest.
+.TP
+\fBsettings\fR
+The settings panel: every option, edited in place and saved to \fBsettings.toml\fR. \fBleader p\fR, or \fB:settings\fR in the palette. See The settings panel\fR.
+.TP
+\fBsearch\fR
+Search the focused pane's history, most recent match first (see Copy mode\fR).
+.TP
+\fBcopy_mode\fR
+Move through the focused pane's history with vi keys and copy from it.
+.TP
+\fBhints\fR
+Label every link on the focused pane's screen (\fBleader o\fR): URLs in the text (\fBhttps\fR, \fBhttp\fR, \fBfile\fR, \fBftp\fR, \fBmailto\fR), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with \fBxdg\-open\fR instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. \fBEsc\fR or a click cancels; the bar shows \fBLINK\fR meanwhile.
+.TP
+\fBmode <name>\fR
+Enter a mode declared with \fBranma.mode\fR: WM mode with its keys. See Modes\fR.
+.TP
+\fBdisplay_panes\fR
+Number the panes on screen, large (tmux's \fBdisplay\-panes\fR): type a number to focus that pane. With ten or more, numbers have two digits (\fB01\fR). Any other key or a click puts them away without passing the key on; the bar shows \fBPANE\fR meanwhile (\fBleader i\fR).
+.TP
+\fBpipe_pane [off\e|command line]\fR
+Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's \fBpipe\-pane\fR). Bare, it toggles a log at \fB~/.local/state/ranma/logs/pane<ID>\-<YYYYMMDD\-HHMMSS>.log\fR (UTC); with a command line, the output goes into that command's stdin (\fBpipe_pane cat >> ~/build.log\fR, \fBpipe_pane grep \-\-line\-buffered error > ~/errors\fR), run by \fBsh \-c\fR in the pane's directory; \fBoff\fR stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. Bare, it is \fBleader x l\fR.
+.TP
+\fBchoose_buffer\fR
+The copies kept lately, newest first, one line each (\fB↵\fR for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's \fBchoose\-buffer\fR). Every copy is kept: copy mode's, a link copied from \fBhints\fR, \fBranma.copy\fR, and what a program copies itself with OSC 52. The last 50, the same text once, in memory only: never written to disk, and gone when the server ends or upgrades (\fBleader V\fR, beside \fBv\fR; not tmux's \fB#\fR, which is Shift+3 and so moves with the keyboard layout).
+.TP
+\fBpaste_buffer [n]\fR
+Paste the last copy into the focused pane, or the \fBn\fRth newest (tmux's \fBpaste\-buffer\fR), as a paste: bracketed when the program asked for that (\fBleader ]\fR, tmux's key).
+.TP
+\fBrespawn_pane\fR
+In a pane that stayed after its program ended (\fBremain_on_exit\fR), run the same command again where it first started. A pane still running is left alone (\fBleader x r\fR).
+.TP
+\fBmonitor_silence [seconds\e|off]\fR
+Watch the focused pane for silence (tmux's \fBmonitor\-silence\fR): once it has printed and then stays quiet for the \fBmonitor_silence\fR setting's seconds (or the number given), a toast says \fBquiet: <title>\fR, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles (\fBleader x s\fR); \fBoff\fR stops. A build or a log you want to hear the end of.
+.TP
+\fBexec <command line>\fR
+Open a pane running the command (through \fBsh \-c\fR), in the focused pane's directory.
+.TP
+\fBexit_mode\fR
+Leave WM mode.
+.TP
+\fBleader\fR
+Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type \fBctrl+b\fR) or a script: \fBranma action leader\fR. Unlike the key, a second one does not send the leader to the program; \fBsend_leader\fR does that.
+.TP
+\fBsend_leader\fR
+Send the leader chord to the focused program.
+.TP
+\fBpaste_image\fR
+Type the paths of the files copied on the clipboard, else of its image, into the focused pane (\fBleader v\fR), uploading them first when the pane runs \fBssh\fR. See Pasting files over ssh\fR.
+.TP
+\fBreload_config\fR
+Reload \fBinit.lua\fR and the theme. The profile in use stays in use, if the new config still defines it.
+.TP
+\fBtoolbar <name> [on\e|off\e|toggle]\fR
+Show, hide or flip a toolbar (see Toolbars\fR); toggle without a word. Until the next profile switch, which shows the profile's.
+.TP
+\fBsend <chord>\fR
+Type the chord into the focused pane as if pressed there (\fBsend ctrl+c\fR, \fBsend esc\fR, \fBsend alt+.\fR), with any latched modifier; binds are not looked up. For a toolbar button.
+.TP
+\fBlatch ctrl\fR / \fBlatch alt\fR / \fBlatch shift\fR
+Hold the modifier for the next key; twice quickly, until tapped again (see Toolbars\fR).
+.TP
+\fBprofile <name>\fR / \fBprofile none\fR
+Use a profile (see Profiles\fR) over the configuration \fBinit.lua\fR set, or go back to it.
+.TP
+\fBdetach\fR
+Leave this terminal; the server and everything in it keep running (\fBleader d\fR).
+.TP
+\fBserver_switcher\fR
+The servers \fBranma ls\fR lists, opened on this one (\fBleader S\fR). \fBEnter\fR moves this terminal to the selected server, taking it from a terminal that shows it; the one you leave keeps running, detached. \fBCtrl+X\fR kills the selected server after asking (\fBy\fR or \fBEnter\fR kills); this one is ended with \fBquit\fR instead. A server the terminal itself runs inside (ranma in ranma) cannot be picked.
+.TP
+\fBattach <server>\fR
+Move this terminal to that server, as picking it in \fBserver_switcher\fR does: \fBranma action "attach 2"\fR. The terminal's ranma must be this build (an older one is told to detach and \fBranma attach\fR instead).
+.TP
+\fBquit\fR / \fBquit now\fR
+Quit ranma, closing every pane in every session (\fBleader Delete\fR). \fBquit\fR asks first (\fBy\fR or \fBEnter\fR quits, any other key cancels); \fBquit now\fR does not, for scripts: \fBranma action "quit now"\fR.
+.PP
+Workspaces exist while they have panes or are shown; an empty workspace you leave
+is gone. Enter (or the keypad's Enter) on an empty workspace opens a
+shell there. Floats overlap freely and cascade as they open. \fBSessions\fR are separate sets of workspaces, one shown at a time; the
+others keep running. A session whose last pane closes ends, and another is shown. The \fBscratchpad\fR is Hyprland's special workspace: a layer of free floating panes
+over whatever workspace is shown. Its first pane opens centred at 80%, later ones
+cascade; move, size and stack them like any float. A click beside its panes hides
+it (and does nothing else); the panes keep running.
+.SS "The which\-key hint"
+.PP
+Pause in WM mode (half a second, \fBwm_mode.hint\fR) and a panel opens on the
+bar, next to \fBWM\fR, listing what the keys do, grouped: layout, panes,
+workspaces, your own binds, sessions, history, ranma. It never takes a key:
+press one and it goes away and the key does what it does; pause again (twice
+as long this time) and it is back. Families read as one row, as you press
+them: \fB←↓↑→ focus\fR, \fBshift+←↓↑→ resize\fR, \fB1\-0 workspace\fR, \fBctrl+h/l prev/next
+tab\fR. The keys are your binds, so rebinding changes it; a bind is named by
+its \fBdesc\fR when it has one, and listed under its \fBgroup\fR. A folder is one row,
+\fBg +git\fR, and opening it shows its keys in the same panel (see "Folders"
+above). It is at most half the screen high and takes more columns on a
+wide one; groups that do not fit are named in its bottom frame
+(\fB+sessions · history · ranma\fR), and \fB? all keys\fR is there for the rest. A
+small screen gets the binds flowed without headings, and one under 30×6
+nothing. \fBwm_mode = { hint = false }\fR turns it off.
+.SH "A SCROLLING LAYOUT"
+.PP
+\fBranma.set { layout = "scrolling" }\fR lays each workspace out as
+niri\fR <https://github.com/YaLTeR/niri> does: a strip of columns that may be
+wider than the screen, and a view onto it that follows the focused column.
+.IP \(bu 2
+\fBA new pane is a new column\fR right of the focused one, \fBscroll_width\fR
+wide. Nothing already on screen is resized to make room; columns off
+screen keep their size and keep running (scrolling resizes no program).
+.IP \(bu 2
+\fBA column holds one pane, a stack, or a group.\fR \fBalt+↑↓\fR (\fBnew_pane up\fR
+and \fBdown\fR) opens a pane in the column; \fB{\fR and \fB}\fR take the focused pane
+into the neighbouring column or out into a new one; \fBg\fR makes the column a
+group (tabs) and back.
+.IP \(bu 2
+\fBThe view follows focus\fR: \fB←→\fR go to the next column whether it shows or
+not, and the view moves the least that shows it whole (\fBscroll_center\fR
+can centre it instead; \fBc\fR centres it once). Focus moved any way counts:
+a click, a hook, a switcher.
+.IP \(bu 2
+\fBWidths\fR: \fBe\fR steps through \fBscroll_widths\fR, \fBE\fR makes a column full
+width and back, \fBshift+←→\fR sizes it by hand in cells (and dragging its
+right border does too), \fB=\fR puts every column back to \fBscroll_width\fR and
+the panes in each column to equal heights. \fBshift+↑↓\fR sizes a pane within
+its column; \fBctrl+shift+←→\fR moves the whole column along the strip, and
+\fBctrl+shift+↑↓\fR moves a pane within its column.
+.IP \(bu 2
+\fBWhat is off screen shows at the edges.\fR A column across the screen's
+edge is drawn cut and dimmed (a \fIpeek\fR), its title kept in what shows; a
+click on it focuses it, and the press reaches no program. The edge itself
+is a dotted \fB┊\fR with \fB‹\fR or \fB›\fR and how many columns are not wholly on
+screen that way (\fB+\fR for ten or more); a solid border is the end of the
+strip. With \fBborder.style = "ascii"\fR, \fB: < >\fR.
+.IP \(bu 2
+\fBThe which\-key hint follows\fR: in a strip its first group is \fBstrip\fR, with
+\fB{ }\fR, \fBe\fR, \fBE\fR and \fBc\fR; \fBj\fR (\fBtoggle_split\fR) and \fBspace\fR
+(\fBnext_layout\fR) have no meaning there, are left out and, pressed, say so;
+\fBM\fR (\fBswap_master\fR) is left out too.
+Outside a strip the four new keys are left out and say so when pressed.
+.IP \(bu 2
+\fBThe bar\fR: unchanged by default. \fBpane_strip\fR in a strip shows a chip
+per column (a stack's panes joined by \fB·\fR): the focused one in the
+active\-tab colours, one on screen an inactive tab, one peeking dim on that
+ground, one off screen dim; a click focuses that column.
+.IP \(bu 2
+\fBEverything else keeps its meaning.\fR Floats belong to the screen and
+never scroll; tiling one again makes it a new column. Fullscreen fills the
+workspace and leaving puts the view back. The scratchpad is unchanged.
+Closing a column moves the ones right of it left.
+.IP \(bu 2
+\fBSaved layouts\fR save a strip as its tree, \fBscroll = true\fR on the root
+and a \fBwidth\fR per column (\fB"1/2"\fR or cells). Loaded where the layout is
+not \fBscrolling\fR, the widths read as weights; a plain layout loaded into a
+strip becomes one column per pane.
+.IP \(bu 2
+\fBSwitching\fR to \fBscrolling\fR makes every pane a column, in tree order, at
+\fBscroll_width\fR; switching away keeps the row of columns, sized to fit the
+screen.
+.PP
+The colours are roles every theme sets (no new theme key): the peek is its
+own colours mixed halfway to its ground, the rule \fBbar_dim\fR, the arrow and
+count \fBbar_fg\fR.
+.SH "COPY MODE AND SEARCH"
+.PP
+\fBsearch\fR (\fBleader /\fR) opens a prompt on the focused pane's bottom row and searches
+its whole history — commands and their output alike — as you type, most recent
+match first. Every visible match is highlighted, the current one more strongly.
+\fBEnter\fR keeps you at the match in copy mode; \fBEsc\fR leaves.
+.PP
+\fBcopy_mode\fR (\fBleader [\fR) enters copy mode without searching. In copy mode:
+.TP
+\fBh j k l\fR, arrows
+move
+.TP
+\fBw b e\fR / \fBW B E\fR
+words (punctuation\-aware) / WORDS (space\-separated)
+.TP
+\fB0 ^ $\fR
+start of line, first non\-blank, end of line
+.TP
+\fBH M L\fR
+top, middle, bottom of the screen
+.TP
+\fBg G\fR
+oldest line, newest line
+.TP
+\fBCtrl+u Ctrl+d\fR / \fBCtrl+b Ctrl+f\fR, PageUp/PageDown
+half a page / a page
+.TP
+\fB%\fR
+matching bracket
+.TP
+\fBv\fR / \fBV\fR / \fBCtrl+v\fR
+select characters / lines / a block (again to cancel)
+.TP
+\fBy\fR, \fBEnter\fR
+copy the selection — or the current match, if nothing is selected — and leave
+.TP
+\fB/\fR \fB?\fR
+search forward / backward
+.TP
+\fBn\fR \fBN\fR
+next match / previous match
+.TP
+\fBq\fR, \fBEsc\fR
+leave
+.PP
+Copies go to your system clipboard through the terminal (OSC 52): kitty, foot,
+wezterm, alacritty and tmux accept it; some terminals need it allowed in their
+config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,
+say) are passed through too. Reading the clipboard back is not allowed.
+.SH "WINDOW RULES — \fBranma.rule { ... }\fR"
+.PP
+.RS 4
+.nf
+ranma.rule { command = "htop*", float = true, size = { 70, 60 } }
+ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
+.fi
+.RE
+.TP
+\fBcommand\fR
+Glob (\fB*\fR, \fB?\fR) matched against the command an \fBexec\fR pane was opened with; applied when it opens.
+.TP
+\fBtitle\fR
+Glob matched against the pane's title; applied the first time the title matches, once per pane.
+.TP
+\fBfloat\fR
+Float the pane.
+.TP
+\fBsize\fR
+\fB{ width%, height% }\fR of the workspace, each 10\-100; implies \fBfloat\fR.
+.TP
+\fBworkspace\fR
+Move the pane to this workspace, following it unless \fBsilent = true\fR.
+.PP
+Give \fBcommand\fR or \fBtitle\fR, and at least one effect. Every matching rule applies,
+in the order written. Rules act on panes of the shown session, not in the
+scratchpad.
+.PP
+A pane you float, tile, and float again goes back where it last floated.
+.SH "SESSIONS — \fBranma.session(name, opts)\fR"
+.PP
+.RS 4
+.nf
+ranma.session("kumiko", { accent = "#ff6a6a" })
+ranma.session("wayfarer", { accent = "bright\-green" })
+.fi
+.RE
+.TP
+\fBaccent\fR
+A colour (\fB#rrggbb\fR, \fB0\fR\-\fB255\fR, an ANSI name) for the session with this name, whenever it exists: the focused pane's border, the current workspace in the bar, and the session's name there take it instead of \fBborder_active\fR, \fBws_active_bg\fR and \fBbar_accent\fR. The WM\-mode colour does not change. Pick a colour that reads under \fBws_active_fg\fR.
+.PP
+So two projects look different at a glance. \fBsession_accent\fR sets one for the
+current session at run time, and \fBranma open \-\-accent\fR for the session it
+opens in; either wins over the config until \fBsession_accent none\fR.
+.SH "LAYOUTS — \fBranma.layout(name, def)\fR"
+.PP
+A layout is a workspace's tree with what runs in each pane, brought back with
+\fBload_layout NAME\fR (tmuxinator's job, built in). Declare one in \fBinit.lua\fR:
+.PP
+.RS 4
+.nf
+ranma.layout("kumiko", {
+  split = "horizontal",
+  { cwd = "~/projects/kumiko", command = "nvim", size = 2 },
+  { split = "vertical",
+    { cwd = "~/projects/kumiko", command = "yarn run dev" },
+    { cwd = "~/projects/kumiko" } },
+})
+.fi
+.RE
+.PP
+or arrange a workspace by hand and run \fBsave_layout kumiko\fR, which writes
+\fB$XDG_STATE_HOME/ranma/layouts/kumiko.toml\fR (\fB~/.local/state/...\fR).
+.TP
+\fBsplit\fR
+On: a container
+.br
+\fB"horizontal"\fR (side by side) or \fB"vertical"\fR (stacked).
+.TP
+\fBgroup\fR
+On: a container
+.br
+\fBtrue\fR: a group, one pane shown at a time under tabs. \fBsplit\fR may be left out then.
+.TP
+\fBsize\fR
+On: anything
+.br
+Its share among its siblings, as a weight: \fB2\fR beside two \fB1\fRs is half. Left out, 1.
+.TP
+\fBcwd\fR
+On: a pane
+.br
+Where its shell starts; \fB~\fR is your home. Left out: where \fBnew_pane\fR would start it. A directory that is gone: home.
+.TP
+\fBcommand\fR
+On: a pane
+.br
+Typed into its shell once it starts, as if you had typed it: when it ends, the shell stays, and the command is in its history.
+.PP
+A container's children are its list part in Lua, and \fB[[children]]\fR tables
+in a saved file; nothing else differs, so a saved file reads as the Lua it
+would be. Unknown keys are errors naming where they are
+(\fBranma.layout("kumiko")[2][1]: unknown key\fRcomand``).
+.PP
+\fBload_layout\fR on an \fBempty workspace\fR opens every pane. On one with
+\fBpanes\fR, they take the layout's places in order and keep running; places
+left over are opened, and panes left over are placed after the layout. It
+never closes anything. Floats are not part of a layout, and under
+\fBlayout = "master"\fR the master shape is put back over it.
+.PP
+\fBsave_layout\fR records a pane's command only when something other than its
+shell is in the foreground (\fBnvim\fR, \fByarn run dev\fR), quoted for the shell.
+A layout declared in \fBinit.lua\fR wins over a saved file of the same name, and
+\fBsave_layout\fR refuses that name rather than write a file that would never
+load.
+.SS "After a reboot"
+.PP
+A server keeps a snapshot of itself in
+\fB$XDG_STATE_HOME/ranma/servers/NAME.toml\fR (\fB~/.local/state/...\fR): every
+session, workspace name and layout, each pane's directory and command, floats
+in proportion, the scratchpad. It is written a few seconds after you do
+something, only when something changed, and as the server ends; a server that
+ends with no panes leaves none. An idle server writes nothing.
+.PP
+A \fBfresh\fR server (started, not upgraded in place by \fBinstall.sh\fR) moves its
+name's snapshot to \fBNAME.last.toml\fR and asks whether to bring it back:
+.IP \(bu 2
+\fBEnter\fR (or \fBy\fR): every pane comes back with its command typed and waiting
+on its prompt; one Enter in each runs it.
+.IP \(bu 2
+\fBr\fR: the same, and the commands run.
+.IP \(bu 2
+\fBEsc\fR, anything else: not now. The \fBrestore\fR action (\fBleader :\fR) brings it
+back later, until the next fresh server of that name replaces it.
+.PP
+Servers are numbered from 1, so after a reboot the first terminal opened gets
+server 1 and server 1's snapshot. Restoring fills sessions by name and
+workspaces by number, as \fBload_layout\fR fills one: the shell the new server
+opened first takes the first place. Processes do not survive a reboot; these
+are new ones, started where the old ones were. \fBranma.set { restore = "off" }\fR
+turns all of it off.
+.SH "RANMA INSIDE RANMA"
+.PP
+Over SSH, three levels deep, each machine starting ranma: with
+\fBnested = "auto"\fR (the default) that just works.
+.IP \(bu 2
+Each ranma marks its terminal's title (\fB⧉ ranma · <focused title>\fR); a ranma
+that finds the mark on its focused pane passes it \fBevery key\fR, so the leader
+and the Alt binds always act on the innermost ranma, the one whose panes you
+are looking at. Its bar shows \fB⧉\fR while it does. The mark is never shown:
+borders, tabs and the bar show the title without it.
+.IP \(bu 2
+\fBouter_leader\fR (\fBctrl+alt+b\fR) reaches the outermost ranma instead; pressed
+again, the next one down: once for the outermost, twice for the second, and so
+on.
+.IP \(bu 2
+The mouse works through every layer: each ranma keeps its own borders, and
+passes the rest to the ranma inside, whose own borders, drags, selection and
+clipboard then work as usual.
+.IP \(bu 2
+\fBOne bar for all of them.\fR The outer bar shows the inner ranma's
+workspaces in brackets after the workspace that holds it: \fB1:zsh  2 [1:kumiko
+2:notebooks 3:ranma S]  3:ai\fR, the holder's own number first. Your screen's
+workspace is filled as always; the one the inner ranma shows is in bold, in
+its session's accent. The inner ranma draws no bar of its own. While its pane
+has focus the outer bar shows its workspaces; while another pane has it, the
+outer writes them on that pane's border instead, right\-aligned on the edge
+nearest the bar: \fB╰──── pc [1:zsh 2:nvim 3:logs S] ─╯\fR, the connection's
+name, then the workspaces in use, the current one bold, an urgent one in
+\fBws_urgent\fR, and \fBWM\fR if you left it in WM mode. As the pane narrows,
+names go first, then the other workspaces, down to the host alone; an
+urgent workspace stays longest. Click a workspace there to focus the pane
+and go to it. With \fBborder.style = "none"\fR the label sits over the end of
+the pane's last row instead. Its mode shows after \fB⧉\fR
+(\fB⧉  WM\fR), and its messages in the outer bar's centre. A pane whose ranma
+does this has no title on its border, and no border at all when it fills
+the workspace: the ranma inside draws its own. Clicking an inner workspace
+goes there (ranma types the outer leader and that workspace's key for you).
+A holder that is not expanded (a ranma you are not in) says how many
+workspaces it has in use, dim after its name: \fB3:vps[2]\fR. It has no count
+once it expands, since its workspaces are then shown.
+An urgent inner workspace behind a collapsed holder marks the holder urgent.
+When the bar runs out of room, other expanded holders collapse first, then
+names give way one level at a time, deepest first, numbers last; the title
+in the centre gives way before any of it, and is left out rather than cut
+below 12 cells. Both ranmas need a build that knows this; with an older one
+on either side, the bars look as they always did. \fBranma.module("workspaces",
+{ nested = "all" })\fR expands every workspace holding a ranma, not only the
+one you are in; \fB"off"\fR never expands any.
+.IP \(bu 2
+A program could set a title starting with the mark and get the leader passed to
+it; \fBouter_leader\fR still reaches ranma. \fBnested = "off"\fR turns all of it off.
+.IP \(bu 2
+\fBtitle_host\fR puts the machine's name in the mark, so the terminal's tab says
+where you are: \fB⧉ ranma@vps · nvim\fR. \fB"ssh"\fR (the default) names it when the
+terminal reached this ranma over SSH (the client tells the server, so a server
+started at the desk and attached from afar says so while you are away);
+\fB"always"\fR and \fB"never"\fR do what they say. The innermost host wins, and it is
+the only one shown, however deep the nesting: a ranma whose focused pane runs a
+ranma naming a host announces that host, and one whose focused pane runs a
+plain \fBssh box\fR (nothing on the other side) announces \fBbox\fR, the destination
+from ssh's command line. So a local ranma with a pane SSH'd into the VPS gives
+kitty \fB⧉ ranma@vps · nvim\fR, never \fB@desk@vps\fR. Borders, tabs and the bar still
+show the title without the mark.
+.IP \(bu 2
+\fBtheme_colors = "outer"\fR draws this ranma with the \fB[colors]\fR of the ranma
+around it, so a VPS ranma looks like the desktop one without a copy of its
+theme. The outer sends them with its answer when a terminal attaches, every
+role as its theme has it (including what it took from a ranma around \fIit\fR),
+and this ranma lays them over its own theme's colours. Only colours:
+\fB[styles]\fR, borders, gaps and the bar's shape stay this theme's. A role the
+outer does not send, being older, keeps this theme's colour, and one this
+build does not know is skipped, so the two need not be the same build.
+They are sent at attach and never later (after that, what reaches the
+client is read as keys), so a theme changed on the outer shows here at the
+next attach. A terminal with no ranma around it gets this theme's own
+colours back. \fB"own"\fR (the default) never takes them.
+.SH "MOUSE"
+.PP
+With \fBmouse = "click"\fR (the default) or \fB"hover"\fR, ranma takes the mouse from your
+terminal so it can tell where you clicked:
+.IP \(bu 2
+A click focuses the pane under it, and still reaches the program if the program
+uses the mouse (nvim, htop, less with \fB\-\-mouse\fR).
+.IP \(bu 2
+\fBSelecting and copying:\fR in a pane whose program does not use the mouse,
+drag to select; double\-click selects a word, triple\-click a line. Letting go
+copies the selection to your system clipboard (OSC 52), as copy\-on\-select
+terminals do; paste it with your terminal's paste key. Typing or clicking again
+clears the highlight.
+.IP \(bu 2
+The wheel scrolls the pane under the pointer: into the program if it uses the
+mouse; as arrow keys for a full\-screen program that does not (less, man);
+otherwise back through the pane's scrollback. Typing returns to the bottom.
+.IP \(bu 2
+Clicking a workspace in the bar goes there; clicking a tab switches to it.
+.IP \(bu 2
+\fBTo select with your terminal instead\fR (in a pane whose program takes the
+mouse, say), hold Shift while dragging: kitty, foot, alacritty, wezterm and
+xterm all let Shift override mouse capture. That selection is the host's, so it
+spans the whole screen, borders and neighbouring panes included.
+.PP
+\fBBorders are handles, in any mode.\fR A pane's top border is its title bar: drag
+a tile by it and drop it on another tile, and it lands on the side of that tile
+the pointer is on (top, bottom, left or right half, outlined while dragging); drag
+a float by it to move the float. Every other border resizes: between two tiles it
+moves their shared edge, on a float's right or bottom edge it sizes the float.
+Programs are resized once, when the button is released. (With \fBborder.style =
+"none"\fR there are no borders to grab; the keyboard still does all of it.)
+.PP
+\fBA right click opens the pane's menu\fR: on its border or title bar, or in
+its text when its program does not use the mouse (a shell at its prompt, say).
+The menu opens at the pointer and lists what can be done to that pane, float
+or tile, fullscreen, group, swap with the master, synced input, links, copy
+mode, rename, move and close, each with the key that does it. Click an entry
+or pick it with the arrows and \fBEnter\fR; typing filters it; \fBEsc\fR or a click
+outside closes it. A program that asked for the mouse keeps its right clicks;
+its border still opens the menu.
+.PP
+\fBA right click on a workspace in the bar opens its menu\fR, in any mode. It goes
+to that workspace, then offers a new pane, rename, equalize and sending it to
+another session (those two only when it has panes), and the workspace switcher.
+A left click just goes there, as before.
+.PP
+In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
+anywhere with the left button, resize it with the right. \fBmouse = "off"\fR limits ranma to
+exactly that, and leaves the mouse to your terminal the rest of the time.
+.SH "THE BAR"
+.PP
+The bar is a row of modules on three sides:
+.PP
+.RS 4
+.nf
+ranma.bar {
+  left = { "mode", "workspaces" },
+  center = { "title" },
+  right = { "load", "clock" },
+}
+.fi
+.RE
+.PP
+A call changes only the sides it names. Space is shared out in order: the right
+side first (it holds what you glance at), then the left, and the centre gets the
+gap between them, centred on the bar when it fits. Whatever does not fit is cut
+with \fB…\fR. A message from ranma or \fBranma.notify\fR takes the centre while it is up.
+.PP
+\fBsize = "large"\fR makes the bar three rows, for a touch screen: the text sits on
+the middle row, and the mode, workspace and strip chips are at least five
+columns wide, a column apart, filled top to bottom so a thumb can hit them.
+\fB"normal"\fR (the default) is one row. On a short screen a large bar gives way
+to a normal one (see Toolbars\fR).
+.SS "Built\-in modules"
+.TP
+\fBmode\fR
+Shows: \fBWM\fR, \fBCOPY\fR, \fBSEARCH\fR or \fBLINK\fR, nothing otherwise; \fB⇉ sync N\fR while N panes here are marked for synchronized input
+.br
+—
+.TP
+\fBsession\fR
+Shows: The shown session's name, once there is more than one. Click for the session switcher.
+.br
+—
+.TP
+\fBworkspaces\fR
+Shows: The workspaces as \fB3:name\fR, the current one highlighted, urgent ones marked; \fBS\fR when the scratchpad has panes. Clickable. The name is the one given with \fBrename_workspace\fR, else the program in the workspace's focused pane (\fB3:nvim\fR, \fB1:zsh\fR at a prompt), read from \fB/proc\fR at most twice a second and only when something happened. A connection is named for where it goes: \fB2:vps\fR for \fBssh vps\fR (the destination as typed); with no plain \fBssh\fR to read, such as under mosh, the host a ranma on the far side reports.
+.br
+\fBshow = "occupied"\fR (default) or \fB"all"\fR (1\-10); \fBlabel = "program"\fR (default) or \fB"number"\fR (only \fB3\fR unless named); \fBnested = "focused"\fR (default), \fB"all"\fR or \fB"off"\fR: which workspaces show the workspaces of a ranma inside them (see ranma inside ranma\fR)
+.TP
+\fBtitle\fR
+Shows: The focused pane's title; nothing while that pane runs a ranma reporting to this one, which shows its title on its own pane's border (the same words twice otherwise)
+.br
+\fBnested = "hide"\fR (default) or \fB"show"\fR
+.TP
+\fBpanes\fR
+Shows: How many panes are open
+.br
+—
+.TP
+\fBpane_strip\fR
+Shows: The panes of the current workspace as tabs (\fBzsh  nvim\fR, \fB◇\fR before a float), the focused one in the active\-tab colours; click one to focus it. Nothing with one pane. Monocle's strip, in the bar. With a ranma inside the focused pane (over ssh), the panes of the innermost one that has two or more, since that is where focus is; a click there focuses the holding pane.
+.br
+—
+.TP
+\fBcpu\fR
+Shows: CPU in use since the last tick, from \fB/proc/stat\fR (\fBcpu 12%\fR); nothing on the first tick, which has no earlier sample. Urgent at 90% and above.
+.br
+\fBinterval\fR (seconds, default \fB2\fR), \fBformat\fR (\fB%s\fR is \fB12%\fR, default \fB"cpu %s"\fR)
+.TP
+\fBmem\fR
+Shows: Memory in use (total minus available), from \fB/proc/meminfo\fR (\fBmem 24.1G\fR). Urgent at 90% of total and above.
+.br
+\fBinterval\fR (default \fB5\fR), \fBformat\fR (\fB%s\fR is \fB24.1G\fR, default \fB"mem %s"\fR)
+.PP
+Two more come defined in Lua in the defaults, and are redefined like any module:
+\fBdatetime\fR (\fBMon 28 Sep  14:45\fR, the default on the right) and \fBclock\fR (\fB14:45\fR).
+For another format, e.g.
+\fBranma.module("datetime", { interval = 60, render = function() return os.date("%Y\-%m\-%d %H:%M") end })\fR.
+.PP
+Options go through \fBranma.module\fR with the built\-in's name:
+\fBranma.module("workspaces", { show = "all" })\fR, \fBranma.module("cpu", { interval
+= 1, format = "CPU %s" })\fR. \fBcpu\fR and \fBmem\fR read \fB/proc\fR directly on their own
+tick, with no command started. Naming them in \fBranma.bar\fR is enough.
+.PP
+A timed module ticks only while the bar shows it. One that is defined but in
+none of the three lists costs nothing.
+.SS "Your own modules — \fBranma.module(name, opts)\fR"
+.PP
+.RS 4
+.nf
+\-\- A Lua function, on a timer.
+ranma.module("clock", { interval = 60, render = function() return os.date("%H:%M") end })
+
+\-\- A shell command, on a timer. Its first line of output is the text.
+ranma.module("load", { interval = 5, exec = "cut \-d' ' \-f1 /proc/loadavg", format = "load %s" })
+
+\-\- A Lua function with no interval: re\-rendered when ranma's state changes
+\-\- (focus, workspace, mode, the focused title, the pane count).
+ranma.module("where", { render = function() return "ws " .. ranma.state().workspace end })
+.fi
+.RE
+.TP
+\fBrender\fR
+A Lua function returning a string, or \fB{ text = "...", style = "..." }\fR with \fBstyle\fR one of \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR. \fBnil\fR hides the module.
+.TP
+\fBexec\fR
+A command run by \fB/bin/sh \-c\fR, off ranma's own thread, killed (with anything it started) after 5 seconds. A slow command skips ticks instead of piling up.
+.TP
+\fBformat\fR
+For \fBexec\fR: the text, with \fB%s\fR replaced by the output line.
+.TP
+\fBinterval\fR
+Seconds between runs; required for \fBexec\fR. Aligned to the wall clock: \fB60\fR runs on the minute, not 60 s after ranma started.
+.PP
+Give exactly one of \fBrender\fR or \fBexec\fR. A module that fails shows its error in the
+\fBurgent\fR style instead of its text. Modules never run while a frame is drawn; the
+bar shows their last result.
+.SH "PASTING FILES OVER SSH"
+.PP
+A program across \fBssh\fR (Claude Code on another machine) cannot see a file
+on this one, whether a screenshot, a zip or an HTML page: its own image paste
+reads the clipboard of the machine it runs on, and a pasted path names a file
+that is not there. The ranma on the machine with the file does the carrying:
+.IP \(bu 2
+\fB\fBpaste_image\fB\fR (\fBleader v\fR) reads the clipboard itself. Files copied in a
+file manager come first, any kind and several at once; otherwise its image
+is saved under \fB$TMPDIR/ranma\-paste\-UID/\fR. It types their paths. When the
+focused pane's program is \fBssh\fR, each file goes to
+\fB$TMPDIR/ranma\-paste\-UID/HASH/NAME\fR on the far side first and those paths
+are typed instead, separated by spaces. The name stays the file's own
+(\fBreport.html\fR), with anything but letters, digits and \fB._+\-\fR made \fB_\fR. It is an action because a
+terminal's own paste carries text (and Windows Terminal keeps \fBCtrl+V\fR for
+itself). Inside another ranma it is the outermost one's to do, since that
+one is on the machine at the keyboard: the inner one asks it, and the path
+comes back down as a paste. For one key without the leader:
+\fBranma.bind("alt+v", "paste_image", { global = true })\fR.
+.IP \(bu 2
+\fBA paste that is nothing but paths of files here\fR into a pane running
+\fBssh\fR is uploaded the same way (\fBpaste.upload\fR). A file dragged onto the
+terminal arrives as such a paste, so dragging works; so does \fBCtrl+V\fR of a
+path copied as text. Each word or line must be an absolute path (plain,
+quoted, backslash\-escaped or a \fBfile://\fR URI; a \fBC:\e\fR path under WSL) of a
+file that exists on this machine. Anything else in the paste and it is
+typed as it came. This is how a chain works: work → PC → VPS, each ranma
+uploading to the next. Meant a path on the far side that also exists here?
+Copy it from the far side's screen instead, or set \fBpaste.upload = false\fR.
+.PP
+The upload is the pane's own \fBssh\fR command line, its remote command dropped,
+with \fBBatchMode=yes\fR (it never asks for a password: use keys, an agent, or a
+\fBControlMaster\fR, which also makes it quick), forwards cleared and no tty. It
+runs off the screen's thread: a toast says where it goes, keys typed into the
+pane meanwhile are sent after the path, and Esc cancels. A failure, a cancel or
+30 seconds types the paste as it came and says why in a toast. A connection
+that cannot be made (a tunnel reconnecting) is tried once more a second
+later, then reported as \fBcould not reach HOST:\fR with ssh's own reason. A file over
+50 MB, or a folder, fails the paste before anything is sent. The same file
+always lands in the same place, so pasting it again replaces the copy instead
+of adding one. The 30 seconds are for the whole paste, all its files.
+.PP
+\fBReusing the pane's connection.\fR Each upload is a second ssh connection
+beside the pane's: another login, and another trip through any \fBProxyJump\fR,
+which can fail while the pane's session is fine. With connection sharing in
+the ssh config of the machine you paste from, the pane's \fBssh\fR becomes the
+master and the upload rides it instead: no second login, and nothing new to
+route.
+.PP
+.RS 4
+.nf
+Host *
+    ControlMaster auto
+    ControlPath ~/.ssh/cm\-%C
+    ControlPersist 10m
+.fi
+.RE
+.PP
+Only connections started after the change share: reconnect the pane once.
+\fB%C\fR is a hash of the host, port and user, so every destination gets its
+own socket, and \fBControlPersist 10m\fR keeps the master open ten minutes
+after its last session closes, so a quick reconnect is instant too. It
+applies to every ssh from that machine, not only ranma's; \fBssh \-O exit
+HOST\fR closes a master that has gone stale.
+.SH "IMAGES IN PANES"
+.PP
+Programs that draw images with the kitty graphics protocol show them inside
+ranma, in a terminal that can show them (kitty, ghostty; and a ranma inside a
+ranma whose terminal can). ranma shows every image through \fBUnicode
+placeholders\fR: text cells, so an image scrolls, clips to its pane, goes into
+scrollback and comes back with it, and moves with its pane through any
+layout.
+.IP \(bu 2
+Programs that print placeholders themselves (\fBkitten icat
+\-\-unicode\-placeholder\fR, yazi's \fBkgp\fR adapter) work as they do in kitty.
+.IP \(bu 2
+Programs that \fBplace directly\fR at the cursor (plain \fBkitten icat\fR, timg,
+chafa's kitty output) work too: ranma turns the placement into a virtual
+one and writes the placeholder cells into the pane at the cursor, as many
+as the image needs (its \fBc\fR/\fBr\fR, else its size in pixels over the
+terminal's cell size), and the cursor ends after them as kitty leaves it
+(\fBC=1\fR keeps it where it was). An image whose size ranma cannot learn (an
+\fBI=\fR number with no id, a format it cannot read the size of) is answered
+\fBEINVAL\fR instead.
+.PP
+What ranma does with an image:
+.IP \(bu 2
+It answers the program's graphics query itself: OK when a terminal showing
+this server can show images, \fBENOTSUPPORTED\fR when none can. A terminal
+says so once, when its client starts (it is asked, as it is asked for its
+colours).
+.IP \(bu 2
+Each pane's image ids become ids of ranma's own on the terminal, so two
+panes using the same id show their own images.
+.IP \(bu 2
+A file, temporary file or shared memory object the program names is read
+by ranma, on the machine the program runs on, and its bytes sent: this
+works when the terminal is across ssh. Files under \fB/proc\fR, \fB/sys\fR and
+\fB/dev\fR are refused, as kitty refuses them.
+.IP \(bu 2
+Images are sent only to terminals that can show them, and the last 32 MiB
+of them again to a terminal that attaches later.
+.IP \(bu 2
+Closing a pane deletes its images. After \fBranma upgrade\fR the images on
+screen stay, but placeholders printed before it are drawn blank: the new
+build does not know which image they named.
+.PP
+Toasts are short notifications stacked at the top right, gone after five seconds
+or when clicked. They come from three places:
+.IP \(bu 2
+\fBAny pane:\fR \fBranma notify "build done"\fR, \fBranma notify \-u "tests failed"\fR
+(urgent), \fBranma notify \-t 30 "..."\fR (seconds). Chain it after anything slow:
+\fBmake && ranma notify done || ranma notify \-u failed\fR.
+.IP \(bu 2
+\fBLua:\fR \fBranma.toast("text", { urgent = true, timeout = 10 })\fR.
+.IP \(bu 2
+\fBranma:\fR a bell in a pane you cannot see says where it rang.
+.PP
+\fBranma action "<action>"\fR runs any action from a pane the same way, e.g.
+\fBranma action "workspace 3"\fR or \fBranma action "exec htop"\fR, which makes ranma
+scriptable from the shell.
+.PP
+\fBranma open\fR opens a pane somewhere in particular, in one request:
+.PP
+.RS 4
+.nf
+ranma open \-\-session ai \-\-workspace empty \-\-cwd ~/projects/kumiko \e
+           \-\-name kumiko \-\-workspace\-name kumiko \-\- 'ai; exec zsh'
+.fi
+.RE
+.TP
+\fB\-\-session NAME\fR
+switch to that session, creating it if there is none (with this pane as its first)
+.TP
+\fB\-\-workspace WS\fR
+then to that workspace: a number, \fBnext\fR, \fBprev\fR, or \fBempty\fR (the first free one)
+.TP
+\fB\-\-cwd DIR\fR
+start there instead of in the focused pane's directory
+.TP
+\fB\-\-name NAME\fR
+name the pane, as \fBrename_pane\fR
+.TP
+\fB\-\-workspace\-name NAME\fR
+name the workspace it lands in, as \fBrename_workspace\fR
+.TP
+\fB\-\-accent COLOUR\fR
+colour the session it lands in, as \fBsession_accent\fR
+.TP
+\fB\-\-beside PANE\fR
+open it beside that pane (an id from \fBranma panes\fR), in the pane's own session and workspace, instead of where the layout would put it in the shown one. Not with \fB\-\-session\fR or \fB\-\-workspace\fR.
+.TP
+\fB\-\-side DIR\fR
+with \fB\-\-beside\fR: \fBleft\fR, \fBright\fR (the default), \fBup\fR or \fBdown\fR
+.TP
+\fB\-d\fR, \fB\-\-background\fR
+leave focus, the shown session and the shown workspace as they were
+.TP
+\fB\-P\fR, \fB\-\-print\fR
+print the new pane's id
+.TP
+\fB\-\-float W H\fR
+float it, centred, \fBW\fR% by \fBH\fR% of the workspace
+.TP
+\fB\-\- COMMAND\fR
+what to run; the shell when left out. One argument is a command line for the shell (\fB'ai; exec zsh'\fR); several are a command and its arguments, quoted for you.
+.PP
+It is how scripts lay things out: one project per workspace, say, each started
+in its directory and named after it.
+.SS "Scripting panes: \fBranma panes\fR, \fBsend\fR, \fBcapture\fR, \fBwait\fR"
+.PP
+.RS 4
+.nf
+id=$(ranma open \-P \-d \-\- 'make test')   # a pane in the background, and its id
+ranma capture \-p "$id" | tail \-5         # what it shows
+ranma send \-p "$id" \-\-keys ctrl+c        # stop it
+ranma wait \-p "$id"; echo $?             # until it ends; its exit status
+.fi
+.RE
+.TP
+\fBranma panes [\-\-json]\fR
+Every pane in every session: its id (\fB*\fR on the focused one of its workspace), \fBsession:workspace\fR (\fBS\fR is the scratchpad), the program in its foreground and its title. \fB\-\-json\fR gives one object per pane with \fBid session workspace focused visible floating title program cwd pid cols rows\fR.
+.TP
+\fBranma send [\-p PANE] [\-e] TEXT...\fR
+Type the text into the pane (the arguments joined by spaces), as if at its keyboard: a newline is Enter, and \fB\-e\fR presses Enter after it. \fB\-\-paste\fR sends it as a paste instead, bracketed if the program asked for bracketed paste.
+.TP
+\fBranma send [\-p PANE] \-\-keys KEY...\fR
+Press keys, each spelled as in a bind (\fBctrl+c\fR, \fBreturn\fR, \fBalt+x\fR, \fBup\fR), encoded for the modes the program asked for.
+.TP
+\fBranma capture [\-p PANE] [\-H N]\fR
+Print the pane's screen, with \fBN\fR lines of history above it. Each line is trimmed on the right; blank lines at the end are left out.
+.TP
+\fBranma wait [\-p PANE]\fR
+Wait until the pane ends and exit with its program's status (1 when there is none, as for a pane closed by ranma). A pane that ended before \fBwait\fR asked answers at once, with its status if it was among the last 64 to end.
+.SS "Popups: \fBranma popup\fR"
+.PP
+.RS 4
+.nf
+cd "$(ranma popup \-\- 'fd \-td . ~/projects | fzf')"
+branch=$(ranma popup \-W 40 \-H 50 \-t branch \-\- 'git branch \-\-format="%(refname:short)" | fzf')
+.fi
+.RE
+.PP
+\fBranma popup [\-W %] [\-H %] [\-t TITLE] \-\- COMMAND\fR runs the command in a float
+centred over the workspace (60% by 60% unless \fB\-W\fR/\fB\-H\fR say otherwise), in the
+directory \fBranma popup\fR was run from, and waits for it. What the command
+writes to stdout is what \fBranma popup\fR prints, and its exit status is
+\fBranma popup\fR's, so a picker's answer comes back to the script that asked.
+Focus returns to the pane it was opened from when it closes.
+.PP
+The command's stdout goes to that answer, not to the float, so it must draw
+on the terminal itself: fzf, \fBgum\fR, \fBread x </dev/tty\fR do; a program that
+draws on stdout (an editor, \fBless\fR) shows nothing. For those, \fBranma open
+\-\-float 60 60\fR opens the same float without capturing anything.
+.PP
+It is a command for scripts and shell functions in panes. A bind cannot run
+it through \fBos.execute\fR: that would wait on the very ranma it asks.
+.SS "Programs that drive tmux: \fBranma tmux\-shim\fR"
+.PP
+.RS 4
+.nf
+ranma tmux\-shim \-\- env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude
+.fi
+.RE
+.PP
+runs the command with a \fBtmux\fR on its PATH that answers in this ranma, so a
+program that opens panes through tmux opens ranma panes instead: Claude Code's
+agent teams put each teammate in a pane beside the one it ran from, named after
+the teammate, closed when it is done. With no command it starts your shell,
+and every \fBtmux\fR call from that shell goes to the shim. Outside what it runs,
+nothing changes, and a real tmux still works under it (\fBtmux \-L name\fR, or a
+\fBTMUX\fR naming a real server, go to the real one).
+.PP
+It answers a stated subset of tmux, listed in \fBdoc/DESIGN.md\fR ("The tmux
+shim"): splitting, respawning, typing into and reading panes, naming, focusing
+and killing them, listing panes, windows and the session, and formats with
+\fB#{var}\fR. The session is the one you ran it in, \fB@N\fR is workspace N, \fB%N\fR is
+pane N. Layout and style commands (\fBselect\-layout\fR, \fBresize\-pane\fR,
+\fBset\-option\fR) succeed and do nothing: the layout is ranma's. Anything else
+fails with an error naming the command or flag. A call the shim could not
+answer in full is recorded, command and flags only, in
+\fB~/.cache/ranma/tmux\-shim.log\fR: that file is what to look at when a program
+misbehaves under the shim.
+.PP
+Panes the shim opens run with the environment of the command it was started
+for, as tmux panes run with their server's, so they share its profile and
+settings. With ai\-session, the profile follows the lead into its teammates:
+.PP
+.RS 4
+.nf
+ranma tmux\-shim \-\- env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 ai max2
+.fi
+.RE
+.PP
+(\fBai\fR keeps \fBPATH\fR, \fBTMUX\fR and \fBTMUX_PANE\fR and sets \fBCLAUDE_CONFIG_DIR\fR for the
+profile; the teammates get that \fBCLAUDE_CONFIG_DIR\fR from the shim, since Claude
+Code does not pass it on itself.)
+.PP
+\fBranma tmux ARGS\fR is the shim asked for by name, from any pane:
+\fBranma tmux list\-panes \-F '#{pane_id} #{pane_title}'\fR.
+.PP
+\fB\-p\fR takes a pane id from \fBranma panes\fR; without it, each means the pane it
+runs in (\fBRANMA_PANE\fR, which every pane has). A pane id is fixed for the pane's
+life and never reused by that server.
+.PP
+All of these find the ranma they run in through \fBRANMA_SOCKET\fR, which ranma
+sets in every pane; outside ranma they say so and exit 1. A server's socket is
+\fB$XDG_RUNTIME_DIR/ranma/<name>.sock\fR (a \fB\-\-standalone\fR ranma's is
+\fB$XDG_RUNTIME_DIR/ranma\-<pid>.sock\fR), mode 0600, removed when it exits.
+.SH "PLUGINS"
+.PP
+ranma loads Lua plugins laid out the way Neovim's are, from the config
+directory. Installing one is a \fBgit clone\fR, and a plugin is just Lua using the
+same \fBranma.*\fR API as \fBinit.lua\fR.
+.PP
+.RS 4
+.nf
+~/.config/ranma/
+├── init.lua               runs last: your word is final
+├── lua/                   on require's path: require("history") finds
+│   └── history.lua        lua/history.lua or lua/history/init.lua
+├── plugin/                every *.lua here is sourced, in name order
+│   └── agents.lua
+└── pack/
+    └── github/start/      each directory here is a package carrying its own
+        └── some\-plugin/   lua/ and plugin/ (pack/*/opt/ is not loaded)
+.fi
+.RE
+.PP
+The order is the built\-in defaults, then each package's \fBplugin/*.lua\fR
+(packages in name order), then your own \fBplugin/*.lua\fR, then \fBinit.lua\fR. So a
+plugin's binds and settings are defaults that \fBinit.lua\fR can override.
+\fBrequire\fR looks in your own \fBlua/\fR first, then in each package's, then in
+Lua's usual places. \fBrequire\fR returns two values in Lua 5.4 (the module and its
+path), so wrap it in parentheses where a second argument would be taken:
+\fBranma.bind("f5", (require("history")).open)\fR.
+.PP
+\fBA failing plugin is dropped whole.\fR A plugin that errors while it loads
+(a Lua error, or anything ranma refuses, like an unknown setting) is left out
+with everything it bound or set, and the rest load without it. ranma names it
+in a toast (\fBplugin agents.lua not loaded: ...\fR), and \fBranma \-\-check\-config\fR
+lists every plugin, with the failures on stderr. A failed plugin does not fail
+the check, since ranma runs fine without it. A failing \fBinit.lua\fR is still
+fatal on start, and on a reload keeps the old configuration, as before.
+.PP
+\fBA plugin cannot hang ranma.\fR A file may run for 1 second while loading, and
+a bind, hook or module may run for 200 ms. Past that it is stopped with an
+error (\fBstopped: ran longer than 200 ms\fR), shown in the bar. Hooks a bind
+fires share its 200 ms. Once a call is past its time, \fBpcall\fR, \fBxpcall\fR and
+\fBcoroutine.resume\fR pass the error on instead of catching it, so a loop cannot
+keep itself alive by catching it.
+.PP
+\fBTools for writing them.\fR
+.PP
+.RS 4
+.nf
+ranma \-\-dump\-types > ~/.config/ranma/lua/ranma.d.lua   # completion and checks
+ranma lua 'ranma.pane():search("error")'                # try it on the live server
+ranma health                                            # what loaded, what runs
+.fi
+.RE
+.IP \(bu 2
+\fBranma \-\-dump\-types\fR prints every \fBranma.*\fR function, field, option and event
+as LuaLS\fR <https://luals.github.io/> annotations. Put the file where your
+editor's Lua language server reads it (in \fBlua/\fR, or a \fBworkspace.library\fR
+entry), and \fBranma.\fR completes, with argument types and the event names.
+The file ships with the binary, so print it again after an upgrade.
+.IP \(bu 2
+\fBranma lua CODE\fR runs Lua in the running server's configuration, as a bind
+would (the same 200 ms, the same \fBranma.*\fR), and prints what it returned:
+tables as \fB{ k = v }\fR, strings quoted, one value per line. It is evaluated as
+an expression first, then as statements, so \fBranma lua 'ranma.state()'\fR and
+\fBranma lua 'local p = ranma.pane() return p.id'\fR both work. With no
+arguments it reads the code from stdin. A Lua error is printed and exits 1.
+Globals it sets stay until the next reload, which makes it a REPL.
+.IP \(bu 2
+\fBranma health\fR lists the config file, each plugin with its load time or why
+it failed, the hooks by event, the plugin events with listeners, and how many
+timers and jobs there are.
+.PP
+Linking a \fBplugin/\fR, \fBlua/\fR or \fBpack/\fR directory into the config directory (or
+taking it out) reloads as well, and its files are watched from then on: every
+reload looks again at what is linked.
+.PP
+Saving any \fB.lua\fR file under the config directory reloads, plugins included,
+and linked \fBlua/\fR, \fBplugin/\fR, \fBpack/\fR or package directories are watched behind
+their links.
+.SH "LUA AT RUN TIME"
+.PP
+Inside a bind function, a hook, a module's \fBrender\fR, a timer, or a
+\fBspawn\fR callback:
+.TP
+\fBranma.action("workspace 3")\fR
+Run an action, as a bind would. Checked when called: a bad action is an error naming it.
+.TP
+\fBranma.notify("text")\fR
+Show a message in the bar for five seconds, or until the next key in WM mode.
+.TP
+\fBranma.json.decode(text)\fR, \fBranma.json.encode(value)\fR
+JSON both ways, for plugins that read tools' output (\fBranma.spawn({ "ai", "peers", "\-\-json" }, ...)\fR). Works at load too.
+.TP
+\fBranma.copy(text)\fR
+Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too).
+.TP
+\fBranma.toast("text", { urgent, timeout })\fR
+Show a toast (see Toasts\fR).
+.TP
+\fBranma.state()\fR
+\fB{ session, sessions, workspace, workspaces, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+.TP
+\fBranma.use_profile(name)\fR
+Use that profile, or \fBnil\fR for none (see Profiles\fR).
+.TP
+\fBranma.client()\fR
+\fB{ cols, rows, mobile, remote, outer }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
+.TP
+\fBranma.unwatch(id)\fR
+Stop a \fBpane:watch\fR.
+.TP
+\fBranma.tooltip(anchor, content)\fR
+A tooltip on a span of a pane's cells; see Tooltips\fR.
+.TP
+\fBranma.picker { ... }\fR
+A filtered list of your own; see Pickers and prompts\fR.
+.TP
+\fBranma.input { ... }\fR
+A one\-line prompt of your own.
+.TP
+\fBranma.emit(name, data)\fR
+Call every \fBranma.on("user:<name>")\fR listener with \fBdata\fR; see Hooks\fR.
+.TP
+\fBranma.store(name)\fR
+A plugin's state kept on disk; see A plugin's state\fR. Works at load too.
+.TP
+\fBranma.spawn(cmd, opts)\fR
+Run a process in the background; see Timers and processes\fR.
+.TP
+\fBranma.kill(id)\fR
+Stop a process \fBspawn\fR started.
+.TP
+\fBranma.pane(id)\fR
+A handle on pane \fBid\fR, or on the focused pane when \fBid\fR is left out; \fBnil\fR if there is none. See Pane handles\fR.
+.TP
+\fBranma.panes()\fR
+A handle on every pane, in every session, by id.
+.PP
+These refuse to run while the config itself is loading; there is nothing to act on
+yet. The other way round too: the functions that build the configuration
+(\fBranma.set\fR, \fBbind\fR, \fBon\fR, \fBbar\fR, \fBmodule\fR, \fBrule\fR, \fBlayout\fR and the rest)
+are an error from a bind, hook, module or timer. Change the configuration in
+the file and it reloads. Errors in a bind, hook or module are shown in the bar and do not stop ranma.
+Actions that fire hooks that run actions stop after four levels.
+.SS "Pane handles"
+.PP
+A handle is what ranma knew of the pane when the handle was taken, plus a live
+look at its text:
+.TP
+\fBid\fR
+The pane's id, as \fBranma panes\fR prints it.
+.TP
+\fBsession\fR, \fBworkspace\fR
+Where it is; workspace 0 is the scratchpad.
+.TP
+\fBfocused\fR
+It is the pane keys go to in its workspace.
+.TP
+\fBvisible\fR, \fBfloating\fR
+On screen now; in the floating layer.
+.TP
+\fBtitle\fR
+Its name if it has one, else its title.
+.TP
+\fBcols\fR, \fBrows\fR
+Its size.
+.TP
+\fBvars\fR
+A table of your own for this pane: every handle on the pane gets the same one. It lasts until the pane closes or the config reloads; for anything longer, use a store\fR.
+.PP
+Reading is live, from the pane's terminal. \fBLines are numbered from the top of
+the screen\fR: \fB0\fR to \fBrows \- 1\fR are the screen, and the scrollback goes up from
+\fB\-1\fR (the line just above it). Output that scrolls the screen moves every
+line's number, so a number is good for the moment it was read in.
+.TP
+\fB:range()\fR
+The first and last line that exist now: \fB\-history, rows \- 1\fR.
+.TP
+\fB:lines(first, last)\fR
+The text of those lines, both included (default: the screen), clamped to what exists, each trimmed on the right.
+.TP
+\fB:search(pattern, { limit })\fR
+Every match of the regex (copy mode's syntax), newest first, at most \fBlimit\fR (default 100, never more than 1000), over the screen and the whole scrollback. Each is \fB{ line, col, end_line, end_col, text }\fR, columns from 0. A match running onto a wrapped row ends on the next line.
+.TP
+\fB:cwd()\fR
+The directory its process is in, or \fBnil\fR.
+.TP
+\fB:program()\fR
+The program in its foreground, or \fBnil\fR.
+.TP
+\fB:alive()\fR
+Whether the pane still exists.
+.TP
+\fB:watch(pattern, fn)\fR
+Call \fBfn\fR when the regex newly matches on the pane's screen, a prompt appearing (\fB"Do you want to proceed\e\e?"\fR): with \fB{ pane, line, col, text, row }\fR. A match that stays, or scrolls up a row, fires once; one that goes and comes back fires again; one already on screen fires at once. Returns an id for \fBranma.unwatch(id)\fR. Looked at 100 ms after the pane prints, over its screen only (never the scrollback); a pane out of sight is still watched. Watches go with their pane, and on a reload.
+.TP
+\fB:link_at(line, col)\fR
+The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): \fB{ url, line, col, span }\fR, or \fBnil\fR.
+.PP
+Acting is queued, like \fBranma.action\fR, and done when your function returns, in
+the order written, actions and pane methods together:
+.TP
+\fB:focus()\fR
+Show its session and workspace and focus it.
+.TP
+\fB:close()\fR
+Close it.
+.TP
+\fB:rename(name)\fR
+As \fBrename_pane\fR; no name clears it.
+.TP
+\fB:send(text)\fR
+Type the text; a newline is Enter.
+.TP
+\fB:paste(text)\fR
+Paste it, bracketed if the program asked for that.
+.TP
+\fB:keys(chord, ...)\fR
+Press keys, spelled as in binds: \fBp:keys("ctrl+c")\fR.
+.TP
+\fB:scroll_to(line)\fR
+Scroll so the line is on screen: a scrollback line lands mid\-view.
+.TP
+\fB:badge(owner, glyph, word, role)\fR
+Your plugin's mark on the pane's border, after its title: \fBp:badge("agents", "?", "waiting", "urgent")\fR. \fBowner\fR is your plugin's name; one badge per owner per pane, replaced by the next call, taken off with no glyph (\fBp:badge("agents")\fR). The glyph (one or two characters) carries the meaning without colour; the word (12 at most) goes first on a narrow pane; then the title is cut, calm badges go (dim, normal, accent), the title goes, and urgent badges last. Badges keep the order their owners first set one, and are cleared on a reload.
+.TP
+\fB:copy_mode(line, col)\fR
+Focus it and enter copy mode with the cursor there, scrolled into view.
+.PP
+A handle kept past the call (in a variable of your plugin) keeps its fields as
+they were. Its text methods still work while the pane exists, and every method
+is an error (\fBpane 3 is gone\fR) once it does not. The handles of one pane compare
+equal.
+.PP
+A search over the scrollback, picked from and jumped to:
+.PP
+.RS 4
+.nf
+ranma.bind("f5", function()
+  local p = ranma.pane()
+  local hits = p:search("https?://\e\eS+")
+  if #hits > 0 then
+    ranma.toast(#hits .. " links; newest: " .. hits[1].text)
+    p:copy_mode(hits[1].line, hits[1].col)
+  end
+end, { desc = "last link" })
+.fi
+.RE
+.SH "OPTIONS — \fBranma.option(key, spec)\fR, \fBranma.get(key)\fR"
+.PP
+Every setting ranma has, and every theme key the settings panel shows, is in
+one registry: its group, name, description, type and range. A plugin adds its
+own:
+.PP
+.RS 4
+.nf
+\-\- plugin/history.lua
+ranma.option("history.max_results", {
+  type = "int", min = 1, max = 500, default = 100,
+  desc = "The most matches the history picker lists.",
+})
+local max = ranma.get("history.max_results")
+.fi
+.RE
+.PP
+.RS 4
+.nf
+\-\- init.lua
+ranma.set { history = { max_results = 50 } }
+.fi
+.RE
+.TP
+\fBtype\fR
+\fBbool\fR, \fBint\fR, \fBfloat\fR, \fBenum\fR, \fBcolor\fR or \fBstring\fR.
+.TP
+\fBdefault\fR
+Required, and checked against the type.
+.TP
+\fBname\fR, \fBdesc\fR
+What the settings panel shows. The name comes from the key when left out.
+.TP
+\fBmin\fR, \fBmax\fR, \fBstep\fR
+For \fBint\fR and \fBfloat\fR; \fBstep\fR is what one press of ←→ in the panel moves.
+.TP
+\fBslider\fR
+\fBfalse\fR: no slider in the panel, only the number.
+.TP
+\fBchoices\fR
+For \fBenum\fR: the strings it takes.
+.PP
+The key is \fB<plugin>.<name>\fR. The plugin's name becomes its group in the panel,
+and must not be one of ranma's own settings. Values are checked as strictly as
+ranma's own: a wrong type, a number out of range, or a name nothing declared
+is an error naming it. Options are declared while loading, so a plugin declares
+its options before \fBinit.lua\fR sets them, since plugins load first.
+.PP
+\fBranma.get(key)\fR gives any option's value in force, by its dotted key:
+\fB"wm_mode.hint"\fR, \fB"border.style"\fR, \fB"history.max_results"\fR. While loading it
+knows what has been set so far, and not the theme's keys (the theme loads
+last). After that it knows everything, the settings panel's values included.
+.SS "The settings panel"
+.PP
+\fBsettings\fR (\fB:settings\fR in the palette, or bind it: \fBranma.bind("p",
+"settings")\fR) opens a panel on the right of the screen listing every option:
+ranma's own, the theme keys it shows, and every plugin's, grouped. The panes
+are laid out beside it, so a change to gaps, borders or dimming shows as you
+make it. Closing gives them their width back. The bar says \fBSET\fR while it is
+open, and it has the keyboard.
+.TP
+\fB↑↓\fR \fBj\fR \fBk\fR
+Move. \fBtab\fR jumps to the next group, \fBshift+tab\fR back.
+.TP
+\fB←→\fR \fBh\fR \fBl\fR
+Change the value: the next choice, on/off, a step of a number, the theme's next colour.
+.TP
+\fBenter\fR
+Type a value (a number, a colour, text), or flip a choice. \fBenter\fR applies it, \fBesc\fR cancels, \fBctrl+u\fR clears.
+.TP
+\fBr\fR
+Back to the default.
+.TP
+\fBu\fR
+Undo the unsaved edit.
+.TP
+\fB/\fR
+Filter by name; \fBenter\fR keeps the filter and goes back to the list, \fBesc\fR clears it.
+.TP
+\fBspace\fR
+Peek: the panel folds to one row at the bottom, the workspace full width; \fB←→\fR still steps.
+.TP
+\fB?\fR
+The keys and the marks.
+.TP
+\fBw\fR
+Save to \fBsettings.toml\fR.
+.TP
+\fBesc\fR
+Close. With unsaved edits it asks: \fBw\fR save, \fBd\fR discard, \fBesc\fR keep editing.
+.PP
+Edits apply live as you make them and are saved only with \fBw\fR. One that ranma
+refuses (a leader that is no chord, a theme that does not load) is taken back,
+with the reason on the panel. The marks after a name: \fB•\fR differs from the
+default, \fB◆\fR the panel's value wins over what init.lua or the theme says, \fB*\fR
+changed and not saved. Below the list are the selected option's description
+and where its value comes from (\fBdefault 0% · theme 30% · panel 50% → 60%\fR).
+On a wide screen there is a column of sources and an index of the groups.
+.PP
+The panel draws in the colours it opened with, so editing one it uses (the
+toast and picker roles) does not repaint it under you. It shows a sample row in
+the new colour instead. Saving writes \fBsettings.toml\fR, the configuration
+reloads from it (plugins and all, as any reload does), and the panel stays
+open. \fBoption_change\fR fires for each edit, saved or not (see
+Hooks\fR).
+.SS "\fBsettings.toml\fR"
+.PP
+The settings panel saves to \fB~/.config/ranma/settings.toml\fR, never into
+\fBinit.lua\fR:
+.PP
+.RS 4
+.nf
+# Written by ranma's settings panel. ...
+[set]
+mouse = "hover"
+
+[set.history]
+max_results = 50
+
+[theme.panes]
+dim_unfocused = 0.3
+.fi
+.RE
+.PP
+\fB[set]\fR is applied as one more \fBranma.set\fR after \fBinit.lua\fR. \fB[theme]\fR is
+merged over the theme in use, as one more layer of what it inherits. What is
+here wins over both, which is why the panel marks a value that overrides your
+files (\fB◆\fR). It is read as strictly as they are, so editing it by hand is
+fine, with one exception: a plugin's options for a plugin that did not load
+are kept and skipped, with a toast saying so, because a broken plugin must not
+keep ranma from starting.
+.SH "PICKERS AND PROMPTS"
+.PP
+.RS 4
+.nf
+ranma.picker {
+  title = "hosts",
+  items = { "vps", { label = "box", detail = "lan", port = 2222 } },
+  on_select = function(item, query) ... end,  \-\- the item as given, and what was typed
+  on_cancel = function() ... end,             \-\- optional: Esc
+}
+
+ranma.input {
+  title = "search",
+  text = "error",                             \-\- optional: what the line starts with
+  on_submit = function(text) ... end,
+  on_cancel = function() ... end,
+}
+.fi
+.RE
+.PP
+They are ranma's own picker and prompt, drawn and matched as the switchers
+are (fuzzy, best first). An item is a string, or a table with a \fBlabel\fR and an
+optional \fBdetail\fR shown dimmed after it (not matched). Any other fields ride
+along: \fBon_select\fR gets the item itself. Up to 10 000 items. Both open when
+your function returns and call back once something is chosen, inside the same
+budget as a bind. A callback may open the next picker. Only from a bind, hook,
+module or timer.
+.PP
+A search over the scrollback, with what it found to pick from and jump to:
+.PP
+.RS 4
+.nf
+\-\- plugin/history.lua
+ranma.bind("h", function()
+  ranma.input { title = "history", on_submit = function(pattern)
+    local p = ranma.pane()
+    local items = {}
+    for _, h in ipairs(p:search(pattern, { limit = 500 })) do
+      local text = p:lines(h.line, h.line)[1]
+      items[#items + 1] = { label = text, detail = tostring(h.line), hit = h }
+    end
+    ranma.picker { title = #items .. " for " .. pattern, items = items,
+      on_select = function(item) p:copy_mode(item.hit.line, item.hit.col) end }
+  end }
+end, { desc = "history" })
+.fi
+.RE
+.SH "SCREENS — \fBranma.screen { ... }\fR"
+.PP
+A plugin's own screen: a list of blocks in the settings panel's frame, in
+its place on the right, floating over the workspace. The panes under it keep
+running at their size: a screen previews nothing about the layout, so nothing
+is resized when it opens and closes.
+.PP
+.RS 4
+.nf
+local s = ranma.screen {
+  title = "agents",            \-\- the top edge; the bar's chip is AGENTS (chip = to change it)
+  status = { "2 need you", "urgent" },
+  filter = "names",            \-\- "/" filters rows by name; "plugin" calls on_query; false: none
+  count = "5 agents",
+  detail = 4,                  \-\- the detail area's preferred height
+  options = true,              \-\- "o" opens settings on this plugin's options
+  keys = { { "n", "new", function(row) ... end } },
+  card = { { "a", "answer it", "waiting" } },   \-\- the keys card ("?")
+  body = {
+    { "heading", "Needs you", count = 2 },
+    { "row", id = "api", name = "api · claude", note = "1:code  ~/src/api",
+      value = { "? 12m", "urgent" },
+      keys = { { "a", "answer", function(id) ... end } },
+      detail = { { "log", lines = lines, at = 6 }, { "facts", { "ws", "1:code" }, { "pane", "1" } } } },
+  },
+  on_close = function() ... end,
+}
+s:set { body = new_body, status = { "1 needs you", "urgent" } }   \-\- live
+s:close()
+.fi
+.RE
+.TP
+\fB{ "heading", text, tag =, count = }\fR
+A title, a dim tag, a rule and a count, as settings' groups.
+.TP
+\fB{ "row", id =, name =, ... }\fR
+A selectable line: \fBname\fR, \fBmark = { "•", role }\fR, \fBnote\fR (a second, dim column, shown on wide screens), \fBvalue\fR, \fBselect = false\fR, \fBkeys\fR, \fBdetail\fR (the blocks shown under the list while it is selected), \fBon_change(dir)\fR and \fBon_edit(text)\fR for an editable value.
+.TP
+\fB{ "text", "…", role =, strong =, max = }\fR
+A wrapped paragraph, \fBmax\fR lines (4), the last ending in \fB…\fR.
+.TP
+\fB{ "facts", { label, value, role =, strong = }, ... }\fR
+\fBlabel value · label value\fR; pairs go from the end when there is no room.
+.TP
+\fB{ "progress", label =, frac =, num = }\fR
+A bar between a label and a number, 0 to 1.
+.TP
+\fB{ "log", lines =, n =, at = }\fR
+The last \fBn\fR lines, dim; line \fBat\fR (from 1) in the text colour and kept in view. A line is text, or segments \fB{ text, "hit" | "num" | "strong" }\fR.
+.TP
+\fB{ "separator" }\fR, \fB{ "space" }\fR
+A rule; an empty row.
+.PP
+A row's \fBvalue\fR is text, \fB{ text, role }\fR, or one of the settings panel's
+shapes: \fB{ choice = "spotify" }\fR, \fB{ toggle = true }\fR, \fB{ slider = 0.6, text = "60%" }\fR,
+\fB{ swatch = "#ff6a6a" }\fR, \fB{ field = "text" }\fR. Those are edited in place: \fB←→\fR call
+the row's \fBon_change\fR with 1 or \-1, and \fBenter\fR on a field asks for text and
+calls \fBon_edit\fR. The plugin updates the row itself, so nothing is unsaved. Roles
+are the only colour a plugin names: \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR
+(always bold).
+.PP
+Keys: ranma keeps \fB↑↓\fR \fBj\fR \fBk\fR (move), \fBtab\fR (next heading), \fB/\fR (filter),
+\fBesc\fR (close) and \fB?\fR (keys), plus \fB←→\fR \fBh\fR \fBl\fR and \fBenter\fR on an editable row.
+A screen or row binding one of them is an error naming it. \fBspace\fR peeks
+(the screen folds to its selected row at the bottom) and \fBo\fR opens the
+plugin's options, unless the plugin binds those keys itself. A key's function
+gets the selected row's id (\fBnil\fR with nothing selected). The footer shows the
+selected row's keys, then the screen's, dropping from the end; \fB? keys\fR always
+stays. The mouse selects a row and the wheel moves through them.
+.PP
+\fBs:set { ... }\fR changes what it names (\fBtitle\fR, \fBquery\fR, \fBstatus\fR, \fBsubtitle\fR, \fBcount\fR,
+\fBbody\fR, \fBkeys\fR, \fBcard\fR, \fBon_query\fR, \fBon_close\fR), up to a few times a second.
+The screen is redrawn at most every 100 ms whatever the rate. The selection
+follows its row's \fBid\fR; a row that goes hands it to the row taking its place.
+Nothing marks what changed: say it with roles, and with the status.
+.PP
+A screen may open already answering a query (\fBquery = "panic"\fR, with
+\fBfilter = "plugin"\fR): the pattern a prompt asked for, which \fB/\fR then edits.
+.PP
+One screen at a time, in one slot shared with the settings panel: opening a
+screen closes settings (which asks first about unsaved edits) or the screen
+before it, and \fBon_close\fR tells the plugin it was closed by the user or by
+another screen (\fBs:close()\fR does not call it). With \fBfilter = "plugin"\fR,
+\fBon_query(text)\fR runs 150 ms after typing stops. Only from a bind, hook,
+module or timer.
+.SH "TOOLTIPS — \fBranma.tooltip(anchor, content)\fR"
+.PP
+.RS 4
+.nf
+ranma.on("hover", function(e)
+  local p = ranma.pane(e.pane)
+  local l = p and p:link_at(e.line, e.col)
+  if not l then return ranma.tooltip(nil) end
+  ranma.tooltip({ pane = e.pane, line = l.line, col = l.col, span = l.span },
+                { lines = { l.url }, keys = { { "leader o", "open from hints" } } })
+end)
+.fi
+.RE
+.PP
+A small box under a span of a pane's cells (above it when there is no room
+below, pushed in from the right edge, never over the bar or the anchor's row),
+with a tick on its border in the anchor's column. \fBanchor\fR is \fB{ pane, line,
+col, span }\fR, numbered as pane handles\fR number lines (\fBpane\fR
+defaults to the focused one, \fBspan\fR to 1). \fBcontent\fR is a \fBtitle\fR, up to three
+\fBlines\fR (text, or segments \fB{ text, role, strong = }\fR), and \fBkeys\fR, drawn as
+the footer draws keys. It goes on any key (which still does what it does), when
+the pointer leaves the span, or when the pane scrolls. \fBranma.tooltip(nil)\fR
+takes it down. One at a time; a tooltip takes no keys, so hovering over a
+shell never swallows one. Only from a bind, hook, module or timer.
+.SH "TIMERS AND PROCESSES"
+.PP
+.RS 4
+.nf
+ranma.defer(500, function() ... end)        \-\- once, in half a second
+local id = ranma.every(60000, function() ... end)   \-\- every minute
+ranma.cancel(id)
+.fi
+.RE
+.PP
+\fBranma.defer(ms, fn)\fR and \fBranma.every(ms, fn)\fR return an id for
+\fBranma.cancel(id)\fR, which says whether there was such a timer. They work in
+\fBinit.lua\fR and plugins as they load (the timer starts with the configuration)
+and inside any function ranma calls. A timer is only a deadline ranma's loop
+already waits on: none set, no wakeups. \fBevery\fR takes 50 ms at the least; a
+tick that falls behind is not made up, the next one is an interval from late.
+An \fBevery\fR whose function errors is stopped, and the bar says so; one error
+per tick would be all the bar ever said. A reload drops every timer with the
+old configuration, and a plugin that fails to load takes its timers with it.
+.PP
+.RS 4
+.nf
+ranma.spawn({ "git", "status", "\-\-short" }, {
+  cwd = ranma.pane():cwd(),
+  on_exit = function(r)
+    if r.code == 0 then ranma.toast(r.stdout) end
+  end,
+})
+.fi
+.RE
+.PP
+\fBranma.spawn(cmd, opts)\fR runs a process in the background and returns its id.
+\fBcmd\fR is a list of words, run directly, or a string, run by \fB/bin/sh \-c\fR. Only
+from a bind, hook, module or timer: a config that started processes as it loaded
+would start them on every \fB\-\-check\-config\fR too.
+.TP
+\fBcwd\fR
+The directory to run in; ranma's own when left out.
+.TP
+\fBtimeout\fR
+Seconds before its whole process group is killed. None when left out: a \fBtail \-f\fR may run as long as you like.
+.TP
+\fBon_line\fR
+Called with each line of its stdout as it prints, the lines of 50 ms at a time in one call.
+.TP
+\fBon_exit\fR
+Called once it ends, with \fB{ id, code, signal, stdout, stderr, error }\fR: the exit status, or the signal that ended it; all of stdout unless \fBon_line\fR read it; stderr; and why it could not start or that it timed out. stdout and stderr are kept up to 1 MiB each.
+.PP
+Its stdin is empty, and it runs in a process group of its own. \fBranma.kill(id)\fR
+sends that group SIGTERM, and says whether the job was still running. A reload
+or ranma quitting does the same to every job the old configuration started,
+since nothing would hear them end. 64 may run at once.
+.SH "A PLUGIN'S STATE — \fBranma.store(name)\fR"
+.PP
+The Lua state starts over on every reload and every upgrade. What a plugin
+must remember across them goes in a store:
+.PP
+.RS 4
+.nf
+local s = ranma.store("history")
+s:set("count", (s:get("count") or 0) + 1)
+s:set("last", { cmd = "make", exit = 0 })
+s:set("last", nil)      \-\- forget it
+for _, k in ipairs(s:keys()) do ... end
+.fi
+.RE
+.PP
+A store is one JSON file, \fB$XDG_STATE_HOME/ranma/store/<name>.json\fR
+(\fB~/.local/state/ranma/store/\fR). It is read the first time it is asked for, and
+written whole on every \fBset\fR by a write and a rename, so a crash leaves the old
+file or the new one. Values are what JSON holds: nil, booleans, numbers,
+strings, and tables of them. A function is refused. Every \fBranma.store\fR of one
+name in a configuration is the same store. Names are letters, digits, \fB_\fR,
+\fB\-\fR and \fB.\fR. A store is for small state: past 1 MiB a \fBset\fR is refused and the
+store stays as it was. It works at load too, so a plugin can read its state
+as it starts.
+.SH "TOOLBARS — \fBranma.toolbar(name, def)\fR"
+.PP
+A toolbar is a row of buttons, each a label and an action: on a phone, what
+the keyboard cannot type and the leader is too slow for; on the desktop, a
+strip of the actions you have no key for. Buttons are tapped or clicked.
+.PP
+.RS 4
+.nf
+ranma.toolbar("touch", {
+  position = "bottom",  \-\- "top", "bottom" (the default), or "beside" the bar
+  size = "large",       \-\- "normal" (the default): one row; "large": three
+  show = false,         \-\- shown from the start, or only when asked (default)
+  buttons = {
+    { "≡", "pane_menu", text = "menu" },
+    { "+", "new_pane", text = "new" },
+    { "◀", "focus prev" },
+    { "▶", "focus next" },
+    { "◆", "leader", text = "leader" },
+    { "⌃", "latch ctrl", text = "ctrl" },
+    { "⎋", "send esc" },
+    { "⊞", "workspace_switcher" },
+    { "✕", "close_pane" },
+    { "!", function() ranma.notify("hi") end },
+  },
+})
+.fi
+.RE
+.IP \(bu 2
+A button is \fB{ label, action }\fR: the label is a symbol or short text, the
+action any action ranma knows (checked at load, like a bind's) or a Lua
+function. \fBtext = "..."\fR is shown after the label wherever the button has
+room (\fB≡ menu\fR on a tablet, \fB≡\fR on a phone). Use one\-cell symbols: \fB+\fR, not
+the full\-width \fB＋\fR, which is two cells and sits off\-centre.
+.IP \(bu 2
+\fBLarge\fR buttons are three rows and at least five columns, and share the
+whole row out, a column apart; the column between two buttons belongs to
+the one on its left, so every cell of the row does something. \fBNormal\fR
+ones are one row, at their natural width, dropping \fBtext\fR before anything
+is cut. Past what fits, the last button becomes \fB⋯\fR, which lists the rest.
+.IP \(bu 2
+\fBWhere they go\fR: toolbars are the outermost rows, nearest the thumb
+(\fBbottom\fR, under the bar) or the top edge. \fBbeside\fR puts the toolbar in the
+bar's own rows, on the right, when it fits in half the width (a phone on its
+side, a tablet), and at the bottom when it does not.
+.IP \(bu 2
+\fBHow a button looks\fR says what its action would do: \fIpressed\fR while held
+(and a moment after, so a quick tap is seen); \fIactive\fR for a toggle that is
+on (\fBsync_toggle\fR, \fBfullscreen\fR, the profile or toolbar it switches), for
+the button whose list is open, and for the \fBleader\fR button while in WM
+mode; \fIlatched\fR or \fIlocked\fR for a held modifier; \fIdisabled\fR when it cannot run (\fBclose_pane\fR with no pane), when a tap does
+nothing.
+.IP \(bu 2
+Show and hide them with the \fBtoolbar NAME on|off|toggle\fR action, or name
+them in a profile\fR's \fBtoolbars\fR.
+.PP
+\fBWhat gives way on a short screen.\fR When the bar or a toolbar is large,
+the rows decide, in this order: under 30 rows the monocle strip folds into
+the bar (its tabs where they fit, else one \fB2/4 nvim\fR chip that opens the
+pane switcher); under 24 the bar goes to one row, the strip's tabs inside it
+and only the current workspace named; under 20 the pane on screen loses its
+border; under 12 the toolbar goes to one row; under 8 it hides. A toolbar
+\fBbeside\fR the bar counts its rows back, since it takes none of its own. The
+toolbar gives way last, because the keyboard is open exactly when Esc and
+Ctrl are needed. Normal\-size chrome never folds.
+.PP
+\fBLatched modifiers.\fR \fBlatch ctrl\fR (\fBalt\fR, \fBshift\fR) holds the modifier for
+the next key, from the keyboard or a \fBsend\fR button: \fBctrl\fR, then \fBc\fR is
+\fBctrl+c\fR. Tapped twice quickly it locks, until tapped again. Latches stack
+(\fBctrl\fR, then \fBalt\fR, then \fBesc\fR is \fBctrl+alt+esc\fR). While one is held, the
+bar's mode slot says \fBCTRL\fR (\fBCTRL LOCK\fR, \fBCTRL ALT\fR) and the focused
+border takes the mode colour, as in WM mode. A button that runs anything else
+lets go of what was latched for one key. A latch is the terminal's that set
+it: another terminal driving the screen clears it.
+.PP
+\fBPickers become sheets.\fR While the bar or a shown toolbar is large, every
+picker (the pane menu, the switchers, the palette, \fB⋯\fR) is drawn as a sheet
+rising from the toolbar across the whole width: its entries are three\-row
+faces two to a row (three from 100 columns), the current one marked \fB●\fR, key
+hints and counts shown only when every entry has room for its own. A tap on a
+face picks it; a tap outside the sheet, or on the button that opened it,
+closes it, as does Esc. Nothing is highlighted until a key moves the
+selection, since a tap picks, not Enter; once something is typed, the top
+match is, because Enter runs it. A swipe scrolls a row of faces, and the
+bottom border counts what is below (\fB▾ 5 more\fR).
+.SH "A MOBILE VIEW"
+.PP
+Nothing about the pieces above is mobile; put together in a
+profile\fR, they are the mobile view:
+.PP
+.RS 4
+.nf
+ranma.toolbar("touch", { size = "large", buttons = { \-\-[[ as above ]] } })
+ranma.profile("mobile", {
+  set = { layout = "monocle" },
+  bar = { size = "large", center = {}, right = {} },
+  toolbars = { "touch" },
+})
+ranma.on("driver_change", function(c)
+  ranma.use_profile(c.mobile and "mobile" or nil)
+end)
+.fi
+.RE
+.PP
+A terminal says it is a phone or a tablet with \fBRANMA_MOBILE=1\fR, or
+\fBranma attach \-\-mobile NAME\fR. Over SSH from Termux, set it in Termux's
+\fB~/.ssh/config\fR so every connection says so:
+.PP
+.RS 4
+.nf
+Host vps
+  SetEnv RANMA_MOBILE=1
+.fi
+.RE
+.PP
+and let the far side's sshd take it (\fB/etc/ssh/sshd_config\fR, then reload
+sshd): \fBAcceptEnv RANMA_*\fR. Without that line sshd drops the variable
+silently, and the phone gets the desk's layout.
+.PP
+When the phone and the desk both show a server, the screen follows the one
+last typed in (see Servers\fR),
+and so does the profile: tapping on the phone brings the mobile view (the tap
+itself only takes the screen), typing at the desk brings the desk's back.
+.SH "MODES — \fBranma.mode(name, def)\fR"
+.PP
+A mode of your own is WM mode with a key table of its own: a resize mode, a
+git mode, keys that only make sense together. The \fBmode NAME\fR action enters
+it; its keys run until Esc or Enter (or a bind with \fBexit = true\fR), and the
+leader goes back to WM mode's keys. The bar's mode module says its label.
+.PP
+.RS 4
+.nf
+ranma.mode("resize", {
+  label = "RESIZE",                        \-\- default: the name in capitals
+  binds = {
+    h = "resize left 5", l = "resize right 5",
+    j = "resize down 2", k = "resize up 2",
+    ["="] = { "equalize", exit = true },     \-\- options after the action
+    x = { function() ranma.notify("x") end, desc = "say x" },
+  },
+  sticky = true,                           \-\- stay after a bind (default)
+  on_enter = function() end,
+  on_exit = function() end,
+})
+ranma.bind("r", "mode resize")
+.fi
+.RE
+.PP
+A bind naming a mode that no \fBranma.mode\fR declares is an error at load. The
+\fBmode_change\fR hook hears the mode's name. The which\-key hint lists its keys.
+.SH "COMMANDS — \fBranma.command(name, fn, opts)\fR"
+.PP
+A command of your own in the palette (\fBleader :\fR), next to the actions:
+.PP
+.RS 4
+.nf
+ranma.command("note", function(arg)
+  ranma.spawn({ "sh", "\-c", "echo \e"$1\e" >> ~/notes.txt", "sh", arg or "" })
+end, { desc = "append to my notes", args = "<text>" })
+
+ranma.command("proj", function(name) ranma.action("session " .. name) end, {
+  args = "<name>",
+  complete = function() return { "kumiko", "wayfarer", "ranma" } end,
+})
+.fi
+.RE
+.PP
+\fBfn\fR gets what was typed after the name, or \fBnil\fR. \fBdesc\fR shows beside it,
+\fBargs\fR after its name (\fB<...>\fR means Enter completes the name and waits for
+the argument, as for actions). \fBcomplete\fR is a list, or a function called as
+the palette opens, of values offered as the argument is typed. A name that is
+a built\-in action's is an error.
+.SH "PROFILES — \fBranma.profile(name, def)\fR"
+.PP
+A profile is a set of settings and bar sides used \fBover\fR the configuration
+the rest of \fBinit.lua\fR sets, while it is in use. It is how the mobile view is
+built (DESIGN.md, "A mobile view"), and nothing about it is mobile: a profile
+for presenting, or for a small window, works the same way.
+.PP
+.RS 4
+.nf
+ranma.profile("mobile", {
+  set = { layout = "master", wm_mode = { hint = false } },
+  bar = { center = {}, right = { "mode" } },
+})
+
+\-\- Use it while a phone drives the screen, and go back when the desk does.
+ranma.on("driver_change", function(c)
+  ranma.use_profile(c.mobile and "mobile" or nil)
+end)
+.fi
+.RE
+.IP \(bu 2
+\fBset\fR takes what \fBranma.set\fR takes, except \fBtheme\fR (read once, at load);
+\fBbar\fR what \fBranma.bar\fR takes; \fBtoolbars\fR the names of the toolbars shown
+while it is in use, instead of the base's. Both are checked when \fBinit.lua\fR loads, as
+strictly as the calls they mirror: a typo in a profile is a config error,
+not a surprise the first time a phone attaches.
+.IP \(bu 2
+Anything the profile does not name is the base's. Switching rebuilds the
+settings and bar from the base each time, so \fBranma.use_profile(nil)\fR (or the
+\fBprofile none\fR action) gives back exactly what \fBinit.lua\fR set, and switching
+from one profile to another leaves nothing of the first.
+.IP \(bu 2
+\fBranma.use_profile(name)\fR works in binds and hooks. From a key or a script,
+use the action: \fBranma.bind("p", "profile mobile")\fR, \fBranma action "profile none"\fR.
+.SH "HOOKS — \fBranma.on(event, fn)\fR"
+.PP
+.RS 4
+.nf
+ranma.on("workspace_change", function(ev)
+  ranma.notify("workspace " .. ev.previous .. " \-> " .. ev.workspace)
+end)
+.fi
+.RE
+.TP
+\fBpane_open\fR
+\fBpane\fR (id), \fBworkspace\fR (0 for the scratchpad)
+.TP
+\fBpane_close\fR
+\fBpane\fR, \fBworkspace\fR
+.TP
+\fBfocus_change\fR
+\fBpane\fR, \fBprevious\fR (either may be nil)
+.TP
+\fBworkspace_change\fR
+\fBworkspace\fR, \fBprevious\fR
+.TP
+\fBmode_change\fR
+\fBmode\fR: \fB"wm"\fR or \fB"normal"\fR
+.TP
+\fBconfig_reload\fR
+nothing; runs in the newly loaded config
+.TP
+\fBsession_switch\fR
+\fBsession\fR, \fBprevious\fR (names)
+.TP
+\fBcommand_finished\fR
+\fBpane\fR, \fBexit\fR (the status, or nil), \fBduration\fR (seconds), \fBworkspace\fR (nil if the pane is gone from view), \fBvisible\fR (on screen now), \fBtitle\fR — when a shell that marks its commands (below) finishes one
+.TP
+\fBdriver_change\fR
+\fBcols\fR, \fBrows\fR, \fBmobile\fR, \fBremote\fR, \fBouter\fR (as \fBranma.client()\fR), \fBprevious_mobile\fR — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize.
+.TP
+\fBcommand_started\fR
+\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR — when a shell that marks its commands (below) starts one
+.TP
+\fBcwd_change\fR
+\fBpane\fR, \fBworkspace\fR, \fBcwd\fR, \fBprevious\fR (nil the first time), \fBhost\fR — when a pane's shell is somewhere new. Heard from OSC 7 (\fBhost\fR is the one it names, the far one over ssh), or read from \fB/proc\fR when a marked command finishes (\fBhost\fR nil).
+.TP
+\fBtitle_change\fR
+\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR, \fBprevious\fR — when a program sets a different title. Spinners set titles often: keep the function cheap.
+.TP
+\fBbell\fR
+\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR — every bell, seen or not (an unseen one also toasts, as before)
+.TP
+\fBpane_idle\fR
+\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR, \fBbusy\fR (seconds it had been printing) — a pane that printed has printed nothing for \fBpane_idle\fR seconds. An agent or a build that stopped. Once per burst of output.
+.TP
+\fBclick\fR
+\fBpane\fR, \fBline\fR, \fBcol\fR (as pane handles\fR number them), \fBx\fR, \fBy\fR, \fBbutton\fR (\fBleft\fR, \fBright\fR, \fBmiddle\fR), \fBctrl\fR, \fBalt\fR, \fBshift\fR — a press with \fBCtrl or Alt\fR held in a pane's text. While a \fBclick\fR hook exists such a press is the hook's and does not reach the program (which would act on it too); plain clicks are untouched. Shift is the terminal's own (selection past the mouse capture), so it never arrives here alone.
+.TP
+\fBhover\fR
+\fBpane\fR, \fBline\fR, \fBcol\fR (as pane handles\fR number them), \fBx\fR, \fBy\fR — the pointer rested 150 ms on another cell of a pane's text. Needs the mouse on (\fBmouse\fR not \fB"off"\fR).
+.TP
+\fBoption_change\fR
+\fBkey\fR, \fBvalue\fR, \fBprevious\fR, \fBsaved\fR — the settings panel changed an option: as an edit is made (\fBsaved\fR false), when it is put back, and once more for each edit saved (\fBsaved\fR true). \fBvalue\fR is \fBnil\fR for unset.
+.TP
+\fBuser:<name>\fR
+whatever \fBranma.emit(name, data)\fR passed — a plugin's own event; see below
+.PP
+\fBcommand_finished\fR and \fBcommand_started\fR need the shell to say where commands
+start and end, with the OSC 133 marks most terminals understand. For zsh, in
+\fB.zshrc\fR:
+.PP
+.RS 4
+.nf
+_ranma_mark_end()   { local s=$?; print \-n "\ee]133;D;$s\ea\ee]133;A\ea"; }
+_ranma_mark_start() { print \-n "\ee]133;C\ea"; }
+precmd_functions+=(_ranma_mark_end)
+preexec_functions+=(_ranma_mark_start)
+.fi
+.RE
+.PP
+Then, for example, a toast when something slow finishes where you are not
+looking:
+.PP
+.RS 4
+.nf
+ranma.on("command_finished", function(ev)
+  if ev.duration > 10 and not ev.visible then
+    ranma.toast(ev.title .. ": exit " .. tostring(ev.exit), { urgent = ev.exit ~= 0 })
+  end
+end)
+.fi
+.RE
+.PP
+Programs' own desktop notifications, OSC 9 (\fBprintf '\ee]9;done\ea'\fR) and OSC
+777 (\fB\ee]777;notify;title;body\ea\fR), show as toasts, named after their pane
+when they give no title. When the name and the message do not fit the box
+together, the name is cut in the middle to one line (\fBme@host:/tmp/…/project:\fR)
+and the message keeps the rest: a pane deep in a directory tree never pushes
+its own notification out of view.
+.PP
+Watching costs nothing until a hook asks. Without a \fBpane_idle\fR hook ranma
+keeps no account of output, without \fBcwd_change\fR it reads no \fB/proc\fR, and
+without \fBhover\fR it tracks no pointer. With \fBpane_idle\fR, a pane printing out of
+sight costs at most one wakeup a second.
+.PP
+\fBA plugin's own events.\fR \fBranma.on("user:<name>", fn)\fR listens, and
+\fBranma.emit(name, data)\fR calls every listener of that name there and then, in
+the order they were added, with \fBdata\fR as it was given. An error in one stops
+the emit and reaches the code that emitted. Emitting is for binds, hooks,
+modules and timers, not config load. Events emitted from handlers of events
+stop at 8 deep.
+.PP
+.RS 4
+.nf
+\-\- plugin/agents.lua
+ranma.on("pane_idle", function(e)
+  if e.title:find("claude") then ranma.emit("agent_done", e) end
+end)
+
+\-\- init.lua: what you do about it is yours
+ranma.on("user:agent_done", function(e)
+  if not e.visible then ranma.toast("agent done: workspace " .. e.workspace) end
+end)
+.fi
+.RE
+.SH "GLOBALS"
+.PP
+\fBranma.version\fR is the ranma version; \fBranma.config_dir\fR the directory the config
+was read from. The Lua standard library is fully available — the config is your own
+code, not a sandbox.
+.SH "THEMES"
+.PP
+A theme is \fB~/.config/ranma/themes/<name>.toml\fR, selected with
+\fBranma.set { theme = "<name>" }\fR. It is merged key by key over the theme it
+\fBinherits\fR (the built\-in \fBdefault\fR when it says nothing), so this is a complete
+theme:
+.PP
+.RS 4
+.nf
+[colors]
+border_active = "#f38ba8"
+.fi
+.RE
+.PP
+A theme can build on another of yours with \fBinherits = "other\-name"\fR.
+.PP
+Colours are \fB"#rrggbb"\fR, an ANSI name (\fB"blue"\fR, \fB"bright\-black"\fR), an index
+\fB0\fR\-\fB255\fR, or \fB"default"\fR for the host terminal's own colour.
+.TP
+\fBcolors.border_active\fR, \fBborder_inactive\fR, \fBborder_floating\fR
+colour
+.TP
+\fBcolors.bar_bg\fR, \fBbar_fg\fR, \fBbar_dim\fR, \fBbar_accent\fR, \fBbar_urgent\fR
+colour; the last four are the module styles \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR
+.TP
+\fBcolors.mode_fg\fR, \fBmode_bg\fR
+the WM\-mode indicator, and the focused border in WM mode
+.TP
+\fBcolors.ws_active_fg\fR, \fBws_active_bg\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR
+the workspaces module
+.TP
+\fBcolors.ws_activity\fR
+a workspace that printed while not shown (\fBmonitor_activity\fR); unset, \fBbar_accent\fR
+.TP
+\fBcolors.tab_active_fg\fR, \fBtab_active_bg\fR, \fBtab_inactive_fg\fR, \fBtab_inactive_bg\fR
+tab bars of groups
+.TP
+\fBcolors.picker_selected_fg\fR, \fBpicker_selected_bg\fR
+the selected row in switchers and help
+.TP
+\fBcolors.toolbar_bg\fR
+a toolbar's row and the gaps between its buttons; unset, \fBbar_bg\fR
+.TP
+\fBcolors.button_fg\fR, \fBbutton_bg\fR
+a button, and the entries of a large picker; unset, \fBtab_inactive_fg\fR / \fBtab_inactive_bg\fR
+.TP
+\fBcolors.button_pressed_fg\fR, \fBbutton_pressed_bg\fR
+a button held down; unset, the button's colours reversed
+.TP
+\fBcolors.button_active_fg\fR, \fBbutton_active_bg\fR
+a toggle that is on, the button whose list is open, and \fBleader\fR in WM mode; unset, \fBtab_active_fg\fR / \fBtab_active_bg\fR
+.TP
+\fBcolors.button_latched_fg\fR, \fBbutton_latched_bg\fR
+a latched or locked modifier; unset, \fBmode_fg\fR / \fBmode_bg\fR
+.TP
+\fBcolors.button_disabled_fg\fR
+a button that cannot run now, on \fBbutton_bg\fR; unset, \fBbar_dim\fR
+.PP
+The toolbar keys are optional: each follows the role it names when unset, so
+a theme that only sets the older roles (one rendered from the wallpaper's
+palette, say) styles toolbars too.
+.TP
+\fBcolors.toast_fg\fR, \fBtoast_bg\fR
+toasts (their border is \fBbar_accent\fR, or \fBbar_urgent\fR when urgent)
+.TP
+\fBcolors.module_bg\fR, \fBmodule_fg\fR
+a bar module's ground, between \fBbar.module_left\fR and \fBmodule_right\fR, and its \fBnormal\fR text there; unset, modules sit on \fBbar_bg\fR
+.TP
+\fBborder.style\fR
+\fBrounded\fR, \fBplain\fR, \fBthick\fR, \fBdouble\fR, \fBascii\fR (\fB+ \- \e|\fR), \fBcustom\fR, \fBnone\fR
+.TP
+\fBborder.chars\fR
+with \fBcustom\fR: six one\-cell characters, top\-left, top\-right, bottom\-left, bottom\-right, horizontal, vertical (\fB"┏┓┗┛━┃"\fR)
+.TP
+\fBborder.floating_style\fR
+floats and popups (\fBranma popup\fR); unset, \fBstyle\fR
+.TP
+\fBborder.title\fR
+where a pane's title goes: \fBtop\fR, \fBbottom\fR, \fBoff\fR
+.TP
+\fBborder.title_align\fR
+\fBleft\fR, \fBcenter\fR, \fBright\fR
+.TP
+\fBborder.title_format\fR
+the title's text (see Formats\fR): \fB{title}\fR (its name, else what its program set), \fB{index}\fR (its place in the workspace, from 1), \fB{program}\fR (the program in its foreground), \fB{cwd}\fR (its directory, \fB~\fR for home). \fB" {title} "\fR by default.
+.TP
+\fBborder.indicator\fR
+\fBnone\fR, or \fBarrows\fR: arrows on the focused pane's edges, pointing in (not on the edge its title is on)
+.TP
+\fBgaps.inner\fR, \fBouter_horizontal\fR, \fBouter_vertical\fR
+cells
+.TP
+\fBgaps.outer_top\fR, \fBouter_bottom\fR, \fBouter_left\fR, \fBouter_right\fR
+cells, one side's outer gap over its axis's (\fBouter_top = 2\fR with \fBouter_vertical = 1\fR: two above, one below); unset, the side follows \fBouter_vertical\fR or \fBouter_horizontal\fR
+.TP
+\fBbar.position\fR
+\fBtop\fR, \fBbottom\fR, \fBhidden\fR
+.TP
+\fBbar.separator\fR
+text drawn between two modules on the same side
+.TP
+\fBbar.workspace_format\fR, \fBworkspace_current_format\fR
+a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.
+.TP
+\fBbar.module_left\fR, \fBmodule_right\fR
+drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
+.TP
+\fBpanes.dim_unfocused\fR
+\fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.
+.TP
+\fBpanes.active_bg\fR, \fBinactive_bg\fR
+the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's \fBwindow\-active\-style\fR and \fBwindow\-style\fR); unset, the terminal's own. Unfocused text fades toward \fBinactive_bg\fR.
+.TP
+\fBbackground.art\fR
+text art drawn behind the panes, wherever none covers the workspace: the gaps, an empty workspace, around floats. A name is \fB~/.config/ranma/backgrounds/<name>.txt\fR, else a built\-in (\fBdots\fR, \fBgrid\fR, \fBwaves\fR); a path (with \fB/\fR, or starting \fB~\fR) is that file. Plain text, or coloured with SGR escapes, which is what \fBchafa\fR, \fBjp2a \-\-colors\fR, \fBlolcat \-f\fR and \fBtoilet \-\-gay\fR write (\fBchafa \-\-format symbols \-s 80x24 cat.png > ~/.config/ranma/backgrounds/cat.txt\fR). Other escapes are dropped. A name that is neither is an error at load. Over an empty workspace the splash keeps only its keys, at the bottom. Unset: no background.
+.TP
+\fBbackground.align\fR
+\fBcenter\fR (default), \fBtop\fR, \fBbottom\fR, \fBleft\fR, \fBright\fR, \fBtop_left\fR, \fBtop_right\fR, \fBbottom_left\fR, \fBbottom_right\fR, or \fBtile\fR: repeated from the top left across the whole area
+.TP
+\fBcolors.background_fg\fR, \fBbackground_bg\fR
+the art's colours where it sets none: its text (unset, \fBbar_dim\fR) and the ground under the whole area (unset, the terminal's own)
+.TP
+\fBpanes.scrollbar\fR
+\fBoff\fR, \fBscrolled\fR (the default), \fBon\fR: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's \fBpane\-scrollbars\fR). \fBscrolled\fR only while the view is scrolled back (the wheel, copy mode); \fBon\fR whenever the pane has history. Drawn as the heavy line in the border's colour (\fB#\fR with \fBascii\fR); a pane with no border has none.
+.TP
+\fBstyles.<role>\fR
+text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR, \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
+.PP
+A cell is about twice as tall as it is wide, so outer gaps look even at
+\fBouter_horizontal = 2 * outer_vertical\fR.
+.SS "Formats"
+.PP
+A format is text with \fB{placeholders}\fR, and a part in \fB[...]\fR that shows only
+when every placeholder in it has a value: \fB" {n}[:{name}] "\fR is \fB3:nvim\fR
+for a named workspace and \fB3\fR for one without. \fB[[\fR, \fB]]\fR, \fB{{\fR and \fB}}\fR
+are the characters themselves. That is all: there are no conditionals, and an
+unknown placeholder is an error at load. For logic, write a Lua module.
+.SS "From tmux"
+.PP
+What a \fB.tmux.conf\fR styles, and where it lives here:
+.TP
+\fBpane\-border\-style\fR, \fBpane\-active\-border\-style\fR
+\fBcolors.border_inactive\fR, \fBborder_active\fR
+.TP
+\fBpane\-border\-lines\fR
+\fBborder.style\fR, \fBborder.chars\fR
+.TP
+\fBpane\-border\-status\fR, \fBpane\-border\-format\fR
+\fBborder.title\fR, \fBborder.title_format\fR
+.TP
+\fBpane\-border\-indicators\fR
+\fBborder.indicator\fR
+.TP
+\fBpopup\-border\-lines\fR
+\fBborder.floating_style\fR
+.TP
+\fBwindow\-style\fR, \fBwindow\-active\-style\fR
+\fBpanes.inactive_bg\fR, \fBactive_bg\fR
+.TP
+\fBpane\-scrollbars\fR
+\fBpanes.scrollbar\fR
+.TP
+\fBmode\-style\fR
+\fBcolors.selection_fg\fR, \fBselection_bg\fR
+.TP
+\fBstatus\-style\fR
+\fBcolors.bar_bg\fR, \fBbar_fg\fR, \fBstyles.bar\fR
+.TP
+\fBwindow\-status\-format\fR, \fB\-current\-format\fR
+\fBbar.workspace_format\fR, \fBworkspace_current_format\fR
+.TP
+\fBwindow\-status\-current\-style\fR
+\fBcolors.ws_active_fg\fR, \fBws_active_bg\fR, \fBstyles.ws_active\fR
+.TP
+\fBwindow\-status\-separator\fR
+\fBbar.separator\fR
+.TP
+\fBstatus\-position\fR
+\fBbar.position\fR
+.TP
+\fBstatus\-justify\fR, \fBstatus\-left\fR, \fBstatus\-right\fR
+\fBranma.bar { left, center, right }\fR in \fBinit.lua\fR
+.TP
+\fBmessage\-style\fR
+\fBcolors.toast_fg\fR, \fBtoast_bg\fR, \fBstyles.toast\fR
+.PP
+Colours, attributes and shapes are the theme; what the bar shows is
+\fBinit.lua\fR. There is no stylesheet on purpose — see \fBDESIGN.md\fR, "Looks".
+.SH "SEE ALSO"
+\fBranma\fR(1), \fBranma\-keys\fR(7)

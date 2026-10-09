@@ -1,0 +1,30 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-SEND 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-send \- Type into a pane as if at its keyboard: \fBranma send \-p 3 \-e \*(Aqmake test\*(Aq\fR
+.SH SYNOPSIS
+\fBranma send\fR [\fB\-p\fR|\fB\-\-pane\fR] [\fB\-\-keys\fR] [\fB\-\-paste\fR] [\fB\-e\fR|\fB\-\-enter\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIINPUT\fR> 
+.SH DESCRIPTION
+Type into a pane as if at its keyboard: \fBranma send \-p 3 \-e \*(Aqmake test\*(Aq\fR
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\-pane\fR \fI<PANE>\fR
+The pane (from \fBranma panes\fR); the one this runs in when left out
+.TP
+\fB\-\-keys\fR
+Each argument is a key as a bind spells it: \fBranma send \-\-keys ctrl+c\fR
+.TP
+\fB\-\-paste\fR
+Send the text as a paste, bracketed if the program asked for that
+.TP
+\fB\-e\fR, \fB\-\-enter\fR
+Press Enter after the text
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIINPUT\fR>
+The text (arguments joined by spaces), or the keys
+.SH "SEE ALSO"
+\fBranma\fR(1)

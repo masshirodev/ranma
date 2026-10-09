@@ -1,0 +1,18 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-LUA 1 "" "ranma 0.1.0" "ranma manual"
+.SH NAME
+ranma\-lua \- Evaluate Lua in the running ranma\*(Aqs configuration and print what it returns: \fBranma lua \*(Aqranma.state()\*(Aq\fR. The code is the arguments joined by spaces, or stdin when there are none. It runs as a bind does
+.SH SYNOPSIS
+\fBranma lua\fR [\fB\-h\fR|\fB\-\-help\fR] [\fICODE\fR] 
+.SH DESCRIPTION
+Evaluate Lua in the running ranma\*(Aqs configuration and print what it returns: \fBranma lua \*(Aqranma.state()\*(Aq\fR. The code is the arguments joined by spaces, or stdin when there are none. It runs as a bind does
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fICODE\fR]
+The Lua code; stdin when there is none
+.SH "SEE ALSO"
+\fBranma\fR(1)
