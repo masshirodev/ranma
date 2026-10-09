@@ -113,6 +113,10 @@ dim_unfocused = 0.0
 # Unset: the terminal's own.
 # active_bg = "#1e1e2e"
 # inactive_bg = "#181825"
+# A thumb on a pane's right border showing where the view is in its history
+# (tmux's pane-scrollbars): "scrolled" only while you are scrolled back, "on"
+# whenever there is history, "off" never. Drawn in the border's colour.
+scrollbar = "scrolled"
 
 [styles]
 # Text attributes per role: bold, dim, italic, underline, reverse,

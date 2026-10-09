@@ -1554,6 +1554,7 @@ palette, say) styles toolbars too.
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
 | `panes.active_bg`, `inactive_bg` | the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's `window-active-style` and `window-style`); unset, the terminal's own. Unfocused text fades toward `inactive_bg`. |
+| `panes.scrollbar` | `off`, `scrolled` (the default), `on`: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's `pane-scrollbars`). `scrolled` only while the view is scrolled back (the wheel, copy mode); `on` whenever the pane has history. Drawn as the heavy line in the border's colour (`#` with `ascii`); a pane with no border has none. |
 | `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected`, `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
 
 A cell is about twice as tall as it is wide, so outer gaps look even at
@@ -1579,6 +1580,7 @@ What a `.tmux.conf` styles, and where it lives here:
 | `pane-border-indicators` | `border.indicator` |
 | `popup-border-lines` | `border.floating_style` |
 | `window-style`, `window-active-style` | `panes.inactive_bg`, `active_bg` |
+| `pane-scrollbars` | `panes.scrollbar` |
 | `mode-style` | `colors.selection_fg`, `selection_bg` |
 | `status-style` | `colors.bar_bg`, `bar_fg`, `styles.bar` |
 | `window-status-format`, `-current-format` | `bar.workspace_format`, `workspace_current_format` |

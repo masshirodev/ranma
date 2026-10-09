@@ -241,7 +241,7 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] Activity and silence marks on workspaces: `monitor_activity`, `monitor_silence`
 - [x] Panes that stay when their program ends (`remain_on_exit`, `respawn_pane`)
 - [x] Paste buffers and a picker over them: `choose_buffer`, `paste_buffer`
-- [ ] Pane scrollbars
+- [x] Pane scrollbars: `panes.scrollbar`
 - [ ] Logging a pane's output (`pipe_pane`)
 - [ ] ASCII-art backgrounds behind the panes
 - [ ] Images in panes (the kitty graphics protocol)

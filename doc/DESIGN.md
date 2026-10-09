@@ -1127,6 +1127,17 @@ marked panes when typing would. `choose_buffer` is the picker; its entries
 run `paste_buffer N`, so the picker is one more list of commands, as the
 layouts picker is.
 
+**A scrollbar is the border, thickened** (`panes.scrollbar`, tmux 3.6's
+`pane-scrollbars`). tmux gives the scrollbar a column of its own; ranma
+already has one beside every pane, the right border, so the thumb is drawn
+over it in the heavy line and the border's colour, and a pane loses no width
+to it. Its default is `scrolled`, tmux's `modal`: shown only while the view
+is off the bottom, which is when the question "where am I" is asked, so a
+theme from before looks exactly as it did until you scroll. The thumb is at
+least a cell and touches the top only at the top. It costs a lock of the
+pane's grid per frame the pane is drawn, as the cursor already does, and
+nothing while idle.
+
 ### Window rules match what a terminal knows
 
 A terminal window has no X11 class. What it does know is the command an `exec`

@@ -264,6 +264,19 @@ pub enum Align {
     Right,
 }
 
+/// When a pane's right border shows where its view is in the history
+/// (tmux's `pane-scrollbars`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Scrollbar {
+    Off,
+    /// Only while the view is scrolled back from the bottom (tmux's `modal`).
+    #[default]
+    Scrolled,
+    /// Whenever the pane has history.
+    On,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Indicator {
@@ -592,6 +605,28 @@ pub struct Panes {
     pub active_bg: Option<Color>,
     #[serde(default)]
     pub inactive_bg: Option<Color>,
+    /// A thumb on the right border for where the view is in the history.
+    #[serde(default)]
+    pub scrollbar: Scrollbar,
+}
+
+/// Where the thumb goes on a track of `track` cells, for a view `offset`
+/// lines up from the bottom of `history` lines of scrollback over a screen of
+/// `rows`: its first cell and its length. At least one cell, and only at the
+/// very top when the view is at the very top.
+pub fn thumb(track: u16, rows: usize, history: usize, offset: usize) -> (u16, u16) {
+    if track == 0 || history == 0 {
+        return (0, track);
+    }
+    let total = history + rows;
+    let len = ((track as usize * rows) / total).clamp(1, track as usize) as u16;
+    let room = (track - len) as usize;
+    let from_top = history - offset.min(history);
+    let mut at = (room * from_top).div_ceil(history) as u16;
+    if from_top > 0 && at == 0 {
+        at = 1.min(room as u16);
+    }
+    (at.min(room as u16), len)
 }
 
 /// What a border title's format can name.
@@ -962,5 +997,21 @@ mod tests {
     #[test]
     fn theme_names_cannot_escape_the_directory() {
         assert!(load("../etc/passwd", &[]).is_err());
+    }
+
+    #[test]
+    fn the_thumb_stands_for_the_view() {
+        // 10 rows of track, 10 on screen, 90 of history: a tenth of it.
+        assert_eq!(thumb(10, 10, 90, 0), (9, 1), "at the bottom");
+        assert_eq!(thumb(10, 10, 90, 90), (0, 1), "at the top");
+        let (mid, _) = thumb(10, 10, 90, 45);
+        assert!((4..=5).contains(&mid), "{mid}");
+        assert_eq!(thumb(10, 10, 10, 0), (5, 5), "half of it is history");
+        assert_eq!(thumb(10, 10, 100_000, 1).1, 1, "never less than a cell");
+        assert_eq!(
+            thumb(10, 10, 100_000, 99_999).0,
+            1,
+            "only the top is the top"
+        );
     }
 }

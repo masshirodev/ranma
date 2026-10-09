@@ -137,6 +137,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
                 app.border_title(view.id)
             };
             draw_border(f, app, view, &title);
+            draw_scrollbar(f, app, view, pane);
         }
         if let Some(c) = draw_pane(f, app, view, pane) {
             cursor = Some(c);
@@ -593,6 +594,44 @@ fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintSta
         if done < inner.w - col {
             buf.set_stringn(x + done, y, rest, room - done as usize, label);
         }
+    }
+}
+
+/// The thumb on the right border, beside the rows it stands for: where the
+/// view is in the history. Drawn over the border's line in its colour, with
+/// the heavy line, so it reads as part of the frame.
+fn draw_scrollbar(f: &mut Frame, app: &App, view: &PaneView, pane: &crate::pane::Pane) {
+    use crate::theme::Scrollbar;
+    let mode = app.config.theme.panes.scrollbar;
+    if mode == Scrollbar::Off || view.inner.w == view.outer.w {
+        return;
+    }
+    let (history, offset, rows) = {
+        let term = pane.term.lock();
+        let grid = term.grid();
+        (
+            grid.history_size(),
+            grid.display_offset(),
+            term.screen_lines(),
+        )
+    };
+    if history == 0 || (mode == Scrollbar::Scrolled && offset == 0) {
+        return;
+    }
+    let inner = view.inner;
+    let (at, len) = theme::thumb(inner.h, rows, history, offset);
+    let x = view.outer.x + view.outer.w - 1;
+    let buf = f.buffer_mut();
+    let edge = buf[(x, inner.y)].style();
+    let b = &app.config.theme.border;
+    let style = if view.floating { b.floating() } else { b.style };
+    let glyph = if style == BorderStyle::Ascii {
+        "#"
+    } else {
+        "┃"
+    };
+    for y in inner.y + at..inner.y + at + len {
+        buf[(x, y)].set_symbol(glyph).set_style(edge);
     }
 }
 

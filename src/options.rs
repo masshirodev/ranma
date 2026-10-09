@@ -551,6 +551,14 @@ pub fn builtin() -> Vec<Opt> {
             Theme,
             "How far the text of panes you are not in fades toward their background. 0 is off.",
         ),
+        opt(
+            "panes.scrollbar",
+            "looks",
+            "Scrollbar",
+            choices(&["off", "scrolled", "on"]),
+            Theme,
+            "A thumb on a pane's right border for where the view is in its history: scrolled only while scrolled back, on whenever there is history.",
+        ),
         Opt {
             unset: Some("unset".into()),
             ..opt(
