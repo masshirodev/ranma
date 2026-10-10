@@ -9,14 +9,48 @@ Lua and themed in TOML.
 
 Named for the 欄間, the carved transom panel above sliding doors.
 
-**Status:** milestones 1-4 of [`doc/ROADMAP.md`](doc/ROADMAP.md) are done — a
-daily-drivable tiling window manager: dwindle-tiled panes, tabbed groups, a
-floating layer, workspaces and sessions with fuzzy switchers, a scratchpad,
-copy mode and history search with the system clipboard, window rules, a
-waybar-style bar with Lua and shell modules, Lua binds and hooks, mouse focus,
-and live config reload. It runs as a server, so closing the terminal (or losing
-SSH) only detaches: `ranma` again picks up where you were. `leader ?` lists
-every key, and `leader :` runs any action by name.
+**Status:** a daily driver. Milestones 0-12 of
+[`doc/ROADMAP.md`](doc/ROADMAP.md) are done (one plugin primitive aside), and
+13 is under way:
+
+- dwindle-tiled panes, tabbed groups, a floating layer, a scratchpad, and a
+  scrolling layout (niri's strip of columns); workspaces and sessions with
+  fuzzy switchers; window rules and saved layouts
+- copy mode and history search with the system clipboard (OSC 52, over SSH
+  too); images in panes (the kitty graphics protocol) and the kitty keyboard
+  protocol
+- a waybar-style bar with Lua and shell modules, which nested ranmas share
+  rather than stack; a mobile view while a phone drives the screen; pasting
+  files into a pane that runs ssh
+- it runs as a server: closing the terminal (or losing SSH) only detaches, and
+  `ranma` again picks up where you were; an upgrade moves running servers to
+  the new build without closing anything
+- Lua plugins in Neovim's layout, with screens built from ready-made blocks; a
+  plugin that fails while loading is dropped whole, and a watchdog stops one
+  that hangs
+
+`leader ?` lists every key, and `leader :` runs any action by name.
+
+## Plugins
+
+Plugins are plain Lua using the same API as `init.lua`
+([`doc/CONFIG.md`](doc/CONFIG.md), "Plugins"; `ranma --dump-types` prints it
+for your editor). [hako](https://github.com/masshirodev/hako.ranma) installs
+and keeps them, shaped like lazy.nvim (without the lazy-loading): specs in
+Lua, a lockfile, and a screen to update, install and clean. A few to start
+from:
+
+- [history.ranma](https://github.com/masshirodev/history.ranma): search a
+  pane's scrollback by regex and jump to a match
+- [compose.ranma](https://github.com/masshirodev/compose.ranma): write a prompt
+  in `$EDITOR` and have it pasted where you were (an AI CLI's prompt box, say)
+- [openpath.ranma](https://github.com/masshirodev/openpath.ranma): Ctrl+click a
+  path in a pane to open it, or copy its content
+- [linkhover.ranma](https://github.com/masshirodev/linkhover.ranma): where a link
+  goes, on hover
+- [agents.ranma](https://github.com/masshirodev/agents.ranma): what each AI
+  agent running in a pane is doing (needs
+  [ai-session](https://github.com/masshirodev/ai-session))
 
 ## Install
 
