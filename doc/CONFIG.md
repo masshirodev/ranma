@@ -1097,7 +1097,7 @@ line's number, so a number is good for the moment it was read in.
 | `:program()` | The program in its foreground, or `nil`. |
 | `:alive()` | Whether the pane still exists. |
 | `:watch(pattern, fn)` | Call `fn` when the regex newly matches on the pane's screen, a prompt appearing (`"Do you want to proceed\\?"`): with `{ pane, line, col, text, row }`. A match that stays, or scrolls up a row, fires once; one that goes and comes back fires again; one already on screen fires at once. Returns an id for `ranma.unwatch(id)`. Looked at 100 ms after the pane prints, over its screen only (never the scrollback); a pane out of sight is still watched. Watches go with their pane, and on a reload. |
-| `:link_at(line, col)` | The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): `{ url, line, col, span }`, or `nil`. |
+| `:link_at(line, col)` | The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): `{ url, line, col, span, text }`, or `nil`. `text` is what the link is drawn as (an OSC 8 link's words, not its address); `col` and `span` count cells, so slicing `:lines()` by them cuts multibyte characters, which is what `text` is for. |
 
 Acting is queued, like `ranma.action`, and done when your function returns, in
 the order written, actions and pane methods together:

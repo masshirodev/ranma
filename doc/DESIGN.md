@@ -741,7 +741,10 @@ Where it departs from the handoff:
   keep apart from it, and that step drops the title.
 - `pane:link_at` reuses hints' link finder, now also reporting how many cells
   each link covers. It looks two rows either side, so a URL wrapped across
-  rows is found from either half.
+  rows is found from either half. It also hands back the link's `text`: a
+  plugin that sliced `:lines()` by `col` and `span` cut characters in half
+  (columns are cells, Lua strings are bytes), and the invalid UTF-8 failed
+  the hook on its way back into Rust.
 
 Not done yet: the handoff's rule that the nested-ranma label gives way to
 badges when both share the title's edge (bar on top, title on top). Each still

@@ -1559,7 +1559,7 @@ Whether the pane still exists.
 Call \fBfn\fR when the regex newly matches on the pane's screen, a prompt appearing (\fB"Do you want to proceed\e\e?"\fR): with \fB{ pane, line, col, text, row }\fR. A match that stays, or scrolls up a row, fires once; one that goes and comes back fires again; one already on screen fires at once. Returns an id for \fBranma.unwatch(id)\fR. Looked at 100 ms after the pane prints, over its screen only (never the scrollback); a pane out of sight is still watched. Watches go with their pane, and on a reload.
 .TP
 \fB:link_at(line, col)\fR
-The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): \fB{ url, line, col, span }\fR, or \fBnil\fR.
+The link under that cell, whole, as hints finds it (a URL in the text or an OSC 8 link, wrapped rows included): \fB{ url, line, col, span, text }\fR, or \fBnil\fR. \fBtext\fR is what the link is drawn as (an OSC 8 link's words, not its address); \fBcol\fR and \fBspan\fR count cells, so slicing \fB:lines()\fR by them cuts multibyte characters, which is what \fBtext\fR is for.
 .PP
 Acting is queued, like \fBranma.action\fR, and done when your function returns, in
 the order written, actions and pane methods together:

@@ -148,11 +148,26 @@ pub fn new_matches(before: &std::collections::HashSet<String>, now: &[Seen]) -> 
         .collect()
 }
 
-/// The link under (`line`, `col`): its target, the line and column it starts
-/// at, and how many cells it covers. URLs in the text and OSC 8 links, as
-/// hints finds them, looked for in the rows around the line so a URL wrapped
-/// across rows is found from either half.
-pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<(String, i32, usize, usize)> {
+/// A link found under a cell, for a script.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkAt {
+    /// Where it points.
+    pub url: String,
+    /// The line and column (from 0) it starts at.
+    pub line: i32,
+    pub col: usize,
+    /// How many cells it covers, wrapped rows included.
+    pub span: usize,
+    /// What it is drawn as: those cells' text, a wide character once. A
+    /// script needs it because columns count cells and Lua strings count
+    /// bytes, so slicing a row by columns cuts characters in half.
+    pub text: String,
+}
+
+/// The link under (`line`, `col`). URLs in the text and OSC 8 links, as hints
+/// finds them, looked for in the rows around the line so a URL wrapped across
+/// rows is found from either half.
+pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<LinkAt> {
     let (top, bottom) = line_range(term);
     if line < top || line > bottom {
         return None;
@@ -179,7 +194,27 @@ pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<(String, i32,
         })
         .collect();
     let (link, n) = crate::hints::link_at(&rows, (line - from) as usize, col)?;
-    Some((link.target, from + link.at.0 as i32, link.at.1, n))
+    let (mut r, mut c) = link.at;
+    let mut text = String::new();
+    for _ in 0..n {
+        match rows.get(r).and_then(|row| row.cells.get(c)) {
+            Some(('\0', _)) => {}
+            Some((ch, _)) => text.push(*ch),
+            None => break,
+        }
+        c += 1;
+        if c >= cols {
+            r += 1;
+            c = 0;
+        }
+    }
+    Some(LinkAt {
+        url: link.target,
+        line: from + link.at.0 as i32,
+        col: link.at.1,
+        span: n,
+        text,
+    })
 }
 
 #[cfg(test)]
@@ -270,16 +305,28 @@ mod tests {
 
     #[test]
     fn the_link_under_a_cell_is_found_whole() {
+        let found = |t: &Term<VoidListener>, line, col| {
+            link_at(t, line, col).map(|l| (l.url, l.line, l.col, l.span, l.text))
+        };
         let t = term("see https://ranma.dev/doc ok");
-        assert_eq!(
-            link_at(&t, 0, 10),
-            Some(("https://ranma.dev/doc".into(), 0, 4, 21))
-        );
-        assert_eq!(link_at(&t, 0, 2), None, "not on the link");
+        let url = "https://ranma.dev/doc".to_string();
+        assert_eq!(found(&t, 0, 10), Some((url.clone(), 0, 4, 21, url)));
+        assert_eq!(found(&t, 0, 2), None, "not on the link");
         let t = term("0123456789 https://example.com/x");
-        let want = Some(("https://example.com/x".into(), 0, 11, 21));
-        assert_eq!(link_at(&t, 1, 3), want, "from the wrapped half");
-        assert_eq!(link_at(&t, 0, 12), want);
+        let url = "https://example.com/x".to_string();
+        let want = Some((url.clone(), 0, 11, 21, url));
+        assert_eq!(found(&t, 1, 3), want, "from the wrapped half");
+        assert_eq!(found(&t, 0, 12), want);
+    }
+
+    #[test]
+    fn a_link_after_wide_and_multibyte_characters_has_its_own_text() {
+        // `⊡` is three bytes and `日` two cells: the link's columns are cells,
+        // and its text must not start mid-character or a cell late.
+        let t = term("日⊡ https://a.io/x");
+        let l = link_at(&t, 0, 6).unwrap();
+        assert_eq!((l.col, l.span), (4, 14));
+        assert_eq!(l.text, "https://a.io/x");
     }
 
     #[test]

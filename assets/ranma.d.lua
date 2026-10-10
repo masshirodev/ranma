@@ -355,10 +355,12 @@ function Pane:scroll_to(line) end
 ---@return integer id
 function Pane:watch(pattern, fn) end
 
----The link under a cell (a URL in the text, or an OSC 8 link), whole.
+---The link under a cell (a URL in the text, or an OSC 8 link), whole. `text`
+---is what it is drawn as; use it rather than slicing a row by `col`, which
+---counts cells, not the bytes a Lua string is indexed by.
 ---@param line integer
 ---@param col integer
----@return { url: string, line: integer, col: integer, span: integer }?
+---@return { url: string, line: integer, col: integer, span: integer, text: string }?
 function Pane:link_at(line, col) end
 
 ---This plugin's badge on the pane's border, after its title; no glyph takes

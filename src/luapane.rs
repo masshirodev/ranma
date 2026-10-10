@@ -154,14 +154,15 @@ impl UserData for Handle {
                 let term = term.lock();
                 panetext::link_at(&term, line, col)
             };
-            let Some((url, l, c, span)) = found else {
+            let Some(link) = found else {
                 return Ok(None);
             };
             let t = lua.create_table()?;
-            t.set("url", url)?;
-            t.set("line", l)?;
-            t.set("col", c)?;
-            t.set("span", span)?;
+            t.set("url", link.url)?;
+            t.set("line", link.line)?;
+            t.set("col", link.col)?;
+            t.set("span", link.span)?;
+            t.set("text", link.text)?;
             Ok(Some(t))
         });
         m.add_method("range", |_, h, ()| {
