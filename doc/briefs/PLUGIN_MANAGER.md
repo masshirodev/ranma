@@ -1,4 +1,4 @@
-# Brief: the plugin manager's screen (lazy.ranma)
+# Brief: the plugin manager's screen (hako)
 
 For Claude Design. Repository: <https://github.com/masshirodev/ranma>
 (public). Read `doc/DESIGN.md` ("Plugins: Neovim's shape, in Lua"),
@@ -8,9 +8,11 @@ with `PLUGIN_PANEL_MOCK.txt` (plugin screens cell for cell) and
 `PLUGIN_PANEL_screen.js` (the code that draws them). `assets/ranma.d.lua` is
 the whole Lua API in one file.
 
-The manager itself will live in its own repository, `masshirodev/lazy.ranma`,
+The manager is called **hako** (箱, a box): `require("hako")`, the palette
+command `hako`. It is modelled on lazy.nvim but is not named after it, because
+the one thing it leaves out is lazy-loading. It will live in its own repository, `masshirodev/hako.ranma`,
 which does not exist yet; this brief is the first thing written for it. Card
-c196 ("Plugin manager (lazy.ranma) and one repo per plugin") on the `ranma`
+c196 ("Plugin manager (hako) and one repo per plugin") on the `ranma`
 board. Nothing in this brief is built.
 
 ## What ranma is
@@ -52,7 +54,7 @@ where each plugin was declared and acts on that place:
 
 ```lua
 -- 1. Inline, in init.lua
-require("lazy").setup {
+require("hako").setup {
   "masshirodev/history.ranma",
   { "masshirodev/compose.ranma", opts = { keep = 30 } },
   { dir = "~/projects/agents.ranma" },          -- a local checkout, for development

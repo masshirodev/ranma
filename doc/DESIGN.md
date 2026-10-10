@@ -556,7 +556,7 @@ three-function run-time API.
   if one is ever wanted, is itself a plugin.
 - `ranma.packadd(dir)` (2026-10-10) is Neovim's `:packadd`, and the one thing
   the core gives a plugin manager. Its packages live wherever the manager
-  keeps them (lazy.ranma: `~/.local/share/ranma/lazy/`), and load only when
+  keeps them (hako: `~/.local/share/ranma/hako/`), and load only when
   the spec in `init.lua` asks, in its order, so `enabled = false`,
   dependencies and a `config` run after its plugin can mean something; a
   package under `pack/*/start/` loads whether it is wanted or not. The manager

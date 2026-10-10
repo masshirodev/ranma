@@ -237,7 +237,7 @@ features below the line live outside the repository.
 Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
 regex goto, link hover tooltips, agent integrations, autorun commands. Moving
 to a repository each, installed by a plugin manager that is itself a plugin
-(`lazy.ranma`), on `ranma.packadd`.
+(hako, `masshirodev/hako.ranma`), on `ranma.packadd`.
 
 ## 12. More from tmux
 
