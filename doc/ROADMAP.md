@@ -208,6 +208,8 @@ features below the line live outside the repository.
 - [x] Design agreed
 - [x] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
   watched; a failing plugin dropped whole; the 200 ms watchdog
+- [x] `ranma.packadd(dir)`: a package from anywhere, for a plugin manager
+- [ ] Design: `doc/briefs/PLUGIN_MANAGER.md`, the manager's screen
 - [x] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `settings.toml` read and applied
 - [x] `option_change`, fired by the settings panel
@@ -233,7 +235,9 @@ features below the line live outside the repository.
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)
 
 Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
-regex goto, link hover tooltips, agent integrations, autorun commands.
+regex goto, link hover tooltips, agent integrations, autorun commands. Moving
+to a repository each, installed by a plugin manager that is itself a plugin
+(`lazy.ranma`), on `ranma.packadd`.
 
 ## 12. More from tmux
 

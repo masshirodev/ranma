@@ -1391,6 +1391,29 @@ Lua's usual places. \fBrequire\fR returns two values in Lua 5.4 (the module and 
 path), so wrap it in parentheses where a second argument would be taken:
 \fBranma.bind("f5", (require("history")).open)\fR.
 .PP
+\fBA package from anywhere: \fBranma.packadd(dir)\fB.\fR Neovim's \fB:packadd\fR, for
+a package outside \fBpack/*/start/\fR: a plugin manager's clones, or a checkout
+you are working on. It loads there and then, in the order your \fBinit.lua\fR
+(or a plugin) calls it:
+.PP
+.RS 4
+.nf
+local ok, err = ranma.packadd("~/projects/history.ranma")
+if not ok then ranma.notify(err) end
+ranma.set { history = { context = 3 } }   \-\- after it: its options exist now
+.fi
+.RE
+.PP
+The package's \fBlua/\fR goes on \fBrequire\fR's path after your own \fBlua/\fR, and each
+of its \fBplugin/*.lua\fR is sourced as a start package's is: dropped whole if it
+fails, named in a toast and in \fBranma health\fR, and given a second of its own,
+so a slow or broken package never fails \fBinit.lua\fR. It returns \fBtrue\fR, or
+\fBfalse\fR and the first error (or \fBno package at …\fR); it does not raise. A
+relative path is from the config directory, and \fB~/\fR is your home. Adding a
+directory twice, or one \fBpack/*/start/\fR already loaded, does nothing. The
+directory is watched like the config directory, so saving a \fB.lua\fR file in
+it reloads. Only while the configuration loads, like \fBranma.bind\fR.
+.PP
 \fBA failing plugin is dropped whole.\fR A plugin that errors while it loads
 (a Lua error, or anything ranma refuses, like an unknown setting) is left out
 with everything it bound or set, and the rest load without it. ranma names it

@@ -72,6 +72,16 @@ function ranma.set(settings) end
 ---@param spec ranma.OptionSpec
 function ranma.option(key, spec) end
 
+---Load a package that lives anywhere (Neovim's `:packadd`): its `lua/` goes
+---on `require`'s path after your own, and each `plugin/*.lua` is sourced as a
+---`pack/*/start/` one is, dropped whole if it fails, with a load budget of its
+---own. A relative path is from the config directory; `~/` is home. Loading
+---one twice, or a start package, does nothing. While loading only.
+---@param dir string
+---@return boolean ok Every file loaded.
+---@return string? err The first error, or why there is no package.
+function ranma.packadd(dir) end
+
 ---An option's value in force, by its dotted key: "wm_mode.hint",
 ---"border.style", "history.max_results". Theme keys only once loaded.
 ---@param key string

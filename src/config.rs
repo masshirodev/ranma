@@ -868,6 +868,13 @@ struct Builder {
     default_set: toml::Table,
     /// `ranma.option` declarations.
     plugin_options: Vec<crate::options::Opt>,
+    /// Every package loaded so far, `pack/*/start/*` and `ranma.packadd`
+    /// alike, as its canonical directory: a second packadd of one is a no-op.
+    packages: Vec<PathBuf>,
+    /// The packages `ranma.packadd` loaded, in order.
+    added: Vec<PathBuf>,
+    /// Their plugin files, failed ones included.
+    added_loads: Vec<PluginLoad>,
 }
 
 pub struct Config {
@@ -916,8 +923,12 @@ pub struct Config {
     pub toolbars_shown: Vec<String>,
     /// The user's init.lua, if one was found and run.
     pub source: Option<PathBuf>,
-    /// Every plugin file found, in the order sourced, failed ones included.
+    /// Every plugin file found, in the order sourced, failed ones included:
+    /// `pack/*/start/*` and `plugin/`, then what `ranma.packadd` loaded.
     pub plugins: Vec<PluginLoad>,
+    /// The packages `ranma.packadd` loaded, which live wherever a plugin
+    /// manager put them: watched like the config directory.
+    pub packages: Vec<PathBuf>,
     /// What loaded but deserves a word: settings.toml naming an option
     /// nothing declares.
     pub warnings: Vec<String>,
@@ -1394,11 +1405,22 @@ fn install_api(
     jobs: &crate::jobs::Jobs,
     user: &UserEvents,
     values: &Values,
+    watchdog: &Watchdog,
 ) -> mlua::Result<()> {
     let ranma = lua.create_table()?;
     ranma.set("version", env!("CARGO_PKG_VERSION"))?;
     if let Some(dir) = config_dir {
         ranma.set("config_dir", dir.display().to_string())?;
+    }
+    {
+        let watchdog = watchdog.clone();
+        let config_dir = config_dir.map(Path::to_path_buf);
+        ranma.set(
+            "packadd",
+            lua.create_function(move |lua, dir: String| {
+                packadd(lua, &watchdog, config_dir.as_deref(), &dir)
+            })?,
+        )?;
     }
 
     ranma.set(
@@ -2225,7 +2247,7 @@ pub fn load_from(
     let values = Values::default();
     // mlua's error is not Send without its `send` feature, so it cannot go through
     // anyhow's `.context` directly; its Display is all we need from it anyway.
-    install_api(&lua, config_dir, &jobs, &user_events, &values)
+    install_api(&lua, config_dir, &jobs, &user_events, &values, &watchdog)
         .and_then(|()| watchdog.install(&lua))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("installing the ranma Lua API")?;
@@ -2252,6 +2274,10 @@ pub fn load_from(
             .put_on_path(&lua)
             .map_err(|e| anyhow::anyhow!("{e}"))
             .context("setting `require`'s path")?;
+        lua.app_data_mut::<Builder>()
+            .expect("builder installed above")
+            .packages
+            .clone_from(&found.packages);
         for file in &found.files {
             plugins.push(source_plugin(&lua, &watchdog, file));
         }
@@ -2304,6 +2330,7 @@ pub fn load_from(
     let mut builder = lua
         .remove_app_data::<Builder>()
         .expect("builder installed above");
+    plugins.append(&mut builder.added_loads);
     // A system module the bar names but nobody configured gets its defaults.
     let named: Vec<String> = builder.bar.all().cloned().collect();
     for name in named {
@@ -2435,6 +2462,7 @@ pub fn load_from(
         theme,
         source: user_file,
         plugins,
+        packages: builder.added,
         warnings,
         watchdog,
         jobs,
@@ -2704,6 +2732,19 @@ impl Watchdog {
         }
         out
     }
+
+    /// Run `f` with a `budget` of its own, the outer run's clock stopped
+    /// meanwhile: a plugin that `ranma.packadd` sources from `init.lua` gets
+    /// a plugin's second, and neither spends the other's.
+    fn run_apart<R>(&self, budget: Duration, f: impl FnOnce() -> R) -> R {
+        let outer = self.0.get();
+        let start = Instant::now();
+        self.0.set(Some((start, budget)));
+        let out = f();
+        self.0
+            .set(outer.map(|(since, b)| (since + start.elapsed(), b)));
+        out
+    }
 }
 
 /// One plugin file sourced at load, for the bar and `--check-config`.
@@ -2726,6 +2767,9 @@ struct PluginDirs {
     /// Sourced in this order: packages first, then the user's own
     /// `plugin/`, so their own plugins run last and win.
     files: Vec<PathBuf>,
+    /// The `pack/*/start/*` packages, so `ranma.packadd` does not load one
+    /// of them a second time.
+    packages: Vec<PathBuf>,
 }
 
 impl PluginDirs {
@@ -2735,8 +2779,14 @@ impl PluginDirs {
             .flat_map(|pack| sorted_entries(&pack.join("start")))
             .filter(|p| p.is_dir())
             .collect();
+        let mut out = PluginDirs {
+            packages: packages
+                .iter()
+                .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+                .collect(),
+            ..PluginDirs::default()
+        };
         packages.push(config_dir.to_path_buf());
-        let mut out = PluginDirs::default();
         for root in packages.iter().rev() {
             let lua = root.join("lua");
             if lua.is_dir() {
@@ -2857,7 +2907,7 @@ fn source_plugin(lua: &Lua, watchdog: &Watchdog, path: &Path) -> PluginLoad {
         .map_err(|e| e.to_string())
         .and_then(|src| {
             watchdog
-                .run(LOAD_BUDGET, || {
+                .run_apart(LOAD_BUDGET, || {
                     lua.load(src)
                         .set_name(format!("@{}", path.display()))
                         .exec()
@@ -2872,6 +2922,91 @@ fn source_plugin(lua: &Lua, watchdog: &Watchdog, path: &Path) -> PluginLoad {
         took: start.elapsed(),
         error: result.err(),
     }
+}
+
+/// `ranma.packadd(dir)`: Neovim's `:packadd`, for a package that lives
+/// anywhere (a plugin manager's clones, a checkout being worked on). Its `lua/`
+/// goes on `require`'s path after the user's own, and each `plugin/*.lua` is
+/// sourced as a `pack/*/start` one is: dropped whole if it fails, named in
+/// `ranma health`. Returns whether every file loaded, and the first error;
+/// it raises only for a call that could never work.
+fn packadd(
+    lua: &Lua,
+    watchdog: &Watchdog,
+    config_dir: Option<&Path>,
+    dir: &str,
+) -> mlua::Result<(bool, Option<String>)> {
+    if lua.app_data_ref::<Builder>().is_none() {
+        return Err(loading_only());
+    }
+    let given = if let Some(rest) = dir.strip_prefix("~/") {
+        let home = std::env::var_os("HOME")
+            .ok_or_else(|| rt_err("ranma.packadd: `~` with no HOME set"))?;
+        PathBuf::from(home).join(rest)
+    } else {
+        let p = PathBuf::from(dir);
+        match config_dir {
+            Some(c) if p.is_relative() => c.join(p),
+            _ => p,
+        }
+    };
+    let Ok(root) = given
+        .canonicalize()
+        .map_err(|e| e.to_string())
+        .and_then(|p| {
+            if p.is_dir() {
+                Ok(p)
+            } else {
+                Err("not a directory".into())
+            }
+        })
+    else {
+        return Ok((
+            false,
+            Some(format!("ranma.packadd: no package at {}", given.display())),
+        ));
+    };
+    {
+        let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+        if b.packages.contains(&root) {
+            return Ok((true, None));
+        }
+        b.packages.push(root.clone());
+        b.added.push(root.clone());
+    }
+    let lua_dir = root.join("lua");
+    if lua_dir.is_dir() {
+        let package: Table = lua.globals().get("package")?;
+        let path: String = package.get("path")?;
+        let entry = format!("{0}/?.lua;{0}/?/init.lua;", lua_dir.display());
+        // After the user's own lua/, so a module of theirs still shadows it.
+        let own = config_dir.map(|c| format!("{0}/?.lua;{0}/?/init.lua;", c.join("lua").display()));
+        let path = match own
+            .as_deref()
+            .and_then(|o| path.find(o).map(|i| i + o.len()))
+        {
+            Some(at) => format!("{}{entry}{}", &path[..at], &path[at..]),
+            None => format!("{entry}{path}"),
+        };
+        package.set("path", path)?;
+    }
+    let mut first_error = None;
+    for file in sorted_entries(&root.join("plugin"))
+        .into_iter()
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "lua"))
+    {
+        let load = source_plugin(lua, watchdog, &file);
+        if first_error.is_none() {
+            first_error.clone_from(&load.error);
+        }
+        // Pushed after the source: a failed file put the builder back as it
+        // was before it, and its record must survive that.
+        lua.app_data_mut::<Builder>()
+            .ok_or_else(loading_only)?
+            .added_loads
+            .push(load);
+    }
+    Ok((first_error.is_none(), first_error))
 }
 
 #[cfg(test)]
@@ -3803,6 +3938,127 @@ mod tests {
         );
         let cfg = load(Some(&dir)).unwrap();
         assert_eq!(bound(&cfg, "f5").as_deref(), Some("equalize"));
+    }
+
+    #[test]
+    fn packadd_loads_a_package_from_anywhere_in_init_luas_order() {
+        let pkg = config_tree(
+            "padd-pkg",
+            &[
+                ("lua/hist.lua", "return 'help'"),
+                ("lua/m.lua", "return 'help'"),
+                (
+                    "plugin/hist.lua",
+                    "ranma.option('hist.n', { type = 'int', default = 3 })\n\
+                     ranma.bind('f5', (require('hist')))\nranma.bind('f6', 'help')",
+                ),
+            ],
+        );
+        let init = format!(
+            "ranma.bind('f5', 'equalize')\n\
+             local ok, err = ranma.packadd('{0}')\n\
+             assert(ok and err == nil)\n\
+             assert(ranma.packadd('{0}/') == true, 'a second packadd is a no-op')\n\
+             ranma.bind('f6', 'equalize')\n\
+             ranma.bind('f7', (require('m')))",
+            pkg.display()
+        );
+        let dir = config_tree(
+            "padd",
+            &[("lua/m.lua", "return 'equalize'"), ("init.lua", &init)],
+        );
+        let cfg = load(Some(&dir)).unwrap();
+        assert_eq!(
+            bound(&cfg, "f5").as_deref(),
+            Some("help"),
+            "the package ran where init.lua added it"
+        );
+        assert_eq!(
+            bound(&cfg, "f6").as_deref(),
+            Some("equalize"),
+            "and init.lua went on after it"
+        );
+        assert_eq!(
+            bound(&cfg, "f7").as_deref(),
+            Some("equalize"),
+            "the user's lua/ still shadows a package's"
+        );
+        assert_eq!(
+            cfg.plugins.len(),
+            1,
+            "sourced once, listed for ranma health"
+        );
+        assert!(cfg.plugins[0].error.is_none());
+        assert_eq!(cfg.packages, [pkg.canonicalize().unwrap()]);
+    }
+
+    #[test]
+    fn a_packadded_plugin_that_fails_is_dropped_and_init_lua_goes_on() {
+        let pkg = config_tree(
+            "padd-bad-pkg",
+            &[
+                (
+                    "plugin/a_bad.lua",
+                    "ranma.bind('f5', 'help')\nerror('boom')",
+                ),
+                (
+                    "plugin/b_hang.lua",
+                    "ranma.bind('f6', 'help')\nwhile true do end",
+                ),
+                ("plugin/c_good.lua", "ranma.bind('f7', 'help')"),
+            ],
+        );
+        let init = format!(
+            "local ok, err = ranma.packadd('{}')\n\
+             ranma.bind('f8', ok and 'help' or 'equalize')\n\
+             assert(err:find('boom'), err)\n\
+             local gone, why = ranma.packadd('/no/such/package')\n\
+             assert(not gone and why:find('no package'), why)",
+            pkg.display()
+        );
+        let dir = config_tree("padd-bad", &[("init.lua", &init)]);
+        let start = Instant::now();
+        let cfg = load(Some(&dir)).expect("a broken package never fails init.lua");
+        assert!(start.elapsed() < LOAD_BUDGET * 3, "{:?}", start.elapsed());
+        assert_eq!(bound(&cfg, "f5"), None, "dropped whole");
+        assert_eq!(bound(&cfg, "f6"), None, "stopped at its own budget");
+        assert_eq!(bound(&cfg, "f7").as_deref(), Some("help"));
+        assert_eq!(bound(&cfg, "f8").as_deref(), Some("equalize"));
+        let errors: Vec<_> = cfg.plugins.iter().map(|p| p.error.is_some()).collect();
+        assert_eq!(errors, [true, true, false]);
+    }
+
+    #[test]
+    fn packadd_skips_a_start_package_and_works_only_while_loading() {
+        let dir = config_tree(
+            "padd-start",
+            &[
+                (
+                    "pack/ext/start/p/plugin/p.lua",
+                    "ranma.option('p.n', { type = 'int', default = 1 })",
+                ),
+                (
+                    "init.lua",
+                    "assert(ranma.packadd('pack/ext/start/p') == true)",
+                ),
+            ],
+        );
+        let cfg = load(Some(&dir)).expect("not sourced twice: its option is declared once");
+        assert_eq!(cfg.plugins.len(), 1);
+        assert!(
+            cfg.packages.is_empty(),
+            "already watched with the config dir"
+        );
+        let e = cfg
+            .lua
+            .load("ranma.packadd('/tmp')")
+            .exec()
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("only works while the configuration loads"),
+            "{e}"
+        );
     }
 
     #[test]

@@ -3014,7 +3014,7 @@ impl App {
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
                 if self.watcher.is_some() {
-                    self.watcher = watch_config(self.tx.clone());
+                    self.watcher = watch_config(self.tx.clone(), &self.config.packages);
                 }
                 // The plugins that set them start over too.
                 self.badges.clear();
@@ -4485,8 +4485,13 @@ pub(super) fn spawn_input_thread(tx: Sender<AppEvent>) {
 /// Dotfiles usually make `init.lua` (or `themes/`) a symlink into a repo, and
 /// inotify reports changes to a symlink's *target* only to a watch on the
 /// target's own directory. So the directories behind any such links are watched
-/// too, or saving through the link would never reload.
-pub(super) fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWatcher> {
+/// too, or saving through the link would never reload. So are the packages
+/// `ranma.packadd` loaded from outside it: a plugin manager's clones, a
+/// checkout being worked on.
+pub(super) fn watch_config(
+    tx: Sender<AppEvent>,
+    packages: &[std::path::PathBuf],
+) -> Option<notify::RecommendedWatcher> {
     use notify::{RecursiveMode, Watcher};
     let dir = config::config_dir().filter(|d| d.is_dir())?;
     let mut w = notify::recommended_watcher(move |ev: notify::Result<notify::Event>| {
@@ -4513,6 +4518,10 @@ pub(super) fn watch_config(tx: Sender<AppEvent>) -> Option<notify::RecommendedWa
     for (entry, mode) in config_link_targets(&dir) {
         // Best effort: a dangling link simply is not watched.
         let _ = w.watch(&entry, mode);
+    }
+    let real = dir.canonicalize().unwrap_or(dir);
+    for p in packages.iter().filter(|p| !p.starts_with(&real)) {
+        let _ = w.watch(p, RecursiveMode::Recursive);
     }
     Some(w)
 }

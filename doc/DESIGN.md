@@ -554,6 +554,24 @@ three-function run-time API.
   sources its `plugin/*.lua`, which is how a cloned plugin repository is used
   without copying files around. Installing is `git clone`. A plugin manager,
   if one is ever wanted, is itself a plugin.
+- `ranma.packadd(dir)` (2026-10-10) is Neovim's `:packadd`, and the one thing
+  the core gives a plugin manager. Its packages live wherever the manager
+  keeps them (lazy.ranma: `~/.local/share/ranma/lazy/`), and load only when
+  the spec in `init.lua` asks, in its order, so `enabled = false`,
+  dependencies and a `config` run after its plugin can mean something; a
+  package under `pack/*/start/` loads whether it is wanted or not. The manager
+  could `dofile` the files itself, and then one broken plugin would take
+  `init.lua` down with it. Instead each file goes through the same sourcing
+  as a start package's: dropped whole if it fails, listed in `ranma health`,
+  toasted, and given **its own** 1 s, with `init.lua`'s clock stopped
+  meanwhile (`Watchdog::run_apart`), so a slow plugin neither spends the
+  config's time nor fails it. It returns `ok, err` rather than raising, so a
+  manager can show the failure. Its `lua/` goes after the user's own (theirs
+  still shadows), a second packadd of one directory, or of a start package,
+  does nothing, and the directories are watched for a reload like the config
+  directory. A package a plugin adds goes with that plugin if it then fails:
+  the rollback is of everything the file did. Load time only: binds and
+  options cannot be made later, so there is no lazy-loading to do.
 - Every one of these directories is watched like `init.lua`. A save anywhere
   reloads the whole configuration in a fresh Lua state, as today.
 - **A failing plugin is dropped whole, not half-applied.** Each plugin file is

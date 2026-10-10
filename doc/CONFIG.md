@@ -985,6 +985,27 @@ Lua's usual places. `require` returns two values in Lua 5.4 (the module and its
 path), so wrap it in parentheses where a second argument would be taken:
 `ranma.bind("f5", (require("history")).open)`.
 
+**A package from anywhere: `ranma.packadd(dir)`.** Neovim's `:packadd`, for
+a package outside `pack/*/start/`: a plugin manager's clones, or a checkout
+you are working on. It loads there and then, in the order your `init.lua`
+(or a plugin) calls it:
+
+```lua
+local ok, err = ranma.packadd("~/projects/history.ranma")
+if not ok then ranma.notify(err) end
+ranma.set { history = { context = 3 } }   -- after it: its options exist now
+```
+
+The package's `lua/` goes on `require`'s path after your own `lua/`, and each
+of its `plugin/*.lua` is sourced as a start package's is: dropped whole if it
+fails, named in a toast and in `ranma health`, and given a second of its own,
+so a slow or broken package never fails `init.lua`. It returns `true`, or
+`false` and the first error (or `no package at …`); it does not raise. A
+relative path is from the config directory, and `~/` is your home. Adding a
+directory twice, or one `pack/*/start/` already loaded, does nothing. The
+directory is watched like the config directory, so saving a `.lua` file in
+it reloads. Only while the configuration loads, like `ranma.bind`.
+
 **A failing plugin is dropped whole.** A plugin that errors while it loads
 (a Lua error, or anything ranma refuses, like an unknown setting) is left out
 with everything it bound or set, and the rest load without it. ranma names it
