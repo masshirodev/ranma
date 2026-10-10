@@ -456,11 +456,22 @@ fn draw_pane(
         out.set_style(style);
     }
 
-    // The search prompt takes the pane's bottom row while it is open.
+    // The search prompt takes the pane's bottom row while it is open, or the
+    // top one while the current match is on the bottom row: the newest match
+    // is often there (the line just typed), and the prompt would hide it.
     if let Some(s) = copy.and_then(|c| c.search.as_ref()).filter(|s| s.editing)
         && inner.h > 0
     {
-        let y = inner.y + inner.h - 1;
+        let bottom = inner.h as i32 - 1;
+        let on_bottom = copy.and_then(|c| c.current.as_ref()).is_some_and(|m| {
+            let off = content.display_offset as i32;
+            (m.start().line.0 + off..=m.end().line.0 + off).contains(&bottom)
+        });
+        let y = if on_bottom && inner.h > 1 {
+            inner.y
+        } else {
+            inner.y + inner.h - 1
+        };
         let prompt = format!(
             "{}{}{}",
             if s.backward { "?" } else { "/" },
@@ -474,7 +485,15 @@ fn draw_pane(
         let style = Style::default()
             .fg(color(colors.mode_fg))
             .bg(color(colors.mode_bg));
-        buf.set_style(RRect::new(inner.x, y, inner.w, 1), style);
+        // Blank the whole row first: styling it alone left the line's own
+        // text showing after the query.
+        buf.set_stringn(
+            inner.x,
+            y,
+            " ".repeat(inner.w as usize),
+            inner.w as usize,
+            style,
+        );
         buf.set_stringn(inner.x, y, &prompt, inner.w as usize, style);
         let cx = inner.x + (1 + s.query.width() as u16).min(inner.w.saturating_sub(1));
         f.set_cursor_position(Position::new(cx, y));

@@ -408,7 +408,8 @@ count `bar_fg`.
 
 `search` (`leader /`) opens a prompt on the focused pane's bottom row and searches
 its whole history — commands and their output alike — as you type, most recent
-match first. Every visible match is highlighted, the current one more strongly.
+match first. While the current match is on that bottom row (the line you just
+typed, often), the prompt takes the top row instead, so it never hides it. Every visible match is highlighted, the current one more strongly.
 `Enter` keeps you at the match in copy mode; `Esc` leaves.
 
 `copy_mode` (`leader [`) enters copy mode without searching. In copy mode:

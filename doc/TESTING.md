@@ -79,6 +79,9 @@ Builds the release binary and drives it inside a **private headless tmux server*
 - a pause in WM mode shows the which-key hint with its footer, and `Esc`
   takes it away
 - `Alt+Left` (a global bind) moves focus without the leader
+- a search whose match is on the pane's bottom row puts its prompt on the
+  top row, so the matched line stays in sight, and the prompt's row holds the
+  query alone (none of the line it is drawn over)
 - a click (raw SGR mouse bytes, as a terminal sends them) focuses the pane under it
 - a click on the bar reaches no program: a mouse-reporting probe in the focused
   pane logs nothing for the hover, press and release

@@ -680,7 +680,8 @@ count \fBbar_fg\fR.
 .PP
 \fBsearch\fR (\fBleader /\fR) opens a prompt on the focused pane's bottom row and searches
 its whole history — commands and their output alike — as you type, most recent
-match first. Every visible match is highlighted, the current one more strongly.
+match first. While the current match is on that bottom row (the line you just
+typed, often), the prompt takes the top row instead, so it never hides it. Every visible match is highlighted, the current one more strongly.
 \fBEnter\fR keeps you at the match in copy mode; \fBEsc\fR leaves.
 .PP
 \fBcopy_mode\fR (\fBleader [\fR) enters copy mode without searching. In copy mode:

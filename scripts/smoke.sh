@@ -695,6 +695,18 @@ T send-keys -t s Enter; sleep 0.2
 T send-keys -t s y; sleep 0.4
 [ "$(T show-buffer 2>/dev/null)" = "needle-7" ] || fail "search + yank did not reach the clipboard"
 
+# A match on the pane's bottom row (the line just typed): the prompt moves to
+# the top row instead of covering it, and the prompt's row holds the query
+# alone, not the rest of the line it was drawn over.
+T send-keys -t s 'clear; seq 1 80; printf bottom-mark-9' Enter; sleep 0.5
+T send-keys -t s C-b /; sleep 0.2
+T send-keys -t s 'bottom-mark'; sleep 0.3
+# The matched line itself, starting at the pane's left edge: not the prompt's
+# row, which (before the fix) read ?bottom-mark-9... from the line under it.
+screen | grep -Eq '[│|]bottom-mark-9' || fail "the search prompt covered the line it matched"
+screen | grep -Eq '[/?]bottom-mark +[│|]' || fail "the line under the search prompt showed through it ($(screen | grep -E '[/?]bottom-mark'))"
+T send-keys -t s Escape; sleep 0.3
+
 # A new session, then its only shell exits: the session ends, main comes back.
 T send-keys -t s C-b N; sleep 0.8
 bar | grep -q '^2 ' || fail "new session not shown in the bar"
