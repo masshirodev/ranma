@@ -768,6 +768,51 @@ Not done yet: the handoff's rule that the nested-ranma label gives way to
 badges when both share the title's edge (bar on top, title on top). Each still
 lays itself out on its own there. The two only meet in that configuration.
 
+**What the plugin manager's screen added** (2026-10-10, from
+`doc/handoffs/PLUGIN_MANAGER.md`, card c196). The manager (hako, a plugin in
+its own repository) needed five things a plugin could not draw, and they went
+into the screen for every plugin, not into it:
+
+- **A meter value**: the slider without arrows, a task's progress in its row
+  (`fetch ━━━●── 60%`), or a word and a time with no fraction. A progress block
+  per row would have doubled the list.
+- **An ask** (`s:ask`): the settings panel's unsaved-changes question, given
+  to plugins. Only its keys and `esc` work while it stands, so a deletion is
+  never one stray key away: the first key asks, a different one answers.
+- **An input line** in an ask, in the filter's place, so typing `owner/repo`
+  happens on the screen it belongs to rather than in a centred prompt.
+- **Paired keys** (`u/U update`), so 80 columns hold a row's three keys.
+- **One step back** (`s:push`): `esc` pops instead of closing. The app keeps
+  the covered view's callbacks beside it, since a pushed body's rows have
+  functions of their own.
+
+Plus `on_click` on a plugin's bar module (built-in modules were already
+clickable).
+
+Where it departs from that handoff:
+
+- The handoff said `o` scoped to the selected plugin "needs no new primitive,
+  it is the plugin passing a group to the same call". The group was fixed when
+  the screen opened, and there is no hook on a selection change to move it,
+  so rows got a `group` of their own.
+- **A reload now closes a plugin's screen**, without its `on_close`. A screen
+  holds functions of the Lua state a reload replaces; left open, it was drawn
+  with callbacks into nothing. The handoff could not know, and the manager
+  reloads after every install. A plugin that wants its screen open across a
+  reload opens it again when it loads.
+- When a plugin's keys card explains `o` itself, ranma's own `o` line in the
+  card is left out (the mock's card has one `o`, the plugin's).
+- The handoff put the ask's typed line on the screen (`S.input`); here it is
+  part of the ask (`input = { ... }`), because the line exists only while an
+  ask does, and its `enter` is one of the ask's answers.
+
+Tests compare every scene of `PLUGIN_MANAGER_MOCK.txt` that is the screen
+(the list at 80×24, 200×50 and 40×15, keys card, peek, the sync's ask and its
+run, first run, adding, removing both ways, cleaning, the log), in both border
+styles, from a Rust port of the script's scene data
+(`src/screen_manager_tests.rs`). The bar module and toast scenes are the
+plugin's to draw and are not compared here.
+
 **Pickers and prompts** (2026-10-08) are ranma's own `Picker` with a kind of
 their own and an item target that is an index. The Lua items table is kept in
 the registry while the picker is open, so `on_select` gets the item the plugin

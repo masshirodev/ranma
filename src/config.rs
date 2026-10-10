@@ -506,6 +506,7 @@ impl ModuleKind {
 fn system_module(name: &str, interval: Option<f64>, format: Option<String>) -> Option<ModuleDef> {
     let default = SYSTEM_MODULES.iter().find(|(n, _)| *n == name)?.1;
     Some(ModuleDef {
+        on_click: None,
         interval: Some(std::time::Duration::from_secs_f64(
             interval.unwrap_or(default),
         )),
@@ -519,6 +520,8 @@ pub struct ModuleDef {
     /// changes" (focus, workspace, title, mode) instead of on a timer.
     pub interval: Option<std::time::Duration>,
     pub kind: ModuleKind,
+    /// A function a click on the module calls (a plugin's own module).
+    pub on_click: Option<Rc<RegistryKey>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -1846,12 +1849,16 @@ fn install_api(
             }
             if let Some(k) = keys
                 .iter()
-                .find(|k| !["render", "exec", "format", "interval"].contains(&k.as_str()))
+                .find(|k| !["render", "exec", "format", "interval", "on_click"].contains(&k.as_str()))
             {
                 return Err(rt_err(format!(
-                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval)"
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click)"
                 )));
             }
+            let on_click = match opts.get::<Option<Function>>("on_click")? {
+                Some(f) => Some(Rc::new(lua.create_registry_value(f)?)),
+                None => None,
+            };
             let interval = match opts.get::<Option<f64>>("interval")? {
                 Some(secs) if secs > 0.0 => Some(std::time::Duration::from_secs_f64(secs)),
                 Some(secs) => {
@@ -1890,7 +1897,14 @@ fn install_api(
             lua.app_data_mut::<Builder>()
                 .ok_or_else(loading_only)?
                 .modules
-                .insert(name, ModuleDef { interval, kind });
+                .insert(
+                    name,
+                    ModuleDef {
+                        interval,
+                        kind,
+                        on_click,
+                    },
+                );
             Ok(())
         })?,
     )?;

@@ -91,6 +91,8 @@ pub enum Click {
         pane: crate::layout::PaneId,
         n: u8,
     },
+    /// A plugin's module with an `on_click`: its place among them, by name.
+    Module(u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

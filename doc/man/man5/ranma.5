@@ -1090,6 +1090,9 @@ For \fBexec\fR: the text, with \fB%s\fR replaced by the output line.
 .TP
 \fBinterval\fR
 Seconds between runs; required for \fBexec\fR. Aligned to the wall clock: \fB60\fR runs on the minute, not 60 s after ranma started.
+.TP
+\fBon_click\fR
+A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable.
 .PP
 Give exactly one of \fBrender\fR or \fBexec\fR. A module that fails shows its error in the
 \fBurgent\fR style instead of its text. Modules never run while a frame is drawn; the
@@ -1872,6 +1875,16 @@ calls \fBon_edit\fR. The plugin updates the row itself, so nothing is unsaved. R
 are the only colour a plugin names: \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR
 (always bold).
 .PP
+A \fBmeter\fR shows a task's progress in a row, read\-only: \fB{ meter = 0.6, text =
+"fetch" }\fR draws \fBfetch ━━━━●── 60%\fR (the bar 13 cells on a list 60 wide, 7 at
+40, 5 at 34, none below; the percentage only at 60), and \fB{ text = "build", time
+= "0:04" }\fR the word and a time, for a task with no fraction. A row with a
+meter in it stays where it is: move it to another heading when the task ends,
+not while it runs.
+.PP
+A row's \fBgroup\fR names the options group \fBo\fR opens while that row is selected
+(a plugin manager's rows are other plugins), over the screen's own \fBgroup\fR.
+.PP
 Keys: ranma keeps \fB↑↓\fR \fBj\fR \fBk\fR (move), \fBtab\fR (next heading), \fB/\fR (filter),
 \fBesc\fR (close) and \fB?\fR (keys), plus \fB←→\fR \fBh\fR \fBl\fR and \fBenter\fR on an editable row.
 A screen or row binding one of them is an error naming it. \fBspace\fR peeks
@@ -1881,14 +1894,58 @@ gets the selected row's id (\fBnil\fR with nothing selected). The footer shows t
 selected row's keys, then the screen's, dropping from the end; \fB? keys\fR always
 stays. The mouse selects a row and the wheel moves through them.
 .PP
+\fBPaired keys.\fR A key with a this\-row form and an all\-rows form is one entry:
+\fB{ "u", "update", update_it, all = { "U", update_all } }\fR is drawn \fBu/U update\fR
+(10 cells instead of 19, so 80 columns hold a row's three keys), and both keys
+work. The keys card is the plugin's to spell out (\fBu U   update it · all\fR).
+When the card explains \fBo\fR itself, ranma does not add its own \fBo\fR line.
+.PP
 \fBs:set { ... }\fR changes what it names (\fBtitle\fR, \fBquery\fR, \fBstatus\fR, \fBsubtitle\fR, \fBcount\fR,
-\fBbody\fR, \fBkeys\fR, \fBcard\fR, \fBon_query\fR, \fBon_close\fR), up to a few times a second.
+\fBbody\fR, \fBkeys\fR, \fBcard\fR, \fBon_query\fR, \fBon_close\fR, and \fBselect\fR, a row's id to
+select), up to a few times a second.
 The screen is redrawn at most every 100 ms whatever the rate. The selection
 follows its row's \fBid\fR; a row that goes hands it to the row taking its place.
 Nothing marks what changed: say it with roles, and with the status.
 .PP
 A screen may open already answering a query (\fBquery = "panic"\fR, with
 \fBfilter = "plugin"\fR): the pattern a prompt asked for, which \fB/\fR then edits.
+.PP
+\fBAsking: \fBs:ask { blocks, keys, input }\fB.\fR A question in the detail area,
+answered from the footer: the settings panel's "close with 2 unsaved
+changes?", given to plugins. While it stands only its keys and \fBesc\fR work;
+anything else does nothing, so a stray key never answers it. Every destructive
+thing a plugin does should go through one, the first key putting the ask up and
+a different key (\fBy\fR) answering it.
+.PP
+.RS 4
+.nf
+s:ask {
+  blocks = { { "text", "Delete 3 clones no spec declares?", role = "urgent", strong = true },
+             { "log", lines = { "old\-theme.ranma  48K", "scratch.ranma  220K" } } },
+  keys = { { "y", "delete 3", clean, role = "urgent" }, { "esc", "keep them" } },
+}
+s:ask(nil)   \-\- take it down
+.fi
+.RE
+.PP
+\fBblocks\fR are what a row's detail holds (text, facts, progress, logs); the ask
+takes the detail area at its height (on a screen with none, all but 3 rows of
+the list). The footer shows every answer, each key in its \fBrole\fR, and no
+\fB? keys\fR. Answering takes the ask down, then calls the key's function with the
+selected row's id; \fBesc\fR may be named, for its label and a function. The ask
+does not mark rows or change the status: put a mark such as \fBdeletes\fR on what
+would go, and a status such as \fBclean?\fR, yourself.
+.PP
+\fBinput = { prefix = "+", text = "" }\fR makes the first row a line being typed,
+in the filter's place: letters go into it, \fBbackspace\fR and \fBctrl+u\fR edit it,
+and \fBenter\fR (an answer to name in \fBkeys\fR) calls its function with the text as
+the second argument.
+.PP
+\fBOne step back: \fBs:push { ... }\fB and \fBs:pop()\fB.\fR A view over the list (a log,
+one item's commits) with its own \fBbody\fR, \fBsubtitle\fR, \fBcount\fR, \fBstatus\fR, \fBkeys\fR,
+\fBcard\fR and \fBfilter\fR. \fBesc\fR comes back to the list with its selection and its
+functions as they were, instead of closing; the bottom edge says \fBesc back\fR.
+One level deep, like settings' \fBo\fR: pushing over a pushed view replaces it.
 .PP
 One screen at a time, in one slot shared with the settings panel: opening a
 screen closes settings (which asks first about unsaved edits) or the screen

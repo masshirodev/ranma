@@ -209,7 +209,8 @@ features below the line live outside the repository.
 - [x] Loading: `lua/` on `require`, `plugin/*.lua`, `pack/*/start/*`, all
   watched; a failing plugin dropped whole; the 200 ms watchdog
 - [x] `ranma.packadd(dir)`: a package from anywhere, for a plugin manager
-- [ ] Design: `doc/briefs/PLUGIN_MANAGER.md`, the manager's screen
+- [x] Design: `doc/briefs/done/PLUGIN_MANAGER.md`, handoff in `doc/handoffs/PLUGIN_MANAGER.md`
+- [x] What the manager's screen needed, for every plugin: meter values, `s:ask` (with a typed line), paired keys, `s:push`/`s:pop`, a row's options `group`, `on_click` on modules; a reload closes plugin screens
 - [x] The options registry, with ranma's own settings declared through it;
   `ranma.option`, `ranma.get`, `settings.toml` read and applied
 - [x] `option_change`, fired by the settings panel

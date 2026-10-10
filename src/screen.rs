@@ -80,9 +80,19 @@ pub enum Value {
     Text(String, Role),
     Choice(String),
     Toggle(bool),
-    Slider { frac: f64, t: String },
+    Slider {
+        frac: f64,
+        t: String,
+    },
     Swatch(Color, String),
     Field(String),
+    /// A task's progress, read-only: what it is doing (`fetch`), then how far
+    /// (`frac`), or with no fraction how long so far (`time`, `0:04`).
+    Meter {
+        frac: Option<f64>,
+        t: String,
+        time: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -113,6 +123,12 @@ pub struct Row {
     pub value: Option<Value>,
     pub select: bool,
     pub keys: Vec<(String, String)>,
+    /// Paired keys: a row key and its all-rows form (`u` and `U`), drawn
+    /// once as `u/U update`.
+    pub alts: Vec<(String, String)>,
+    /// The options group `o` opens while this row is selected (a plugin
+    /// manager's row is another plugin).
+    pub group: Option<String>,
     pub detail: Vec<Block>,
 }
 
@@ -126,6 +142,8 @@ impl Row {
             value: None,
             select: true,
             keys: Vec::new(),
+            alts: Vec::new(),
+            group: None,
             detail: Vec::new(),
         }
     }
@@ -304,6 +322,61 @@ fn value_segs(v: &Option<Value>, cw: i32, sel: bool) -> Vec<(String, St)> {
             p(&format!("[{sp}"), dim);
             p(&trunc(&format!("\"{text}\""), max_in), base);
             p(&format!("{sp}]"), dim);
+        }
+        Value::Meter { frac, t, time } => {
+            // The slider without arrows: nothing here steps.
+            let mw = match frac {
+                None => 0,
+                Some(_) if cw >= 60 => 13,
+                Some(_) if cw >= 40 => 7,
+                Some(_) if cw >= 34 => 5,
+                Some(_) => 0,
+            };
+            p(
+                t,
+                if sel {
+                    st("picker_selected_fg").bold()
+                } else {
+                    st("bar_accent")
+                },
+            );
+            if frac.is_none()
+                && let Some(time) = time
+            {
+                p(&format!(" {time}"), base);
+            }
+            if let Some(f) = frac
+                && mw > 0
+            {
+                p(" ", base);
+                let k = (f * (mw - 1) as f64).round() as i32;
+                for i in 0..mw {
+                    if i < k {
+                        p(
+                            "━",
+                            if sel {
+                                st("picker_selected_fg")
+                            } else {
+                                st("bar_accent")
+                            },
+                        );
+                    } else if i == k {
+                        p(
+                            "●",
+                            if sel {
+                                st("picker_selected_fg").bold()
+                            } else {
+                                st("toast_fg").bold()
+                            },
+                        );
+                    } else {
+                        p("─", dim);
+                    }
+                }
+                if cw >= 60 {
+                    p(&format!(" {:>3}%", (f * 100.0).round() as i32), base);
+                }
+            }
         }
     }
     segs
@@ -651,6 +724,33 @@ pub enum Filter {
     Plugin,
 }
 
+/// A question on a screen (`s:ask`): it takes the detail area, and only its
+/// keys and esc answer it. Every destructive thing a plugin does should go
+/// through one.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Ask {
+    pub blocks: Vec<Block>,
+    /// The answers: key, label, and the role the key is drawn in.
+    pub keys: Vec<(String, String, Role)>,
+    /// A line being typed, in the filter's place: its prefix and its text.
+    pub input: Option<(String, String)>,
+}
+
+/// What `s:push` covered: the view `esc` goes back to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Back {
+    pub status: Option<(String, Role)>,
+    pub subtitle: Option<String>,
+    pub count: Option<String>,
+    pub filter: Filter,
+    pub query: String,
+    pub keys: Vec<(String, String)>,
+    pub alts: Vec<(String, String)>,
+    pub card: Vec<(String, String, Option<String>)>,
+    pub body: Vec<Block>,
+    pub sel: Option<String>,
+}
+
 /// A plugin's screen: what it describes, and where the user is in it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Screen {
@@ -667,6 +767,8 @@ pub struct Screen {
     pub detail: usize,
     /// Keys for the whole screen: (key, label).
     pub keys: Vec<(String, String)>,
+    /// Paired screen keys: (key, its all-rows form).
+    pub alts: Vec<(String, String)>,
     /// The keys card's rows: key, what it does, and the state it is for.
     pub card: Vec<(String, String, Option<String>)>,
     pub body: Vec<Block>,
@@ -686,6 +788,10 @@ pub struct Screen {
     pub detail_rows: std::cell::Cell<usize>,
     /// Where each row was drawn last: (screen row, id), for the mouse.
     pub rows_at: std::cell::RefCell<Vec<(u16, String)>>,
+    /// The question standing, if one does.
+    pub ask: Option<Ask>,
+    /// The view `s:push` covered; `esc` goes back to it. One level deep.
+    pub back: Option<Box<Back>>,
 }
 
 /// What a key asks of the app.
@@ -705,6 +811,11 @@ pub enum Outcome {
     Edit(String),
     /// The query changed (a plugin-answered filter).
     Query(String),
+    /// An ask was answered (it is gone now): the key, the typed text if it
+    /// had a line, and the selected row.
+    Ask(String, Option<String>, Option<String>),
+    /// `esc` on a pushed view: back to the one under it.
+    Pop,
 }
 
 impl Screen {
@@ -841,6 +952,9 @@ impl Screen {
             return Outcome::Stay;
         }
         let name = key_name(k);
+        if self.ask.is_some() {
+            return self.ask_key(k, &name);
+        }
         if self.filtering {
             match k.code {
                 KeyCode::Esc => {
@@ -879,6 +993,10 @@ impl Screen {
             "tab" => self.next_group(false),
             "backtab" => self.next_group(true),
             "?" => self.help = true,
+            "esc" if self.back.is_some() => {
+                self.pop();
+                return Outcome::Pop;
+            }
             "esc" => return Outcome::Close,
             "/" if self.filter != Filter::Off => self.filtering = true,
             "left" | "h" | "right" | "l" => {
@@ -904,12 +1022,97 @@ impl Screen {
                 self.peek = true;
                 return Outcome::Peek;
             }
-            "o" if self.options && !self.keys.iter().any(|(k, _)| k == "o") => {
+            "o" if (self.options || self.selected().is_some_and(|r| r.group.is_some()))
+                && !self.keys.iter().any(|(k, _)| k == "o") =>
+            {
                 return Outcome::Options;
             }
             _ => return self.plugin_key(&name),
         }
         Outcome::Stay
+    }
+
+    /// While an ask stands: only its keys and esc, and, with a line, typing.
+    fn ask_key(&mut self, k: &KeyEvent, name: &str) -> Outcome {
+        let row = self.selected().map(|r| r.id.clone());
+        let ask = self.ask.as_mut().expect("checked");
+        if let Some((_, text)) = ask.input.as_mut() {
+            let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+            match k.code {
+                KeyCode::Char('u') if ctrl => text.clear(),
+                KeyCode::Char(c) if !ctrl => text.push(c),
+                KeyCode::Backspace => {
+                    text.pop();
+                }
+                KeyCode::Enter | KeyCode::Esc => {
+                    let ask = self.ask.take().expect("checked");
+                    let text = ask.input.map(|(_, t)| t);
+                    return Outcome::Ask(name.to_string(), text, row);
+                }
+                _ => {
+                    // Another key the ask names (ctrl+e, say) answers it.
+                    if ask.keys.iter().any(|(key, _, _)| key == name) {
+                        let ask = self.ask.take().expect("checked");
+                        return Outcome::Ask(name.to_string(), ask.input.map(|(_, t)| t), row);
+                    }
+                }
+            }
+            return Outcome::Stay;
+        }
+        if name == "esc" || ask.keys.iter().any(|(key, _, _)| key == name) {
+            self.ask = None;
+            return Outcome::Ask(name.to_string(), None, row);
+        }
+        Outcome::Stay
+    }
+
+    /// `s:push`: this view goes under, the new one is shown.
+    pub fn push(&mut self, mut view: Back) {
+        std::mem::swap(&mut self.status, &mut view.status);
+        std::mem::swap(&mut self.subtitle, &mut view.subtitle);
+        std::mem::swap(&mut self.count, &mut view.count);
+        std::mem::swap(&mut self.filter, &mut view.filter);
+        std::mem::swap(&mut self.query, &mut view.query);
+        std::mem::swap(&mut self.keys, &mut view.keys);
+        std::mem::swap(&mut self.alts, &mut view.alts);
+        std::mem::swap(&mut self.card, &mut view.card);
+        std::mem::swap(&mut self.body, &mut view.body);
+        std::mem::swap(&mut self.sel, &mut view.sel);
+        self.ask = None;
+        self.filtering = false;
+        self.scroll.set(0);
+        // One level: pushing over a pushed view replaces it, and esc still
+        // goes back to the list.
+        if self.back.is_none() {
+            self.back = Some(Box::new(view));
+        }
+    }
+
+    /// Back to the view under a push, with its selection.
+    pub fn pop(&mut self) {
+        let Some(view) = self.back.take() else {
+            return;
+        };
+        let v = *view;
+        self.status = v.status;
+        self.subtitle = v.subtitle;
+        self.count = v.count;
+        self.filter = v.filter;
+        self.query = v.query;
+        self.keys = v.keys;
+        self.alts = v.alts;
+        self.card = v.card;
+        self.body = v.body;
+        self.sel = v.sel;
+        self.ask = None;
+        self.filtering = false;
+    }
+
+    /// The options group `o` opens: the selected row's, else the screen's.
+    pub fn options_group(&self) -> Option<String> {
+        self.selected()
+            .and_then(|r| r.group.clone())
+            .or_else(|| self.group.clone())
     }
 
     fn query_changed(&mut self) -> Outcome {
@@ -927,8 +1130,13 @@ impl Screen {
     /// A key the plugin bound: on the selected row first, then the screen's.
     fn plugin_key(&self, name: &str) -> Outcome {
         let row = self.selected();
-        let on_row = row.is_some_and(|r| r.keys.iter().any(|(k, _)| k == name));
-        if on_row || self.keys.iter().any(|(k, _)| k == name) {
+        let on_row = row.is_some_and(|r| {
+            r.keys.iter().any(|(k, _)| k == name) || r.alts.iter().any(|(_, a)| a == name)
+        });
+        if on_row
+            || self.keys.iter().any(|(k, _)| k == name)
+            || self.alts.iter().any(|(_, a)| a == name)
+        {
             return Outcome::Key(name.to_string(), row.map(|r| r.id.clone()));
         }
         Outcome::Stay
@@ -1048,6 +1256,14 @@ impl Screen {
                 d = 0;
             }
         }
+        // An ask takes the detail area, at its fixed height; on a screen too
+        // short for a detail, all but 3 rows of the list.
+        if let Some(ask) = &self.ask
+            && d == 0
+        {
+            let want = layout_blocks(&ask.blocks, cw, 0).len() as i32;
+            d = want.min((body - 4).max(1));
+        }
         let rule1 = if d > 0 { rule2 - d - 1 } else { rule2 };
         let l = rule1 - list_top;
         let h_rule = |s: &mut Grid, yy: i32, j: Option<char>| {
@@ -1087,15 +1303,24 @@ impl Screen {
             s.put(x + w - 2 - len(&t), y, &t, stl);
         }
         let mut bottom: Vec<(&str, &str)> = Vec::new();
-        if self.options {
-            bottom.push(("o", "options"));
+        if self.back.is_some() {
+            bottom.push(("esc", "back"));
+        } else {
+            if self.options {
+                bottom.push(("o", "options"));
+            }
+            bottom.push(("esc", "close"));
         }
-        bottom.push(("esc", "close"));
         put_edge_keys(s, x + w - 2, y + h - 1, &bottom, bst_bg(none));
 
         // The first row: the filter, or the plugin's subtitle; its count.
         let count = self.count.clone().unwrap_or_default();
-        if self.filter != Filter::Off {
+        if let Some((prefix, text)) = self.ask.as_ref().and_then(|a| a.input.as_ref()) {
+            // An ask's line, in the filter's place.
+            let mut qx = s.put(x0, q_y, prefix, st("bar_accent").bold());
+            qx = s.put(qx + 1, q_y, text, st("toast_fg").bold());
+            s.set(qx, q_y, ' ', St::default().bg("toast_fg"));
+        } else if self.filter != Filter::Off {
             if !self.query.is_empty() {
                 let mut qx = s.put(x0, q_y, "/", st("bar_accent").bold());
                 qx = s.put(qx + 1, q_y, &self.query, st("toast_fg").bold());
@@ -1113,7 +1338,7 @@ impl Screen {
         } else if let Some(sub) = &self.subtitle {
             s.put(x0, q_y, &trunc(sub, cw - len(&count) - 2), st("bar_dim"));
         }
-        if !count.is_empty() {
+        if !count.is_empty() && self.ask.as_ref().is_none_or(|a| a.input.is_none()) {
             s.put(x0 + cw - len(&count), q_y, &count, st("bar_dim"));
         }
 
@@ -1211,20 +1436,31 @@ impl Screen {
             }
         }
 
-        // The detail of the selected row.
+        // The detail of the selected row, or the ask.
+        let detail = match (&self.ask, &sel_row) {
+            (Some(a), _) => Some(&a.blocks),
+            (None, Some(r)) => Some(&r.detail),
+            _ => None,
+        };
         if d > 0
-            && let Some(r) = &sel_row
+            && let Some(blocks) = detail
         {
-            for (i, it) in fit_detail(&r.detail, d as usize, cw).iter().enumerate() {
+            for (i, it) in fit_detail(blocks, d as usize, cw).iter().enumerate() {
                 draw_line(s, it, x0, rule1 + 1 + i as i32, cw, 0, false, "", hch);
             }
         }
 
-        let foot = self.foot_keys(sel_row.as_ref(), wide, heads.len() >= 2);
-        put_keys(s, x0, foot_y, &foot, x0 + cw);
+        if let Some(ask) = &self.ask {
+            put_answers(s, x0, foot_y, &ask.keys);
+        } else {
+            let foot = self.foot_keys(sel_row.as_ref(), wide, heads.len() >= 2);
+            put_keys(s, x0, foot_y, &foot, x0 + cw);
+        }
 
         if self.help {
-            self.draw_keys_card(s, x + (w - 40) / 2, y + 2, b, style);
+            let ch = 3 + self.card.len() as i32 + self.ranma_keys().len() as i32;
+            let cy = if ch > h - 4 { y + 1 } else { y + 2 };
+            self.draw_keys_card(s, x + (w - 40) / 2, cy, b, style);
         }
     }
 
@@ -1232,9 +1468,9 @@ impl Screen {
         let mut k: Vec<(String, String)> = Vec::new();
         if let Some(r) = row {
             k.extend(value_keys(&r.value));
-            k.extend(r.keys.iter().cloned());
+            k.extend(paired(&r.keys, &r.alts));
         }
-        k.extend(self.keys.iter().cloned());
+        k.extend(paired(&self.keys, &self.alts));
         if wide {
             if self.filter != Filter::Off {
                 k.push(("/".into(), "filter".into()));
@@ -1271,7 +1507,9 @@ impl Screen {
         if rows && !self.binds_space() {
             k.push(("space".into(), "peek at the panes".into()));
         }
-        if self.options {
+        // A card that explains `o` itself (a plugin manager's `o` is the
+        // selected plugin's options) has the last word on it.
+        if self.options && !self.card.iter().any(|(key, _, _)| key == "o") {
             k.push(("o".into(), format!("{} options", self.title)));
         }
         k.push(("esc".into(), "close".into()));
@@ -1342,12 +1580,41 @@ impl Screen {
             s.put(x + w - 2 - len(&t), y, &t, stl);
         }
         draw_row(s, x + 2, y + 1, w - 4, row, true, "");
+        let first = paired(&row.keys, &row.alts).into_iter().next();
         let mut pairs: Vec<(&str, &str)> = vec![("space", "back")];
-        if let Some((k, l)) = row.keys.first() {
+        if let Some((k, l)) = &first {
             pairs.push((k, l));
         }
         pairs.push(("esc", "close"));
         put_edge_keys(s, x + w - 2, y + 2, &pairs, bst_bg(none));
+    }
+}
+
+/// Keys as the footer names them: a key with an all-rows form is `u/U`.
+fn paired(keys: &[(String, String)], alts: &[(String, String)]) -> Vec<(String, String)> {
+    keys.iter()
+        .map(|(k, l)| match alts.iter().find(|(a, _)| a == k) {
+            Some((_, all)) => (format!("{k}/{all}"), l.clone()),
+            None => (k.clone(), l.clone()),
+        })
+        .collect()
+}
+
+/// An ask's answers: all of them, each key in its role, and no `? keys`
+/// (as the settings panel's unsaved question).
+fn put_answers(s: &mut Grid, mut x: i32, y: i32, keys: &[(String, String, Role)]) {
+    for (i, (k, l, role)) in keys.iter().enumerate() {
+        if i > 0 {
+            x += 2;
+        }
+        let mut kst = if *role == Role::Normal {
+            st("bar_accent")
+        } else {
+            st(role.theme())
+        };
+        kst.b = true;
+        x = s.put(x, y, k, kst);
+        x = s.put(x + 1, y, l, st("bar_dim"));
     }
 }
 
@@ -1639,6 +1906,10 @@ pub fn key_line(pairs: &[(&str, &str)]) -> TipLine {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "screen_manager_tests.rs"]
+mod manager_tests;
 
 #[cfg(test)]
 mod tests {

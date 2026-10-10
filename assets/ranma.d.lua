@@ -173,6 +173,7 @@ function ranma.bar(bar) end
 
 ---@class ranma.Module
 ---@field render? fun(): (string|{ text: string, style?: "normal"|"dim"|"accent"|"urgent" }|nil)
+---@field on_click? fun() Called when the module is clicked.
 ---@field exec? string A shell command; its first line is the text.
 ---@field format? string For exec: %s is the output line.
 ---@field interval? number Seconds between runs (required for exec).
@@ -421,15 +422,28 @@ function ranma.input(spec) end
 
 ---@alias ranma.Role "normal"|"dim"|"accent"|"urgent"
 
----A row's value: text (in a role), or one of the settings panel's shapes.
----@alias ranma.Value string|{ [1]: string, [2]: ranma.Role? }|{ choice: string }|{ toggle: boolean }|{ slider: number, text?: string }|{ swatch: string }|{ field: string }
+---A row's value: text (in a role), one of the settings panel's shapes, or a
+---task's meter: `{ meter = 0.6, text = "fetch" }`, or `{ text = "build", time = "0:04" }`
+---when there is no fraction.
+---@alias ranma.Value string|{ [1]: string, [2]: ranma.Role? }|{ choice: string }|{ toggle: boolean }|{ slider: number, text?: string }|{ swatch: string }|{ field: string }|{ meter: number, text?: string }|{ time: string, text?: string }
 
----A key and its label, and the function it runs (called with the selected row's id).
----@alias ranma.ScreenKey { [1]: string, [2]: string, [3]: fun(row_id: string?)? }
+---A key and its label, and the function it runs (called with the selected
+---row's id). `all` pairs it with an all-rows form, drawn once as `u/U update`.
+---@alias ranma.ScreenKey { [1]: string, [2]: string, [3]: fun(row_id: string?)?, all?: { [1]: string, [2]: fun(row_id: string?)? } }
+
+---An ask's answer: a key, its label, the function (called with the selected
+---row's id and, with an input line, the text typed), and the key's role.
+---`esc` may be named, for its label and function.
+---@alias ranma.AskKey { [1]: string, [2]: string, [3]: fun(row_id: string?, text: string?)?, role?: ranma.Role }
+
+---@class ranma.Ask
+---@field blocks? ranma.Block[] The question, in the detail area: text, facts, progress, logs.
+---@field keys ranma.AskKey[] The answers; only they and esc work while it stands.
+---@field input? { prefix?: string, text?: string } A line typed in the filter's place.
 
 ---A block of a screen. The first field is its kind:
 ---{ "heading", text, tag?, count? }
----{ "row", id=, name=, mark={ glyph, role }, note=, value=, select=false, keys={ ranma.ScreenKey }, detail={ blocks }, on_change=fun(dir: 1|-1), on_edit=fun(text) }
+---{ "row", id=, name=, mark={ glyph, role }, note=, value=, select=false, keys={ ranma.ScreenKey }, detail={ blocks }, on_change=fun(dir: 1|-1), on_edit=fun(text), group= }
 ---{ "text", text, role?, strong?, max? }
 ---{ "facts", { label, value, role?, strong? }, ... }
 ---{ "progress", label?, frac=0..1, num? }
@@ -459,9 +473,23 @@ function ranma.input(spec) end
 local Screen = {}
 
 ---Change what it names: title, query, status, subtitle, count, body, keys,
----card, on_query, on_close. The selection follows its row's id.
+---card, on_query, on_close, select (a row's id). The selection follows its
+---row's id.
 ---@param t table
 function Screen:set(t) end
+
+---Ask something in the detail area, answered from the footer; nil takes it
+---down. Every destructive thing a plugin does should go through one.
+---@param ask ranma.Ask?
+function Screen:ask(ask) end
+
+---A view over this one (a log, one item of a list): esc comes back, with the
+---selection kept. One level deep.
+---@param t { body?: ranma.Block[], subtitle?: string, count?: string|integer, status?: { [1]: string, [2]: ranma.Role? }, keys?: ranma.ScreenKey[], card?: table, filter?: "names"|false }
+function Screen:push(t) end
+
+---Back from a push.
+function Screen:pop() end
 
 ---Close it (on_close is not called: the plugin knows).
 function Screen:close() end

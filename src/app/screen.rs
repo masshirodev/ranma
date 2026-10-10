@@ -20,6 +20,8 @@ pub struct PluginScreen {
     pub id: u64,
     pub screen: Screen,
     hooks: Hooks,
+    /// The callbacks of the view a `push` covered, for `esc` back.
+    back_hooks: Option<Hooks>,
     /// When the plugin's `on_query` is next due (typing is debounced).
     query_due: Option<Instant>,
 }
@@ -57,6 +59,7 @@ impl App {
             id: spec.id,
             screen,
             hooks: spec.hooks,
+            back_hooks: None,
             query_due: None,
         });
         self.picker = None;
@@ -97,7 +100,8 @@ impl App {
             .flatten()
         {
             if ps.id == id {
-                up.clone().apply(&mut ps.screen, &mut ps.hooks);
+                up.clone()
+                    .apply(&mut ps.screen, &mut ps.hooks, &mut ps.back_hooks);
             }
         }
         // Drawn at most every SCREEN_FRAME: a plugin updating a timer every
@@ -224,8 +228,7 @@ impl App {
                 };
                 let group = ps
                     .screen
-                    .group
-                    .clone()
+                    .options_group()
                     .unwrap_or_else(|| ps.screen.title.clone());
                 let title = ps.screen.title.clone();
                 self.stashed_screen = Some(ps);
@@ -274,6 +277,21 @@ impl App {
                         ..Default::default()
                     },
                 });
+            }
+            Outcome::Ask(k, text, row) => {
+                let f = self
+                    .plugin_screen
+                    .as_ref()
+                    .and_then(|p| p.hooks.ask_keys.get(&k))
+                    .cloned();
+                self.call_hook(&f, (row, text));
+            }
+            Outcome::Pop => {
+                if let Some(ps) = self.plugin_screen.as_mut()
+                    && let Some(h) = ps.back_hooks.take()
+                {
+                    ps.hooks = h;
+                }
             }
             Outcome::Query(_) => {
                 if let Some(ps) = self.plugin_screen.as_mut() {

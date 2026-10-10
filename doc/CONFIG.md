@@ -727,6 +727,7 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 | `exec` | A command run by `/bin/sh -c`, off ranma's own thread, killed (with anything it started) after 5 seconds. A slow command skips ticks instead of piling up. |
 | `format` | For `exec`: the text, with `%s` replaced by the output line. |
 | `interval` | Seconds between runs; required for `exec`. Aligned to the wall clock: `60` runs on the minute, not 60 s after ranma started. |
+| `on_click` | A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable. |
 
 Give exactly one of `render` or `exec`. A module that fails shows its error in the
 `urgent` style instead of its text. Modules never run while a frame is drawn; the
@@ -1347,6 +1348,16 @@ calls `on_edit`. The plugin updates the row itself, so nothing is unsaved. Roles
 are the only colour a plugin names: `normal`, `dim`, `accent`, `urgent`
 (always bold).
 
+A **meter** shows a task's progress in a row, read-only: `{ meter = 0.6, text =
+"fetch" }` draws `fetch ━━━━●── 60%` (the bar 13 cells on a list 60 wide, 7 at
+40, 5 at 34, none below; the percentage only at 60), and `{ text = "build", time
+= "0:04" }` the word and a time, for a task with no fraction. A row with a
+meter in it stays where it is: move it to another heading when the task ends,
+not while it runs.
+
+A row's `group` names the options group `o` opens while that row is selected
+(a plugin manager's rows are other plugins), over the screen's own `group`.
+
 Keys: ranma keeps `↑↓` `j` `k` (move), `tab` (next heading), `/` (filter),
 `esc` (close) and `?` (keys), plus `←→` `h` `l` and `enter` on an editable row.
 A screen or row binding one of them is an error naming it. `space` peeks
@@ -1356,14 +1367,56 @@ gets the selected row's id (`nil` with nothing selected). The footer shows the
 selected row's keys, then the screen's, dropping from the end; `? keys` always
 stays. The mouse selects a row and the wheel moves through them.
 
+**Paired keys.** A key with a this-row form and an all-rows form is one entry:
+`{ "u", "update", update_it, all = { "U", update_all } }` is drawn `u/U update`
+(10 cells instead of 19, so 80 columns hold a row's three keys), and both keys
+work. The keys card is the plugin's to spell out (`u U   update it · all`).
+When the card explains `o` itself, ranma does not add its own `o` line.
+
 `s:set { ... }` changes what it names (`title`, `query`, `status`, `subtitle`, `count`,
-`body`, `keys`, `card`, `on_query`, `on_close`), up to a few times a second.
+`body`, `keys`, `card`, `on_query`, `on_close`, and `select`, a row's id to
+select), up to a few times a second.
 The screen is redrawn at most every 100 ms whatever the rate. The selection
 follows its row's `id`; a row that goes hands it to the row taking its place.
 Nothing marks what changed: say it with roles, and with the status.
 
 A screen may open already answering a query (`query = "panic"`, with
 `filter = "plugin"`): the pattern a prompt asked for, which `/` then edits.
+
+**Asking: `s:ask { blocks, keys, input }`.** A question in the detail area,
+answered from the footer: the settings panel's "close with 2 unsaved
+changes?", given to plugins. While it stands only its keys and `esc` work;
+anything else does nothing, so a stray key never answers it. Every destructive
+thing a plugin does should go through one, the first key putting the ask up and
+a different key (`y`) answering it.
+
+```lua
+s:ask {
+  blocks = { { "text", "Delete 3 clones no spec declares?", role = "urgent", strong = true },
+             { "log", lines = { "old-theme.ranma  48K", "scratch.ranma  220K" } } },
+  keys = { { "y", "delete 3", clean, role = "urgent" }, { "esc", "keep them" } },
+}
+s:ask(nil)   -- take it down
+```
+
+`blocks` are what a row's detail holds (text, facts, progress, logs); the ask
+takes the detail area at its height (on a screen with none, all but 3 rows of
+the list). The footer shows every answer, each key in its `role`, and no
+`? keys`. Answering takes the ask down, then calls the key's function with the
+selected row's id; `esc` may be named, for its label and a function. The ask
+does not mark rows or change the status: put a mark such as `deletes` on what
+would go, and a status such as `clean?`, yourself.
+
+`input = { prefix = "+", text = "" }` makes the first row a line being typed,
+in the filter's place: letters go into it, `backspace` and `ctrl+u` edit it,
+and `enter` (an answer to name in `keys`) calls its function with the text as
+the second argument.
+
+**One step back: `s:push { ... }` and `s:pop()`.** A view over the list (a log,
+one item's commits) with its own `body`, `subtitle`, `count`, `status`, `keys`,
+`card` and `filter`. `esc` comes back to the list with its selection and its
+functions as they were, instead of closing; the bottom edge says `esc back`.
+One level deep, like settings' `o`: pushing over a pushed view replaces it.
 
 One screen at a time, in one slot shared with the settings panel: opening a
 screen closes settings (which asks first about unsaved edits) or the screen

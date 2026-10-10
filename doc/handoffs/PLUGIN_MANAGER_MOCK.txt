@@ -1,0 +1,783 @@
+# lazy.ranma's screen, cell for cell, as this handoff draws it
+# (LAZY_screen.js, default theme; colour roles are in the script, not here).
+# ranma's tests compare against these. Regenerate only from a new handoff.
+## the list · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ──────────────────────── 2 failed ─╮
+│  1 -- ~/.config/ranma/init.lua    │ / filter                      13 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │ Failed ─────────────────────────────── 2 ┃
+│  4   { dir = "~/projects/agents.ra│ › media.ranma                     ✗ load ┃
+│  5   "masshirodev/notes.ranma",   │   build.ranma                    ✗ build ┃
+│  6   { import = "plugins" },      │ Updates ────────────────────────────── 3 ┃
+│  7 }                              │   history.ranma                      ↑ 3 ┃
+│  8                                │   compose.ranma                      ↑ 1 ┃
+│  9 ranma.set { border = "rounded" │   marks.ranma                       ↑ 12 │
+│ 10 ranma.bind("leader L", function│ Not installed ──────────────────────── 1 │
+│ 11   require("lazy").open()       │   notes.ranma                  ○ missing │
+│ 12 end, { desc = "plugins" })     │ Installed ──────────────────────────── 5 │
+│ 13                                │   agents.ranma local             ● 1.4ms │
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ lua/media/init.lua:42: attempt to index  │
+│ 16   right = { "lazy", "cpu", "mem│ a nil value (field 'player')             │
+│ 17 }                              │ e opens lua/media/init.lua:42 in a pane. │
+│~                                  │ branch main · at 9b2d6f8 · not loaded    │
+│~                                  │ from lua/plugins/media.lua:1             │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ e edit  u/U update  l log  ? keys        │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## ? keys · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ──────────────────────── 2 failed ─╮
+│  1 -- ~/.config/ranma/init.lua    │ ╭─ keys ───────────────────────────────╮ │
+│  2 require("lazy").setup {        ├─│ u U      update it · all             │─┤
+│  3   "masshirodev/history.ranma", │ │ i I      install it · all missing    │ ┃
+│  4   { dir = "~/projects/agents.ra│ │ r R      restore it · all (the lock) │ ┃
+│  5   "masshirodev/notes.ranma",   │ │ x X      remove it · clean (asks)    │ ┃
+│  6   { import = "plugins" },      │ │ C        check all for updates       │ ┃
+│  7 }                              │ │ S        sync: install, clean, pull  │ ┃
+│  8                                │ │ a        add one: owner/repo         │ ┃
+│  9 ranma.set { border = "rounded" │ │ l        the log of its updates      │ │
+│ 10 ranma.bind("leader L", function│ │ b        run its build again   build │ │
+│ 11   require("lazy").open()       │ │ e        edit at the error      load │ │
+│ 12 end, { desc = "plugins" })     │ │ enter    open its folder in a pane   │ │
+│ 13                                │ │ y        copy its URL                │ │
+│ 14 ranma.bar {                    ├─│ o        its options in settings     │─┤
+│ 15   left = { "mode", "workspaces"│ │ ranma ────────────────────────────── │ │
+│ 16   right = { "lazy", "cpu", "mem│ │ ↑↓ j k   move                        │ │
+│ 17 }                              │ │ tab      next group                  │ │
+│~                                  │ │ /        filter by name              │ │
+│~                                  │ │ space    peek at the panes           │ │
+│~                                  ├─│ esc      close                       │─┤
+│ NORMAL  init.lua                  │ ╰─ any key ────────────────────────────╯ │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## the list · 200×50 · rounded
+╭ 1 nvim ──────────────────────────────────────────────────────────────────────────────────────────────╮╭─ lazy ───────────────┬──────────────────────────────────────────────────────────── 2 failed ─╮
+│  1 -- ~/.config/ranma/init.lua                                                                       ││ Groups               │ / filter                                                   13 plugins │
+│  2 require("lazy").setup {                                                                           │├──────────────────────┼───────────────────────────────────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma",                                                                    ││   Failed           2 │ Failed ──────────────────────────────────────────────────────────── 2 │
+│  4   { dir = "~/projects/agents.ranma" },                                                            ││ › Updates          3 │   media.ranma               plugins/media.lua:1                ✗ load │
+│  5   "masshirodev/notes.ranma",                                                                      ││   Not installed    1 │   build.ranma               plugins/build.lua:1               ✗ build │
+│  6   { import = "plugins" },                                                                         ││   Installed        5 │ Updates ─────────────────────────────────────────────────────────── 3 │
+│  7 }                                                                                                 ││   Not in spec      1 │ › history.ranma             init.lua:3                            ↑ 3 │
+│  8                                                                                                   ││   Not managed      1 │   compose.ranma             plugins/compose.lua:1                 ↑ 1 │
+│  9 ranma.set { border = "rounded" }                                                                  ││                      │   marks.ranma               plugins/marks.lua:1                  ↑ 12 │
+│ 10 ranma.bind("leader L", function()                                                                 ││                      │ Not installed ───────────────────────────────────────────────────── 1 │
+│ 11   require("lazy").open()                                                                          ││                      │   notes.ranma               init.lua:5                      ○ missing │
+│ 12 end, { desc = "plugins" })                                                                        ││                      │ Installed ───────────────────────────────────────────────────────── 5 │
+│ 13                                                                                                   ││                      │   agents.ranma local        ~/projects/agents.ranma           ● 1.4ms │
+│ 14 ranma.bar {                                                                                       ││                      │   clock.ranma off lock      plugins/clock.lua:1               ● 0.2ms │
+│ 15   left = { "mode", "workspaces" },                                                                ││                      │   lazy.ranma                init.lua:2                        ● 0.6ms │
+│ 16   right = { "lazy", "cpu", "mem", "clock" },                                                      ││                      │   links.ranma pinned        plugins/links.lua:1               ● 0.3ms │
+│ 17 }                                                                                                 ││                      │   zen.ranma                 plugins/zen.lua:1                   – off │
+│~                                                                                                     ││                      │ Not in spec ─────────────────────────────────────────────────────── 1 │
+│~                                                                                                     ││                      │   scratch.ranma             no spec                            ◇ 220K │
+│~                                                                                                     ││                      │ Not managed ─────────────────────────────────────────────────────── 1 │
+│~                                                                                                     ││                      │   ssh-hosts                 pack/github/start/ssh-hosts       ● 0.4ms │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     ││                      │                                                                       │
+│~                                                                                                     │├──────────────────────┴───────────────────────────────────────────────────────────────────────┤
+│~                                                                                                     ││                        7d02e4b keep the query when the pane scrolls                          │
+│~                                                                                                     ││                        c11a9e0 match across wrapped lines                                    │
+│~                                                                                                     ││                        58be7d1 doc: the on_query delay                                       │
+│~                                                                                                     ││                        branch main · at a3f91c2 · behind 3 · load 0.4ms                      │
+│~                                                                                                     ││                        from init.lua:3                                                       │
+│~                                                                                                     ││                                                                                              │
+│~                                                                                                     ││                                                                                              │
+│~                                                                                                     ││                                                                                              │
+│~                                                                                                     │├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ NORMAL  init.lua                                                                                     ││                        u/U update  l log  x remove  S sync  a add  C check  / filter  ? keys │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                                                                                                                                                       cpu 12%  mem 41%  16:36
+## nested ranma · 40×15 · rounded
+╭─ lazy ──────────────────── 2 failed ─╮
+│ / filter                  13 plugins │
+├──────────────────────────────────────┤
+│ Failed ─────────────────────────── 2 ┃
+│ › media.ranma                 ✗ load ┃
+│   build.ranma                ✗ build ┃
+│ Updates ────────────────────────── 3 │
+│   history.ranma                  ↑ 3 │
+│   compose.ranma                  ↑ 1 │
+│   marks.ranma                   ↑ 12 │
+│ Not installed ──────────────────── 1 │
+├──────────────────────────────────────┤
+│ e edit  u/U update  l log  ? keys    │
+╰────────────── o options · esc close ─╯
+ LAZY    1:code  2  3             16:36
+## the detail, by state · 40 cells · rounded
+
+
+  loaded            › lazy.ranma                     ● 0.6ms      update available  › history.ranma                      ↑ 3
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    Up to date · checked 12m ago                                    7d02e4b keep the query when the pane scr
+                    branch main · at 4be1c07 · load 0.6ms                           c11a9e0 match across wrapped lines
+                    from init.lua:2                                                 58be7d1 doc: the on_query delay
+                                                                                    branch main · at a3f91c2 · behind 3
+                                                                                    from init.lua:3
+
+
+
+  failed to load    › media.ranma                     ✗ load      failed task       › build.ranma                    ✗ build
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    lua/media/init.lua:42: attempt to index                         cc -O2 -o bin/watch src/watch.c
+                    a nil value (field 'player')                                    make: cc: No such file or directory
+                    e opens lua/media/init.lua:42 in a pane.                        make: *** [Makefile:4: bin/watch] Error
+                    branch main · at 9b2d6f8 · not loaded                           build make · exit 127 · at 0de93b2
+                    from lua/plugins/media.lua:1                                    from lua/plugins/build.lua:1
+
+
+
+  working           › compose.ranma            fetch ━━━━●──      not installed     › notes.ranma                  ○ missing
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    remote: Enumerating objects: 9, done.                           Declared, not cloned yet: i installs it,
+                    Receiving objects:  60% (5/9)                                   and so does the next sync.
+                    branch main · at c11a9e0 · load 0.3ms                           github.com/masshirodev/notes.ranma
+                    from lua/plugins/compose.lua:1                                  from init.lua:5
+
+
+
+
+  disabled          › zen.ranma                        – off      pinned            › links.ranma pinned             ● 0.3ms
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    enabled = false: installed, not loaded.                         pin = true: update and sync skip it.
+                    Updates still reach it.                                         tag v0.3.0 · at e0c4f3a · load 0.3ms
+                    branch main · at 7d02e4b                                        from lua/plugins/links.lua:1
+                    from lua/plugins/zen.lua:1
+
+
+
+
+  local             › agents.ranma local             ● 1.4ms      off the lock      › clock.ranma off lock           ● 0.2ms
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    Your checkout: loaded as it is, never                           At 9c1e2aa; the lock says 58be7d1. r
+                    fetched, reset or deleted.                                      goes back to it; u updates and locks.
+                    dir ~/projects/agents.ranma                                     branch main · at 9c1e2aa · load 0.2ms
+                    branch wip · at 41aa0c7 · load 1.4ms                            from lua/plugins/clock.lua:1
+
+
+
+
+  not in the spec   › scratch.ranma                   ◇ 220K      not managed       › ssh-hosts                      ● 0.4ms
+                  ────────────────────────────────────────────                    ────────────────────────────────────────────
+                    No spec declares it. x deletes this                             Cloned by hand into pack/*/start/: ranma
+                    clone, X every stray; both ask first.                           loads it; the manager leaves it be.
+                    dir lazy/scratch.ranma · size 220K                              at 0de93b2 · load 0.4ms
+
+
+
+
+## S: sync asks before it deletes · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ─────────────────────────── sync? ─╮
+│  1 -- ~/.config/ranma/init.lua    │ / filter                      13 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │   notes.ranma                  ○ missing │
+│  4   { dir = "~/projects/agents.ra│ Installed ──────────────────────────── 5 │
+│  5   "masshirodev/notes.ranma",   │   agents.ranma local             ● 1.4ms │
+│  6   { import = "plugins" },      │   clock.ranma off lock           ● 0.2ms │
+│  7 }                              │   lazy.ranma                     ● 0.6ms │
+│  8                                │   links.ranma pinned             ● 0.3ms ┃
+│  9 ranma.set { border = "rounded" │   zen.ranma                        – off ┃
+│ 10 ranma.bind("leader L", function│ Not in spec ────────────────────────── 1 ┃
+│ 11   require("lazy").open()       │ › scratch.ranma deletes           ◇ 220K ┃
+│ 12 end, { desc = "plugins" })     │ Not managed ────────────────────────── 1 ┃
+│ 13                                │   ssh-hosts                      ● 0.4ms ┃
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ Sync deletes 1 clone no spec declares:   │
+│ 16   right = { "lazy", "cpu", "mem│ scratch.ranma  220K · loaded 3 weeks ago │
+│ 17 }                              │ Then it installs 1, updates 8 and skips  │
+│~                                  │ 2 (local, pinned).                       │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ y sync  n sync, keep it  esc cancel      │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a sync in progress · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ──────────── sync 7/10 · 1 failed ─╮
+│  1 -- ~/.config/ranma/init.lua    │ / filter                      13 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │ Failed ─────────────────────────────── 2 ┃
+│  4   { dir = "~/projects/agents.ra│   media.ranma                       ✓ +1 ┃
+│  5   "masshirodev/notes.ranma",   │ › build.ranma                 build 0:04 ┃
+│  6   { import = "plugins" },      │ Updates ────────────────────────────── 3 ┃
+│  7 }                              │   history.ranma                     ✓ +3 ┃
+│  8                                │   compose.ranma            fetch ━━━━●── ┃
+│  9 ranma.set { border = "rounded" │   marks.ranma                     ✗ pull │
+│ 10 ranma.bind("leader L", function│ Not installed ──────────────────────── 1 │
+│ 11   require("lazy").open()       │   notes.ranma              clone ━━●──── │
+│ 12 end, { desc = "plugins" })     │ Installed ──────────────────────────── 5 │
+│ 13                                │   agents.ranma local           – skipped │
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ $ make                                   │
+│ 16   right = { "lazy", "cpu", "mem│ cc -O2 -c src/watch.c                    │
+│ 17 }                              │ cc -O2 -c src/tail.c                     │
+│~                                  │ build make · running 0:04 · at 6e2f1d0   │
+│~                                  │ from lua/plugins/build.lua:1             │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ enter open  l log  S sync  a add  ? keys │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## first run: three plugins cloning · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ────────────────── installing 0/3 ─╮
+│  1 -- ~/.config/ranma/init.lua    │ opened to install 3 plugins    4 plugins │
+│  2 local dir = ranma.data .. "/laz├──────────────────────────────────────────┤
+│  3 if not ranma.exists(dir) then  │ Not installed ──────────────────────── 3 │
+│  4   ranma.git_clone("masshirodev/│ › compose.ranma            clone ━━━━●── │
+│  5 end                            │   history.ranma            clone ━━●──── │
+│  6 ranma.rtp_prepend(dir)         │   media.ranma              clone ●────── │
+│  7                                │ Installed ──────────────────────────── 1 │
+│  8 require("lazy").setup {        │   lazy.ranma                     ● 0.6ms │
+│  9   { import = "plugins" },      │                                          │
+│ 10 }                              │                                          │
+│~                                  │                                          │
+│~                                  │                                          │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│~                                  │ Cloning into 'compose.ranma'...          │
+│~                                  │ remote: Enumerating objects: 96, done.   │
+│~                                  │ Receiving objects:  72% (69/96)          │
+│~                                  │ github.com/masshirodev/compose.ranma     │
+│~                                  │ from lua/plugins/compose.lua:1           │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ enter open  l log  S sync  a add  ? keys │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a: typing owner/repo · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ───────────────────────────── add ─╮
+│  1 -- ~/.config/ranma/init.lua    │ + masshirodev/sessions.ranma             │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │ Failed ─────────────────────────────── 2 ┃
+│  4   { dir = "~/projects/agents.ra│ › media.ranma                     ✗ load ┃
+│  5   "masshirodev/notes.ranma",   │   build.ranma                    ✗ build ┃
+│  6   { import = "plugins" },      │ Updates ────────────────────────────── 3 ┃
+│  7 }                              │   history.ranma                      ↑ 3 ┃
+│  8                                │   compose.ranma                      ↑ 1 ┃
+│  9 ranma.set { border = "rounded" │   marks.ranma                       ↑ 12 │
+│ 10 ranma.bind("leader L", function│ Not installed ──────────────────────── 1 │
+│ 11   require("lazy").open()       │   notes.ranma                  ○ missing │
+│ 12 end, { desc = "plugins" })     │ Installed ──────────────────────────── 5 │
+│ 13                                │   agents.ranma local             ● 1.4ms │
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ owner/repo, or a git URL.                │
+│ 16   right = { "lazy", "cpu", "mem│ Writes lua/plugins/sessions.lua with its │
+│ 17 }                              │ spec; ranma reloads and installs it.     │
+│~                                  │ writes lua/plugins/sessions.lua          │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ enter add  esc cancel  ctrl+u clear      │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a: the new plugin installing · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ────────────────── installing 1/1 ─╮
+│  1 -- lua/plugins/sessions.lua    │ / filter                      14 plugins │
+│  2 -- written by lazy.ranma; yours├──────────────────────────────────────────┤
+│  3 return {                       │ Not installed ──────────────────────── 2 │
+│  4   "masshirodev/sessions.ranma",│   notes.ranma                  ○ missing │
+│  5 }                              │ › sessions.ranma new       clone ━━━●─── │
+│~                                  │ Installed ──────────────────────────── 5 │
+│~                                  │   agents.ranma local             ● 1.4ms ┃
+│~                                  │   clock.ranma off lock           ● 0.2ms ┃
+│~                                  │   lazy.ranma                     ● 0.6ms ┃
+│~                                  │   links.ranma pinned             ● 0.3ms ┃
+│~                                  │   zen.ranma                        – off ┃
+│~                                  │ Not in spec ────────────────────────── 1 ┃
+│~                                  │   scratch.ranma                   ◇ 220K │
+│~                                  ├──────────────────────────────────────────┤
+│~                                  │ Cloning into 'sessions.ranma'...         │
+│~                                  │ remote: Enumerating objects: 214, done.  │
+│~                                  │ Receiving objects:  45% (97/214)         │
+│~                                  │ github.com/masshirodev/sessions.ranma    │
+│~                                  │ from lua/plugins/sessions.lua:1          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  sessions.lua              │ enter open  l log  S sync  a add  ? keys │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## x: a plugin with its own file · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ───────────────────────── remove? ─╮
+│  1 -- lua/plugins/compose.lua     │ / filter                      13 plugins │
+│  2 return {                       ├──────────────────────────────────────────┤
+│  3   "masshirodev/compose.ranma", │ Updates ────────────────────────────── 3 │
+│  4   opts = { keep = 30, submit = │   history.ranma                      ↑ 3 │
+│  5 }                              │ › compose.ranma deletes              ↑ 1 ┃
+│~                                  │   marks.ranma                       ↑ 12 ┃
+│~                                  │ Not installed ──────────────────────── 1 ┃
+│~                                  │   notes.ranma                  ○ missing ┃
+│~                                  │ Installed ──────────────────────────── 5 ┃
+│~                                  │   agents.ranma local             ● 1.4ms ┃
+│~                                  │   clock.ranma off lock           ● 0.2ms │
+│~                                  │   lazy.ranma                     ● 0.6ms │
+│~                                  │   links.ranma pinned             ● 0.3ms │
+│~                                  ├──────────────────────────────────────────┤
+│~                                  │ Remove compose.ranma?                    │
+│~                                  │ deletes lua/plugins/compose.lua          │
+│~                                  │ deletes its clone, lazy/compose.ranma    │
+│~                                  │ ranma reloads without it.                │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  compose.lua               │ y remove  esc keep it                    │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## x: a plugin declared in init.lua · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ────────────────────────── remove ─╮
+│  1 -- ~/.config/ranma/init.lua    │ / filter                      13 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │ Updates ────────────────────────────── 3 │
+│  4   { dir = "~/projects/agents.ra│ › history.ranma                      ↑ 3 │
+│  5   "masshirodev/notes.ranma",   │   compose.ranma                      ↑ 1 ┃
+│  6   { import = "plugins" },      │   marks.ranma                       ↑ 12 ┃
+│  7 }                              │ Not installed ──────────────────────── 1 ┃
+│  8                                │   notes.ranma                  ○ missing ┃
+│  9 ranma.set { border = "rounded" │ Installed ──────────────────────────── 5 ┃
+│ 10 ranma.bind("leader L", function│   agents.ranma local             ● 1.4ms ┃
+│ 11   require("lazy").open()       │   clock.ranma off lock           ● 0.2ms │
+│ 12 end, { desc = "plugins" })     │   lazy.ranma                     ● 0.6ms │
+│ 13                                │   links.ranma pinned             ● 0.3ms │
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ history.ranma is declared in init.lua:3. │
+│ 16   right = { "lazy", "cpu", "mem│ The manager never rewrites init.lua:     │
+│ 17 }                              │ delete that line, save, and X cleans the │
+│~                                  │ clone up.                                │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ e edit init.lua:3  esc back              │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## X: cleaning three strays · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ────────────────────────── clean? ─╮
+│  1 -- ~/.config/ranma/init.lua    │ / filter                      15 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │   agents.ranma local             ● 1.4ms │
+│  4   { dir = "~/projects/agents.ra│   clock.ranma off lock           ● 0.2ms │
+│  5   "masshirodev/notes.ranma",   │   lazy.ranma                     ● 0.6ms │
+│  6   { import = "plugins" },      │   links.ranma pinned             ● 0.3ms │
+│  7 }                              │   zen.ranma                        – off │
+│  8                                │ Not in spec ────────────────────────── 3 ┃
+│  9 ranma.set { border = "rounded" │ › old-theme.ranma deletes          ◇ 48K ┃
+│ 10 ranma.bind("leader L", function│   pane-notes.ranma deletes        ◇ 812K ┃
+│ 11   require("lazy").open()       │   scratch.ranma deletes           ◇ 220K ┃
+│ 12 end, { desc = "plugins" })     │ Not managed ────────────────────────── 1 ┃
+│ 13                                │   ssh-hosts                      ● 0.4ms ┃
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ Delete 3 clones no spec declares?        │
+│ 16   right = { "lazy", "cpu", "mem│ old-theme.ranma    48K  2 months ago     │
+│ 17 }                              │ pane-notes.ranma  812K  5 days ago       │
+│~                                  │ scratch.ranma     220K  3 weeks ago      │
+│~                                  │ 1.1M in all                              │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ y delete 3  esc keep them                │
+╰───────────────────────────────────╰────────────────── o options · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## l: what updates brought · 80×24 · rounded
+╭ 1 nvim ───────────────────────────╭─ lazy ───────────────────────────────────╮
+│  1 -- ~/.config/ranma/init.lua    │ log · the last 7 days          4 plugins │
+│  2 require("lazy").setup {        ├──────────────────────────────────────────┤
+│  3   "masshirodev/history.ranma", │ history.ranma a3f91c2 → 7d02e4b ────── 3 │
+│  4   { dir = "~/projects/agents.ra│ › keep the query when the pane scro…  2h │
+│  5   "masshirodev/notes.ranma",   │   match across wrapped lines          2h │
+│  6   { import = "plugins" },      │   doc: the on_query delay             2h │
+│  7 }                              │ clock.ranma 58be7d1 → 9c1e2aa ──────── 2 │
+│  8                                │   show seconds while the bar is lar…  1d │
+│  9 ranma.set { border = "rounded" │   format option takes os.date's       1d │
+│ 10 ranma.bind("leader L", function│ media.ranma 41aa0c7 → 9b2d6f8 ──────── 1 │
+│ 11   require("lazy").open()       │   players from playerctl -l           4d │
+│ 12 end, { desc = "plugins" })     │ lazy.ranma e3b8f01 → 4be1c07 ───────── 1 │
+│ 13                                │   lock where each update lands        6d │
+│ 14 ranma.bar {                    ├──────────────────────────────────────────┤
+│ 15   left = { "mode", "workspaces"│ lua/history/screen.lua   +31 −8          │
+│ 16   right = { "lazy", "cpu", "mem│ lua/history/query.lua     +4 −2          │
+│ 17 }                              │ 2 files changed                          │
+│~                                  │ 7d02e4b · by masshiro · 2h ago           │
+│~                                  │                                          │
+│~                                  ├──────────────────────────────────────────┤
+│ NORMAL  init.lua                  │ enter show  y copy hash  ? keys          │
+╰───────────────────────────────────╰─────────────────────────────── esc back ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## space: peek · 80×24 · rounded
+╭ 1 nvim ──────────────────────────────╮╭ 2 zsh ───────────────────────────────╮
+│  1 -- ~/.config/ranma/init.lua       ││~/.config/ranma main                  │
+│  2 require("lazy").setup {           ││❯ ls lua/plugins                      │
+│  3   "masshirodev/history.ranma",    ││build.lua    clock.lua    compose.lua │
+│  4   { dir = "~/projects/agents.ranma││links.lua    marks.lua    media.lua   │
+│  5   "masshirodev/notes.ranma",      ││zen.lua                               │
+│  6   { import = "plugins" },         ││~/.config/ranma main                  │
+│  7 }                                 ││❯ █                                   │
+│  8                                   ││                                      │
+│  9 ranma.set { border = "rounded" }  ││                                      │
+│ 10 ranma.bind("leader L", function() │╰──────────────────────────────────────╯
+│ 11   require("lazy").open()          │╭ 3 cargo ─────────────────────────────╮
+│ 12 end, { desc = "plugins" })        ││$ cargo test -q                       │
+│ 13                                   ││running 42 tests                      │
+│ 14 ranma.bar {                       ││test layout::dwindle ... ok           │
+│ 15   left = { "mode", "workspaces" },││test layout::master ... ok            │
+│ 16   right = { "lazy", "cpu", "mem", ││test picker::filter ... ok            │
+│ 17 }                                 ││test theme::inherit ... ok            │
+│~                                     ││test render::crop ... ok              │
+│~                                     ││                                      │
+╭─ lazy · peek ───────────────────────────────────────────────────── 2 failed ─╮
+│ › history.ranma             init.lua:3                                   ↑ 3 │
+╰──────────────────────────────────────── space back · u/U update · esc close ─╯
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## screen closed: the toast and the bar module · 80×24 · rounded
+╭ 1 nvim ──────────────────────────────╮╭ 2 zsh ───────────────────────────────╮
+│  1 -- ~/.config/ranma/init.lua       │╭─ lazy ──────────────────────────────╮│
+│  2 require("lazy").setup {           ││ 3 plugins have updates: history,    ││
+│  3   "masshirodev/history.ranma",    ││ compose and marks.                  ││
+│  4   { dir = "~/projects/agents.ranma││ leader L shows them; checked 16:30  ││
+│  5   "masshirodev/notes.ranma",      │╰─────────────────────────────────────╯│
+│  6   { import = "plugins" },         ││~/.config/ranma main                  │
+│  7 }                                 ││❯ █                                   │
+│  8                                   ││                                      │
+│  9 ranma.set { border = "rounded" }  ││                                      │
+│ 10 ranma.bind("leader L", function() │╰──────────────────────────────────────╯
+│ 11   require("lazy").open()          │╭ 3 cargo ─────────────────────────────╮
+│ 12 end, { desc = "plugins" })        ││$ cargo test -q                       │
+│ 13                                   ││running 42 tests                      │
+│ 14 ranma.bar {                       ││test layout::dwindle ... ok           │
+│ 15   left = { "mode", "workspaces" },││test layout::master ... ok            │
+│ 16   right = { "lazy", "cpu", "mem", ││test picker::filter ... ok            │
+│ 17 }                                 ││test theme::inherit ... ok            │
+│~                                     ││test render::crop ... ok              │
+│~                                     ││                                      │
+│~                                     ││test result: ok. 42 passed            │
+│ NORMAL  init.lua                     ││$ █                                   │
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1:code  2:web  3                          ↑ 3 updates  cpu 12%  mem 41%  16:36
+## the bar module, by state and width · rounded
+
+  nothing to say: the module renders nil and takes no room
+ 1:code  2:web  3                                       cpu 12%  mem 41%  16:36
+
+  updates found by the timer's check
+ 1:code  2:web  3                          ↑ 3 updates  cpu 12%  mem 41%  16:36
+
+  a plugin failed to load: urgent first
+ 1:code  2:web  3                       ✗ 1 failed ↑ 3  cpu 12%  mem 41%  16:36
+
+  a sync running, screen closed
+ 1:code  2:web  3                          ● sync 7/10  cpu 12%  mem 41%  16:36
+
+  the same four on a 40-column ranma
+ 1:code  2  3                     16:36
+
+
+ 1:code  2  3                 ↑3  16:36
+
+
+ 1:code  2  3              ✗1 ↑3  16:36
+
+
+ 1:code  2  3             ● 7/10  16:36
+
+## the list · 80×24 · none
+  1 nvim                               lazy                          2 failed
+   1 -- ~/.config/ranma/init.lua      / filter                      13 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",   Failed ─────────────────────────────── 2 ▐
+   4   { dir = "~/projects/agents.ra  › media.ranma                     ✗ load ▐
+   5   "masshirodev/notes.ranma",       build.ranma                    ✗ build ▐
+   6   { import = "plugins" },        Updates ────────────────────────────── 3 ▐
+   7 }                                  history.ranma                      ↑ 3 ▐
+   8                                    compose.ranma                      ↑ 1 ▐
+   9 ranma.set { border = "rounded"     marks.ranma                       ↑ 12
+  10 ranma.bind("leader L", function  Not installed ──────────────────────── 1
+  11   require("lazy").open()           notes.ranma                  ○ missing
+  12 end, { desc = "plugins" })       Installed ──────────────────────────── 5
+  13                                    agents.ranma local             ● 1.4ms
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  lua/media/init.lua:42: attempt to index
+  16   right = { "lazy", "cpu", "mem  a nil value (field 'player')
+  17 }                                e opens lua/media/init.lua:42 in a pane.
+ ~                                    branch main · at 9b2d6f8 · not loaded
+ ~                                    from lua/plugins/media.lua:1
+ ~
+  NORMAL  init.lua                    e edit  u/U update  l log  ? keys
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## ? keys · 80×24 · none
+  1 nvim                               lazy                          2 failed
+   1 -- ~/.config/ranma/init.lua         keys
+   2 require("lazy").setup {            u U      update it · all
+   3   "masshirodev/history.ranma",     i I      install it · all missing      ▐
+   4   { dir = "~/projects/agents.ra    r R      restore it · all (the lock)   ▐
+   5   "masshirodev/notes.ranma",       x X      remove it · clean (asks)      ▐
+   6   { import = "plugins" },          C        check all for updates         ▐
+   7 }                                  S        sync: install, clean, pull    ▐
+   8                                    a        add one: owner/repo           ▐
+   9 ranma.set { border = "rounded"     l        the log of its updates
+  10 ranma.bind("leader L", function    b        run its build again   build
+  11   require("lazy").open()           e        edit at the error      load
+  12 end, { desc = "plugins" })         enter    open its folder in a pane
+  13                                    y        copy its URL
+  14 ranma.bar {                        o        its options in settings
+  15   left = { "mode", "workspaces"    ranma ──────────────────────────────
+  16   right = { "lazy", "cpu", "mem    ↑↓ j k   move
+  17 }                                  tab      next group
+ ~                                      /        filter by name
+ ~                                      space    peek at the panes
+ ~                                      esc      close
+  NORMAL  init.lua                       any key
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## S: sync asks before it deletes · 80×24 · none
+  1 nvim                               lazy                             sync?
+   1 -- ~/.config/ranma/init.lua      / filter                      13 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",     notes.ranma                  ○ missing
+   4   { dir = "~/projects/agents.ra  Installed ──────────────────────────── 5
+   5   "masshirodev/notes.ranma",       agents.ranma local             ● 1.4ms
+   6   { import = "plugins" },          clock.ranma off lock           ● 0.2ms
+   7 }                                  lazy.ranma                     ● 0.6ms
+   8                                    links.ranma pinned             ● 0.3ms ▐
+   9 ranma.set { border = "rounded"     zen.ranma                        – off ▐
+  10 ranma.bind("leader L", function  Not in spec ────────────────────────── 1 ▐
+  11   require("lazy").open()         › scratch.ranma deletes           ◇ 220K ▐
+  12 end, { desc = "plugins" })       Not managed ────────────────────────── 1 ▐
+  13                                    ssh-hosts                      ● 0.4ms ▐
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  Sync deletes 1 clone no spec declares:
+  16   right = { "lazy", "cpu", "mem  scratch.ranma  220K · loaded 3 weeks ago
+  17 }                                Then it installs 1, updates 8 and skips
+ ~                                    2 (local, pinned).
+ ~
+ ~
+  NORMAL  init.lua                    y sync  n sync, keep it  esc cancel
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a sync in progress · 80×24 · none
+  1 nvim                               lazy              sync 7/10 · 1 failed
+   1 -- ~/.config/ranma/init.lua      / filter                      13 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",   Failed ─────────────────────────────── 2 ▐
+   4   { dir = "~/projects/agents.ra    media.ranma                       ✓ +1 ▐
+   5   "masshirodev/notes.ranma",     › build.ranma                 build 0:04 ▐
+   6   { import = "plugins" },        Updates ────────────────────────────── 3 ▐
+   7 }                                  history.ranma                     ✓ +3 ▐
+   8                                    compose.ranma            fetch ━━━━●── ▐
+   9 ranma.set { border = "rounded"     marks.ranma                     ✗ pull
+  10 ranma.bind("leader L", function  Not installed ──────────────────────── 1
+  11   require("lazy").open()           notes.ranma              clone ━━●────
+  12 end, { desc = "plugins" })       Installed ──────────────────────────── 5
+  13                                    agents.ranma local           – skipped
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  $ make
+  16   right = { "lazy", "cpu", "mem  cc -O2 -c src/watch.c
+  17 }                                cc -O2 -c src/tail.c
+ ~                                    build make · running 0:04 · at 6e2f1d0
+ ~                                    from lua/plugins/build.lua:1
+ ~
+  NORMAL  init.lua                    enter open  l log  S sync  a add  ? keys
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## first run: three plugins cloning · 80×24 · none
+  1 nvim                               lazy                    installing 0/3
+   1 -- ~/.config/ranma/init.lua      opened to install 3 plugins    4 plugins
+   2 local dir = ranma.data .. "/laz
+   3 if not ranma.exists(dir) then    Not installed ──────────────────────── 3
+   4   ranma.git_clone("masshirodev/  › compose.ranma            clone ━━━━●──
+   5 end                                history.ranma            clone ━━●────
+   6 ranma.rtp_prepend(dir)             media.ranma              clone ●──────
+   7                                  Installed ──────────────────────────── 1
+   8 require("lazy").setup {            lazy.ranma                     ● 0.6ms
+   9   { import = "plugins" },
+  10 }
+ ~
+ ~
+ ~
+ ~
+ ~                                    Cloning into 'compose.ranma'...
+ ~                                    remote: Enumerating objects: 96, done.
+ ~                                    Receiving objects:  72% (69/96)
+ ~                                    github.com/masshirodev/compose.ranma
+ ~                                    from lua/plugins/compose.lua:1
+ ~
+  NORMAL  init.lua                    enter open  l log  S sync  a add  ? keys
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a: typing owner/repo · 80×24 · none
+  1 nvim                               lazy                               add
+   1 -- ~/.config/ranma/init.lua      + masshirodev/sessions.ranma
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",   Failed ─────────────────────────────── 2 ▐
+   4   { dir = "~/projects/agents.ra  › media.ranma                     ✗ load ▐
+   5   "masshirodev/notes.ranma",       build.ranma                    ✗ build ▐
+   6   { import = "plugins" },        Updates ────────────────────────────── 3 ▐
+   7 }                                  history.ranma                      ↑ 3 ▐
+   8                                    compose.ranma                      ↑ 1 ▐
+   9 ranma.set { border = "rounded"     marks.ranma                       ↑ 12
+  10 ranma.bind("leader L", function  Not installed ──────────────────────── 1
+  11   require("lazy").open()           notes.ranma                  ○ missing
+  12 end, { desc = "plugins" })       Installed ──────────────────────────── 5
+  13                                    agents.ranma local             ● 1.4ms
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  owner/repo, or a git URL.
+  16   right = { "lazy", "cpu", "mem  Writes lua/plugins/sessions.lua with its
+  17 }                                spec; ranma reloads and installs it.
+ ~                                    writes lua/plugins/sessions.lua
+ ~
+ ~
+  NORMAL  init.lua                    enter add  esc cancel  ctrl+u clear
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## a: the new plugin installing · 80×24 · none
+  1 nvim                               lazy                    installing 1/1
+   1 -- lua/plugins/sessions.lua      / filter                      14 plugins
+   2 -- written by lazy.ranma; yours
+   3 return {                         Not installed ──────────────────────── 2
+   4   "masshirodev/sessions.ranma",    notes.ranma                  ○ missing
+   5 }                                › sessions.ranma new       clone ━━━●───
+ ~                                    Installed ──────────────────────────── 5
+ ~                                      agents.ranma local             ● 1.4ms ▐
+ ~                                      clock.ranma off lock           ● 0.2ms ▐
+ ~                                      lazy.ranma                     ● 0.6ms ▐
+ ~                                      links.ranma pinned             ● 0.3ms ▐
+ ~                                      zen.ranma                        – off ▐
+ ~                                    Not in spec ────────────────────────── 1 ▐
+ ~                                      scratch.ranma                   ◇ 220K
+ ~
+ ~                                    Cloning into 'sessions.ranma'...
+ ~                                    remote: Enumerating objects: 214, done.
+ ~                                    Receiving objects:  45% (97/214)
+ ~                                    github.com/masshirodev/sessions.ranma
+ ~                                    from lua/plugins/sessions.lua:1
+ ~
+  NORMAL  sessions.lua                enter open  l log  S sync  a add  ? keys
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## x: a plugin with its own file · 80×24 · none
+  1 nvim                               lazy                           remove?
+   1 -- lua/plugins/compose.lua       / filter                      13 plugins
+   2 return {
+   3   "masshirodev/compose.ranma",   Updates ────────────────────────────── 3
+   4   opts = { keep = 30, submit =     history.ranma                      ↑ 3
+   5 }                                › compose.ranma deletes              ↑ 1 ▐
+ ~                                      marks.ranma                       ↑ 12 ▐
+ ~                                    Not installed ──────────────────────── 1 ▐
+ ~                                      notes.ranma                  ○ missing ▐
+ ~                                    Installed ──────────────────────────── 5 ▐
+ ~                                      agents.ranma local             ● 1.4ms ▐
+ ~                                      clock.ranma off lock           ● 0.2ms
+ ~                                      lazy.ranma                     ● 0.6ms
+ ~                                      links.ranma pinned             ● 0.3ms
+ ~
+ ~                                    Remove compose.ranma?
+ ~                                    deletes lua/plugins/compose.lua
+ ~                                    deletes its clone, lazy/compose.ranma
+ ~                                    ranma reloads without it.
+ ~
+ ~
+  NORMAL  compose.lua                 y remove  esc keep it
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## x: a plugin declared in init.lua · 80×24 · none
+  1 nvim                               lazy                            remove
+   1 -- ~/.config/ranma/init.lua      / filter                      13 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",   Updates ────────────────────────────── 3
+   4   { dir = "~/projects/agents.ra  › history.ranma                      ↑ 3
+   5   "masshirodev/notes.ranma",       compose.ranma                      ↑ 1 ▐
+   6   { import = "plugins" },          marks.ranma                       ↑ 12 ▐
+   7 }                                Not installed ──────────────────────── 1 ▐
+   8                                    notes.ranma                  ○ missing ▐
+   9 ranma.set { border = "rounded"   Installed ──────────────────────────── 5 ▐
+  10 ranma.bind("leader L", function    agents.ranma local             ● 1.4ms ▐
+  11   require("lazy").open()           clock.ranma off lock           ● 0.2ms
+  12 end, { desc = "plugins" })         lazy.ranma                     ● 0.6ms
+  13                                    links.ranma pinned             ● 0.3ms
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  history.ranma is declared in init.lua:3.
+  16   right = { "lazy", "cpu", "mem  The manager never rewrites init.lua:
+  17 }                                delete that line, save, and X cleans the
+ ~                                    clone up.
+ ~
+ ~
+  NORMAL  init.lua                    e edit init.lua:3  esc back
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## X: cleaning three strays · 80×24 · none
+  1 nvim                               lazy                            clean?
+   1 -- ~/.config/ranma/init.lua      / filter                      15 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",     agents.ranma local             ● 1.4ms
+   4   { dir = "~/projects/agents.ra    clock.ranma off lock           ● 0.2ms
+   5   "masshirodev/notes.ranma",       lazy.ranma                     ● 0.6ms
+   6   { import = "plugins" },          links.ranma pinned             ● 0.3ms
+   7 }                                  zen.ranma                        – off
+   8                                  Not in spec ────────────────────────── 3 ▐
+   9 ranma.set { border = "rounded"   › old-theme.ranma deletes          ◇ 48K ▐
+  10 ranma.bind("leader L", function    pane-notes.ranma deletes        ◇ 812K ▐
+  11   require("lazy").open()           scratch.ranma deletes           ◇ 220K ▐
+  12 end, { desc = "plugins" })       Not managed ────────────────────────── 1 ▐
+  13                                    ssh-hosts                      ● 0.4ms ▐
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  Delete 3 clones no spec declares?
+  16   right = { "lazy", "cpu", "mem  old-theme.ranma    48K  2 months ago
+  17 }                                pane-notes.ranma  812K  5 days ago
+ ~                                    scratch.ranma     220K  3 weeks ago
+ ~                                    1.1M in all
+ ~
+  NORMAL  init.lua                    y delete 3  esc keep them
+                                                        o options · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## l: what updates brought · 80×24 · none
+  1 nvim                               lazy
+   1 -- ~/.config/ranma/init.lua      log · the last 7 days          4 plugins
+   2 require("lazy").setup {
+   3   "masshirodev/history.ranma",   history.ranma a3f91c2 → 7d02e4b ────── 3
+   4   { dir = "~/projects/agents.ra  › keep the query when the pane scro…  2h
+   5   "masshirodev/notes.ranma",       match across wrapped lines          2h
+   6   { import = "plugins" },          doc: the on_query delay             2h
+   7 }                                clock.ranma 58be7d1 → 9c1e2aa ──────── 2
+   8                                    show seconds while the bar is lar…  1d
+   9 ranma.set { border = "rounded"     format option takes os.date's       1d
+  10 ranma.bind("leader L", function  media.ranma 41aa0c7 → 9b2d6f8 ──────── 1
+  11   require("lazy").open()           players from playerctl -l           4d
+  12 end, { desc = "plugins" })       lazy.ranma e3b8f01 → 4be1c07 ───────── 1
+  13                                    lock where each update lands        6d
+  14 ranma.bar {
+  15   left = { "mode", "workspaces"  lua/history/screen.lua   +31 −8
+  16   right = { "lazy", "cpu", "mem  lua/history/query.lua     +4 −2
+  17 }                                2 files changed
+ ~                                    7d02e4b · by masshiro · 2h ago
+ ~
+ ~
+  NORMAL  init.lua                    enter show  y copy hash  ? keys
+                                                                     esc back
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36
+## space: peek · 80×24 · none
+  1 nvim                                  2 zsh
+   1 -- ~/.config/ranma/init.lua         ~/.config/ranma main
+   2 require("lazy").setup {             ❯ ls lua/plugins
+   3   "masshirodev/history.ranma",      build.lua    clock.lua    compose.lua
+   4   { dir = "~/projects/agents.ranma  links.lua    marks.lua    media.lua
+   5   "masshirodev/notes.ranma",        zen.lua
+   6   { import = "plugins" },           ~/.config/ranma main
+   7 }                                   ❯ █
+   8
+   9 ranma.set { border = "rounded" }
+  10 ranma.bind("leader L", function()
+  11   require("lazy").open()             3 cargo
+  12 end, { desc = "plugins" })          $ cargo test -q
+  13                                     running 42 tests
+  14 ranma.bar {                         test layout::dwindle ... ok
+  15   left = { "mode", "workspaces" },  test layout::master ... ok
+  16   right = { "lazy", "cpu", "mem",   test picker::filter ... ok
+  17 }                                   test theme::inherit ... ok
+ ~                                       test render::crop ... ok
+ ~
+   lazy · peek                                                       2 failed
+  › history.ranma             init.lua:3                                   ↑ 3
+                                          space back · u/U update · esc close
+ LAZY    1:code  2:web  3                               cpu 12%  mem 41%  16:36

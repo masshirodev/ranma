@@ -1922,6 +1922,18 @@ impl App {
                     path,
                 }) => self.click_nested(holder, &path[..depth as usize]),
                 Some(Click::InPane { pane, n }) => self.click_in_pane(pane, Some(n)),
+                Some(Click::Module(i)) => {
+                    let hook = self
+                        .click_modules()
+                        .get(i as usize)
+                        .and_then(|n| self.config.modules.get(n))
+                        .and_then(|m| m.on_click.clone());
+                    if let Some(k) = hook
+                        && let Ok(f) = self.config.lua.registry_value::<mlua::Function>(&k)
+                    {
+                        self.call_lua(|_| f.call::<()>(()));
+                    }
+                }
                 None => {}
             }
             return true;
@@ -3004,6 +3016,12 @@ impl App {
                     );
                 }
                 self.config = cfg;
+                // A plugin's screen holds functions of the Lua that just went:
+                // it closes, without an on_close nobody is left to hear. The
+                // plugin, loaded again, opens it again if it wants it open.
+                self.plugin_screen = None;
+                self.stashed_screen = None;
+                self.pending_screen = None;
                 // The new theme's colours are its own; the outer's go over
                 // them again, if the setting still asks for them.
                 self.own_colors = None;
@@ -4215,8 +4233,31 @@ impl App {
                 ],
                 None => Vec::new(),
             },
-            _ => self.module_values.get(name).cloned().unwrap_or_default(),
+            _ => {
+                let seg = self.module_values.get(name).cloned().unwrap_or_default();
+                match self.click_modules().iter().position(|m| m == name) {
+                    Some(i) => seg
+                        .into_iter()
+                        .map(|p| p.on_click(Click::Module(i as u16)))
+                        .collect(),
+                    None => seg,
+                }
+            }
         }
+    }
+
+    /// Plugins' modules that take a click, by name: `Click::Module` is a
+    /// place in this list, which stays put until the config reloads.
+    fn click_modules(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .config
+            .modules
+            .iter()
+            .filter(|(_, m)| m.on_click.is_some())
+            .map(|(n, _)| n.clone())
+            .collect();
+        names.sort();
+        names
     }
 
     /// The bar's pieces and where they go, for `cols` columns. A status message
@@ -5865,6 +5906,90 @@ mod tests {
         lua(&mut a, "s:close()");
         assert!(a.plugin_screen().is_none());
         assert!(ran(&a).is_empty());
+    }
+
+    #[test]
+    fn a_plugins_module_with_on_click_is_clicked() {
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(
+                r#"clicked = 0
+                ranma.module("hako", { render = function() return "hako ↑3" end,
+                                       on_click = function() clicked = clicked + 1 end })
+                ranma.module("plain", { render = function() return "plain" end })
+                ranma.bar { right = { "plain", "hako" } }"#,
+            ),
+        )
+        .unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 100, 30);
+        a.set_module_value("hako".into(), vec![Piece::new("hako ↑3", Style::Normal)]);
+        a.set_module_value("plain".into(), vec![Piece::new("plain", Style::Normal)]);
+        assert_eq!(a.segment("hako")[0].click, Some(Click::Module(0)));
+        assert_eq!(
+            a.segment("plain")[0].click,
+            None,
+            "no on_click: not clickable"
+        );
+        let bar = a.bar_rect().unwrap();
+        let (x, _) = a
+            .bar_pieces(bar.w)
+            .into_iter()
+            .find(|(_, p)| p.text.contains("hako"))
+            .unwrap();
+        tap(&mut a, bar.x + x + 1, bar.y);
+        let n: i64 = a.config.lua.load("return clicked").eval().unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn asks_paired_keys_and_a_push_call_the_plugin_back() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        lua(&mut a, AGENTS);
+        lua(
+            &mut a,
+            r#"s:set { body = {
+              { "row", id = "api", name = "api", keys = {
+                  { "u", "update", function(row) table.insert(ran, "u " .. row) end,
+                    all = { "U", function() table.insert(ran, "U") end } } } } } }
+            s:ask { blocks = { { "text", "Remove it?", role = "urgent" } },
+                    keys = { { "y", "remove", function(row, text) table.insert(ran, "y " .. row .. " " .. tostring(text)) end, role = "urgent" },
+                             { "esc", "keep it", function() table.insert(ran, "kept") end } } }"#,
+        );
+        typed(&mut a, "u");
+        assert!(ran(&a).is_empty(), "an ask takes only its keys");
+        typed(&mut a, "y");
+        typed(&mut a, "u");
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            KeyCode::Char('U'),
+            crossterm::event::KeyModifiers::SHIFT,
+        ))));
+        assert_eq!(ran(&a), ["y api nil", "u api", "U"]);
+        lua(
+            &mut a,
+            r#"ran = {}
+            s:ask { input = { prefix = "+" }, keys = {
+              { "enter", "add", function(row, text) table.insert(ran, "add " .. text) end } } }"#,
+        );
+        typed(&mut a, "me/x");
+        key(&mut a, KeyCode::Enter);
+        assert_eq!(ran(&a), ["add me/x"]);
+        lua(
+            &mut a,
+            r#"ran = {}
+            s:push { subtitle = "log", body = {
+              { "row", id = "c1", name = "a commit", keys = { { "y", "copy", function(row) table.insert(ran, "copy " .. row) end } } } } }"#,
+        );
+        typed(&mut a, "y");
+        key(&mut a, KeyCode::Esc);
+        assert!(
+            a.plugin_screen().is_some(),
+            "esc went back, it did not close"
+        );
+        typed(&mut a, "u");
+        assert_eq!(ran(&a), ["copy c1", "u api"], "back with the list's keys");
     }
 
     #[test]
