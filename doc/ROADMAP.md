@@ -235,10 +235,10 @@ features below the line live outside the repository.
 - [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)
 
-Plugins, in `~/.config/myconf/ranma/`, not here: scrollback history with
-regex goto, link hover tooltips, agent integrations, autorun commands. Moving
-to a repository each, installed by a plugin manager that is itself a plugin
-(hako, `masshirodev/hako.ranma`), on `ranma.packadd`.
+Plugins, not here: a repository each (`masshirodev/history.ranma`,
+`compose.ranma`, `openpath.ranma`, `linkhover.ranma`, `agents.ranma`),
+installed by a plugin manager that is itself a plugin (hako,
+`masshirodev/hako.ranma`), on `ranma.packadd`.
 
 ## 12. More from tmux
 
