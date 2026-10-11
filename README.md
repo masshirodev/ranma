@@ -101,7 +101,9 @@ and committed in [`doc/man/`](doc/man).
 
 ## Contributing
 
-Read [`doc/DESIGN.md`](doc/DESIGN.md) first: it records the decisions and the
+[`CONTRIBUTING.md`](CONTRIBUTING.md) says what belongs in the core and what
+belongs in a plugin, and how to send a change. Read
+[`doc/DESIGN.md`](doc/DESIGN.md) first: it records the decisions and the
 non-goals, and a feature on the non-goals list needs the design changed before
 it needs a pull request. [`AGENTS.md`](AGENTS.md) has the conventions.
 
