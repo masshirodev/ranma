@@ -15,7 +15,7 @@ use ranma::{config, ipc, theme};
 /// lists the default keys and ranma(5) the configuration, read from
 /// ~/.config/ranma/init.lua.
 #[derive(Parser)]
-#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("RANMA_GIT_SHA"), ")"))]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("RANMA_BUILD_INFO"), ")"))]
 struct Cli {
     /// Print the built-in default init.lua and exit. It is also the reference for every option.
     #[arg(long, conflicts_with_all = ["check_config", "dump_theme"])]
@@ -277,7 +277,11 @@ fn commented(src: &str) -> String {
 /// `ranma update`: report how far behind the source is, and (without --check)
 /// run the same pull-and-install the in-ranma update does.
 fn update(check: bool) -> ExitCode {
-    use ranma::update::{BUILD_SHA, Source, behind, install_command};
+    use ranma::update::{BUILD_SHA, PACKAGED, Source, behind, install_command, packaged_message};
+    if let Some(by) = PACKAGED {
+        eprintln!("ranma: {}", packaged_message(by));
+        return ExitCode::FAILURE;
+    }
     let source = match Source::current() {
         Ok(s) => s,
         Err(e) => {

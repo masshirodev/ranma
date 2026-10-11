@@ -2908,6 +2908,10 @@ impl App {
             Action::Update => {
                 // In a float, so the pull and the build can be watched, and the
                 // pane stays until a key is pressed so the result can be read.
+                if let Some(by) = crate::update::PACKAGED {
+                    self.status = Some(crate::update::packaged_message(by));
+                    return;
+                }
                 let source = match crate::update::Source::current() {
                     Ok(s) => s,
                     Err(e) => {

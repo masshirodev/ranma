@@ -90,6 +90,12 @@ another checkout instead, to try a branch not pushed yet. It must be a ranma
 checkout (it has \fBCargo.toml\fR and \fB.git\fR), and is never cloned or moved. It is a
 variable rather than a setting so it cannot be set once and forgotten.
 .PP
+A packaged ranma (a release build, or the AUR's \fBranma\-bin\fR and \fBranma\-git\fR)
+never checks or updates itself: its package manager does. \fBranma update\fR and
+\fBleader U\fR say where it came from instead, and \fBranma \-\-version\fR names it.
+After the package manager has upgraded it, \fBranma upgrade \-\-all\fR moves running
+servers onto the new build.
+.PP
 A build from commits the source has never seen (one installed from a
 development checkout, ahead of what is pushed) is behind nothing.
 .PP

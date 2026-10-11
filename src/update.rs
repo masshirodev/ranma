@@ -29,6 +29,27 @@ use crate::pane::AppEvent;
 
 /// The commit this binary was built from (`-dirty` if the tree had changes).
 pub const BUILD_SHA: &str = env!("RANMA_GIT_SHA");
+/// Who built this binary, when a package did: the release workflow and the AUR
+/// packages set `RANMA_PACKAGED` at build time ("a GitHub release", "the AUR
+/// (ranma-bin)"). Such a binary is updated by whatever installed it: it never
+/// checks its source, and `ranma update` and `leader U` say where to update
+/// instead of installing a second ranma into `~/.cargo/bin` beside it.
+pub const PACKAGED: Option<&str> = match option_env!("RANMA_PACKAGED") {
+    Some(p) if p.is_empty() => None,
+    p => p,
+};
+
+/// What a packaged ranma says when asked to update itself.
+pub fn packaged_message(by: &str) -> String {
+    format!("this ranma is from {by}: update it there, then `ranma upgrade --all`")
+}
+
+/// Whether to check the source for new commits: when updates are not off,
+/// and never for a packaged build.
+pub fn checks(updates_off: bool, packaged: Option<&str>) -> bool {
+    !updates_off && packaged.is_none()
+}
+
 /// Where the managed clone comes from. Public, over HTTPS: no key needed on
 /// any machine.
 pub const REPO_URL: &str = "https://github.com/masshirodev/ranma.git";
@@ -269,6 +290,16 @@ fn shell_quote(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_packaged_build_never_checks_and_names_its_package() {
+        assert!(checks(false, None));
+        assert!(!checks(true, None));
+        assert!(!checks(false, Some("the AUR (ranma-bin)")));
+        let m = packaged_message("the AUR (ranma-bin)");
+        assert!(m.contains("from the AUR (ranma-bin)"), "{m}");
+        assert!(m.contains("ranma upgrade --all"), "{m}");
+    }
 
     fn run(dir: &Path, args: &[&str]) {
         let mut cmd = Command::new("git");

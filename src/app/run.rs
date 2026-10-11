@@ -583,7 +583,8 @@ fn listen(
 }
 
 fn start_background(app: &App, tx: &Sender<AppEvent>) {
-    if app.config.settings.updates != crate::config::UpdateMode::Off {
+    let off = app.config.settings.updates == crate::config::UpdateMode::Off;
+    if crate::update::checks(off, crate::update::PACKAGED) {
         let hours = app.config.settings.update_check_hours;
         crate::update::spawn_checker(tx.clone(), Duration::from_secs_f64(hours * 3600.0));
     }

@@ -55,6 +55,20 @@ ranma: the first start clones it, and a spec file in
 
 ## Install
 
+On Arch, from the AUR: `ranma-bin` (the release binary) or `ranma-git` (built
+from `main`). Elsewhere, each [release](https://github.com/masshirodev/ranma/releases)
+has a tarball for x86_64 Linux with glibc 2.34 or newer: put `ranma` on your
+`PATH` and the `man/` pages under a `share/man` beside it.
+
+pacman and a copied binary skip what `install.sh` does after an upgrade. Run
+it yourself:
+
+```sh
+ranma --check-config && ranma upgrade --all   # check the new build, then move running servers onto it
+```
+
+From source:
+
 ```sh
 ./install.sh            # build, install to ~/.cargo/bin, check it against your config
 ./install.sh --check    # run the full pre-commit gate first
@@ -98,6 +112,7 @@ and committed in [`doc/man/`](doc/man).
 - [`doc/CONFIG.md`](doc/CONFIG.md): the configuration and theme reference
 - [`doc/ROADMAP.md`](doc/ROADMAP.md): milestones
 - [`doc/TESTING.md`](doc/TESTING.md): what to run, and what each check proves
+- [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and the AUR packages
 
 ## How it's built
 

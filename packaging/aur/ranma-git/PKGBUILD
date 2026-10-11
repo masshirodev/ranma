@@ -1,0 +1,56 @@
+# Maintainer: masshirodev <guilhermemrka@gmail.com>
+# Built from main. doc/RELEASING.md covers the packages.
+pkgname=ranma-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY (git)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/masshirodev/ranma'
+license=('MIT OR Apache-2.0')
+depends=('glibc' 'gcc-libs')
+makedepends=('git' 'cargo')
+optdepends=('git: hako, the plugin manager, clones itself on the first start'
+            'wl-clipboard: paste_image on Wayland'
+            'xclip: paste_image on X11'
+            'openssh: pasting files into a pane that runs ssh'
+            'xdg-utils: opening links from hint mode')
+provides=('ranma')
+conflicts=('ranma')
+install=ranma.install
+# The vendored Lua is C: with makepkg's LTO flags gcc emits LTO objects rust-lld cannot link.
+options=('!lto')
+source=("ranma::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd ranma
+  local version
+  version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd ranma
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd ranma
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  # pacman updates this binary, so ranma must not update itself from source.
+  export RANMA_PACKAGED="the AUR (ranma-git)"
+  cargo build --frozen --release
+}
+
+package() {
+  cd ranma
+  install -Dm755 target/release/ranma "$pkgdir/usr/bin/ranma"
+  cd doc
+  for page in man/man*/*; do
+    install -Dm644 "$page" "$pkgdir/usr/share/$page"
+  done
+  cd ..
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}
