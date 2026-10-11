@@ -45,8 +45,8 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
 
 3. The workflow runs `cargo test`, builds, and creates the release with notes
    generated from the commits since the last tag. The smoke test is not run
-   there (it needs tmux and a real terminal); the pre-push hook has run it on
-   every commit being released.
+   again there: CI (`.github/workflows/ci.yml`, `doc/TESTING.md`) ran it on
+   every push to `main`, so wait for it to be green on the commit you tag.
 
 To try the build without releasing, run the workflow by hand
 (`gh workflow run release.yml`): it builds the same tarball as a run artifact

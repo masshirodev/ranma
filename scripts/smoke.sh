@@ -27,8 +27,15 @@ RT=$(mktemp -d)
 CACHE=$(mktemp -d)
 # Saved layouts are state: the test's go here, never into the user's.
 STATE=$(mktemp -d)
+# A private data dir holding a stub hako. The default plugin manager is cloned
+# into the data dir on a first start: with the user's, the test loaded their
+# real hako; with none (a CI runner), it cloned from the network and its toasts
+# covered the top row. The stub is what the core needs, `setup`, and no more.
+DATA=$(mktemp -d)
+mkdir -p "$DATA/ranma/hako/hako.ranma/lua/hako"
+echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako/init.lua"
 # No SSH variables: the title names the host only where a step asks for it.
-ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
 # The server process of this test (the client is a separate, thinner process).
 server_pid() {
   for p in $(pgrep -x ranma); do
@@ -44,6 +51,8 @@ cleanup() {
   for p in $(pgrep -x ranma); do
     tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
   done
+  # /tmp is often a tmpfs, so what a run leaves there is memory until reboot.
+  rm -rf "$CFG" "$RT" "$CACHE" "$STATE" "$DATA" "${TCONF:-}" "${MCFG:-}" "${FAKE:-}" "${LAZY:-}"
   true
 }
 trap cleanup EXIT
