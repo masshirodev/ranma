@@ -170,6 +170,18 @@ struct Observed {
     panes: usize,
 }
 
+/// The one clone of hako a server makes (`App::start_hako`).
+#[derive(Debug)]
+enum HakoClone {
+    Running {
+        id: u64,
+        tmp: std::path::PathBuf,
+        dest: std::path::PathBuf,
+    },
+    Done,
+    Failed,
+}
+
 pub struct App {
     pub config: Config,
     pub panes: HashMap<PaneId, Pane>,
@@ -239,6 +251,9 @@ pub struct App {
     /// The config directory's watcher, made again on every reload so that a
     /// directory linked in since (a plugin's) is followed too.
     pub(super) watcher: Option<notify::RecommendedWatcher>,
+    /// The clone fetching hako on a first start, or that it failed: one try
+    /// per server, so an offline box is told once, not on every reload.
+    hako_clone: Option<HakoClone>,
     /// Plugins' `pane:watch`es, by id; the panes that printed since the last
     /// look, and when the next look is due.
     watches: std::collections::BTreeMap<u64, watch::Watch>,
@@ -509,10 +524,66 @@ impl App {
             outer_colors: None,
             own_colors: None,
             frameless_was: None,
+            hako_clone: None,
         };
         app.schedule_modules(Instant::now());
         app.report_plugin_failures();
+        app.start_hako();
         app
+    }
+
+    /// A first start without hako: clone it (DESIGN.md, "hako ships with
+    /// ranma"), and reload when it is there. Nothing to do when it is loaded,
+    /// off, or a clone already ran this server.
+    fn start_hako(&mut self) {
+        let crate::hako::State::Missing(dest) = &self.config.hako else {
+            return;
+        };
+        if self.hako_clone.is_some() {
+            return;
+        }
+        let dest = dest.clone();
+        crate::hako::sweep_parts(&dest);
+        let tmp = crate::hako::tmp_dir(&dest);
+        let id = crate::jobs::next_id();
+        self.toast(
+            "installing hako, the plugin manager (git clone)",
+            crate::toast::Level::Normal,
+            None,
+        );
+        self.hako_clone = Some(HakoClone::Running {
+            id,
+            tmp: tmp.clone(),
+            dest,
+        });
+        crate::jobs::start(id, crate::hako::clone_spec(&tmp), self.tx.clone());
+    }
+
+    /// hako's clone ended: put it in place and reload, or say why not.
+    fn hako_cloned(&mut self, exit: &crate::jobs::Exit) {
+        let Some(HakoClone::Running { tmp, dest, .. }) = self.hako_clone.take() else {
+            return;
+        };
+        match crate::hako::finish(&tmp, &dest, exit) {
+            Ok(()) => {
+                self.hako_clone = Some(HakoClone::Done);
+                self.toast(
+                    "hako installed; reloading the config",
+                    crate::toast::Level::Normal,
+                    None,
+                );
+                self.reload_config();
+            }
+            Err(why) => {
+                self.hako_clone = Some(HakoClone::Failed);
+                self.toast(
+                    format!("hako: could not install the plugin manager: {why}"),
+                    crate::toast::Level::Urgent,
+                    None,
+                );
+            }
+        }
+        self.dirty = true;
     }
 
     /// A plugin that failed to load was dropped and the rest run without it;
@@ -3061,6 +3132,7 @@ impl App {
                 self.relayout();
                 self.render_state_modules();
                 self.emit(HookEvent::ConfigReload, |_| Ok(()));
+                self.start_hako();
             }
             // Keep running on the old config; a typo must never take the session down.
             Err(e) => {
@@ -3626,6 +3698,14 @@ impl App {
     /// unknown to this configuration, and dropped.
     fn job_event(&mut self, id: u64, event: crate::jobs::JobEvent) {
         use crate::jobs::JobEvent;
+        // hako's clone is the core's own job, not a configuration's.
+        if let (Some(HakoClone::Running { id: ours, .. }), JobEvent::Exit(exit)) =
+            (&self.hako_clone, &event)
+            && *ours == id
+        {
+            self.hako_cloned(exit);
+            return;
+        }
         match event {
             JobEvent::Lines(lines) => {
                 let Some(key) = self.config.jobs.on_line(id) else {

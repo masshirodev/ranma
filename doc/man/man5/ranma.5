@@ -152,6 +152,11 @@ Default: \fB"default"\fR
 .br
 Theme name; see Themes\fR.
 .TP
+\fBplugin_manager\fR
+Default: \fB"hako"\fR
+.br
+The plugin manager. \fBhako\fR comes with ranma: the first start clones hako\fR <https://github.com/masshirodev/hako.ranma> into \fB~/.local/share/ranma/hako/hako.ranma\fR (\fB$XDG_DATA_HOME\fR, with \fBgit\fR) and reloads, and from then on \fBrequire("hako")\fR loads it and it installs, updates and pins the plugins you declare; see Plugins\fR. \fBnone\fR leaves it out: plugins then come from \fBpack/*/start/\fR, \fBranma.packadd\fR, or a manager of your own, and \fBrequire("hako")\fR says so. Set it before any \fBrequire("hako")\fR in \fBinit.lua\fR; a clone already made stays on disk, unused.
+.TP
 \fBlayout\fR
 Default: \fB"dwindle"\fR
 .br
@@ -1381,6 +1386,36 @@ sets in every pane; outside ranma they say so and exit 1. A server's socket is
 ranma loads Lua plugins laid out the way Neovim's are, from the config
 directory. Installing one is a \fBgit clone\fR, and a plugin is just Lua using the
 same \fBranma.*\fR API as \fBinit.lua\fR.
+.PP
+\fBhako comes with ranma.\fR hako\fR <https://github.com/masshirodev/hako.ranma>
+is the plugin manager, shaped like lazy.nvim without the lazy\-loading: specs
+in Lua, a lockfile pinning each plugin to a commit, and a screen (\fBhako open\fR,
+or the \fBhako\fR bar module) to install, update, clean and restore. ranma clones
+it on the first start, into \fB~/.local/share/ranma/hako/hako.ranma\fR, and
+reloads once it is there (a toast says so; \fBranma health\fR has a \fBhako\fR line).
+Declare plugins either way:
+.PP
+.RS 4
+.nf
+\-\- ~/.config/ranma/lua/plugins/history.lua: one spec file per plugin, read
+\-\- by the default setup (hako itself, then { import = "plugins" }).
+return { "masshirodev/history.ranma" }
+
+\-\- Or in init.lua, which replaces the default list; the options are hako's:
+require("hako").setup({
+  "masshirodev/hako.ranma",            \-\- so hako updates itself
+  { import = "plugins" },
+  { "masshirodev/compose.ranma", keys = { { "C", "compose" } } },
+}, { lockfile = "~/.config/ranma/hako\-lock.json" })
+.fi
+.RE
+.PP
+A declared plugin is cloned when you ask (\fBhako install\fR, or \fBi\fR on its
+screen); \fBranma.set { hako = { install_missing = true } }\fR clones them as
+ranma loads, as lazy.nvim does. hako's README is the reference for specs and
+the screen. \fBplugin_manager = "none"\fR (see Settings\fR) leaves hako
+out, for a manager of your own or none: everything below still works without
+it.
 .PP
 .RS 4
 .nf

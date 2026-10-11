@@ -20,6 +20,15 @@ ranma.set {
   -- A theme name, looked up as ~/.config/ranma/themes/<name>.toml, then the built-ins.
   theme = "default",
 
+  -- The plugin manager. "hako" comes with ranma: the first start clones it
+  -- into ~/.local/share/ranma/hako/ and reloads, and from then on it installs
+  -- and updates the plugins you declare, one spec file each in
+  -- ~/.config/ranma/lua/plugins/ (return { "owner/repo" }), or in a
+  -- require("hako").setup { ... } call in your init.lua, which then replaces
+  -- the default list (hako itself and lua/plugins/). "none" skips all of it:
+  -- plugins come from pack/*/start/, ranma.packadd, or a manager of your own.
+  plugin_manager = "hako",
+
   -- How new panes are placed: "dwindle" splits the focused pane along its longer
   -- side, like Hyprland; "manual" splits the way the last toggle_split said, like i3;
   -- "master" keeps one master pane on the left and stacks the rest on the right

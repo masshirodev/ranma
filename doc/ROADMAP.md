@@ -238,7 +238,9 @@ features below the line live outside the repository.
 Plugins, not here: a repository each (`masshirodev/history.ranma`,
 `compose.ranma`, `openpath.ranma`, `linkhover.ranma`, `agents.ranma`),
 installed by a plugin manager that is itself a plugin (hako,
-`masshirodev/hako.ranma`), on `ranma.packadd`.
+`masshirodev/hako.ranma`), on `ranma.packadd`. hako comes with ranma: the
+core clones it on the first start (`plugin_manager`, 2026-10-10), so a fresh
+install has a plugin manager without anyone's dotfiles.
 
 ## 12. More from tmux
 

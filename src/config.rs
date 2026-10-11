@@ -64,6 +64,17 @@ impl Layout {
     }
 }
 
+/// Which plugin manager comes along (DESIGN.md, "hako ships with ranma").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginManager {
+    /// hako, cloned on the first start and loaded on `require("hako")`.
+    Hako,
+    /// No manager: plugins come from `pack/*/start/`, `ranma.packadd`, or
+    /// a manager of the user's own.
+    None,
+}
+
 /// What the mouse does outside WM mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -171,6 +182,7 @@ pub enum UpdateMode {
 pub struct Settings {
     pub leader: Chord,
     pub theme: String,
+    pub plugin_manager: PluginManager,
     pub layout: Layout,
     /// With `layout = "master"`: the master's share of the width, for a new
     /// master area (a resized one keeps its size).
@@ -223,6 +235,7 @@ impl Default for Settings {
         Settings {
             leader: "ctrl+b".parse().unwrap(),
             theme: theme::DEFAULT_THEME_NAME.into(),
+            plugin_manager: PluginManager::Hako,
             layout: Layout::Dwindle,
             master_ratio: 0.55,
             scroll_widths: crate::strip::DEFAULT_WIDTHS.to_vec(),
@@ -260,6 +273,7 @@ impl Default for Settings {
 struct SettingsPatch {
     leader: Option<String>,
     theme: Option<String>,
+    plugin_manager: Option<PluginManager>,
     layout: Option<Layout>,
     master_ratio: Option<f32>,
     scroll_widths: Option<Vec<crate::strip::WidthSetting>>,
@@ -958,6 +972,8 @@ pub struct Config {
     /// The packages `ranma.packadd` loaded, which live wherever a plugin
     /// manager put them: watched like the config directory.
     pub packages: Vec<PathBuf>,
+    /// hako: off, loaded from where, or wanted and not cloned yet.
+    pub hako: crate::hako::State,
     /// What loaded but deserves a word: settings.toml naming an option
     /// nothing declares.
     pub warnings: Vec<String>,
@@ -1370,6 +1386,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(n) = patch.nested {
         s.nested = n;
+    }
+    if let Some(p) = patch.plugin_manager {
+        s.plugin_manager = p;
     }
     if let Some(h) = patch.title_host {
         s.title_host = h;
@@ -2261,6 +2280,12 @@ fn install_api(
 
 /// Load the defaults, then `<config_dir>/init.lua` if it exists, then the theme.
 pub fn load(config_dir: Option<&Path>) -> Result<Config> {
+    load_dir(config_dir, crate::hako::dir().as_deref())
+}
+
+/// [`load`] with hako's directory given, or left out with `None` (tests, which
+/// must not pick up the machine's own clone).
+pub fn load_dir(config_dir: Option<&Path>, hako_dir: Option<&Path>) -> Result<Config> {
     let user_file = config_dir
         .map(|d| d.join("init.lua"))
         .filter(|p| p.is_file());
@@ -2270,14 +2295,26 @@ pub fn load(config_dir: Option<&Path>) -> Result<Config> {
         }
         None => None,
     };
-    load_from(config_dir, user_file, user_src.as_deref())
+    load_full(config_dir, user_file, user_src.as_deref(), hako_dir)
 }
 
-/// [`load`] with the user source passed in, so tests need no files for it.
+/// [`load`] with the user source passed in, so tests need no files for it,
+/// and without hako: a test machine's own clone must not load into every test.
 pub fn load_from(
     config_dir: Option<&Path>,
     user_file: Option<PathBuf>,
     user_src: Option<&str>,
+) -> Result<Config> {
+    load_full(config_dir, user_file, user_src, None)
+}
+
+/// The whole load. `hako_dir` is where hako is, or would be cloned to; `None`
+/// leaves the plugin manager out entirely (tests).
+pub fn load_full(
+    config_dir: Option<&Path>,
+    user_file: Option<PathBuf>,
+    user_src: Option<&str>,
+    hako_dir: Option<&Path>,
 ) -> Result<Config> {
     let lua = Lua::new();
     lua.set_app_data(Builder::default());
@@ -2305,6 +2342,15 @@ pub fn load_from(
             .app_data_mut::<Builder>()
             .expect("builder installed above");
         b.default_set = b.set_table.clone();
+    }
+
+    // hako loads on `require("hako")`, from a plugin file or init.lua, when
+    // the setting still asks for it at that moment: a searcher, not a path
+    // entry, so `plugin_manager = "none"` written before the require holds.
+    if let Some(hako) = hako_dir.filter(|d| d.is_dir()) {
+        install_hako_searcher(&lua, &watchdog, config_dir, hako)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .context("installing the hako searcher")?;
     }
 
     let mut plugins = Vec::new();
@@ -2337,12 +2383,57 @@ pub fn load_from(
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
-    // The settings panel's file, over everything a person wrote.
-    let mut warnings = Vec::new();
     let panel = match config_dir {
         Some(dir) => read_settings_file(&dir.join(SETTINGS_FILE))?,
         None => PanelFile::default(),
     };
+
+    // hako, when init.lua said nothing about it: set up with the default
+    // specs, as a plugin file is sourced (its own second, dropped whole on an
+    // error, named in `ranma health`). Before the panel's file, so hako's own
+    // options are declared by the time that file names them.
+    let hako = match hako_dir {
+        None => crate::hako::State::Off,
+        Some(dir) => {
+            let panel_off = panel
+                .set
+                .get("plugin_manager")
+                .and_then(toml::Value::as_str)
+                .is_some_and(|v| v == "none");
+            let wanted = !panel_off
+                && lua
+                    .app_data_ref::<Builder>()
+                    .expect("builder installed above")
+                    .settings
+                    .plugin_manager
+                    == PluginManager::Hako;
+            if !wanted {
+                crate::hako::State::Off
+            } else if !dir.is_dir() {
+                crate::hako::State::Missing(dir.to_path_buf())
+            } else {
+                let loaded: bool = lua
+                    .globals()
+                    .get::<Table>("package")
+                    .and_then(|p| p.get::<Table>("loaded"))
+                    .and_then(|l| l.contains_key("hako"))
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                if !loaded {
+                    plugins.push(source_plugin_src(
+                        &lua,
+                        &watchdog,
+                        dir,
+                        crate::hako::DEFAULT_SETUP,
+                        "@<hako default setup>",
+                    ));
+                }
+                crate::hako::State::Loaded(dir.to_path_buf())
+            }
+        }
+    };
+
+    // The settings panel's file, over everything a person wrote.
+    let mut warnings = Vec::new();
     {
         let mut b = lua
             .app_data_mut::<Builder>()
@@ -2503,6 +2594,7 @@ pub fn load_from(
         source: user_file,
         plugins,
         packages: builder.added,
+        hako,
         warnings,
         watchdog,
         jobs,
@@ -2938,22 +3030,32 @@ fn empty_folder(table: &HashMap<Chord, Bind>, prefix: &str) -> Option<(String, S
 /// keeping its effects only if it finishes: a failing plugin is dropped
 /// whole, never half-applied, and the others still load.
 fn source_plugin(lua: &Lua, watchdog: &Watchdog, path: &Path) -> PluginLoad {
+    match std::fs::read_to_string(path) {
+        Ok(src) => source_plugin_src(lua, watchdog, path, &src, &format!("@{}", path.display())),
+        Err(e) => PluginLoad {
+            path: path.to_path_buf(),
+            took: Duration::ZERO,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// [`source_plugin`] for source already in hand, reported under `path`.
+fn source_plugin_src(
+    lua: &Lua,
+    watchdog: &Watchdog,
+    path: &Path,
+    src: &str,
+    name: &str,
+) -> PluginLoad {
     let before = lua
         .app_data_ref::<Builder>()
         .expect("builder installed")
         .clone();
     let start = Instant::now();
-    let result = std::fs::read_to_string(path)
-        .map_err(|e| e.to_string())
-        .and_then(|src| {
-            watchdog
-                .run_apart(LOAD_BUDGET, || {
-                    lua.load(src)
-                        .set_name(format!("@{}", path.display()))
-                        .exec()
-                })
-                .map_err(|e| e.to_string())
-        });
+    let result = watchdog
+        .run_apart(LOAD_BUDGET, || lua.load(src).set_name(name).exec())
+        .map_err(|e| e.to_string());
     if result.is_err() {
         lua.set_app_data(before);
     }
@@ -2962,6 +3064,45 @@ fn source_plugin(lua: &Lua, watchdog: &Watchdog, path: &Path) -> PluginLoad {
         took: start.elapsed(),
         error: result.err(),
     }
+}
+
+/// A `package.searchers` entry, second after `package.preload`, that answers
+/// `require("hako")` and `require("hako.*")` by `packadd`ing hako's directory
+/// the first time, when `plugin_manager` is still `"hako"` at that moment;
+/// the path searcher after it then finds the module. With `"none"` it says
+/// so in require's error instead.
+fn install_hako_searcher(
+    lua: &Lua,
+    watchdog: &Watchdog,
+    config_dir: Option<&Path>,
+    hako: &Path,
+) -> mlua::Result<()> {
+    let watchdog = watchdog.clone();
+    let config_dir = config_dir.map(Path::to_path_buf);
+    let hako = hako.to_path_buf();
+    let searcher = lua.create_function(move |lua, name: String| {
+        if name != "hako" && !name.starts_with("hako.") {
+            return Ok(mlua::Value::Nil);
+        }
+        let wanted = lua
+            .app_data_ref::<Builder>()
+            .is_some_and(|b| b.settings.plugin_manager == PluginManager::Hako);
+        if !wanted {
+            return Ok(mlua::Value::String(lua.create_string(
+                "\n\tno plugin manager: ranma.set { plugin_manager = \"none\" } is in effect",
+            )?));
+        }
+        packadd(
+            lua,
+            &watchdog,
+            config_dir.as_deref(),
+            &hako.display().to_string(),
+        )?;
+        Ok(mlua::Value::Nil)
+    })?;
+    let package: Table = lua.globals().get("package")?;
+    let searchers: Table = package.get("searchers")?;
+    searchers.raw_insert(2, searcher)
 }
 
 /// `ranma.packadd(dir)`: Neovim's `:packadd`, for a package that lives
@@ -3848,6 +3989,11 @@ mod tests {
     }
 
     /// A config directory with these files, fresh for each test.
+    /// The tests' `load`: the production one would find this machine's hako.
+    fn load(config_dir: Option<&Path>) -> Result<Config> {
+        load_dir(config_dir, None)
+    }
+
     fn config_tree(tag: &str, files: &[(&str, &str)]) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("ranma-plugins-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -3936,6 +4082,124 @@ mod tests {
         let i: Chord = "i".parse().unwrap();
         assert!(cfg.binds[&i].folder().unwrap().binds.is_empty());
         assert!(cfg.plugins[0].error.is_some());
+    }
+
+    /// A stand-in for hako: `setup` records what it was given.
+    fn fake_hako(tag: &str) -> PathBuf {
+        config_tree(
+            &format!("hako-{tag}"),
+            &[(
+                "lua/hako/init.lua",
+                "local M = {}\n\
+                 function M.setup(specs, opts) _G.HAKO_SETUP = { specs = specs, opts = opts }; HAKO_CALLS = (HAKO_CALLS or 0) + 1 end\n\
+                 return M",
+            )],
+        )
+    }
+
+    fn hako_calls(cfg: &Config) -> i64 {
+        cfg.lua
+            .globals()
+            .get::<Option<i64>>("HAKO_CALLS")
+            .unwrap()
+            .unwrap_or(0)
+    }
+
+    fn first_spec(cfg: &Config) -> Option<String> {
+        let t: Table = cfg.lua.globals().get("HAKO_SETUP").ok()?;
+        let specs: Table = t.get("specs").ok()?;
+        specs.get::<Option<String>>(1).ok()?
+    }
+
+    #[test]
+    fn hako_is_set_up_with_the_default_specs_when_init_lua_says_nothing() {
+        let hako = fake_hako("default");
+        let cfg = load_full(None, None, None, Some(&hako)).unwrap();
+        assert_eq!(cfg.hako, crate::hako::State::Loaded(hako.clone()));
+        assert_eq!(hako_calls(&cfg), 1);
+        assert_eq!(first_spec(&cfg).as_deref(), Some(crate::hako::REPO));
+        assert!(
+            cfg.packages
+                .iter()
+                .any(|p| p.canonicalize().unwrap() == hako.canonicalize().unwrap()),
+            "hako is a package, watched like the rest"
+        );
+        assert!(cfg.plugins.iter().all(|p| p.error.is_none()));
+        assert_eq!(cfg.settings.plugin_manager, PluginManager::Hako);
+    }
+
+    #[test]
+    fn an_init_lua_that_sets_hako_up_itself_is_left_alone() {
+        let hako = fake_hako("own");
+        let cfg = load_full(
+            None,
+            None,
+            Some(r#"require("hako").setup({ "me/thing.ranma" }, { lockfile = "/tmp/x.json" })"#),
+            Some(&hako),
+        )
+        .unwrap();
+        assert_eq!(hako_calls(&cfg), 1, "set up once, by init.lua");
+        assert_eq!(first_spec(&cfg).as_deref(), Some("me/thing.ranma"));
+        assert_eq!(cfg.hako, crate::hako::State::Loaded(hako));
+    }
+
+    #[test]
+    fn plugin_manager_none_leaves_hako_out_even_when_it_is_cloned() {
+        let hako = fake_hako("none");
+        let cfg = load_full(
+            None,
+            None,
+            Some(r#"ranma.set { plugin_manager = "none" }"#),
+            Some(&hako),
+        )
+        .unwrap();
+        assert_eq!(cfg.hako, crate::hako::State::Off);
+        assert_eq!(hako_calls(&cfg), 0);
+        assert!(cfg.packages.is_empty(), "never packadded");
+        // And a require of it then says why it is not there.
+        let err = load_full(
+            None,
+            None,
+            Some(r#"ranma.set { plugin_manager = "none" } require("hako")"#),
+            Some(&hako),
+        )
+        .err()
+        .map(|e| format!("{e:#}"))
+        .unwrap_or_default();
+        assert!(err.contains("plugin_manager = \"none\""), "{err}");
+        // Unknown names are refused, as every setting's are.
+        let bad = load_from(None, None, Some(r#"ranma.set { plugin_manager = "lazy" }"#));
+        assert!(bad.is_err());
+    }
+
+    #[test]
+    fn a_missing_hako_is_reported_for_the_app_to_clone() {
+        let nowhere = std::env::temp_dir().join("ranma-hako-missing-never-made");
+        let cfg = load_full(None, None, None, Some(&nowhere)).unwrap();
+        assert_eq!(cfg.hako, crate::hako::State::Missing(nowhere));
+        assert!(cfg.packages.is_empty());
+        // Tests and `load_from` leave the manager out entirely.
+        let cfg = load_from(None, None, None).unwrap();
+        assert_eq!(cfg.hako, crate::hako::State::Off);
+    }
+
+    #[test]
+    fn hakos_setup_failing_is_a_dropped_plugin_not_a_failed_config() {
+        let hako = config_tree(
+            "hako-broken",
+            &[(
+                "lua/hako/init.lua",
+                "return { setup = function() error('no network') end }",
+            )],
+        );
+        let cfg = load_full(None, None, None, Some(&hako)).unwrap();
+        let load = cfg
+            .plugins
+            .iter()
+            .find(|p| p.path == hako)
+            .expect("listed as a plugin");
+        assert!(load.error.as_deref().unwrap_or("").contains("no network"));
+        assert_eq!(cfg.hako, crate::hako::State::Loaded(hako));
     }
 
     #[test]

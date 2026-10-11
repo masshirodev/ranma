@@ -290,6 +290,14 @@ pub fn builtin() -> Vec<Opt> {
             "The theme file under themes/, or a built-in. Every colour in Colours starts from it.",
         ),
         opt(
+            "plugin_manager",
+            "general",
+            "Plugin manager",
+            choices(&["hako", "none"]),
+            Init,
+            "hako comes with ranma, cloned on the first start, and installs the plugins declared in lua/plugins/; none leaves plugins to pack/*/start/, ranma.packadd or a manager of your own.",
+        ),
+        opt(
             "layout",
             "general",
             "Layout",

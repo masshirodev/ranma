@@ -12,6 +12,7 @@ pub mod client;
 pub mod config;
 pub mod devtools;
 pub mod graphics;
+pub mod hako;
 pub mod hints;
 pub mod hostcolors;
 pub mod input;

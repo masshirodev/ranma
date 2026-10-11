@@ -36,8 +36,10 @@ Plugins are plain Lua using the same API as `init.lua`
 ([`doc/CONFIG.md`](doc/CONFIG.md), "Plugins"; `ranma --dump-types` prints it
 for your editor). [hako](https://github.com/masshirodev/hako.ranma) installs
 and keeps them, shaped like lazy.nvim (without the lazy-loading): specs in
-Lua, a lockfile, and a screen to update, install and clean. A few to start
-from:
+Lua, a lockfile, and a screen to update, install and clean. It comes with
+ranma: the first start clones it, and a spec file in
+`~/.config/ranma/lua/plugins/` is all a plugin takes (`plugin_manager =
+"none"` opts out). A few to start from:
 
 - [history.ranma](https://github.com/masshirodev/history.ranma): search a
   pane's scrollback by regex and jump to a match

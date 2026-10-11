@@ -725,6 +725,7 @@ fn main() -> ExitCode {
         }
         println!("leader: {}", cfg.settings.leader);
         println!("theme:  {}", cfg.theme.name);
+        println!("hako:   {}", ranma::hako::describe(&cfg.hako));
         println!("binds:  {}", cfg.binds.len());
         println!(
             "hooks:  {}",
@@ -863,6 +864,7 @@ mod tests {
         for key in [
             "leader",
             "theme",
+            "plugin_manager",
             "layout",
             "master_ratio",
             "preserve_split",

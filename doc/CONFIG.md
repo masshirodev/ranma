@@ -123,6 +123,7 @@ Each call changes only the fields it names; call it as often as you like.
 | --- | --- | --- |
 | `leader` | `"ctrl+b"` | The chord that enters WM mode. |
 | `theme` | `"default"` | Theme name; see [Themes](#themes). |
+| `plugin_manager` | `"hako"` | The plugin manager. `hako` comes with ranma: the first start clones [hako](https://github.com/masshirodev/hako.ranma) into `~/.local/share/ranma/hako/hako.ranma` (`$XDG_DATA_HOME`, with `git`) and reloads, and from then on `require("hako")` loads it and it installs, updates and pins the plugins you declare; see [Plugins](#plugins). `none` leaves it out: plugins then come from `pack/*/start/`, `ranma.packadd`, or a manager of your own, and `require("hako")` says so. Set it before any `require("hako")` in `init.lua`; a clone already made stays on disk, unused. |
 | `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. `scrolling`: niri's strip of columns, see [A scrolling layout](#a-scrolling-layout). The setting is every workspace's unless one is given its own with `workspace_layout`. |
 | `master_ratio` | `0.55` | With `layout = "master"`: the master's share of the width when a master area forms (0.1-0.9). Resizing it afterwards sticks. |
 | `scroll_widths` | `{ "1/3", "1/2", "2/3" }` | With `layout = "scrolling"`: the widths `column_width next` (`leader e`) steps through, 1 to 6 of them, each a fraction of the screen (`"a/b"`, at most 1) or whole cells (at least `scroll_min`). Not in the settings panel, which edits one value per row. |
@@ -972,6 +973,34 @@ sets in every pane; outside ranma they say so and exit 1. A server's socket is
 ranma loads Lua plugins laid out the way Neovim's are, from the config
 directory. Installing one is a `git clone`, and a plugin is just Lua using the
 same `ranma.*` API as `init.lua`.
+
+**hako comes with ranma.** [hako](https://github.com/masshirodev/hako.ranma)
+is the plugin manager, shaped like lazy.nvim without the lazy-loading: specs
+in Lua, a lockfile pinning each plugin to a commit, and a screen (`hako open`,
+or the `hako` bar module) to install, update, clean and restore. ranma clones
+it on the first start, into `~/.local/share/ranma/hako/hako.ranma`, and
+reloads once it is there (a toast says so; `ranma health` has a `hako` line).
+Declare plugins either way:
+
+```lua
+-- ~/.config/ranma/lua/plugins/history.lua: one spec file per plugin, read
+-- by the default setup (hako itself, then { import = "plugins" }).
+return { "masshirodev/history.ranma" }
+
+-- Or in init.lua, which replaces the default list; the options are hako's:
+require("hako").setup({
+  "masshirodev/hako.ranma",            -- so hako updates itself
+  { import = "plugins" },
+  { "masshirodev/compose.ranma", keys = { { "C", "compose" } } },
+}, { lockfile = "~/.config/ranma/hako-lock.json" })
+```
+
+A declared plugin is cloned when you ask (`hako install`, or `i` on its
+screen); `ranma.set { hako = { install_missing = true } }` clones them as
+ranma loads, as lazy.nvim does. hako's README is the reference for specs and
+the screen. `plugin_manager = "none"` (see [Settings](#settings)) leaves hako
+out, for a manager of your own or none: everything below still works without
+it.
 
 ```
 ~/.config/ranma/

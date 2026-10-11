@@ -170,6 +170,7 @@ impl App {
             None => writeln!(out, "config   built-in defaults only"),
         }
         .unwrap();
+        writeln!(out, "hako     {}", crate::hako::describe(&c.hako)).unwrap();
         if c.plugins.is_empty() {
             writeln!(out, "plugins  none").unwrap();
         }

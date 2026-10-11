@@ -552,8 +552,9 @@ three-function run-time API.
   always has the last word over a plugin's binds and options.
 - `<config_dir>/pack/*/start/*/` adds each package's `lua/` to the path and
   sources its `plugin/*.lua`, which is how a cloned plugin repository is used
-  without copying files around. Installing is `git clone`. A plugin manager,
-  if one is ever wanted, is itself a plugin.
+  without copying files around. Installing is `git clone`. A plugin manager
+  is itself a plugin: hako, which ranma brings along (below, "hako ships
+  with ranma").
 - `ranma.packadd(dir)` (2026-10-10) is Neovim's `:packadd`, and the one thing
   the core gives a plugin manager. Its packages live wherever the manager
   keeps them (hako: `~/.local/share/ranma/hako/`), and load only when
@@ -1563,6 +1564,56 @@ workspace still reads its widths as weights rather than turning the
 workspace into a strip. Loading a layout arranges panes; it does not
 reconfigure the workspace, and making it do so would be a second way to
 set what `workspace_layout` sets.
+
+### hako ships with ranma (2026-10-10)
+
+The plugin manager used to arrive through one person's dotfiles: a bootstrap
+block at the top of an `init.lua` that `packadd`ed hako if it was there and
+cloned it if not. Hand that ranma to someone else and they got the core with
+no way to install a plugin but `git clone` into `pack/*/start/`; update the
+binary on a second machine of your own and nothing happened either, since the
+block lived in a config that machine never got. **So the core brings hako**,
+and `plugin_manager = "none"` is the way out, for a manager of your own or
+none. Neovim leaves this to the user; ranma does not, because a terminal
+window manager is installed on many boxes and read by few hands, and the
+default should be the whole thing.
+
+**What the core knows is small** (`crate::hako`): the repository, the
+directory (`$XDG_DATA_HOME/ranma/hako/hako.ranma`, the root hako keeps the
+other plugins under), the clone command, and the specs to run with when
+`init.lua` says nothing: hako itself, then `{ import = "plugins" }`, so a
+spec file in `lua/plugins/` is all a plugin takes. Everything else stays
+hako's.
+
+**Loading is by `require`, through a searcher, not a path entry.** The
+setting is read in `init.lua`, which also holds the `require("hako")` that
+would need hako already on the path; so hako's directory is not put on
+`package.path` up front. A `package.searchers` entry answers `hako` and
+`hako.*` by `packadd`ing the directory the first time, if `plugin_manager` is
+still `"hako"` at that moment, and the ordinary path searcher after it finds
+the module. Written before the require, `"none"` therefore holds, and a
+`require("hako")` under it fails with a message naming the setting rather
+than "module not found". A clone already on disk stays there under `"none"`,
+unused; deleting it is the user's.
+
+**After `init.lua`, the core finishes what it did not do.** If hako is wanted
+and present but `package.loaded.hako` is empty, the default setup runs as a
+plugin file is sourced: its own second, dropped whole on an error, listed in
+`ranma health` under hako's directory. An `init.lua` that called `setup`
+itself is left alone, options and lockfile included. If hako is wanted and
+absent, `Config.hako` says `Missing`, and the app clones it once per server
+into a sibling `.part-<pid>` directory, moving it into place on success (or
+keeping a clone somebody else finished first, such as an older bootstrap
+block's), toasting the failure otherwise, and reloading the config when it is
+there. One try per server: an offline box hears it once, not on every reload.
+Tests load without hako (`load_from`, `load_dir(.., None)`): the machine's own
+clone must not load into them, which is why `load` is the one entry that looks
+for it.
+
+**Order against the settings panel's file.** hako's default setup runs
+before `settings.toml` is applied, so the `hako.*` options it declares exist
+by the time that file names them; the file's own `plugin_manager`, if it says
+`"none"`, is honoured by reading it first.
 
 ### The kitty keyboard protocol, both ways (2026-10-09)
 
