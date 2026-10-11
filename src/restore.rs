@@ -54,6 +54,9 @@ pub struct Workspace {
     pub focus: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<Spec>,
+    /// The workspace's own layout (`workspace_layout`), when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_layout: Option<crate::config::Layout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub floats: Vec<Float>,
 }
@@ -222,6 +225,7 @@ mod tests {
                                 command: Some("htop".into()),
                                 ..Float::default()
                             }],
+                            workspace_layout: Some(crate::config::Layout::Scrolling),
                         },
                     ],
                 },

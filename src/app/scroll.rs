@@ -35,7 +35,7 @@ pub struct Edge {
 impl App {
     /// The workspace shown is laid out as a strip.
     pub fn strip_here(&self) -> bool {
-        self.config.settings.layout == Layout::Scrolling && !self.scratch_shown
+        !self.scratch_shown && self.layout_here() == Layout::Scrolling
     }
 
     /// The workspace shown is a strip now (its tree arranged as one).
@@ -43,18 +43,14 @@ impl App {
         self.strip_here() && self.active().tree.is_strip()
     }
 
-    /// Put every workspace's tree in the layout's shape: a strip, or out of
+    /// Put every workspace's tree in its layout's shape: a strip, or out of
     /// one with its widths as weights.
     pub(super) fn arrange_strips(&mut self) {
         let s = &self.config.settings;
-        let (scrolling, width, min) = (
-            s.layout == Layout::Scrolling,
-            s.scroll_width.weight(),
-            s.scroll_min,
-        );
+        let (setting, width, min) = (s.layout, s.scroll_width.weight(), s.scroll_min);
         let screen = self.workspace_area().w;
         for ws in self.workspaces.values_mut() {
-            if scrolling {
+            if ws.layout.unwrap_or(setting) == Layout::Scrolling {
                 ws.tree.arrange_strip(width);
             } else {
                 ws.tree.leave_strip(screen, min);

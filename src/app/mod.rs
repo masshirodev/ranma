@@ -546,6 +546,18 @@ impl App {
 
     // ---- where things are ------------------------------------------------------
 
+    /// The layout a workspace is laid out in: its own (`workspace_layout`),
+    /// else the `layout` setting.
+    pub fn layout_of(&self, ws: &Workspace) -> Layout {
+        ws.layout.unwrap_or(self.config.settings.layout)
+    }
+
+    /// The layout of the workspace shown. The scratchpad floats everything,
+    /// so while it is shown this is the setting, and nothing reads it.
+    pub fn layout_here(&self) -> Layout {
+        self.layout_of(self.active())
+    }
+
     /// The workspace keys and actions apply to: the scratchpad while it is shown.
     fn active(&self) -> &Workspace {
         if self.scratch_shown {
@@ -770,7 +782,7 @@ impl App {
         if let Some(ws) = self.workspaces.get(&self.current) {
             let full = ws.focused.filter(|f| ws.fullscreen && ws.contains(*f));
             let lay = ws.tree.layout_full(area, gap);
-            let monocle = self.config.settings.layout == Layout::Monocle;
+            let monocle = self.layout_of(ws) == Layout::Monocle;
             let strip = self.strip_here() && ws.tree.is_strip();
             match full {
                 None if strip => {
@@ -873,9 +885,12 @@ impl App {
         self.note_snapshot(Instant::now());
         // The master layout is a shape kept by policy: whatever changed the tree
         // (a pane opened, closed or moved in) is put back into it here.
-        if self.config.settings.layout == Layout::Master {
-            let ratio = self.config.settings.master_ratio;
-            for ws in self.workspaces.values_mut() {
+        let (setting, ratio) = (
+            self.config.settings.layout,
+            self.config.settings.master_ratio,
+        );
+        for ws in self.workspaces.values_mut() {
+            if ws.layout.unwrap_or(setting) == Layout::Master {
                 ws.tree.arrange_master(ratio);
             }
         }
@@ -920,7 +935,7 @@ impl App {
     fn select_layout(&mut self, p: Preset) {
         if self.scratch_shown {
             self.status = Some("scratchpad panes always float".into());
-        } else if self.config.settings.layout == Layout::Master && p != Preset::MainVertical {
+        } else if self.layout_here() == Layout::Master && p != Preset::MainVertical {
             self.status = Some(format!(
                 "{}: layout \"master\" keeps its own shape",
                 p.name()
@@ -989,7 +1004,7 @@ impl App {
                 .find(|v| v.id == f)
                 .map(|v| v.outer)
         });
-        let placement = match self.config.settings.layout {
+        let placement = match self.layout_here() {
             Layout::Dwindle => Placement::Dwindle,
             // i3's default for a fresh split is side by side.
             Layout::Manual => Placement::Manual(Split::Horizontal),
@@ -2688,7 +2703,7 @@ impl App {
             }
             // Monocle shows one tile: sideways is through the tabs.
             Action::Focus(dir @ (Dir::Left | Dir::Right))
-                if self.config.settings.layout == Layout::Monocle && !self.scratch_shown =>
+                if self.layout_here() == Layout::Monocle && !self.scratch_shown =>
             {
                 self.focus_cycle(dir == Dir::Right);
             }
@@ -2795,6 +2810,8 @@ impl App {
             Action::SaveLayout(None) => self.open_save_layout_prompt(),
             Action::LoadLayout(Some(name)) => self.load_layout(&name),
             Action::LoadLayout(None) => self.open_layout_picker(),
+            Action::WorkspaceLayout(None) => self.open_workspace_layout_picker(),
+            Action::WorkspaceLayout(Some(pick)) => self.set_workspace_layout(pick),
             Action::Restore { run } => self.restore_last(run),
             Action::ToggleFloating => self.toggle_floating(),
             Action::FloatSize(pw, ph) => self.place_float(|r| r.resized_in(area, pw, ph)),
@@ -4680,6 +4697,59 @@ mod tests {
         a.run_action(Action::NextLayout);
         assert_eq!(a.active().preset, Some(Preset::EvenHorizontal), "wraps");
         assert_eq!(a.active().tree.panes(), vec![1, 2, 3], "every pane kept");
+    }
+
+    /// Milestone 13's last item: one workspace a strip beside dwindle ones.
+    #[test]
+    fn a_workspace_can_have_a_layout_of_its_own() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        a.run_action("workspace_layout scrolling".parse().unwrap());
+        assert_eq!(a.active().layout, Some(Layout::Scrolling));
+        assert!(a.in_strip(), "the tree is a strip now");
+        assert_eq!(a.status.as_deref(), Some("workspace 1: layout scrolling"));
+        // The next workspace follows the setting.
+        a.run_action("workspace 2".parse().unwrap());
+        with_pane_in(&mut a, 2, 3);
+        with_pane_in(&mut a, 2, 4);
+        a.relayout();
+        assert_eq!(a.layout_here(), Layout::Dwindle);
+        assert!(!a.in_strip());
+        // Its own layout can be master while the setting stays dwindle: the
+        // first pane on the left, the other stacked right of it.
+        a.run_action("workspace_layout master".parse().unwrap());
+        with_pane_in(&mut a, 2, 5);
+        a.relayout();
+        let x = |a: &App, id| a.frame().views.iter().find(|v| v.id == id).unwrap().outer.x;
+        assert_eq!(x(&a, 3), 0);
+        assert!(x(&a, 4) > 0 && x(&a, 4) == x(&a, 5), "4 and 5 stacked");
+        // Back on 1, still a strip; back to the setting, the columns become
+        // a row of weights and every pane stays.
+        a.run_action("workspace 1".parse().unwrap());
+        assert!(a.in_strip());
+        a.run_action("workspace_layout default".parse().unwrap());
+        assert_eq!(a.active().layout, None);
+        assert!(!a.active().tree.is_strip());
+        assert_eq!(a.active().tree.panes(), vec![1, 2]);
+        assert_eq!(
+            a.status.as_deref(),
+            Some("workspace 1: layout dwindle (the setting)")
+        );
+        // The scratchpad has no layout to give.
+        a.run_action(Action::ScratchpadToggle);
+        a.run_action("workspace_layout monocle".parse().unwrap());
+        assert_eq!(a.status.as_deref(), Some("scratchpad panes always float"));
+        assert_eq!(a.workspaces[&1].layout, None);
+        // Bare, a picker: the setting first, marked as the choice here.
+        a.run_action(Action::ScratchpadToggle);
+        a.run_action(Action::WorkspaceLayout(None));
+        let p = a.picker.as_ref().unwrap();
+        assert_eq!(p.kind, crate::picker::Kind::WorkspaceLayout);
+        let items = p.visible();
+        assert_eq!(items.len(), 6);
+        assert_eq!(items[0].label, "default (dwindle)");
+        assert!(items[0].current);
     }
 
     #[test]

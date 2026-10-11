@@ -11,7 +11,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result};
 use mlua::{Function, Lua, LuaSerdeExt, RegistryKey, Table, Value};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -22,7 +22,7 @@ use crate::theme::{self, Theme};
 
 pub const DEFAULT_INIT_LUA: &str = include_str!("../assets/init.lua");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Layout {
     Dwindle,
@@ -36,6 +36,32 @@ pub enum Layout {
     /// niri's: a strip of columns wider than the screen, the view scrolling
     /// to the focused one (`crate::strip`).
     Scrolling,
+}
+
+impl Layout {
+    /// Every layout, in the order the setting and the picker list them.
+    pub const ALL: [Layout; 5] = [
+        Layout::Dwindle,
+        Layout::Manual,
+        Layout::Master,
+        Layout::Monocle,
+        Layout::Scrolling,
+    ];
+
+    /// The name the setting takes (`layout = "dwindle"`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Layout::Dwindle => "dwindle",
+            Layout::Manual => "manual",
+            Layout::Master => "master",
+            Layout::Monocle => "monocle",
+            Layout::Scrolling => "scrolling",
+        }
+    }
+
+    pub fn from_name(s: &str) -> Option<Layout> {
+        Layout::ALL.into_iter().find(|l| l.name() == s)
+    }
 }
 
 /// What the mouse does outside WM mode.
@@ -3228,7 +3254,7 @@ mod tests {
         let cfg = with_user(r#"ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#)
             .unwrap();
         let mine = cfg.binds[&y].folder().unwrap();
-        assert_eq!((mine.name.as_str(), mine.binds.len()), ("mine", 3));
+        assert_eq!((mine.name.as_str(), mine.binds.len()), ("mine", 4));
         let cfg = with_user(
             r#"ranma.unbind("y") ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#,
         )

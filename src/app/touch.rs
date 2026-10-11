@@ -194,7 +194,7 @@ impl App {
             BarPosition::Bottom => Some((Side::Bottom, self.config.bar.size)),
         };
         let ws = self.active();
-        let strip = self.config.settings.layout == Layout::Monocle
+        let strip = self.layout_of(ws) == Layout::Monocle
             && !self.scratch_shown
             && !ws.fullscreen
             && ws.len() > 1;
@@ -445,7 +445,7 @@ impl App {
         ws: &crate::workspace::Workspace,
     ) -> Option<crate::layout::PaneId> {
         let tiles = ws.tree.panes();
-        if self.config.settings.layout == Layout::Monocle {
+        if self.layout_of(ws) == Layout::Monocle {
             ws.focused
                 .filter(|f| ws.tree.contains(*f))
                 .or(ws.last_tile.filter(|t| ws.tree.contains(*t)))

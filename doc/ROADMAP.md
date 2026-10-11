@@ -259,8 +259,8 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] `layout = "scrolling"`: a strip of columns and a view that follows
   focus, peeks and edges, four new keys, `pane_strip` columns, saved widths
   (designed from `doc/briefs/done/SCROLLING_LAYOUT.md`)
-- [ ] A layout per workspace, so one workspace can be a strip and the rest
-  dwindle (the handoff's "worth doing next to it")
+- [x] A layout per workspace, so one workspace can be a strip and the rest
+  dwindle (`workspace_layout`, the handoff's "worth doing next to it")
 
 ## Later, maybe
 

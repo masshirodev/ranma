@@ -185,11 +185,15 @@ ranma.bind("space", "next_layout")
 -- save_layout NAME writes the current workspace to ~/.local/state/ranma/layouts;
 -- load_layout NAME brings one back (on an empty workspace it opens the panes
 -- and types their commands in), and without a name picks from a list. In the
--- y folder: s saves (asking for a name), l loads (from the list). The hint
+-- y folder: s saves (asking for a name), l loads (from the list), and w gives
+-- this workspace a layout of its own over the `layout` setting (one strip
+-- beside dwindle workspaces: "workspace_layout scrolling"; "workspace_layout
+-- default" follows the setting again; bare, it picks from a list). The hint
 -- lists it under ranma: the layout and panes groups are full at 80x24.
 ranma.bind("y", { folder = "layouts", group = "ranma" })
 ranma.bind("y s", "save_layout")
 ranma.bind("y l", "load_layout")
+ranma.bind("y w", "workspace_layout")
 -- Or declare one here, a container's panes in its list part:
 --   ranma.layout("kumiko", {
 --     split = "horizontal",

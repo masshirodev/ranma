@@ -155,7 +155,7 @@ Theme name; see Themes\fR.
 \fBlayout\fR
 Default: \fB"dwindle"\fR
 .br
-Placement of new panes: \fBdwindle\fR (Hyprland), \fBmanual\fR (i3), or \fBmaster\fR: one master pane on the left and the others stacked on the right. In \fBmaster\fR a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. \fBmonocle\fR: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a \fB◇\fR tab after the tiles and still float over it). New panes are placed as in \fBdwindle\fR, and the tree is kept, so switching back to another layout (a profile\fR, say) gives the tiling back. \fBscrolling\fR: niri's strip of columns, see A scrolling layout\fR.
+Placement of new panes: \fBdwindle\fR (Hyprland), \fBmanual\fR (i3), or \fBmaster\fR: one master pane on the left and the others stacked on the right. In \fBmaster\fR a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. \fBmonocle\fR: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a \fB◇\fR tab after the tiles and still float over it). New panes are placed as in \fBdwindle\fR, and the tree is kept, so switching back to another layout (a profile\fR, say) gives the tiling back. \fBscrolling\fR: niri's strip of columns, see A scrolling layout\fR. The setting is every workspace's unless one is given its own with \fBworkspace_layout\fR.
 .TP
 \fBmaster_ratio\fR
 Default: \fB0.55\fR
@@ -429,6 +429,9 @@ Bring back the snapshot this server set aside when it started (see After a reboo
 \fBload_layout [name]\fR
 Apply a layout\fR to the workspace. Without a name, pick one from every layout, declared and saved (\fBleader y l\fR).
 .TP
+\fBworkspace_layout [layout]\fR
+Lay this workspace out in a layout of its own, over the \fBlayout\fR setting: \fBdwindle\fR, \fBmanual\fR, \fBmaster\fR, \fBmonocle\fR or \fBscrolling\fR, so one workspace can be a strip while the rest dwindle; \fBdefault\fR follows the setting again. The tree is put in the new shape at once (a strip's columns, master's stack) and taken out of it the way a change of the setting would, and the choice is kept across upgrades and in the restore snapshot. Without an argument, pick from a list, the setting first and this workspace's choice marked (\fBleader y w\fR). Refused on the scratchpad, where everything floats.
+.TP
 \fBtoggle_floating\fR
 Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one.
 .TP
@@ -668,6 +671,12 @@ Closing a column moves the ones right of it left.
 and a \fBwidth\fR per column (\fB"1/2"\fR or cells). Loaded where the layout is
 not \fBscrolling\fR, the widths read as weights; a plain layout loaded into a
 strip becomes one column per pane.
+.IP \(bu 2
+\fBOne strip beside dwindle workspaces\fR: \fBworkspace_layout scrolling\fR
+(\fBleader y w\fR, then pick) makes the shown workspace a strip whatever the
+setting says, and \fBworkspace_layout default\fR hands it back; any layout can
+be given a workspace that way. The hint, the bar and the keys follow the
+shown workspace's layout.
 .IP \(bu 2
 \fBSwitching\fR to \fBscrolling\fR makes every pane a column, in tree order, at
 \fBscroll_width\fR; switching away keeps the row of columns, sized to fit the

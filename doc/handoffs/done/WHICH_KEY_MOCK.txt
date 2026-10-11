@@ -86,4 +86,5 @@
 │ layouts                      │
 │ l load layout                │
 │ s save layout                │
+│ w workspace layout           │
 ╰ bksp back ────── ? all keys ─╯

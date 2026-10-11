@@ -125,7 +125,7 @@ D_HIST=('history',[('/','search','bind'),('[','copy mode','bind'),('o','links','
 D_RANMA=('ranma',[(':','commands','bind'),('p','settings','bind'),('r','reload config','bind'),('d','detach','bind'),('S','servers','bind'),('U','update','bind'),('Del','quit','bind'),('esc','leave WM','bind'),('y','+layouts','folder')])
 # The default folders, opened.
 F_PANE=[('pane',[('a','sync input','bind'),('A','unsync all','bind'),('c','centre','bind'),('l','log pane','bind'),('m','menu','bind'),('r','respawn','bind'),('s','watch silence','bind'),('z','size 80%','bind'),('←↓↑→','snap half','bind')])]
-F_LAYOUTS=[('layouts',[('l','load layout','bind'),('s','save layout','bind')])]
+F_LAYOUTS=[('layouts',[('l','load layout','bind'),('s','save layout','bind'),('w','workspace layout','bind')])]
 DEFAULTS=[D_LAYOUT,D_PANES,D_WS,D_SESS,D_HIST,D_RANMA]
 STRIP=[D_STRIP,D_PANES,D_WS,D_SESS,D_HIST,D_RANMA]
 

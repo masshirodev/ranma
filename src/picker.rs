@@ -94,6 +94,8 @@ pub enum Kind {
     Layouts,
     /// A one-line prompt naming the layout `save_layout` writes.
     SaveLayout,
+    /// The layouts a workspace can be laid out in (`workspace_layout`).
+    WorkspaceLayout,
     /// The paste buffers (`choose_buffer`).
     Buffers,
     /// A list a plugin opened (`ranma.picker`).

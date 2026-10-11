@@ -123,7 +123,7 @@ Each call changes only the fields it names; call it as often as you like.
 | --- | --- | --- |
 | `leader` | `"ctrl+b"` | The chord that enters WM mode. |
 | `theme` | `"default"` | Theme name; see [Themes](#themes). |
-| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. `scrolling`: niri's strip of columns, see [A scrolling layout](#a-scrolling-layout). |
+| `layout` | `"dwindle"` | Placement of new panes: `dwindle` (Hyprland), `manual` (i3), or `master`: one master pane on the left and the others stacked on the right. In `master` a new pane joins the stack after the focused one, a master that closes is replaced by the first of the stack at the same width, and the shape is kept: a split toggled or a group made there is put back into it. `monocle`: one tiled pane fills the workspace and the others are tabs above it (a strip that appears once there are two panes; floats get a `◇` tab after the tiles and still float over it). New panes are placed as in `dwindle`, and the tree is kept, so switching back to another layout (a [profile](#profiles--ranmaprofilename-def), say) gives the tiling back. `scrolling`: niri's strip of columns, see [A scrolling layout](#a-scrolling-layout). The setting is every workspace's unless one is given its own with `workspace_layout`. |
 | `master_ratio` | `0.55` | With `layout = "master"`: the master's share of the width when a master area forms (0.1-0.9). Resizing it afterwards sticks. |
 | `scroll_widths` | `{ "1/3", "1/2", "2/3" }` | With `layout = "scrolling"`: the widths `column_width next` (`leader e`) steps through, 1 to 6 of them, each a fraction of the screen (`"a/b"`, at most 1) or whole cells (at least `scroll_min`). Not in the settings panel, which edits one value per row. |
 | `scroll_width` | `"1/2"` | With `layout = "scrolling"`: a new column's width, anything `scroll_widths` takes. |
@@ -270,6 +270,7 @@ sent them, which it is not asked to.
 | `save_layout [name]` | Save the workspace's tiles as a [layout](#layouts--ranmalayoutname-def): splits, groups, sizes, and each pane's directory and foreground command. Without a name, ask (the workspace's name is offered; `leader y s`). A name `init.lua` declares is refused. |
 | `restore [run]` | Bring back the snapshot this server set aside when it started (see [After a reboot](#after-a-reboot)): each pane's command typed and waiting on its prompt, or run with `restore run`. |
 | `load_layout [name]` | Apply a [layout](#layouts--ranmalayoutname-def) to the workspace. Without a name, pick one from every layout, declared and saved (`leader y l`). |
+| `workspace_layout [layout]` | Lay this workspace out in a layout of its own, over the `layout` setting: `dwindle`, `manual`, `master`, `monocle` or `scrolling`, so one workspace can be a strip while the rest dwindle; `default` follows the setting again. The tree is put in the new shape at once (a strip's columns, master's stack) and taken out of it the way a change of the setting would, and the choice is kept across upgrades and in the restore snapshot. Without an argument, pick from a list, the setting first and this workspace's choice marked (`leader y w`). Refused on the scratchpad, where everything floats. |
 | `toggle_floating` | Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one. |
 | `float_size <w%> [h%]` | Size the focused pane as a float, in percent of the workspace (`float_size 60 40`; one number is both), keeping its centre. A tile is floated first. `leader x z` is `float_size 80 80`. |
 | `snap <where>` | Put the focused pane, floated first if it tiles, on a half (`left right top bottom`), a quarter (`top_left top_right bottom_left bottom_right`), or in the middle at its own size (`center`). The halves and the middle are in the pane folder: `leader x` then an arrow, or `c`. |
@@ -396,6 +397,11 @@ wider than the screen, and a view onto it that follows the focused column.
   and a `width` per column (`"1/2"` or cells). Loaded where the layout is
   not `scrolling`, the widths read as weights; a plain layout loaded into a
   strip becomes one column per pane.
+- **One strip beside dwindle workspaces**: `workspace_layout scrolling`
+  (`leader y w`, then pick) makes the shown workspace a strip whatever the
+  setting says, and `workspace_layout default` hands it back; any layout can
+  be given a workspace that way. The hint, the bar and the keys follow the
+  shown workspace's layout.
 - **Switching** to `scrolling` makes every pane a column, in tree order, at
   `scroll_width`; switching away keeps the row of columns, sized to fit the
   screen.

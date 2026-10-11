@@ -3,6 +3,7 @@
 //! `crate::layouts`; this is the part that reads panes and spawns them.
 
 use super::*;
+use crate::action::LayoutPick;
 use crate::layouts::{self, Spec};
 use crate::picker::{Item, Kind, Picker, Target};
 
@@ -67,6 +68,69 @@ impl App {
                 Some("no layouts yet: save_layout NAME, or ranma.layout in init.lua".into());
         } else {
             self.picker = Some(Picker::new(Kind::Layouts, "load a layout", items));
+        }
+        self.dirty = true;
+    }
+
+    /// `workspace_layout` without an argument: the five layouts and the
+    /// setting, the workspace's own choice marked.
+    pub(super) fn open_workspace_layout_picker(&mut self) {
+        if self.scratch_shown {
+            self.status = Some("scratchpad panes always float".into());
+            self.dirty = true;
+            return;
+        }
+        let own = self.active().layout;
+        let setting = self.config.settings.layout;
+        let mut items = vec![Item {
+            label: format!("default ({})", setting.name()),
+            detail: "the layout setting".into(),
+            target: Target::Run("workspace_layout default".into()),
+            current: own.is_none(),
+        }];
+        items.extend(Layout::ALL.into_iter().map(|l| {
+            Item {
+                label: l.name().into(),
+                detail: match l {
+                    Layout::Dwindle => "split the focused pane along its longer side",
+                    Layout::Manual => "split the way toggle_split last said",
+                    Layout::Master => "one pane on the left, the rest stacked",
+                    Layout::Monocle => "one pane at a time, the others as tabs",
+                    Layout::Scrolling => "a strip of columns wider than the screen",
+                }
+                .into(),
+                target: Target::Run(format!("workspace_layout {}", l.name())),
+                current: own == Some(l),
+            }
+        }));
+        let mut picker = Picker::new(Kind::WorkspaceLayout, "lay this workspace out as", items);
+        picker.select_current();
+        self.picker = Some(picker);
+        self.dirty = true;
+    }
+
+    /// `workspace_layout <layout|default>`: this workspace's own layout, over
+    /// the setting. Relayout puts the tree in the new shape (a strip, master)
+    /// or out of one, as a change of the setting would for every workspace.
+    pub(super) fn set_workspace_layout(&mut self, pick: LayoutPick) {
+        if self.scratch_shown {
+            self.status = Some("scratchpad panes always float".into());
+        } else {
+            let own = match pick {
+                LayoutPick::Setting => None,
+                LayoutPick::Named(l) => Some(l),
+            };
+            let n = self.current;
+            self.active_mut().layout = own;
+            self.active_mut().fullscreen = false;
+            self.status = Some(match own {
+                Some(l) => format!("workspace {n}: layout {}", l.name()),
+                None => format!(
+                    "workspace {n}: layout {} (the setting)",
+                    self.config.settings.layout.name()
+                ),
+            });
+            self.relayout();
         }
         self.dirty = true;
     }

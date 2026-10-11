@@ -9,9 +9,8 @@ Lua and themed in TOML.
 
 Named for the 欄間, the carved transom panel above sliding doors.
 
-**Status:** a daily driver. Milestones 0-12 of
-[`doc/ROADMAP.md`](doc/ROADMAP.md) are done (one plugin primitive aside), and
-13 is under way:
+**Status:** a daily driver. Every milestone of
+[`doc/ROADMAP.md`](doc/ROADMAP.md), 0-13, is done (one plugin primitive aside):
 
 - dwindle-tiled panes, tabbed groups, a floating layer, a scratchpad, and a
   scrolling layout (niri's strip of columns); workspaces and sessions with

@@ -155,6 +155,8 @@ impl App {
                 if let Some(name) = &w.name {
                     self.active_mut().name = Some(name.clone());
                 }
+                // Before the spec, so a strip is loaded into a strip.
+                self.active_mut().layout = w.workspace_layout;
                 if let Some(spec) = &w.layout {
                     note(self.apply_spec(spec, typing));
                 }
@@ -273,7 +275,16 @@ impl App {
                 focus: ws
                     .focused
                     .and_then(|f| ws.panes().iter().position(|p| *p == f)),
-                layout: ws.tree.root.as_ref().map(|r| Spec::from_node(r, &about)),
+                // A strip is saved as one, as save_layout does, so its
+                // columns come back with their widths.
+                layout: ws.tree.root.as_ref().map(|r| {
+                    if ws.tree.is_strip() {
+                        Spec::from_strip(r, &about)
+                    } else {
+                        Spec::from_node(r, &about)
+                    }
+                }),
+                workspace_layout: ws.layout,
                 floats: ws.floating.iter().map(float).collect(),
             })
         };
@@ -353,6 +364,28 @@ mod tests {
         assert_eq!(w1.focus, Some(0));
         assert_eq!((w1.floats[0].x, w1.floats[0].w), (0.0, 0.5));
         assert_eq!(snap.panes(), 3);
+    }
+
+    #[test]
+    fn a_capture_keeps_a_workspaces_own_layout_and_restores_its_strip() {
+        let (mut a, _) = app("capture-layout");
+        with_pane_in(&mut a, 1, 1);
+        with_pane_in(&mut a, 1, 2);
+        a.run_action("workspace_layout scrolling".parse().unwrap());
+        let snap = a.server_snapshot();
+        let w1 = &snap.sessions[0].workspaces[0];
+        assert_eq!(w1.workspace_layout, Some(crate::config::Layout::Scrolling));
+        assert!(
+            w1.layout.as_ref().unwrap().scroll,
+            "a strip is saved as one"
+        );
+
+        let (mut b, _) = app("capture-layout-into");
+        with_pane_in(&mut b, 1, 1);
+        b.restore(&snap, Typing::Wait);
+        assert_eq!(b.active().layout, Some(crate::config::Layout::Scrolling));
+        assert!(b.in_strip(), "the strip came back as one");
+        assert_eq!(b.active().tree.columns().len(), 2);
     }
 
     #[test]

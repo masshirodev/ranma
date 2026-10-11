@@ -1523,9 +1523,46 @@ the four are left out (the first handoff's fixtures still hold) and in one
 - *Swap master* is left as it is in a strip (it swaps with the first pane);
   the hint leaves it out, as drawn.
 
-**Not done**: a layout per workspace (one strip beside dwindle workspaces),
-which the handoff names as worth doing next to it and is a change of its
-own; the peek of a grouped column draws its active tab without the tab bar.
+**Not done**: the peek of a grouped column draws its active tab without the
+tab bar. A layout per workspace, which the handoff names as worth doing next
+to it, followed on 2026-10-10 (below).
+
+### A layout per workspace (2026-10-10)
+
+The last item of milestone 13: one strip beside dwindle workspaces. **The
+setting stays the setting; a workspace may carry its own.** `Workspace`
+gets `layout: Option<Layout>`, and every place that read
+`settings.layout` reads `App::layout_of(ws)` instead, which is the
+workspace's own or the setting. That is the whole mechanism: `relayout`
+already put every tree into its layout's shape (master's stack, the strip,
+or out of one) on every change, and now does so per workspace, so a
+workspace handed `scrolling` becomes a strip on the spot and one handed
+`default` leaves it with its widths as weights, exactly as a change of the
+setting did for all of them. The frame, the which-key hint, the bar's
+`pane_strip`, the touch strip and the placement of a new pane all ask the
+shown workspace, so nothing had to learn a second rule.
+
+**One action, `workspace_layout <layout|default>`**, bare for a picker
+(`y w`, in the layouts folder beside save and load), rather than a table
+in `init.lua` (`workspace_layouts = { [3] = "scrolling" }`) or a Lua
+`workspace` object: a workspace's layout is a thing you decide at the
+workspace, like its name (`rename_workspace`), and a hook that wants it
+declared runs the action on `workspace_change`. Lua reads the setting
+through `ranma.get("layout")` as before; a workspace's own is not exposed
+until something needs it.
+
+**Kept where the workspace is kept.** The field is in the snapshot an
+upgrade hands over (`serde(default)`, so an older snapshot reads) and in the
+restore record (`workspace_layout`, written only when set), which also
+saves a strip with `Spec::from_strip` now, as `save_layout` does, so a
+restored strip comes back with its columns and widths rather than as a row
+of weights that the layout would then rebuild at `scroll_width`.
+
+Not changed: a saved layout with `scroll = true` loaded into a dwindle
+workspace still reads its widths as weights rather than turning the
+workspace into a strip. Loading a layout arranges panes; it does not
+reconfigure the workspace, and making it do so would be a second way to
+set what `workspace_layout` sets.
 
 ### The kitty keyboard protocol, both ways (2026-10-09)
 

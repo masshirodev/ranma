@@ -127,6 +127,9 @@ pub enum Action {
     SaveLayout(Option<String>),
     /// Apply a layout to the workspace; without a name, pick one.
     LoadLayout(Option<String>),
+    /// Give this workspace a layout of its own over the `layout` setting, or
+    /// `default` to follow the setting again; without an argument, pick one.
+    WorkspaceLayout(Option<LayoutPick>),
     /// Bring back the snapshot this server set aside when it started: each
     /// command typed and waiting, or run (`restore run`).
     Restore {
@@ -263,6 +266,7 @@ impl Action {
                 | Action::WorkspaceSwitcher
                 | Action::SaveLayout(_)
                 | Action::LoadLayout(_)
+                | Action::WorkspaceLayout(None)
                 | Action::PaneMenu
                 | Action::SessionSwitcher
                 | Action::Help
@@ -285,6 +289,22 @@ impl Action {
                 | Action::ServerSwitcher
                 | Action::Attach(_)
         )
+    }
+}
+
+/// What `workspace_layout` is given: a layout, or `default` for the setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutPick {
+    Setting,
+    Named(crate::config::Layout),
+}
+
+impl fmt::Display for LayoutPick {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LayoutPick::Setting => f.write_str("default"),
+            LayoutPick::Named(l) => f.write_str(l.name()),
+        }
     }
 }
 
@@ -343,6 +363,10 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("next_layout", ""),
     ("save_layout", "[name]"),
     ("load_layout", "[name]"),
+    (
+        "workspace_layout",
+        "[dwindle|manual|master|monocle|scrolling|default]",
+    ),
     ("restore", "[run]"),
     ("swap_master", ""),
     ("consume_or_expel", "<left|right>"),
@@ -561,6 +585,28 @@ impl FromStr for Action {
                 } else {
                     Action::LoadLayout(named)
                 })
+            }
+            "workspace_layout" => {
+                const LAYOUTS: &str =
+                    "dwindle, manual, master, monocle, scrolling, or default for the setting";
+                match (first, second) {
+                    (None, _) => Ok(Action::WorkspaceLayout(None)),
+                    (Some("default"), None) => {
+                        Ok(Action::WorkspaceLayout(Some(LayoutPick::Setting)))
+                    }
+                    (Some(l), None) => crate::config::Layout::from_name(l)
+                        .map(|l| Action::WorkspaceLayout(Some(LayoutPick::Named(l))))
+                        .ok_or(ActionError::BadArg {
+                            action: name.into(),
+                            arg: l.into(),
+                            expected: LAYOUTS,
+                        }),
+                    (Some(_), Some(_)) => Err(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: LAYOUTS,
+                    }),
+                }
             }
             "swap_master" => no_arg(Action::SwapMaster),
             "consume_or_expel" => match (first, second) {
@@ -939,6 +985,8 @@ impl fmt::Display for Action {
             Action::SaveLayout(Some(n)) => write!(f, "save_layout {n}"),
             Action::LoadLayout(None) => f.write_str("load_layout"),
             Action::LoadLayout(Some(n)) => write!(f, "load_layout {n}"),
+            Action::WorkspaceLayout(None) => f.write_str("workspace_layout"),
+            Action::WorkspaceLayout(Some(p)) => write!(f, "workspace_layout {p}"),
             Action::Restore { run: false } => f.write_str("restore"),
             Action::Restore { run: true } => f.write_str("restore run"),
             Action::SwapMaster => f.write_str("swap_master"),
@@ -1193,6 +1241,9 @@ mod tests {
             "session_accent bright-red",
             "session_accent none",
             "rename_workspace web",
+            "workspace_layout",
+            "workspace_layout scrolling",
+            "workspace_layout default",
             "rename_pane",
             "quit",
             "quit now",

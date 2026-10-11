@@ -28,6 +28,11 @@ pub struct Workspace {
     /// steps on from.
     #[serde(default)]
     pub preset: Option<crate::layout::Preset>,
+    /// A layout of this workspace's own (`workspace_layout`), over the
+    /// `layout` setting; `None` follows the setting. Kept in the snapshot, so
+    /// an upgrade and a restore keep a strip a strip.
+    #[serde(default)]
+    pub layout: Option<crate::config::Layout>,
     /// The pane focused here before the one focused now: where `focus last`
     /// goes (tmux's `last-pane`).
     #[serde(default)]

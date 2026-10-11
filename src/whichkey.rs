@@ -255,12 +255,13 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::RespawnPane => (57, 0),
         Action::MonitorSilence(None) => (58, 0),
         Action::PaneMenu => (59, 0),
+        Action::WorkspaceLayout(None) => (60, 0),
         other => return Some(Err(other.to_string())),
     };
     Some(Ok((i, member)))
 }
 
-const KINDS: [Kind; 60] = [
+const KINDS: [Kind; 61] = [
     k("layout", "focus", Shape::Dirs),
     k("layout", "resize", Shape::Dirs),
     k("layout", "move", Shape::Dirs),
@@ -321,6 +322,7 @@ const KINDS: [Kind; 60] = [
     k("panes", "respawn", Shape::Single),
     k("panes", "watch silence", Shape::Single),
     k("panes", "menu", Shape::Single),
+    k("layout", "workspace layout", Shape::Single),
 ];
 
 /// The strip's own kinds (`layout = "scrolling"`), shown only in a strip,
