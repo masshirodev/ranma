@@ -1,0 +1,26 @@
+# The pre-commit gate of AGENTS.md on every push to main and every pull
+# request: a contributor's change gets the same checks the hooks run here.
+# doc/TESTING.md says what each one covers.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      # The smoke test drives the release build in a private headless tmux.
+      - name: Smoke
+        run: |
+          sudo apt-get install -y -qq tmux
+          scripts/smoke.sh
