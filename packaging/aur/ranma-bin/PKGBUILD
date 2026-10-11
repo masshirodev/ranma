@@ -1,0 +1,31 @@
+# Maintainer: masshirodev <masshiro.iro.kk@gmail.com>
+# The prebuilt binary from a GitHub release. doc/RELEASING.md says how to bump it.
+pkgname=ranma-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY'
+arch=('x86_64')
+url='https://github.com/masshirodev/ranma'
+license=('MIT OR Apache-2.0')
+depends=('glibc' 'gcc-libs')
+optdepends=('git: hako, the plugin manager, clones itself on the first start'
+            'wl-clipboard: paste_image on Wayland'
+            'xclip: paste_image on X11'
+            'openssh: pasting files into a pane that runs ssh'
+            'xdg-utils: opening links from hint mode')
+provides=('ranma')
+conflicts=('ranma')
+install=ranma.install
+_name="ranma-$pkgver-x86_64-unknown-linux-gnu"
+source=("$url/releases/download/v$pkgver/$_name.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$_name"
+  install -Dm755 ranma "$pkgdir/usr/bin/ranma"
+  for page in man/man*/*; do
+    install -Dm644 "$page" "$pkgdir/usr/share/$page"
+  done
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}

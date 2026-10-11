@@ -16,14 +16,23 @@ fn main() {
     // Built with uncommitted changes: the commit alone does not say what is in it.
     let dirty =
         git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-    println!(
-        "cargo:rustc-env=RANMA_GIT_SHA={sha}{}",
+    let sha = format!(
+        "{sha}{}",
         if dirty && !sha.is_empty() {
             "-dirty"
         } else {
             ""
         }
     );
+    println!("cargo:rustc-env=RANMA_GIT_SHA={sha}");
+    // What --version prints: the commit, and the package that built it, if one
+    // did (src/update.rs, PACKAGED), so a bug report says where the binary came from.
+    let info = match std::env::var("RANMA_PACKAGED") {
+        Ok(by) if !by.is_empty() => format!("{sha}, from {by}"),
+        _ => sha,
+    };
+    println!("cargo:rustc-env=RANMA_BUILD_INFO={info}");
+    println!("cargo:rerun-if-env-changed=RANMA_PACKAGED");
     // Re-stamp when the sources change (to catch "-dirty") and when the
     // checked-out commit moves.
     println!("cargo:rerun-if-changed=src");

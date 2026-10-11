@@ -66,6 +66,12 @@ another checkout instead, to try a branch not pushed yet. It must be a ranma
 checkout (it has `Cargo.toml` and `.git`), and is never cloned or moved. It is a
 variable rather than a setting so it cannot be set once and forgotten.
 
+A packaged ranma (a release build, or the AUR's `ranma-bin` and `ranma-git`)
+never checks or updates itself: its package manager does. `ranma update` and
+`leader U` say where it came from instead, and `ranma --version` names it.
+After the package manager has upgraded it, `ranma upgrade --all` moves running
+servers onto the new build.
+
 A build from commits the source has never seen (one installed from a
 development checkout, ahead of what is pushed) is behind nothing.
 

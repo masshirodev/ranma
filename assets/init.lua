@@ -107,7 +107,8 @@ ranma.set {
   --   "prompt": ask y/n, as oh-my-zsh does.
   --   "off":    never check.
   -- Checking is a git fetch at most every update_check_hours, shared by every
-  -- ranma, and never prompts for a password or key.
+  -- ranma, and never prompts for a password or key. A packaged ranma (a
+  -- release, the AUR) never checks: its package manager updates it.
   updates = "remind",
   update_check_hours = 24,
 

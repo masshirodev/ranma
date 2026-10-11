@@ -2530,6 +2530,14 @@ Rust, for predictable latency without a GC, and for the emulator:
   often a dotfiles repository, and a clone does not belong in one.
   `RANMA_SOURCE_DIR` overrides it for one run; a variable, not a setting, so
   it is never left pointing at a branch.
+- A packaged binary leaves updates to its package (2026-10-11). Release
+  builds and the AUR packages set `RANMA_PACKAGED` at build time, and such a
+  ranma never checks its source: updating from a clone would install a second
+  binary into `~/.cargo/bin` beside pacman's, need cargo on a machine that
+  installed a binary to avoid it, and announce every commit on `main` to
+  someone who chose releases. `ranma update` and `leader U` say where it came
+  from instead. A compile-time marker, not a setting, because what installed a
+  binary is a fact about the binary. Releases themselves: `doc/RELEASING.md`.
 - Gaps are whole cells, never fractions (2026-10-08): a terminal cannot start a
   pane's grid part of a cell over, so `0.5` could only be rounded to something
   the file does not say. What a fraction was usually wanted for is a side on its
