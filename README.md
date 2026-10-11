@@ -99,6 +99,17 @@ and committed in [`doc/man/`](doc/man).
 - [`doc/ROADMAP.md`](doc/ROADMAP.md): milestones
 - [`doc/TESTING.md`](doc/TESTING.md): what to run, and what each check proves
 
+## How it's built
+
+ranma is written with AI coding agents, directed and reviewed by its author.
+The direction is in the documents, not the prompts: [`doc/DESIGN.md`](doc/DESIGN.md)
+records every decision and what it rules out, [`doc/ROADMAP.md`](doc/ROADMAP.md)
+the milestones, and nothing reaches `main` without passing fmt, clippy, the tests
+and a smoke test that drives the release build in a headless tmux.
+
+Commits carry no AI trailers. That's a choice about authorship, not
+concealment: whoever commits a change answers for it.
+
 ## Contributing
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md) says what belongs in the core and what
