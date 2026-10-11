@@ -107,12 +107,12 @@ T send-keys -t s 'echo clicked-right' Enter
 wait_for '││clicked-right' || fail "click did not focus the right pane"
 
 # Dragging the border between the two panes resizes them (left one grows).
-W0=$(screen | head -1 | cut -d'╮' -f1 | wc -m)
+W0=$(screen | head -1 | sed 's/╮.*//' | wc -m)
 for e in '0;60;10M' '32;66;10M' '32;70;10M' '0;70;10m'; do
   T send-keys -t s -l $'\e[<'"$e"; sleep 0.1
 done
 sleep 0.3
-W1=$(screen | head -1 | cut -d'╮' -f1 | wc -m)
+W1=$(screen | head -1 | sed 's/╮.*//' | wc -m)
 [ "$W1" -gt "$W0" ] || fail "dragging the border did not resize ($W0 -> $W1)"
 
 # Dragging in a pane's text selects it and copies it on release (OSC 52).
