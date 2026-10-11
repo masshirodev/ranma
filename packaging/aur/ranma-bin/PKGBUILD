@@ -18,7 +18,7 @@ conflicts=('ranma')
 install=ranma.install
 _name="ranma-$pkgver-x86_64-unknown-linux-gnu"
 source=("$url/releases/download/v$pkgver/$_name.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('0b88a660430eedffd77a72013e1ff1f06537e530adb2da8ba26a6cfaff772313')
 
 package() {
   cd "$_name"
