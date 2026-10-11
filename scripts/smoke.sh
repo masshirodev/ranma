@@ -458,7 +458,10 @@ bar | grep -q ' \[1' || fail "going back did not expand the holder again ($(bar)
 # empties it, and an empty scratchpad hides. Fullscreen in the outer, so the
 # inner fills it and draws the only frame.
 T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s M-Enter; sleep 0.3; T send-keys -t s Escape; sleep 0.6
-screen | head -1 | grep -q '^╭─' && fail "the inner ranma filling the outer is still framed by it"
+# Framed by the outer, the inner's own frame sits inside it on the next row.
+# Not "a top row without a title": a shell that sets none (Ubuntu's bash, as
+# against Arch's /etc/bash.bashrc) leaves the inner's own frame untitled too.
+screen | sed -n 2p | grep -q '^│╭' && fail "the inner ranma filling the outer is still framed by it"
 T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s s
 for _ in $(seq 1 20); do bar | grep -q ' S ' && break; sleep 0.25; done
 sleep 0.6
