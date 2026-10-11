@@ -1,0 +1,70 @@
+# Builds the release binary and, on a v* tag, publishes it as a GitHub release.
+# doc/RELEASING.md is the procedure.
+#
+# The build runs on ubuntu-22.04 on purpose: a binary needs the glibc it was
+# linked against or newer, and 22.04's 2.35 is older than every current distro
+# (a build on Arch asks for whatever Arch has, 2.44 at the time of writing).
+# workflow_dispatch builds the same tarball as an artifact without releasing.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: The tag matches Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME, Cargo.toml $have"; exit 1; }
+
+      - name: Test
+        run: cargo test --locked --quiet
+      - name: Build
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Package
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          name="ranma-$version-$TARGET"
+          mkdir -p "dist/$name"
+          cp "target/$TARGET/release/ranma" "dist/$name/"
+          cp -r doc/man "dist/$name/man"
+          cp LICENSE-MIT LICENSE-APACHE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          # The newest glibc symbol the binary asks for: the oldest distro it runs on.
+          objdump -T "dist/$name/ranma" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+          "dist/$name/ranma" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: |
+            dist/${{ env.NAME }}.tar.gz
+            dist/${{ env.NAME }}.tar.gz.sha256
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256" \
+            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
