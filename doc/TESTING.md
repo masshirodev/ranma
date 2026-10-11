@@ -71,7 +71,10 @@ at 80×24.
 
 Builds the release binary and drives it inside a **private headless tmux server**
 (its own socket, so it never touches your sessions), reading the screen back with
-`capture-pane`. It checks what unit tests cannot see:
+`capture-pane`. Everything it reads and writes is its own: an empty config
+dir, private runtime, cache, state and data dirs (the data dir holds a stub
+hako, so the default plugin manager loads without the network and without
+yours), all removed when it ends. It checks what unit tests cannot see:
 
 - panes and the bar draw, with the workspaces and clock modules; a split puts two
   panes side by side
@@ -206,6 +209,15 @@ is about fifteen, and pushes are rarer than commits. The smoke runs on every
 push rather than only for changes to `app`, `pane`, `render` or `input`, because
 a hook cannot tell which a change touches. On a machine where CPU is scarce,
 `SKIP_SMOKE` is the one to reach for.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull
+request, on ubuntu-22.04: `cargo fmt --check`, clippy with `-D warnings`,
+`cargo test --locked`, and the smoke test (tmux installed from apt). It is the
+hooks' gate for changes that did not come through these hooks: a
+contributor's pull request, or a push with a skip flag. The release workflow
+(`doc/RELEASING.md`) runs the tests again on the tagged commit.
 
 ## By hand
 
