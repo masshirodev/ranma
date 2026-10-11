@@ -1,6 +1,6 @@
 pkgbase = ranma-git
 	pkgdesc = A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY (git)
-	pkgver = 0.1.0.r0.g0000000
+	pkgver = 0.1.0.r165.g3c8834e
 	pkgrel = 1
 	url = https://github.com/masshirodev/ranma
 	install = ranma.install

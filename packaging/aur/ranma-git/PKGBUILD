@@ -1,7 +1,7 @@
 # Maintainer: masshirodev <guilhermemrka@gmail.com>
 # Built from main. doc/RELEASING.md covers the packages.
 pkgname=ranma-git
-pkgver=0.1.0.r0.g0000000
+pkgver=0.1.0.r165.g3c8834e
 pkgrel=1
 pkgdesc='A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY (git)'
 arch=('x86_64' 'aarch64')
