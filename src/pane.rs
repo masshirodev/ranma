@@ -250,16 +250,28 @@ impl std::io::Read for ScanReader {
                         self.proxy.mark(crate::osc::Mark::Graphics(body));
                         placed = text;
                     }
-                    crate::osc::Mark::Tag(kinds) => tag = Some(kinds),
+                    crate::osc::Mark::Tag { kinds, run } => tag = Some((kinds, run)),
                     m => self.proxy.mark(m),
                 }
             }
             // A shell mark's tag around the character at `at`: open, the
             // character, close (osc, "Tags"). The scan goes on from the
             // open, which it reads as a link of ours and passes over.
-            if let Some(kinds) = tag {
+            if let Some((kinds, run)) = tag {
                 let len = char_len(buf[at]);
                 let mut text = tag_open(&kinds);
+                // A prompt's tag stays open: the next tag's open replaces it.
+                if run {
+                    if let Some(rest) = insert(buf, &mut n, at, &text) {
+                        self.out = text;
+                        let mut rest = rest;
+                        rest.append(&mut self.raw);
+                        self.raw = rest;
+                        return Ok(at);
+                    }
+                    at += text.len();
+                    continue;
+                }
                 if at + len <= n {
                     text.extend_from_slice(&buf[at..at + len]);
                     text.extend_from_slice(TAG_CLOSE);
@@ -1222,6 +1234,40 @@ mod tests {
         let b = b"\x1b]133;A\x07$ seq 2\r\n\x1b]133;C\x071\r\n2\r\n\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07$ ";
         let m = marks_through_the_reader(b, 4096, 4096);
         assert_eq!((m[0].output, m[0].finished), (Some(1), Some(3)));
+    }
+
+    #[test]
+    fn a_prompt_drawn_again_over_itself_keeps_its_marks() {
+        // powerlevel10k's transient prompt: on Enter the prompt is redrawn,
+        // short, over the same cells (CR, clear the line, print), and only
+        // then the command runs.
+        let transient = b"\x1b]133;A\x07~/src main \xe2\x9d\xaf make\r\x1b[K\xe2\x9d\xaf make\r\n\
+            \x1b]133;C\x07built\r\n\x1b]133;D;0\x07\x1b]133;A\x07~/src main \xe2\x9d\xaf ";
+        let m = marks_through_the_reader(transient, 4096, 4096);
+        assert_eq!(m.len(), 2, "{m:?}");
+        assert_eq!(
+            (m[0].prompt, m[0].output, m[0].finished, m[0].exit),
+            (0, Some(1), Some(2), Some(0))
+        );
+        // zsh drawing its prompt again on a resize, while it waits.
+        let resize = b"\x1b]133;D;3\x07\x1b]133;A\x07$ \r\x1b[K$ \r\x1b[K$ ";
+        let m = marks_through_the_reader(resize, 4096, 4096);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].prompt, 0);
+        // PROMPT_SP: a command that printed nothing, then zsh's `%` and
+        // spaces, a CR, and the prompt drawn over them. Its C and D are on
+        // the prompt that follows: no output, finished there.
+        let sp =
+            b"\x1b]133;A\x07$ true\r\n\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07%          \r$ ";
+        let m = marks_through_the_reader(sp, 4096, 4096);
+        assert_eq!(m.len(), 2, "{m:?}");
+        assert_eq!(
+            (m[0].output, m[0].finished, m[0].exit),
+            (Some(1), Some(1), Some(0))
+        );
+        // Two empty Enters: two prompts, though their marks read the same.
+        let two = b"\x1b]133;A\x07$ \r\n\x1b]133;D;0\x07\x1b]133;A\x07$ \r\n\x1b]133;D;0\x07\x1b]133;A\x07$ ";
+        assert_eq!(marks_through_the_reader(two, 4096, 4096).len(), 3);
     }
 
     #[test]

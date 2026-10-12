@@ -12,10 +12,14 @@
 //!
 //! **Tags.** The emulator parses on its own thread, holding the terminal, so
 //! where the cursor was when a mark went by cannot be read from here, and
-//! read later it has moved on. Instead the next character printed after a
-//! mark is wrapped in an OSC 8 link whose address is [`TAG`] and the marks
-//! (`ranma:133:D2.A`): the grid keeps it on that cell through scrolling and
-//! reflow, it goes when the scrollback does, and `pane:marks()` reads it back.
+//! read later it has moved on. Instead what is printed after a mark is put
+//! in an OSC 8 link whose address is [`TAG`], a number and the marks
+//! (`ranma:133:7:D2.A`): the grid keeps it on those cells through scrolling
+//! and reflow, it goes when the scrollback does, and `pane:marks()` reads it
+//! back. An output's tag (`C`) covers one character. A prompt's (`A`, `B`)
+//! stays open until the next mark: shells draw their prompt again over
+//! itself (powerlevel10k's transient prompt on Enter, zsh on a resize, the
+//! `%` of PROMPT_SP), and a one-cell tag drawn over is gone.
 //! Hints and `link_at` leave these links out. While a tag waits for its
 //! character, escape sequences are followed whole, so it never lands inside
 //! one; a program's own open link is never cut by one (no tag then).
@@ -58,9 +62,11 @@ pub enum Mark {
     /// A kitty graphics command (`ESC _ G ... ESC \`), its body from the
     /// `G` (see `graphics`).
     Graphics(Vec<u8>),
-    /// Tag the character that starts where the scan stopped with these shell
-    /// marks (`D2.A`; see the module's doc).
-    Tag(String),
+    /// Tag what is printed from where the scan stopped with these shell
+    /// marks (`7:D2.A`: a number of its own, then the marks; see the
+    /// module's doc). A `run` stays open until the next tag: a prompt, which
+    /// the shell may draw again over itself.
+    Tag { kinds: String, run: bool },
 }
 
 /// Longer than any graphics command a program sends (they chunk at 4 KiB).
@@ -98,6 +104,8 @@ pub struct Scanner {
     started: Option<Instant>,
     /// Shell marks waiting for the next printed character to be tagged.
     pending: Vec<String>,
+    /// Tags so far: each one's number, so two alike are two marks.
+    tags: u64,
     /// A program's own OSC 8 link is open: a tag would end it, so none.
     link_open: bool,
 }
@@ -110,7 +118,7 @@ impl Scanner {
         while at < bytes.len() {
             let (marks, used) = self.feed_until_graphics(&bytes[at..], now);
             // Tags say where to put bytes, which only the PTY reader does.
-            out.extend(marks.into_iter().filter(|m| !matches!(m, Mark::Tag(_))));
+            out.extend(marks.into_iter().filter(|m| !matches!(m, Mark::Tag { .. })));
             at += used;
         }
         out
@@ -136,7 +144,13 @@ impl Scanner {
                         self.state = State::Esc;
                     }
                     Some(p) => {
-                        out.push(Mark::Tag(std::mem::take(&mut self.pending).join(".")));
+                        let kinds = std::mem::take(&mut self.pending);
+                        let run = kinds.iter().any(|k| k == "A" || k == "B");
+                        self.tags += 1;
+                        out.push(Mark::Tag {
+                            kinds: format!("{}:{}", self.tags, kinds.join(".")),
+                            run,
+                        });
                         return (out, i + p);
                     }
                     None => return (out, bytes.len()),
@@ -403,8 +417,9 @@ mod tests {
             let (marks, used) = s.feed_until_graphics(&bytes[at..], t);
             at += used;
             for m in marks {
-                if let Mark::Tag(k) = m {
-                    out.push((at, k));
+                if let Mark::Tag { kinds, .. } = m {
+                    // Without its number, which the tests do not care about.
+                    out.push((at, kinds.split_once(':').unwrap().1.to_string()));
                 }
             }
         }
