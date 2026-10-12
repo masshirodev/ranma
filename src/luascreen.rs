@@ -750,15 +750,23 @@ impl UserData for Handle {
                 query: t.get("query")?,
                 ..Update::default()
             };
-            if t.contains_key("status")? {
+            // `false` clears one: a nil field is one :set does not name.
+            let cleared = |k: &str| -> mlua::Result<bool> {
+                Ok(matches!(t.get::<Value>(k)?, Value::Boolean(false)))
+            };
+            if cleared("status")? {
+                up.status = Some(None);
+            } else if t.contains_key("status")? {
                 up.status = Some(status(t.get("status")?, &who)?);
             }
-            if t.contains_key("subtitle")? {
+            if cleared("subtitle")? {
+                up.subtitle = Some(None);
+            } else if t.contains_key("subtitle")? {
                 up.subtitle = Some(t.get("subtitle")?);
             }
             if t.contains_key("count")? {
                 up.count = Some(match t.get::<Value>("count")? {
-                    Value::Nil => None,
+                    Value::Nil | Value::Boolean(false) => None,
                     v => Some(str_or_num(v, &who)?),
                 });
             }

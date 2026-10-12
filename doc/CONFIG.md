@@ -1417,7 +1417,8 @@ When the card explains `o` itself, ranma does not add its own `o` line.
 
 `s:set { ... }` changes what it names (`title`, `query`, `status`, `subtitle`, `count`,
 `body`, `keys`, `card`, `on_query`, `on_close`, and `select`, a row's id to
-select), up to a few times a second.
+select), up to a few times a second. A field left out (or `nil`) stays as it
+was; `status = false`, `subtitle = false` or `count = false` takes it away.
 The screen is redrawn at most every 100 ms whatever the rate. The selection
 follows its row's `id`; a row that goes hands it to the row taking its place.
 Nothing marks what changed: say it with roles, and with the status.
