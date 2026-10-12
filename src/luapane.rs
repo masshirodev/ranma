@@ -27,6 +27,8 @@ pub struct PaneEntry {
     pub session: String,
     /// 0 is the scratchpad.
     pub workspace: u8,
+    /// Its workspace's name, when it has one.
+    pub workspace_name: Option<String>,
     /// The pane keys go to in its workspace.
     pub focused: bool,
     /// On screen now.
@@ -46,6 +48,7 @@ impl PaneEntry {
             id,
             session: String::new(),
             workspace: 0,
+            workspace_name: None,
             focused: false,
             visible: false,
             floating: false,
@@ -131,6 +134,7 @@ impl UserData for Handle {
         f.add_field_method_get("id", |_, h| Ok(h.0.id));
         f.add_field_method_get("session", |_, h| Ok(h.0.session.clone()));
         f.add_field_method_get("workspace", |_, h| Ok(h.0.workspace));
+        f.add_field_method_get("workspace_name", |_, h| Ok(h.0.workspace_name.clone()));
         f.add_field_method_get("focused", |_, h| Ok(h.0.focused));
         f.add_field_method_get("visible", |_, h| Ok(h.0.visible));
         f.add_field_method_get("floating", |_, h| Ok(h.0.floating));

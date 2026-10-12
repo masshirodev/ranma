@@ -274,6 +274,7 @@ function ranma.toast(text, opts) end
 ---@field sessions string[]
 ---@field workspace integer 0 while the scratchpad shows.
 ---@field workspaces integer[]
+---@field names table<integer, string> the session's named workspaces
 ---@field focused integer?
 ---@field title string
 ---@field mode "wm"|"normal"|"copy"
@@ -282,6 +283,10 @@ function ranma.toast(text, opts) end
 ---A snapshot of ranma now.
 ---@return ranma.State
 function ranma.state() end
+
+---Every layout load_layout takes: init.lua's, then saved ones.
+---@return { name: string, saved: boolean }[]
+function ranma.layouts() end
 
 ---@class ranma.Client
 ---@field cols integer
@@ -310,6 +315,7 @@ function ranma.use_profile(name) end
 ---@field id integer
 ---@field session string
 ---@field workspace integer 0 is the scratchpad.
+---@field workspace_name string? its workspace's name
 ---@field focused boolean
 ---@field visible boolean
 ---@field floating boolean
