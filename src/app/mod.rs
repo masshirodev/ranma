@@ -6520,6 +6520,9 @@ mod tests {
                 .iter()
                 .all(|w| s.contains(&format!("{w} here")))
                 && a.border_title(ids[2]).contains("btop")
+                // The tests read the first pane's title too; under a loaded
+                // machine it lagged the others (a flaky pre-push).
+                && a.border_title(ids[0]).contains("zsh")
         });
         (a, rx, ids)
     }
