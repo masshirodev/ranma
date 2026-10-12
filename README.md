@@ -120,8 +120,7 @@ sudo dnf install ranma      # openSUSE: sudo zypper addrepo https://masshirodev.
 
 Homebrew (Linux for now): `brew install masshirodev/tap/ranma`.
 
-Arch, from the AUR: `ranma-bin` (the release binary) or `ranma-git` (built
-from `main`).
+Arch, from the AUR: `ranma-bin` (the release binary).
 
 Nix: `nix run github:masshirodev/ranma`, or `packages.<system>.default` /
 `overlays.default` of the flake in a NixOS or home-manager config.
