@@ -2,8 +2,9 @@
 
 A release is a `v*` tag. `.github/workflows/release.yml` builds it for x86_64
 and aarch64, installs every package on the distros it is for, and publishes:
-the GitHub release, the apt and dnf repositories on GitHub Pages, crates.io
-and npm. The AUR packages in `packaging/aur/` are updated from it by hand.
+the GitHub release, the apt and dnf repositories on GitHub Pages, the
+Homebrew tap, crates.io and npm. The AUR packages in `packaging/aur/` are
+updated from it by hand.
 
 ## What a release contains
 
@@ -11,7 +12,7 @@ For each target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`),
 made by `packaging/package.sh` from one build:
 
 - `ranma-<version>-<target>.tar.gz` and its `.sha256`: the AUR's `ranma-bin`,
-  `install.sh`, `cargo binstall` and npm all unpack this.
+  `install.sh`, `cargo binstall`, npm and Homebrew all unpack this.
 - `ranma_<version>-1_<amd64|arm64>.deb` and `ranma-<version>-1.<arch>.rpm`
   (`[package.metadata.deb]` and `[package.metadata.generate-rpm]` in
   `Cargo.toml`): the same binary and man pages under `/usr`, `git`
@@ -97,6 +98,20 @@ the tarball for the machine, checks its sha256, and does what `./install.sh`
 does after a build (the config check with the old binary to fall back to,
 man pages, `ranma upgrade --all`). It refuses musl and a glibc older than
 2.34 with a pointer to building from source.
+
+**Homebrew** is the tap https://github.com/masshirodev/homebrew-tap
+(`brew install masshirodev/tap/ranma`): one file, `Formula/ranma.rb`, that
+nobody edits. `packaging/brew/formula.sh` writes it from the release's
+`.sha256` files, a binary formula with a tarball per architecture, and the
+`homebrew` job pushes it to the tap when the secret `HOMEBREW_TAP_TOKEN` is
+set, skipping otherwise. The token is fine-grained: repository access
+"Only select repositories", `masshirodev/homebrew-tap`, and the one permission
+Contents "Read and write"; when it expires, the job fails at the clone and the
+tap stays on the last version until it is replaced. The formula says
+`depends_on :linux` until macOS ships (`ROADMAP.md`, milestone 15), and its
+caveats carry the same upgrade note as the AUR's. It is a tap, not
+homebrew-core: core builds from source and wants a project already known, so
+that is for later. `packaging/test/run.sh brew` installs it in Docker.
 
 **crates.io** (`cargo install ranma`, and `cargo binstall ranma` through
 `[package.metadata.binstall]`) is published by the `crates-io` job when the

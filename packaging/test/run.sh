@@ -2,7 +2,7 @@
 # Install what packaging/test/build.sh (or a release run) put in dist/, on
 # each distro it is meant for, in Docker, and check that it runs.
 #
-# Usage: packaging/test/run.sh [deb|rpm|script|repo|nix|all]...   (default: all but nix)
+# Usage: packaging/test/run.sh [deb|rpm|script|repo|brew|nix|all]...   (default: all but nix)
 #
 #   deb     the .deb with apt on Ubuntu 22.04/24.04 and Debian 12/13
 #   rpm     the .rpm with dnf on Fedora and Rocky 9 (glibc 2.34, the floor),
@@ -11,6 +11,9 @@
 #           on Alpine (musl) it must refuse
 #   repo    the apt and dnf repositories built by packaging/repo/build.sh with
 #           a throwaway key, served over HTTP, installed from like a user would
+#   brew    the Homebrew formula (packaging/brew/formula.sh) installed from a
+#           local tap in homebrew/brew, its test block and audit (x86_64 only:
+#           the image is)
 #   nix     the flake, built from source in nixos/nix (minutes, so not in all)
 #
 # Each case prints "ok <name>" or "FAIL <name>" with the output, and the
@@ -139,6 +142,30 @@ t_repo() {
   rm -rf "$site" 2>/dev/null || docker run --rm -v "$site:/s" alpine rm -rf /s/deb /s/rpm
 }
 
+t_brew() {
+  if [ "$rpmarch" != x86_64 ]; then echo "skip brew (homebrew/brew is x86_64 only)"; return; fi
+  # The newest tarball's version, which is what build.sh or a release run made.
+  version="$(ls "$dist"/ranma-*-x86_64-unknown-linux-gnu.tar.gz | sed 's/.*ranma-\(.*\)-x86_64.*/\1/' | sort -V | tail -1)"
+  sums="$(mktemp -d)"
+  cp "$dist"/ranma-"$version"-*.tar.gz.sha256 "$sums"/
+  # One architecture was built here; the other's line only has to exist.
+  for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+    f="$sums/ranma-$version-$t.tar.gz.sha256"
+    [ -f "$f" ] || printf '%064d  -\n' 0 >"$f"
+  done
+  sh packaging/brew/formula.sh "$version" "$sums" file:///dist >"$sums/ranma.rb"
+  EXTRA="-v $sums:/formula:ro -e HOMEBREW_NO_AUTO_UPDATE=1 -e HOMEBREW_NO_ANALYTICS=1" \
+    case_ "brew formula from a tap" homebrew/brew:latest "
+      brew tap-new --no-git local/test >/dev/null
+      cp /formula/ranma.rb \$(brew --repository local/test)/Formula/
+      brew install --formula local/test/ranma
+      brew test local/test/ranma
+      brew audit --formula --strict local/test/ranma
+      test -f \"\$(brew --prefix)/share/man/man1/ranma.1\"
+      sh -euc \"\$CHECK\""
+  rm -rf "$sums"
+}
+
 t_nix() {
   src="$(mktemp -d)"
   git ls-files -co --exclude-standard | tar -cf - -T - | tar -C "$src" -xf -
@@ -150,11 +177,11 @@ t_nix() {
 
 docker network create "$net" >/dev/null
 trap 'docker rm -f "$net-site" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1' EXIT
-[ $# -gt 0 ] || set -- deb rpm script repo
+[ $# -gt 0 ] || set -- deb rpm script repo brew
 for t in "$@"; do
   case "$t" in
-    all) need_dist; t_deb; t_rpm; t_script; t_repo ;;
-    deb | rpm | script | repo) need_dist; "t_$t" ;;
+    all) need_dist; t_deb; t_rpm; t_script; t_repo; t_brew ;;
+    deb | rpm | script | repo | brew) need_dist; "t_$t" ;;
     nix) t_nix ;;
     *) echo "unknown test: $t" >&2; exit 2 ;;
   esac

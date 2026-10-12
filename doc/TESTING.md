@@ -225,7 +225,7 @@ Every way of installing ranma, tried on the distros it is for, in Docker:
 
 ```sh
 packaging/test/build.sh             # build and package in ubuntu:22.04, as release.yml does, into dist/
-packaging/test/run.sh               # deb, rpm, script and repo
+packaging/test/run.sh               # deb, rpm, script, repo and brew
 packaging/test/run.sh nix           # the flake, built from source (minutes)
 ```
 
@@ -237,10 +237,14 @@ packaging/test/run.sh nix           # the flake, built from source (minutes)
   new build rejects, the old binary must come back.
 - `repo`: the apt and dnf repositories built by `packaging/repo/build.sh`
   with a throwaway key, served over HTTP, installed from as the README says.
+- `brew`: the formula `packaging/brew/formula.sh` writes, pointed at the
+  tarball in `dist/`, installed from a local tap in `homebrew/brew`, then its
+  `test` block, `brew audit --strict`, and the man page. x86_64 only, as the
+  image is.
 
 Each install must run `--version` (naming where it came from),
 `--check-config`, `--dump-config`, and a `--standalone` that lives three
-seconds in a `script` PTY. The release workflow runs `deb rpm script` on an
+seconds in a `script` PTY. The release workflow runs `deb rpm script brew` on an
 x86_64 and an arm64 runner and `repo` on x86_64 before it publishes anything.
 `build.sh` keeps its caches on `/mnt/hdd2/ranma-pkgtest` when that exists.
 

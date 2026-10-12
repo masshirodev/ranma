@@ -118,6 +118,8 @@ sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ran
 sudo dnf install ranma      # openSUSE: sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma
 ```
 
+Homebrew (Linux for now): `brew install masshirodev/tap/ranma`.
+
 Arch, from the AUR: `ranma-bin` (the release binary) or `ranma-git` (built
 from `main`).
 
