@@ -308,7 +308,7 @@ impl App {
         match text {
             Some(t) => {
                 let n = t.chars().count();
-                self.set_host_clipboard(&t);
+                self.set_host_clipboard(&t, "mouse", Some(id));
                 self.status = Some(format!(
                     "copied {n} character{}",
                     if n == 1 { "" } else { "s" }

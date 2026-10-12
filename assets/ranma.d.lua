@@ -154,6 +154,7 @@ function ranma.unbind_all() end
 ---| "pane_idle"        # { pane, workspace, visible, title, busy }
 ---| "hover"            # { pane, line, col, x, y }
 ---| "option_change"    # { key, value, previous, saved }
+---| "copy"             # { text, source, pane }: source is copy_mode, mouse, hints, osc52 or lua
 ---| `user:${string}`   # a plugin's own event: what ranma.emit passed
 
 ---Run `fn` on an event. A plugin's own events are named "user:<name>".

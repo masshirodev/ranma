@@ -314,7 +314,7 @@ impl App {
         match text.filter(|t| !t.is_empty()) {
             Some(t) => {
                 let n = t.chars().count();
-                self.set_host_clipboard(&t);
+                self.set_host_clipboard(&t, "copy_mode", Some(id));
                 self.status = Some(format!(
                     "copied {n} character{}",
                     if n == 1 { "" } else { "s" }
@@ -375,13 +375,28 @@ impl App {
         self.dirty = true;
     }
 
-    /// Queue an OSC 52 write setting the host's clipboard.
-    pub(super) fn set_host_clipboard(&mut self, text: &str) {
+    /// Queue an OSC 52 write setting the host's clipboard, and tell the
+    /// `copy` hook: `source` is what copied (`copy_mode`, `mouse`, `hints`,
+    /// `osc52`, `lua`), `pane` the pane it came from.
+    pub(super) fn set_host_clipboard(&mut self, text: &str, source: &str, pane: Option<PaneId>) {
         self.remember_copy(text);
         let mut seq = b"\x1b]52;c;".to_vec();
         seq.extend_from_slice(base64(text.as_bytes()).as_bytes());
         seq.push(0x07);
         self.host_out.push(seq);
+        // A hook that copies (a history plugin putting one back) does not
+        // hear its own copy: it would hear it forever.
+        if !self.in_copy_hook {
+            self.in_copy_hook = true;
+            let text = text.to_string();
+            let source = source.to_string();
+            self.emit(crate::config::Event::Copy, |t| {
+                t.set("text", text)?;
+                t.set("source", source)?;
+                t.set("pane", pane)
+            });
+            self.in_copy_hook = false;
+        }
     }
 }
 
