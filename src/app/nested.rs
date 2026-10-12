@@ -246,7 +246,13 @@ impl App {
         let was = self.bar_yielded();
         self.client_outer = outer.is_some_and(nestbar::speaks);
         self.outer_v = outer.filter(|v| nestbar::speaks(*v)).unwrap_or(0);
-        self.host_focused = true;
+        // A terminal attaching is one being typed in: focused until it says.
+        if !self.host_focused {
+            self.host_focused = true;
+            self.emit(crate::config::Event::ClientFocus, |t| {
+                t.set("focused", true)
+            });
+        }
         self.last_report = None;
         if self.bar_yielded() != was {
             self.relayout();

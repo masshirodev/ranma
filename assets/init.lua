@@ -555,7 +555,8 @@ ranma.profile("mobile", {
 -- driver_change (a terminal started driving the screen; ev.mobile says it is a
 -- phone or tablet, from RANMA_MOBILE=1 or `ranma attach --mobile`; ev.outer
 -- that a ranma runs around it), copy (ranma put text on the clipboard:
--- ev.text, which is whatever was copied, passwords too, and ev.source).
+-- ev.text, which is whatever was copied, passwords too, and ev.source),
+-- client_focus (the terminal's window gained or lost focus: ev.focused).
 -- doc/CONFIG.md lists their fields.
 --
 -- Window rules: float, size or place a pane when its command (for exec panes)

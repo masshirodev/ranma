@@ -443,10 +443,13 @@ pub enum Event {
     /// ranma put text on the clipboard (copy mode, a drag, hints, a
     /// program's OSC 52, ranma.copy).
     Copy,
+    /// The window of the terminal driving the screen gained or lost the
+    /// desktop's focus.
+    ClientFocus,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 18] = [
+pub const EVENTS: [(&str, Event); 19] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -465,6 +468,7 @@ pub const EVENTS: [(&str, Event); 18] = [
     ("option_change", Event::OptionChange),
     ("click", Event::Click),
     ("copy", Event::Copy),
+    ("client_focus", Event::ClientFocus),
 ];
 
 impl Event {
@@ -832,6 +836,10 @@ pub struct ClientFacts {
     pub remote: bool,
     /// A ranma around that terminal answered at attach (see `nestbar`).
     pub outer: bool,
+    /// Its window has the desktop's focus (focus reports, `CSI ? 1004`);
+    /// true until it says otherwise, which is also what a terminal that
+    /// never reports gets.
+    pub focused: bool,
 }
 
 impl ClientFacts {
@@ -840,7 +848,8 @@ impl ClientFacts {
         t.set("rows", self.rows)?;
         t.set("mobile", self.mobile)?;
         t.set("remote", self.remote)?;
-        t.set("outer", self.outer)
+        t.set("outer", self.outer)?;
+        t.set("focused", self.focused)
     }
 }
 

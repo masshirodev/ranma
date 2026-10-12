@@ -1937,8 +1937,13 @@ impl App {
             Event::Key(key) => self.handle_key(key),
             Event::Paste(text) => self.paste(text),
             Event::FocusGained | Event::FocusLost => {
-                self.host_focused = ev == Event::FocusGained;
+                let focused = ev == Event::FocusGained;
+                let changed = focused != self.host_focused;
+                self.host_focused = focused;
                 self.dirty = true;
+                if changed {
+                    self.emit(HookEvent::ClientFocus, |t| t.set("focused", focused));
+                }
                 // Not to a ranma that reports here: to it, focus means "this
                 // bar shows your workspaces", which the window losing focus
                 // does not change. Told it anyway, it drew its own bar over
@@ -3196,6 +3201,7 @@ impl App {
             mobile: self.client_mobile,
             remote: self.client_remote,
             outer: self.client_outer,
+            focused: self.host_focused,
         }
     }
 
@@ -4953,6 +4959,21 @@ mod tests {
         a.set_host_clipboard("a link", "hints", Some(3));
         let heard: Vec<String> = a.config.lua.load("return heard").eval().unwrap();
         assert_eq!(heard, ["lua:from lua:nil", "hints:a link:3"]);
+    }
+
+    #[test]
+    fn plugins_hear_the_terminal_window_gain_and_lose_focus() {
+        let mut a = app(Some(
+            r#"heard = {}
+            ranma.on("client_focus", function(ev)
+              table.insert(heard, tostring(ev.focused) .. "/" .. tostring(ranma.client().focused))
+            end)"#,
+        ));
+        a.handle(AppEvent::Input(Event::FocusLost));
+        a.handle(AppEvent::Input(Event::FocusLost));
+        a.handle(AppEvent::Input(Event::FocusGained));
+        let heard: Vec<String> = a.config.lua.load("return heard").eval().unwrap();
+        assert_eq!(heard, ["false/false", "true/true"], "once per change");
     }
 
     #[test]
