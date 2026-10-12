@@ -135,7 +135,11 @@ fn visible_rows(pane: &crate::pane::Pane) -> Vec<Row> {
                     } else {
                         cell.c
                     };
-                    (ch, cell.hyperlink().map(|h| h.uri().to_string()))
+                    let link = cell
+                        .hyperlink()
+                        .map(|h| h.uri().to_string())
+                        .filter(|u| crate::osc::is_users_link(u));
+                    (ch, link)
                 })
                 .collect();
             Row {

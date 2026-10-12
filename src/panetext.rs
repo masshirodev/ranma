@@ -186,7 +186,11 @@ pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<LinkAt> {
                         } else {
                             cell.c
                         };
-                        (ch, cell.hyperlink().map(|h| h.uri().to_string()))
+                        let link = cell
+                            .hyperlink()
+                            .map(|h| h.uri().to_string())
+                            .filter(|u| crate::osc::is_users_link(u));
+                        (ch, link)
                     })
                     .collect(),
                 wrapped: row[Column(cols - 1)].flags.contains(Flags::WRAPLINE),
@@ -215,6 +219,66 @@ pub fn link_at<T>(term: &Term<T>, line: i32, col: usize) -> Option<LinkAt> {
         span: n,
         text,
     })
+}
+
+/// One command, from the shell's OSC 133 marks (see `osc`, "Tags"): the line
+/// its prompt starts on, where its command line starts (`B`, else the
+/// prompt's line), where its output starts (`C`), where it finished (`D`,
+/// the line the next prompt starts on) and its exit status.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CommandMarks {
+    pub prompt: i32,
+    pub command: Option<i32>,
+    pub output: Option<i32>,
+    pub finished: Option<i32>,
+    pub exit: Option<i32>,
+}
+
+/// Every command whose prompt is still in the scrollback, oldest first.
+pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
+    let (top, bottom) = line_range(term);
+    let cols = term.columns();
+    let mut out: Vec<CommandMarks> = Vec::new();
+    for l in top..=bottom {
+        let row = &term.grid()[Line(l)];
+        for c in 0..cols {
+            let Some(h) = row[Column(c)].hyperlink() else {
+                continue;
+            };
+            let Some(kinds) = h.uri().strip_prefix(crate::osc::TAG) else {
+                continue;
+            };
+            for k in kinds.split('.') {
+                match k.split_at(k.len().min(1)) {
+                    ("A", _) => out.push(CommandMarks {
+                        prompt: l,
+                        ..CommandMarks::default()
+                    }),
+                    ("B", _) => {
+                        if let Some(m) = out.last_mut() {
+                            m.command = Some(l);
+                        }
+                    }
+                    ("C", _) => {
+                        if let Some(m) = out.last_mut() {
+                            m.output = Some(l);
+                        }
+                    }
+                    ("D", exit) => {
+                        if let Some(m) = out.last_mut() {
+                            m.finished = Some(l);
+                            m.exit = exit.parse().ok();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    for m in &mut out {
+        m.command = m.command.or(Some(m.prompt));
+    }
+    out
 }
 
 #[cfg(test)]

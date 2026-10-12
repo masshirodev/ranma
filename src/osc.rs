@@ -6,13 +6,32 @@
 //! cost next to nothing: a read with no ESC in it is one search for the byte
 //! and done. Only after `ESC ]` does it look at bytes one by one, and only
 //! until the sequence ends or runs past `MAX`, which ends the looking. A
-//! sequence split across reads is followed through the split. It never
-//! changes the bytes; the emulator still sees everything.
+//! sequence split across reads is followed through the split. The emulator
+//! still sees everything; the one thing added is a tag on the character a
+//! shell mark lands on (below), so the marks can be found in the grid later.
+//!
+//! **Tags.** The emulator parses on its own thread, holding the terminal, so
+//! where the cursor was when a mark went by cannot be read from here, and
+//! read later it has moved on. Instead the next character printed after a
+//! mark is wrapped in an OSC 8 link whose address is [`TAG`] and the marks
+//! (`ranma:133:D2.A`): the grid keeps it on that cell through scrolling and
+//! reflow, it goes when the scrollback does, and `pane:marks()` reads it back.
+//! Hints and `link_at` leave these links out. While a tag waits for its
+//! character, escape sequences are followed whole, so it never lands inside
+//! one; a program's own open link is never cut by one (no tag then).
 
 use std::time::{Duration, Instant};
 
 /// Longer than any mark, notification or nested ranma's report worth keeping.
 const MAX: usize = 16 * 1024;
+
+/// The address of a shell mark's tag (see the module's doc).
+pub const TAG: &str = "ranma:133:";
+
+/// Whether an OSC 8 link's address is a program's, not a tag of ours.
+pub fn is_users_link(uri: &str) -> bool {
+    !uri.starts_with(TAG)
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mark {
@@ -39,6 +58,9 @@ pub enum Mark {
     /// A kitty graphics command (`ESC _ G ... ESC \`), its body from the
     /// `G` (see `graphics`).
     Graphics(Vec<u8>),
+    /// Tag the character that starts where the scan stopped with these shell
+    /// marks (`D2.A`; see the module's doc).
+    Tag(String),
 }
 
 /// Longer than any graphics command a program sends (they chunk at 4 KiB).
@@ -61,6 +83,11 @@ enum State {
     /// first: any other APC is skipped).
     Apc,
     ApcEsc,
+    /// While a tag waits for its character, the sequences a printable byte
+    /// can sit inside are followed to their end: a CSI's parameters, and an
+    /// escape's intermediates (`ESC ( B`).
+    Csi,
+    EscInter,
 }
 
 #[derive(Debug, Default)]
@@ -69,6 +96,10 @@ pub struct Scanner {
     payload: Vec<u8>,
     /// When the running command started (133;C), if one is running.
     started: Option<Instant>,
+    /// Shell marks waiting for the next printed character to be tagged.
+    pending: Vec<String>,
+    /// A program's own OSC 8 link is open: a tag would end it, so none.
+    link_open: bool,
 }
 
 impl Scanner {
@@ -78,7 +109,8 @@ impl Scanner {
         let mut at = 0;
         while at < bytes.len() {
             let (marks, used) = self.feed_until_graphics(&bytes[at..], now);
-            out.extend(marks);
+            // Tags say where to put bytes, which only the PTY reader does.
+            out.extend(marks.into_iter().filter(|m| !matches!(m, Mark::Tag(_))));
             at += used;
         }
         out
@@ -91,6 +123,26 @@ impl Scanner {
         let mut out = Vec::new();
         let mut i = 0;
         while i < bytes.len() {
+            if matches!(self.state, State::Ground) && !self.pending.is_empty() {
+                // A tag waits: the next printed byte is its character, unless
+                // a sequence starts first. Controls (CR, LF, BS) print nothing.
+                let rest = &bytes[i..];
+                match rest
+                    .iter()
+                    .position(|b| *b == 0x1b || (*b >= 0x20 && *b != 0x7f))
+                {
+                    Some(p) if rest[p] == 0x1b => {
+                        i += p + 1;
+                        self.state = State::Esc;
+                    }
+                    Some(p) => {
+                        out.push(Mark::Tag(std::mem::take(&mut self.pending).join(".")));
+                        return (out, i + p);
+                    }
+                    None => return (out, bytes.len()),
+                }
+                continue;
+            }
             if matches!(self.state, State::Ground) {
                 // The hot path: nothing to do until an ESC.
                 match bytes[i..].iter().position(|b| *b == 0x1b) {
@@ -133,7 +185,22 @@ impl Scanner {
                     State::Apc
                 }
                 State::Esc if b == 0x1b => State::Esc,
+                // Only while a tag waits: otherwise ground skips to the next
+                // ESC anyway, and these cost nothing.
+                State::Esc if !self.pending.is_empty() && b == b'[' => State::Csi,
+                State::Esc if !self.pending.is_empty() && (0x20..=0x2f).contains(&b) => {
+                    State::EscInter
+                }
+                State::Esc if !self.pending.is_empty() && matches!(b, b'P' | b'X' | b'^') => {
+                    State::Skip
+                }
                 State::Esc => State::Ground,
+                State::Csi if (0x40..=0x7e).contains(&b) => State::Ground,
+                State::Csi if b == 0x1b => State::Esc,
+                State::Csi => State::Csi,
+                State::EscInter if (0x30..=0x7e).contains(&b) => State::Ground,
+                State::EscInter if b == 0x1b => State::Esc,
+                State::EscInter => State::EscInter,
                 State::Osc | State::OscEsc if b == 0x07 => {
                     self.finish(now, &mut out);
                     State::Ground
@@ -193,7 +260,13 @@ impl Scanner {
         match code {
             "133" => {
                 let mut f = rest.split(';');
-                match f.next() {
+                let kind = f.next();
+                let exit: Option<i32> = if kind == Some("D") {
+                    f.next().and_then(|s| s.trim().parse().ok())
+                } else {
+                    None
+                };
+                match kind {
                     Some("C") => {
                         self.started = Some(now);
                         out.push(Mark::CommandStarted);
@@ -203,12 +276,29 @@ impl Scanner {
                     Some("D") => {
                         if let Some(start) = self.started.take() {
                             out.push(Mark::CommandFinished {
-                                exit: f.next().and_then(|s| s.trim().parse().ok()),
+                                exit,
                                 duration: now.saturating_duration_since(start),
                             });
                         }
                     }
                     _ => {}
+                }
+                if !self.link_open {
+                    match kind {
+                        Some(k @ ("A" | "B" | "C")) => self.pending.push(k.to_string()),
+                        Some("D") => self.pending.push(format!(
+                            "D{}",
+                            exit.map(|e| e.to_string()).unwrap_or_default()
+                        )),
+                        _ => {}
+                    }
+                }
+            }
+            // A program's link: `8;params;uri`, an empty uri ending it.
+            "8" => {
+                let uri = rest.split_once(';').map(|(_, u)| u).unwrap_or("");
+                if is_users_link(uri) {
+                    self.link_open = !uri.is_empty();
                 }
             }
             "7" => {
@@ -302,6 +392,66 @@ mod tests {
         );
         // Once only: the next D has no C before it.
         assert!(s.feed(b"\x1b]133;D;0\x07", later).is_empty());
+    }
+
+    /// Feed it as the reader does: stopping at each tag, which says where
+    /// its character starts.
+    fn tags(s: &mut Scanner, bytes: &[u8]) -> Vec<(usize, String)> {
+        let t = Instant::now();
+        let (mut at, mut out) = (0, Vec::new());
+        while at < bytes.len() {
+            let (marks, used) = s.feed_until_graphics(&bytes[at..], t);
+            at += used;
+            for m in marks {
+                if let Mark::Tag(k) = m {
+                    out.push((at, k));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_mark_tags_the_next_printed_character() {
+        let mut s = Scanner::default();
+        let b = b"\x1b]133;D;2\x07\x1b]133;A\x07\r\n$ ls\x1b]133;C\x07\r\nfile";
+        let found = tags(&mut s, b);
+        let first = b.iter().position(|c| *c == b'$').unwrap();
+        let out = b.iter().rposition(|c| *c == b'f').unwrap();
+        assert_eq!(found, vec![(first, "D2.A".into()), (out, "C".into())]);
+    }
+
+    #[test]
+    fn a_tag_waits_out_escape_sequences() {
+        let mut s = Scanner::default();
+        // A colour, a charset and a title come between the mark and the
+        // prompt: the tag goes on the `$`, never inside a sequence.
+        let b = b"\x1b]133;A\x07\x1b[1;32m\x1b(B\x1b]0;title\x07$ ";
+        let at = b.iter().position(|c| *c == b'$').unwrap();
+        assert_eq!(tags(&mut s, b), vec![(at, "A".into())]);
+        // Split anywhere, the same.
+        let mut s = Scanner::default();
+        let mut whole = Vec::new();
+        let mut off = 0;
+        for chunk in b.chunks(2) {
+            for (i, k) in tags(&mut s, chunk) {
+                whole.push((off + i, k));
+            }
+            off += chunk.len();
+        }
+        assert_eq!(whole, vec![(at, "A".into())]);
+    }
+
+    #[test]
+    fn no_tag_inside_a_programs_own_link() {
+        let mut s = Scanner::default();
+        let b = b"\x1b]8;;https://x\x07\x1b]133;A\x07link\x1b]8;;\x07\x1b]133;A\x07$";
+        let at = b.len() - 1;
+        assert_eq!(
+            tags(&mut s, b),
+            vec![(at, "A".into())],
+            "only after the link ends"
+        );
     }
 
     #[test]
