@@ -259,8 +259,12 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
                             m.command = Some(l);
                         }
                     }
+                    // Where output starts is the first C: a shell can send
+                    // more (bash's DEBUG trap fires for PROMPT_COMMAND too).
                     ("C", _) => {
-                        if let Some(m) = out.last_mut() {
+                        if let Some(m) = out.last_mut()
+                            && m.output.is_none()
+                        {
                             m.output = Some(l);
                         }
                     }

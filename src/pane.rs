@@ -1217,6 +1217,14 @@ mod tests {
     }
 
     #[test]
+    fn a_commands_output_starts_at_its_first_c() {
+        // bash's DEBUG trap sends a C for PROMPT_COMMAND as well.
+        let b = b"\x1b]133;A\x07$ seq 2\r\n\x1b]133;C\x071\r\n2\r\n\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07$ ";
+        let m = marks_through_the_reader(b, 4096, 4096);
+        assert_eq!((m[0].output, m[0].finished), (Some(1), Some(3)));
+    }
+
+    #[test]
     fn marks_survive_any_split_and_a_full_buffer() {
         let whole = marks_through_the_reader(SESSION, 4096, 4096);
         for chunk in [1, 2, 3, 5, 7] {
