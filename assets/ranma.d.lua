@@ -146,7 +146,7 @@ function ranma.unbind_all() end
 ---| "config_reload"    # nothing; runs in the new config
 ---| "command_finished" # { pane, exit, duration, workspace, visible, title }
 ---| "driver_change"    # { cols, rows, mobile, remote, outer, previous_mobile }
----| "command_started"  # { pane, workspace, visible, title }
+---| "command_started"  # { pane, workspace, visible, title, command }
 ---| "cwd_change"       # { pane, workspace, cwd, previous, host }
 ---| "title_change"     # { pane, workspace, visible, title, previous }
 ---| "bell"             # { pane, workspace, visible, title }
