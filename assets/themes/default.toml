@@ -106,6 +106,13 @@ workspace_current_format = " {n}[:{name}] "
 # is a pill. Empty: nothing.
 module_left = ""
 module_right = ""
+# Blank cells inside those caps, either side of a module's text (0-4).
+module_padding = 0
+# Drawn before and after each filled chip (the current workspace, a
+# pane_strip tab, the WM mode sign) in the chip's own colour, on the module's
+# ground: the same glyphs round the chips inside a pill. Empty: square chips.
+chip_left = ""
+chip_right = ""
 
 [panes]
 # Fade the text of unfocused panes toward their background: 0 is off, 0.3 is

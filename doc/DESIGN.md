@@ -982,7 +982,7 @@ is optional or has a default in the built-in theme, so a theme written before
 | `window-style`, `window-active-style` | `panes.inactive_bg`, `panes.active_bg`: the ground a program leaves as the default background |
 | `mode-style` | `colors.selection_fg`, `selection_bg`; unset, reversed as before |
 | `window-status-format`, `-current-format` | `bar.workspace_format`, `bar.workspace_current_format`, with `{n}` and `{name}` |
-| powerline status lines | `colors.module_bg` / `module_fg` and `bar.module_left` / `module_right`: each module on its own ground between two caps |
+| powerline status lines | `colors.module_bg` / `module_fg` and `bar.module_left` / `module_right`: each module on its own ground between two caps, `bar.module_padding` cells inside them; `bar.chip_left` / `chip_right` round the filled chips inside |
 
 **Formats have placeholders and optional groups, and nothing else.** A part in
 `[...]` shows only when every placeholder in it has a value, which is all a
@@ -1003,6 +1003,19 @@ width, and filled pieces inside it (the current workspace, ` WM `) keep their
 own background. The nested workspaces an outer bar expands are one module, so
 they sit between one pair of caps; they keep their compact form rather than
 the workspace formats, whose room the nested bar's ladder already budgets.
+
+**Filled chips get caps of their own** (2026-10-12): `bar.chip_left` /
+`chip_right` go either side of every filled piece (the current workspace, a
+`pane_strip` tab, the mode), drawn in that piece's ground on the module's,
+so a round current workspace sits inside a round module, as the README's
+screenshot has it. They were asked for after the screenshot turned out not to
+be reproducible: a theme could round a module but not what was inside it.
+Like the module caps they are drawn by ranma, take the chip's click, and are
+empty by default, so no existing theme changes. `bar.module_padding` (0-4)
+puts blank cells inside the module caps, which a module's own text cannot do
+for the built-ins. The large bar keeps square chips: `enlarge` pads them to a
+thumb's width over all three rows, and a one-row cap would sit beside a
+three-row chip.
 
 **A border title naming `{program}` or `{cwd}` costs a frame nothing.** Both
 come from /proc, so they are read where the workspaces module's program

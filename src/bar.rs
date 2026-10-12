@@ -42,6 +42,43 @@ pub enum Style {
     TabPeek,
     /// `bar.module_left` or `module_right`: the edge of a module's ground.
     Cap,
+    /// `bar.chip_left` or `chip_right`: the edge of a filled chip, in that
+    /// chip's ground on whatever it sits on.
+    ChipCap(Chip),
+}
+
+/// The filled chips `bar.chip_left` / `chip_right` round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Chip {
+    Mode,
+    WsActive,
+    TabActive,
+    TabInactive,
+    TabPeek,
+}
+
+impl Chip {
+    fn of(style: Style) -> Option<Chip> {
+        Some(match style {
+            Style::Mode => Chip::Mode,
+            Style::WsActive => Chip::WsActive,
+            Style::TabActive => Chip::TabActive,
+            Style::TabInactive => Chip::TabInactive,
+            Style::TabPeek => Chip::TabPeek,
+            _ => return None,
+        })
+    }
+
+    /// The chip's own style, whose ground its caps are drawn in.
+    pub fn style(self) -> Style {
+        match self {
+            Chip::Mode => Style::Mode,
+            Chip::WsActive => Style::WsActive,
+            Chip::TabActive => Style::TabActive,
+            Chip::TabInactive => Style::TabInactive,
+            Chip::TabPeek => Style::TabPeek,
+        }
+    }
 }
 
 impl Style {
@@ -178,19 +215,57 @@ pub fn stretch(seg: Segment, spare: usize) -> Segment {
 }
 
 /// A module between its caps (`bar.module_left` / `module_right`), its pieces
-/// on the module's ground. An empty module stays empty: it takes no room.
-pub fn boxed(seg: Segment, left: &str, right: &str) -> Segment {
+/// on the module's ground, `padding` blank cells inside each cap. An empty
+/// module stays empty: it takes no room.
+pub fn boxed(seg: Segment, left: &str, right: &str, padding: u8) -> Segment {
     if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
         return seg;
     }
     let cap = |t: &str| Piece::new(t, Style::Cap);
-    let mut out = Vec::with_capacity(seg.len() + 2);
+    let pad = || Piece {
+        boxed: true,
+        ..Piece::new(" ".repeat(padding as usize), Style::Normal)
+    };
+    let mut out = Vec::with_capacity(seg.len() + 4);
     if !left.is_empty() {
         out.push(cap(left));
     }
+    if padding > 0 {
+        out.push(pad());
+    }
     out.extend(seg.into_iter().map(|p| Piece { boxed: true, ..p }));
+    if padding > 0 {
+        out.push(pad());
+    }
     if !right.is_empty() {
         out.push(cap(right));
+    }
+    out
+}
+
+/// Every filled chip in `seg` between `bar.chip_left` / `chip_right`, drawn
+/// in its ground: a round current workspace inside a round module. A cap
+/// clicks as its chip does.
+pub fn rounded(seg: Segment, left: &str, right: &str) -> Segment {
+    if left.is_empty() && right.is_empty() {
+        return seg;
+    }
+    let mut out = Vec::with_capacity(seg.len());
+    for p in seg {
+        let Some(chip) = Chip::of(p.style).filter(|_| !p.text.is_empty()) else {
+            out.push(p);
+            continue;
+        };
+        let cap = |t: &str| Piece {
+            click: p.click,
+            ..Piece::new(t, Style::ChipCap(chip))
+        };
+        if !left.is_empty() {
+            out.push(cap(left));
+        }
+        let right_cap = (!right.is_empty()).then(|| cap(right));
+        out.push(p);
+        out.extend(right_cap);
     }
     out
 }
@@ -486,7 +561,7 @@ mod tests {
 
     #[test]
     fn a_boxed_module_is_its_caps_around_its_ground() {
-        let b = boxed(seg("cpu 3%"), "(", ")");
+        let b = boxed(seg("cpu 3%"), "(", ")", 0);
         let texts: Vec<(&str, Style, bool)> = b
             .iter()
             .map(|p| (p.text.as_str(), p.style, p.boxed))
@@ -500,10 +575,40 @@ mod tests {
             ]
         );
         assert!(
-            boxed(Vec::new(), "(", ")").is_empty(),
+            boxed(Vec::new(), "(", ")", 1).is_empty(),
             "an empty module takes no room"
         );
-        assert_eq!(boxed(seg("x"), "", ""), seg("x"), "no caps, no ground");
+        assert_eq!(boxed(seg("x"), "", "", 2), seg("x"), "no caps, no ground");
+        let padded: String = boxed(seg("x"), "(", ")", 2)
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect();
+        assert_eq!(padded, "(  x  )", "padding sits inside the caps");
+    }
+
+    #[test]
+    fn filled_chips_get_caps_in_their_own_ground() {
+        let seg = vec![
+            Piece::new("1", Style::WsActive).on_click(Click::Workspace(1)),
+            Piece::new("2", Style::WsOccupied),
+        ];
+        let r = rounded(seg.clone(), "(", ")");
+        let texts: Vec<(&str, Style)> = r.iter().map(|p| (p.text.as_str(), p.style)).collect();
+        assert_eq!(
+            texts,
+            vec![
+                ("(", Style::ChipCap(Chip::WsActive)),
+                ("1", Style::WsActive),
+                (")", Style::ChipCap(Chip::WsActive)),
+                ("2", Style::WsOccupied),
+            ]
+        );
+        assert_eq!(
+            r[0].click,
+            Some(Click::Workspace(1)),
+            "a cap clicks as its chip"
+        );
+        assert_eq!(rounded(seg.clone(), "", ""), seg, "no caps: square chips");
     }
 
     #[test]

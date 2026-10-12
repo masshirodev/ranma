@@ -1016,7 +1016,9 @@ the workspaces on the left, the focused pane's title in the middle, the date on
 the right. Where it sits (\fBbar.position\fR: \fBtop\fR, \fBbottom\fR, \fBhidden\fR), its
 colours and the pill shape around each module belong to the theme (see
 Themes\fR); which modules it shows, to \fBinit.lua\fR. The bar in the
-README's screenshot is \fBdoc/examples/screenshot/\fR, both halves of it.
+README's screenshot is \fBdoc/examples/screenshot/\fR, both halves of it: round
+modules with padding inside them, and a round current workspace inside its
+pill (\fBbar.chip_left\fR, \fBchip_right\fR).
 .PP
 It is a row of modules on three sides:
 .PP
@@ -2613,6 +2615,12 @@ a workspace in the workspaces module, and the current one (see Formats\fR): \fB{
 .TP
 \fBbar.module_left\fR, \fBmodule_right\fR
 drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
+.TP
+\fBbar.module_padding\fR
+\fB0\fR\-\fB4\fR: blank cells inside those caps, either side of a module's text, on its ground. \fB0\fR by default.
+.TP
+\fBbar.chip_left\fR, \fBchip_right\fR
+drawn before and after every filled chip (the current workspace, a \fBpane_strip\fR tab, \fBWM\fR), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a \fBworkspace_current_format\fR without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default.
 .TP
 \fBpanes.dim_unfocused\fR
 \fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.

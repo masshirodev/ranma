@@ -55,15 +55,23 @@ indicator = "none"
 inner = 1
 outer_horizontal = 2
 outer_vertical = 1
+# None under the panes: the terminal's own padding, and the pixels left over
+# below its last whole row, already make a margin there.
+outer_bottom = 0
 
 [bar]
 position = "top"
 separator = " "
 workspace_format = " {n}[ {name}] "
-workspace_current_format = " {n}[ {name}] "
+# The current one is a round chip of its own (chip_left/right below), whose
+# caps take the place of the spaces.
+workspace_current_format = "{n}[ {name}]"
 # Nerd Font half-circles: every module becomes a pill.
 module_left = "\ue0b6"
 module_right = "\ue0b4"
+module_padding = 1
+chip_left = "\ue0b6"
+chip_right = "\ue0b4"
 
 [panes]
 dim_unfocused = 0.35
