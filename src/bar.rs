@@ -221,10 +221,38 @@ pub fn stretch(seg: Segment, spare: usize) -> Segment {
 /// On a side with no padding, a chip's cap at the module's end (`rounded`) is
 /// that end: the module's cap beside it would only draw a ring of the
 /// module's ground around the chip, so it is left out and the chip's cap sits
-/// on the bar.
+/// on the bar. A workspace that is not current there gives its outer blank
+/// (the cell the current one's chip cap takes) to the module's cap instead,
+/// so the workspace hugs the edge either way and the module keeps its width
+/// whichever workspace is current.
 pub fn boxed(seg: Segment, left: &str, right: &str, pad_left: u8, pad_right: u8) -> Segment {
     if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
         return seg;
+    }
+    let mut seg = seg;
+    let slot = |p: &Piece| {
+        matches!(
+            p.style,
+            Style::WsOccupied
+                | Style::WsEmpty
+                | Style::WsUrgent
+                | Style::WsActivity
+                | Style::WsHolder
+        )
+    };
+    if !left.is_empty()
+        && pad_left == 0
+        && let Some(p) = seg
+            .first_mut()
+            .filter(|p| slot(p) && p.text.starts_with(' '))
+    {
+        p.text.remove(0);
+    }
+    if !right.is_empty()
+        && pad_right == 0
+        && let Some(p) = seg.last_mut().filter(|p| slot(p) && p.text.ends_with(' '))
+    {
+        p.text.pop();
     }
     let chip_end = |cap: &str, pad: u8, p: Option<&Piece>| {
         !cap.is_empty() && pad == 0 && p.is_some_and(|p| matches!(p.style, Style::ChipCap(_)))
@@ -689,6 +717,35 @@ mod tests {
                 s(">", false)
             ],
             "each side decides alone: padded left, the chip's cap ends it on the right"
+        );
+    }
+
+    #[test]
+    fn a_workspace_at_an_unpadded_end_keeps_the_module_one_width() {
+        let ws = |current: bool| {
+            let (text, style) = if current {
+                ("1 nvim", Style::WsActive)
+            } else {
+                (" 1 nvim ", Style::WsOccupied)
+            };
+            vec![
+                Piece::new(text, style),
+                Piece::new(" 2 zsh ", Style::WsOccupied),
+            ]
+        };
+        let draw = |current, pad| -> String {
+            boxed(rounded(ws(current), "<", ">"), "(", ")", pad, pad)
+                .iter()
+                .map(|p| p.text.as_str())
+                .collect()
+        };
+        assert_eq!(draw(true, 0), "<1 nvim> 2 zsh)");
+        assert_eq!(draw(false, 0), "(1 nvim  2 zsh)", "the cap takes the blank");
+        assert_eq!(draw(true, 0).len(), draw(false, 0).len());
+        assert_eq!(
+            draw(false, 1),
+            "(  1 nvim  2 zsh  )",
+            "padded, the blank stays beside the padding"
         );
     }
 
