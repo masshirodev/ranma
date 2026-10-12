@@ -1,6 +1,7 @@
 # Builds the release binaries and packages and, on a v* tag, publishes them:
 # the GitHub release, the apt and dnf repositories on GitHub Pages, and, when
-# their tokens are set, crates.io and npm. doc/RELEASING.md is the procedure.
+# their tokens are set, the Homebrew tap, crates.io and npm. doc/RELEASING.md
+# is the procedure.
 #
 # The builds run on ubuntu-22.04 on purpose: a binary needs the glibc it was
 # linked against or newer, and 22.04's 2.35 is older than every current distro
@@ -77,8 +78,8 @@ jobs:
           pattern: dist-*
           path: dist
           merge-multiple: true
-      - name: deb, rpm and install.sh
-        run: packaging/test/run.sh deb rpm script
+      - name: deb, rpm, install.sh and the Homebrew formula
+        run: packaging/test/run.sh deb rpm script brew
       - name: The apt and dnf repositories
         if: matrix.runner == 'ubuntu-24.04'
         run: packaging/test/run.sh repo
@@ -141,6 +142,36 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # The formula in masshirodev/homebrew-tap, rewritten for this release by
+  # packaging/brew/formula.sh. HOMEBREW_TAP_TOKEN is a fine-grained token with
+  # contents write on that repository only (doc/RELEASING.md).
+  homebrew:
+    needs: release
+    runs-on: ubuntu-24.04
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
+      - uses: actions/download-artifact@v4
+        if: env.TAP_TOKEN != ''
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Push the formula
+        if: env.TAP_TOKEN != ''
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          git clone -q "https://x-access-token:${TAP_TOKEN}@github.com/masshirodev/homebrew-tap.git" tap
+          packaging/brew/formula.sh "$version" dist >tap/Formula/ranma.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ranma.rb
+          git diff --cached --quiet || git commit -q -m "ranma $version"
+          git push -q origin HEAD
 
   # Published only once the token is set as a repository secret, so a release
   # without it still goes out everywhere else.

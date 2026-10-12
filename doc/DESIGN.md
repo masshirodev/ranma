@@ -2591,7 +2591,7 @@ Rust, for predictable latency without a GC, and for the emulator:
   binary is a fact about the binary. Releases themselves: `doc/RELEASING.md`.
 - One binary per architecture, every channel (2026-10-12). The tarball, the
   `.deb` and `.rpm`, the apt and dnf repositories, `install.sh`, `cargo
-  binstall`, npm and the AUR's `ranma-bin` all ship the file `release.yml`
+  binstall`, npm, the Homebrew tap and the AUR's `ranma-bin` all ship the file `release.yml`
   linked on ubuntu-22.04, so a bug report from any of them is about the same
   build, and each channel costs packaging, not a build of its own. The
   exceptions build from source because that is what they are: `ranma-git`,
