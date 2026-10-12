@@ -30,7 +30,39 @@ Named for the 欄間, the carved transom panel above sliding doors.
   plugin that fails while loading is dropped whole, and a watchdog stops one
   that hangs
 
-`leader ?` lists every key, and `leader :` runs any action by name.
+## First steps
+
+**The leader is `Ctrl+b`**, the same key tmux uses. Press it and let go, and
+ranma enters **WM mode** (` WM ` in the bar): the keys you press now go to
+ranma instead of the program in the pane. Wait half a second and a panel lists
+what each key does. `Esc` or `Enter` leaves WM mode. Throughout the docs,
+`leader t` means "press `Ctrl+b`, let go, then press `t`".
+
+| Keys | Does |
+| --- | --- |
+| `leader t` | open a pane next to the focused one |
+| `leader ←↓↑→` | move focus (`Alt+←↓↑→` does it without the leader) |
+| `leader q` | close the focused pane |
+| `leader 1`…`0` | go to workspace 1-10 (`Alt+1`…`Alt+0` without the leader) |
+| `leader w` | float the pane, or put it back in the tiling |
+| `leader d` | detach: ranma keeps running, and `ranma` brings you back |
+| `leader ?` | every key, searchable |
+| `leader :` | run any action by name |
+| `leader p` | the settings panel |
+
+The leader is a setting: `ranma.set { leader = "ctrl+a" }` in
+`~/.config/ranma/init.lua`. `ranma --dump-config` prints the default
+configuration, which lists every key and option with what it does, and `man
+ranma-keys` lists the keys. In WM mode, pressing the leader again sends it to
+the program in the pane.
+
+**The bar is on by default, at the bottom, in plain colours.** The one in the
+screenshot above is a theme and a few modules:
+[`doc/examples/screenshot/`](doc/examples/screenshot) is that configuration,
+ready to copy (it needs a Nerd Font), and its
+[README](doc/examples/README.md) says what in the screenshot it cannot
+reproduce. [`doc/CONFIG.md`](doc/CONFIG.md), "The bar" and "Themes", covers
+the rest.
 
 ## Plugins
 
@@ -98,7 +130,7 @@ back to a plain shell because of an upgrade. Running instances keep the old bina
 they exit.
 
 Then start it with `ranma` (or from your shell startup: see
-[`doc/CONFIG.md`](doc/CONFIG.md)). `Ctrl+b ?` lists every key.
+[`doc/CONFIG.md`](doc/CONFIG.md)), and see [First steps](#first-steps) for the keys.
 
 ```sh
 ranma --dump-config    # the default init.lua, which documents every option
@@ -117,6 +149,7 @@ and committed in [`doc/man/`](doc/man).
 - [`doc/ROADMAP.md`](doc/ROADMAP.md): milestones
 - [`doc/TESTING.md`](doc/TESTING.md): what to run, and what each check proves
 - [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and the AUR packages
+- [`doc/examples/`](doc/examples): whole configurations to copy, the screenshot's among them
 - [`scripts/demo/README.md`](scripts/demo/README.md): re-recording the gif above
 
 ## How it's built

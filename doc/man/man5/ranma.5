@@ -1011,7 +1011,14 @@ anywhere with the left button, resize it with the right. \fBmouse = "off"\fR lim
 exactly that, and leaves the mouse to your terminal the rest of the time.
 .SH "THE BAR"
 .PP
-The bar is a row of modules on three sides:
+The bar is on from the first start, at the bottom: the mode, the session and
+the workspaces on the left, the focused pane's title in the middle, the date on
+the right. Where it sits (\fBbar.position\fR: \fBtop\fR, \fBbottom\fR, \fBhidden\fR), its
+colours and the pill shape around each module belong to the theme (see
+Themes\fR); which modules it shows, to \fBinit.lua\fR. The bar in the
+README's screenshot is \fBdoc/examples/screenshot/\fR, both halves of it.
+.PP
+It is a row of modules on three sides:
 .PP
 .RS 4
 .nf
