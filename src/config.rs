@@ -594,6 +594,13 @@ pub struct Profile {
     /// The toolbars shown while it is in use, instead of the base's.
     #[serde(default)]
     toolbars: Option<Vec<String>>,
+    /// Theme keys over the theme in use while it is (`bar.position`,
+    /// `border.style`, `gaps`): the frame, which `set` cannot reach since the
+    /// theme is read at load. Read strictly at load too, into `built`.
+    #[serde(default)]
+    theme: Option<toml::Table>,
+    #[serde(skip)]
+    built: Option<Theme>,
 }
 
 impl Profile {
@@ -826,6 +833,14 @@ pub struct StateSnapshot {
     /// `ranma.layouts()` asks: this snapshot is made before every call).
     pub layouts: Vec<String>,
     pub layouts_dir: Option<std::path::PathBuf>,
+    /// The profile in use, if any.
+    pub profile: Option<String>,
+    /// The current workspace is fullscreen.
+    pub fullscreen: bool,
+    /// The current workspace's layout, and whether it is its own
+    /// (`workspace_layout`) rather than the `layout` setting.
+    pub layout: &'static str,
+    pub own_layout: bool,
     pub focused: Option<u64>,
     pub title: String,
     pub mode: &'static str,
@@ -981,6 +996,8 @@ pub struct Config {
     /// The settings, bar and shown toolbars as `init.lua` left them, before
     /// any profile.
     base: (Settings, BarLayout, Vec<String>),
+    /// The theme as the configuration left it, before any profile's keys.
+    base_theme: Theme,
     /// `ranma.toolbar` definitions, in the order written.
     pub toolbars: Vec<(String, ToolbarDef)>,
     /// The toolbars shown now, by name, in definition order.
@@ -1072,6 +1089,7 @@ impl Config {
 
     pub fn use_profile(&mut self, name: Option<&str>) -> Result<(), String> {
         let (mut settings, mut bar, mut toolbars) = self.base.clone();
+        let mut theme = self.base_theme.clone();
         if let Some(name) = name {
             let Some(p) = self.profiles.get(name) else {
                 let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
@@ -1090,7 +1108,11 @@ impl Config {
             if let Some(t) = &p.toolbars {
                 toolbars = t.clone();
             }
+            if let Some(t) = &p.built {
+                theme = t.clone();
+            }
         }
+        self.theme = theme;
         self.settings = settings;
         self.bar = bar;
         self.toolbars_shown = toolbars;
@@ -2206,6 +2228,10 @@ fn install_api(
                 names.set(n, name)?;
             }
             t.set("names", names)?;
+            t.set("profile", st.profile)?;
+            t.set("fullscreen", st.fullscreen)?;
+            t.set("layout", st.layout)?;
+            t.set("own_layout", st.own_layout)?;
             t.set("focused", st.focused)?;
             t.set("title", st.title)?;
             t.set("mode", st.mode)?;
@@ -2597,6 +2623,22 @@ pub fn load_full(
         &theme::theme_dirs(config_dir),
         Some(&panel.theme),
     )?;
+    // A profile's theme keys go over settings.toml's [theme], over the
+    // theme: checked now, so a typo is a config error and not a surprise
+    // the first time the profile is used.
+    for (name, p) in builder.profiles.iter_mut() {
+        if let Some(t) = &p.theme {
+            let mut overlay = panel.theme.clone();
+            theme::merge_into(&mut overlay, t.clone());
+            let (built, _) = theme::load_over(
+                &builder.settings.theme,
+                &theme::theme_dirs(config_dir),
+                Some(&overlay),
+            )
+            .with_context(|| format!("ranma.profile(\"{name}\"): theme"))?;
+            p.built = Some(built);
+        }
+    }
     {
         let mut options = crate::options::builtin();
         options.extend(builder.plugin_options.iter().cloned());
@@ -2651,6 +2693,7 @@ pub fn load_full(
             builder.bar.clone(),
             builder.toolbars_shown.clone(),
         ),
+        base_theme: theme.clone(),
         toolbars: builder.toolbars,
         toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,

@@ -473,8 +473,8 @@ Make the container holding the focused pane tabbed, or split again.
 \fBgroup_next\fR / \fBgroup_prev\fR
 Cycle the tabs of the group around the focused pane.
 .TP
-\fBfullscreen\fR
-Toggle the focused pane filling the workspace.
+\fBfullscreen [on\e|off]\fR
+Toggle the focused pane filling the workspace; \fBon\fR or \fBoff\fR set it (a plugin that knows what it wants, without reading first). \fBranma.state().fullscreen\fR says which it is.
 .TP
 \fBworkspace <ws>\fR
 Go to a workspace: \fB1\fR\-\fB99\fR, \fBnext\fR, \fBprev\fR (wrapping in 1\-10), \fBempty\fR, or \fBlast\fR: the one shown before this, in this session (tmux's \fBlast\-window\fR; again comes back). Each session remembers its own. \fBworkspace last\fR is \fBleader l\fR, tmux's key.
@@ -1542,7 +1542,7 @@ Run a bar module again now, so data a plugin fetched in the background (a \fBran
 Show a toast (see Toasts\fR).
 .TP
 \fBranma.state()\fR
-\fB{ session, sessions, workspace, workspaces, names, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+\fB{ session, sessions, workspace, workspaces, names, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
 .TP
 \fBranma.layouts()\fR
 Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBinit.lua\fR's (\fBsaved = false\fR) first, then the saved ones they do not shadow. Read when asked.
@@ -2331,7 +2331,11 @@ end)
 .fi
 .RE
 .IP \(bu 2
-\fBset\fR takes what \fBranma.set\fR takes, except \fBtheme\fR (read once, at load);
+\fBset\fR takes what \fBranma.set\fR takes, except \fBtheme\fR (the theme's name, read
+once, at load). \fBtheme\fR takes theme keys, used over the theme while the
+profile is: the frame, which \fBset\fR cannot reach, as in
+\fBtheme = { bar = { position = "hidden" }, border = { style = "none" } }\fR.
+They are checked when \fBinit.lua\fR loads, as strictly as a theme file;
 \fBbar\fR what \fBranma.bar\fR takes; \fBtoolbars\fR the names of the toolbars shown
 while it is in use, instead of the base's. Both are checked when \fBinit.lua\fR loads, as
 strictly as the calls they mirror: a typo in a profile is a config error,

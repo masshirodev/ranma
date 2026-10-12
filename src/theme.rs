@@ -720,6 +720,11 @@ fn read_theme_table(name: &str, dirs: &[PathBuf]) -> Result<(toml::Table, String
 }
 
 /// Merge `over` into `base` key by key; tables recurse, everything else replaces.
+/// `over` merged into `base`, tables key by key (one more layer of a theme).
+pub fn merge_into(base: &mut toml::Table, over: toml::Table) {
+    merge(base, over)
+}
+
 fn merge(base: &mut toml::Table, over: toml::Table) {
     for (k, v) in over {
         match (base.get_mut(&k), v) {

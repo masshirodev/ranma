@@ -2431,7 +2431,12 @@ background processes for the one thing the server is for.
 - **Profiles.** `ranma.profile(name, { set, bar, toolbars })` declares
   overrides; `ranma.use_profile(name)` applies one over the base configuration
   and `ranma.use_profile(nil)` goes back to it exactly. A profile is an overlay,
-  never an edit of the base, so reverting cannot drift.
+  never an edit of the base, so reverting cannot drift. Since 2026-10-11 a
+  profile may carry `theme` keys too (c236, for zen.ranma): the frame
+  (`bar.position`, `border.style`, `gaps`) is theme, read at load, so `set`
+  could empty the bar but not take its row away. Each profile's theme is
+  built and checked at load (over `settings.toml`'s `[theme]`, as one more
+  layer), and switching swaps the whole theme, as it swaps the settings.
 - **Toolbars**: named rows of buttons, each a label and an action or a Lua
   function, `top`, `bottom` or `beside` the bar, `normal` or `large`.
 - **`send <keys>` and latching modifiers** (`latch ctrl`): what Gboard cannot

@@ -2971,11 +2971,14 @@ impl App {
                     self.relayout();
                 }
             }
-            Action::Fullscreen => {
+            Action::Fullscreen(set) => {
                 if focused.is_some() && !self.scratch_shown {
                     let ws = self.active_mut();
-                    ws.fullscreen = !ws.fullscreen;
-                    self.relayout();
+                    let want = set.unwrap_or(!ws.fullscreen);
+                    if want != ws.fullscreen {
+                        ws.fullscreen = want;
+                        self.relayout();
+                    }
                 }
             }
             Action::Workspace(t) => {
@@ -3195,6 +3198,10 @@ impl App {
                 v
             },
             layouts_dir: self.layouts_dir.clone(),
+            profile: self.config.profile.clone(),
+            fullscreen: self.active().fullscreen,
+            layout: self.layout_here().name(),
+            own_layout: self.active().layout.is_some(),
             focused: self.focused(),
             title: self.focused_title().unwrap_or("").to_string(),
             mode: match self.mode {
@@ -5025,6 +5032,51 @@ mod tests {
         a.run_action("rename_workspace kumiko".parse().unwrap());
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.status.as_deref(), Some("kumiko dev/false 1"));
+    }
+
+    #[test]
+    fn a_profile_changes_the_frame_and_plugins_read_where_they_are() {
+        let mut a = app(Some(
+            r#"ranma.profile("zen", {
+              theme = { bar = { position = "hidden" }, border = { style = "none" }, gaps = { outer_horizontal = 0, outer_vertical = 0 } },
+            })
+            ranma.bind("z", function()
+              local s = ranma.state()
+              ranma.notify(tostring(s.profile) .. " " .. tostring(s.fullscreen) .. " " .. s.layout .. " " .. tostring(s.own_layout))
+            end)"#,
+        ));
+        with_pane(&mut a, 1);
+        let base = a.config.theme.border.style;
+        a.run_action("profile zen".parse().unwrap());
+        assert_eq!(
+            a.config.theme.bar.position,
+            crate::theme::BarPosition::Hidden
+        );
+        assert_eq!(a.config.theme.border.style, BorderStyle::None);
+        a.run_action("fullscreen on".parse().unwrap());
+        a.run_action("fullscreen on".parse().unwrap());
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(
+            a.status.as_deref(),
+            Some("zen true dwindle false"),
+            "on twice is still on"
+        );
+        a.run_action("profile none".parse().unwrap());
+        assert_eq!(a.config.theme.border.style, base, "back exactly");
+        a.run_action("fullscreen off".parse().unwrap());
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(a.status.as_deref(), Some("nil false dwindle false"));
+    }
+
+    #[test]
+    fn a_profiles_theme_typo_is_a_config_error() {
+        let e = crate::config::load_from(
+            None,
+            None,
+            Some(r#"ranma.profile("z", { theme = { bar = { postion = "top" } } })"#),
+        )
+        .unwrap_err();
+        assert!(format!("{e:#}").contains("profile(\"z\")"), "{e:#}");
     }
 
     #[test]
