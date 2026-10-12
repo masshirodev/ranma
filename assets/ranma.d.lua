@@ -474,7 +474,7 @@ local Screen = {}
 
 ---Change what it names: title, query, status, subtitle, count, body, keys,
 ---card, on_query, on_close, select (a row's id). The selection follows its
----row's id.
+---row's id. A field left out stays; status, subtitle or count = false clears it.
 ---@param t table
 function Screen:set(t) end
 

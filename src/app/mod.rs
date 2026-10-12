@@ -6147,6 +6147,33 @@ mod tests {
     }
 
     #[test]
+    fn set_clears_a_status_subtitle_or_count_with_false() {
+        let mut a = app(None);
+        lua(&mut a, AGENTS);
+        lua(
+            &mut a,
+            r#"s:set { status = { "2 failed", "urgent" }, subtitle = "sub", count = "3" }"#,
+        );
+        let sc = a.plugin_screen().expect("open");
+        assert!(
+            sc.screen.status.is_some() && sc.screen.subtitle.is_some() && sc.screen.count.is_some()
+        );
+        lua(
+            &mut a,
+            r#"s:set { status = false, subtitle = false, count = false }"#,
+        );
+        let sc = a.plugin_screen().expect("open");
+        assert_eq!(sc.screen.status, None, "false clears the status");
+        assert_eq!(sc.screen.subtitle, None);
+        assert_eq!(sc.screen.count, None);
+        lua(&mut a, r#"s:set { status = { "x" } } s:set { body = {} }"#);
+        assert!(
+            a.plugin_screen().expect("open").screen.status.is_some(),
+            "a field :set does not name stays"
+        );
+    }
+
+    #[test]
     fn a_push_answers_its_own_filter_and_closing_from_it_tells_the_plugin() {
         let mut a = app(None);
         lua(&mut a, AGENTS);
