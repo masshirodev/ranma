@@ -3184,6 +3184,17 @@ impl App {
                 .filter(|(_, w)| !w.is_empty())
                 .map(|(n, _)| *n)
                 .collect(),
+            names: self
+                .workspaces
+                .iter()
+                .filter_map(|(n, w)| w.name.clone().map(|name| (*n, name)))
+                .collect(),
+            layouts: {
+                let mut v: Vec<String> = self.config.layouts.keys().cloned().collect();
+                v.sort();
+                v
+            },
+            layouts_dir: self.layouts_dir.clone(),
             focused: self.focused(),
             title: self.focused_title().unwrap_or("").to_string(),
             mode: match self.mode {
@@ -4997,6 +5008,22 @@ mod tests {
         assert_eq!(a.segment("feed")[0].text, "old");
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.segment("feed")[0].text, "new", "at once, no interval");
+    }
+
+    #[test]
+    fn plugins_read_workspace_names_and_layouts() {
+        let mut a = app(Some(
+            r#"ranma.layout("dev", { split = "horizontal", {}, {} })
+            ranma.bind("z", function()
+              local s = ranma.state()
+              local l = ranma.layouts()
+              ranma.notify(tostring(s.names[3]) .. " " .. l[1].name .. "/" .. tostring(l[1].saved) .. " " .. #l)
+            end)"#,
+        ));
+        a.run_action("workspace 3".parse().unwrap());
+        a.run_action("rename_workspace kumiko".parse().unwrap());
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(a.status.as_deref(), Some("kumiko dev/false 1"));
     }
 
     #[test]

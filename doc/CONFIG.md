@@ -1109,7 +1109,8 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
 | `ranma.refresh_module(name)` | Run a bar module again now, so data a plugin fetched in the background (a `ranma.spawn`'s `on_exit`) shows at once rather than at the next interval. |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
-| `ranma.state()` | `{ session, sessions, workspace, workspaces, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
+| `ranma.state()` | `{ session, sessions, workspace, workspaces, names, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
+| `ranma.layouts()` | Every layout `load_layout NAME` takes: `{ { name, saved }, ... }`, `init.lua`'s (`saved = false`) first, then the saved ones they do not shadow. Read when asked. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer, focused }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, whether its window has the desktop's focus (`focused`: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; `client_focus` says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
@@ -1142,6 +1143,7 @@ look at its text:
 | --- | --- |
 | `id` | The pane's id, as `ranma panes` prints it. |
 | `session`, `workspace` | Where it is; workspace 0 is the scratchpad. |
+| `workspace_name` | Its workspace's name (`rename_workspace`), or `nil`. |
 | `focused` | It is the pane keys go to in its workspace. |
 | `visible`, `floating` | On screen now; in the floating layer. |
 | `title` | Its name if it has one, else its title. |

@@ -1542,7 +1542,10 @@ Run a bar module again now, so data a plugin fetched in the background (a \fBran
 Show a toast (see Toasts\fR).
 .TP
 \fBranma.state()\fR
-\fB{ session, sessions, workspace, workspaces, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+\fB{ session, sessions, workspace, workspaces, names, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+.TP
+\fBranma.layouts()\fR
+Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBinit.lua\fR's (\fBsaved = false\fR) first, then the saved ones they do not shadow. Read when asked.
 .TP
 \fBranma.use_profile(name)\fR
 Use that profile, or \fBnil\fR for none (see Profiles\fR).
@@ -1596,6 +1599,9 @@ The pane's id, as \fBranma panes\fR prints it.
 .TP
 \fBsession\fR, \fBworkspace\fR
 Where it is; workspace 0 is the scratchpad.
+.TP
+\fBworkspace_name\fR
+Its workspace's name (\fBrename_workspace\fR), or \fBnil\fR.
 .TP
 \fBfocused\fR
 It is the pane keys go to in its workspace.

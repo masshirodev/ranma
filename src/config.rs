@@ -820,6 +820,12 @@ pub struct StateSnapshot {
     pub sessions: Vec<String>,
     pub workspace: u8,
     pub workspaces: Vec<u8>,
+    /// The current session's named workspaces, empty ones included.
+    pub names: Vec<(u8, String)>,
+    /// Layouts `init.lua` declares, and where saved ones are (read only when
+    /// `ranma.layouts()` asks: this snapshot is made before every call).
+    pub layouts: Vec<String>,
+    pub layouts_dir: Option<std::path::PathBuf>,
     pub focused: Option<u64>,
     pub title: String,
     pub mode: &'static str,
@@ -2195,11 +2201,50 @@ fn install_api(
             t.set("sessions", st.sessions)?;
             t.set("workspace", st.workspace)?;
             t.set("workspaces", st.workspaces)?;
+            let names = lua.create_table()?;
+            for (n, name) in st.names {
+                names.set(n, name)?;
+            }
+            t.set("names", names)?;
             t.set("focused", st.focused)?;
             t.set("title", st.title)?;
             t.set("mode", st.mode)?;
             t.set("panes", st.panes)?;
             Ok(t)
+        })?,
+    )?;
+
+    // Every layout by name: `{ name, saved }`, init.lua's first, then the
+    // saved ones it does not shadow (what `load_layout NAME` takes).
+    ranma.set(
+        "layouts",
+        lua.create_function(|lua, ()| {
+            let (declared, dir) = {
+                let rt = lua.app_data_ref::<Runtime>().ok_or_else(|| {
+                    rt_err("ranma.layouts only works inside binds, hooks and modules, not at config load")
+                })?;
+                (rt.state.layouts.clone(), rt.state.layouts_dir.clone())
+            };
+            let out = lua.create_table()?;
+            let mut n = 0;
+            for name in &declared {
+                n += 1;
+                let t = lua.create_table()?;
+                t.set("name", name.as_str())?;
+                t.set("saved", false)?;
+                out.set(n, t)?;
+            }
+            for name in dir.as_deref().map(crate::layouts::saved).unwrap_or_default() {
+                if declared.contains(&name) {
+                    continue;
+                }
+                n += 1;
+                let t = lua.create_table()?;
+                t.set("name", name)?;
+                t.set("saved", true)?;
+                out.set(n, t)?;
+            }
+            Ok(out)
         })?,
     )?;
 

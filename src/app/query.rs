@@ -231,6 +231,7 @@ impl App {
                 Some(PaneEntry {
                     session,
                     workspace,
+                    workspace_name: ws.name.clone(),
                     focused: ws.focused == Some(id),
                     visible: self.visible.contains(&id),
                     floating: ws.is_floating(id),
