@@ -281,3 +281,21 @@ contract between two builds.
 
 Bar widgets in Lua, once listed here as "later, maybe", came in pieces:
 Lua and exec modules, `refresh_module` and `module_shown`.
+
+## 15. macOS
+
+The decision is DESIGN.md's "Linux and macOS, not native Windows". The exit
+test: the smoke script and the whole test suite on a macOS runner, and the
+daily-driver set (nested ranma over SSH, an upgrade in place, the bar's cpu and
+mem) by hand on a Mac.
+
+- [ ] A Homebrew tap serving the Linux release binaries, bumped by release.yml
+- [ ] `src/os/`: everything that reads `/proc` or opens a pidfd behind one
+  module, Linux unchanged
+- [ ] The macOS half: foreground program, command line and directory from
+  libproc, cpu and mem from the host, child exit from kqueue
+- [ ] Paths: sockets under the 104-byte `sun_path` limit, the config in
+  `~/.config/ranma` rather than `~/Library/Application Support`
+- [ ] Defaults: `open` for links, an image paste command
+- [ ] CI and release: macOS builds (arm64 and x86_64), the smoke test there,
+  macOS tarballs in the release and the tap
