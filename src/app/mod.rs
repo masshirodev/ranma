@@ -6155,15 +6155,22 @@ mod tests {
             r#"ran = {}
             s:push { subtitle = "browse", filter = "plugin",
               on_query = function(q) table.insert(ran, "query " .. q) end,
+              on_back = function() table.insert(ran, "back") end,
               body = { { "row", id = "gitbar", name = "gitbar" } } }"#,
         );
         typed(&mut a, "/#git");
         a.screen_timers(std::time::Instant::now() + std::time::Duration::from_secs(1));
         assert_eq!(ran(&a), ["query #git"], "the pushed view's on_query");
+        // esc leaves the filter, then the view: on_back says so.
+        key(&mut a, crossterm::event::KeyCode::Esc);
+        key(&mut a, crossterm::event::KeyCode::Esc);
+        assert_eq!(ran(&a), ["query #git", "back"]);
+        assert!(a.plugin_screen().is_some(), "back, not closed");
+        lua(&mut a, r#"s:push { subtitle = "browse", body = {} }"#);
         // Another screen opening over the pushed view closes the screen: the
         // plugin hears it, though the push gave no on_close of its own.
         lua(&mut a, r#"ranma.screen { title = "other" }"#);
-        assert_eq!(ran(&a), ["query #git", "closed"]);
+        assert_eq!(ran(&a), ["query #git", "back", "closed"]);
         lua(
             &mut a,
             r#"ran = {}

@@ -31,6 +31,8 @@ pub struct Hooks {
     pub on_edit: HashMap<String, Rc<RegistryKey>>,
     pub on_query: Option<Rc<RegistryKey>>,
     pub on_close: Option<Rc<RegistryKey>>,
+    /// A pushed view's: `esc` went back from it to the list.
+    pub on_back: Option<Rc<RegistryKey>>,
     /// The standing ask's answers, by key.
     pub ask_keys: HashMap<String, Rc<RegistryKey>>,
 }
@@ -57,6 +59,7 @@ impl PartialEq for Hooks {
             && same(&self.on_edit, &o.on_edit)
             && opt(&self.on_query, &o.on_query)
             && opt(&self.on_close, &o.on_close)
+            && opt(&self.on_back, &o.on_back)
             && same(&self.ask_keys, &o.ask_keys)
     }
 }
@@ -806,12 +809,16 @@ impl UserData for Handle {
                 &t,
                 &[
                     "body", "subtitle", "count", "status", "keys", "card", "filter", "on_query",
+                    "on_back",
                 ],
                 &who,
             )?;
             let mut hooks = Hooks::default();
             if let Some(f) = t.get::<Option<Function>>("on_query")? {
                 hooks.on_query = Some(key(lua, f)?);
+            }
+            if let Some(f) = t.get::<Option<Function>>("on_back")? {
+                hooks.on_back = Some(key(lua, f)?);
             }
             let body = match t.get::<Option<Table>>("body")? {
                 Some(b) => blocks(lua, b, &mut hooks, &mut Vec::new(), &who)?,

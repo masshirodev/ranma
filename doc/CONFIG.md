@@ -1458,8 +1458,10 @@ the second argument.
 one item's commits) with its own `body`, `subtitle`, `count`, `status`, `keys`,
 `card` and `filter`, which may be `"plugin"` with an `on_query` of its own (a
 catalogue searched by description or tag). `esc` comes back to the list with
-its selection and its functions as they were, instead of closing; the bottom
-edge says `esc back`. The screen's `on_close` still runs if the screen is
+its selection and its functions as they were, instead of closing, and calls
+the view's `on_back` (so a plugin that refreshes in the background knows which
+view it is drawing); the bottom edge says `esc back`. `s:pop()` calls nothing:
+the plugin asked for it. The screen's `on_close` still runs if the screen is
 closed from the pushed view. One level deep, like settings' `o`: pushing over
 a pushed view replaces it.
 
