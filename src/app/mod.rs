@@ -710,6 +710,8 @@ impl App {
             nums.sort_unstable();
             nums.dedup();
         }
+        // A hidden one only while it is where you are, so you know where.
+        nums.retain(|n| *n == self.current || !self.workspaces.get(n).is_some_and(|w| w.hidden));
         nums.into_iter()
             .map(|n| {
                 let ws = self.workspaces.get(&n);
@@ -1211,7 +1213,7 @@ impl App {
     fn tidy(&mut self) {
         let cur = self.current;
         self.workspaces
-            .retain(|n, ws| *n == cur || !ws.is_empty() || ws.name.is_some());
+            .retain(|n, ws| *n == cur || !ws.is_empty() || ws.name.is_some() || ws.hidden);
         if self.scratch.is_empty() {
             self.scratch_shown = false;
         }
@@ -1362,20 +1364,24 @@ impl App {
         match t {
             WorkspaceTarget::Last => self.last_workspace.unwrap_or(self.current),
             WorkspaceTarget::Index(n) => *n,
-            // Relative moves stay among 1-10, wrapping, like a row of keys.
-            WorkspaceTarget::Next => {
-                if self.current >= 10 {
-                    1
-                } else {
-                    self.current + 1
+            // Relative moves stay among 1-10, wrapping, like a row of keys,
+            // and pass over hidden ones.
+            WorkspaceTarget::Next | WorkspaceTarget::Prev => {
+                let step = |n: u8| match t {
+                    WorkspaceTarget::Next if n >= 10 => 1,
+                    WorkspaceTarget::Next => n + 1,
+                    _ if n <= 1 => 10,
+                    _ => n - 1,
+                };
+                let hidden = |n: &u8| self.workspaces.get(n).is_some_and(|w| w.hidden);
+                let mut n = step(self.current.clamp(1, 10));
+                for _ in 0..10 {
+                    if !hidden(&n) {
+                        break;
+                    }
+                    n = step(n);
                 }
-            }
-            WorkspaceTarget::Prev => {
-                if self.current <= 1 {
-                    10
-                } else {
-                    self.current - 1
-                }
+                n
             }
             WorkspaceTarget::Empty => (1..=99u8)
                 .find(|n| self.workspaces.get(n).is_none_or(|w| w.is_empty()))
@@ -3085,6 +3091,14 @@ impl App {
             Action::RenameSession(None) => self.open_rename_prompt(self.active_session),
             Action::RenameWorkspace(Some(name)) => self.rename_workspace(self.current, &name),
             Action::RenameWorkspace(None) => self.open_rename_workspace(),
+            Action::HideWorkspace(n, hide) => {
+                let n = n.unwrap_or(self.current);
+                if n != crate::app::SCRATCHPAD {
+                    self.workspaces.entry(n).or_default().hidden = hide;
+                    self.tidy();
+                    self.dirty = true;
+                }
+            }
             Action::RenamePane(Some(name)) => {
                 if let Some(id) = self.focused() {
                     self.rename_pane(id, &name);
@@ -3191,6 +3205,12 @@ impl App {
                 .workspaces
                 .iter()
                 .filter_map(|(n, w)| w.name.clone().map(|name| (*n, name)))
+                .collect(),
+            hidden: self
+                .workspaces
+                .iter()
+                .filter(|(_, w)| w.hidden)
+                .map(|(n, _)| *n)
                 .collect(),
             layouts: {
                 let mut v: Vec<String> = self.config.layouts.keys().cloned().collect();
@@ -5077,6 +5097,39 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{e:#}").contains("profile(\"z\")"), "{e:#}");
+    }
+
+    #[test]
+    fn a_hidden_workspace_is_kept_out_of_sight_and_still_reachable() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        a.relayout();
+        a.focus(2);
+        a.run_action("hide_workspace 99".parse().unwrap());
+        // A program parked there, out of sight.
+        a.run_action("move_to_workspace_silent 99".parse().unwrap());
+        a.run_action("workspace 99".parse().unwrap());
+        assert_eq!(a.focused(), Some(2));
+        // Shown while you are there.
+        assert!(a.workspace_list().iter().any(|w| w.0 == 99));
+        a.run_action("workspace 1".parse().unwrap());
+        assert!(
+            !a.workspace_list().iter().any(|w| w.0 == 99),
+            "out of the bar and the switcher"
+        );
+        a.run_action("hide_workspace 2".parse().unwrap());
+        a.run_action("workspace next".parse().unwrap());
+        assert_eq!(a.current, 3, "next passes over a hidden one");
+        a.run_action("workspace 99".parse().unwrap());
+        assert_eq!(a.current, 99, "still reachable by number");
+        assert_eq!(a.snapshot().hidden, vec![2, 99]);
+        a.run_action("show_workspace 99".parse().unwrap());
+        a.run_action("workspace 1".parse().unwrap());
+        assert!(
+            a.workspace_list().iter().any(|w| w.0 == 99),
+            "back in the bar"
+        );
     }
 
     #[test]

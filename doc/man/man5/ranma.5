@@ -521,6 +521,9 @@ Send the current workspace, with every pane in it, to another session and follow
 \fBrename_workspace [name]\fR
 Name the current workspace, shown as \fB3:name\fR in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask.
 .TP
+\fBhide_workspace [n]\fR, \fBshow_workspace [n]\fR
+Keep a workspace (the current one without a number) out of the bar, the workspace switcher and \fBworkspace next\fR/\fBprev\fR, or put it back: where a plugin parks a program out of sight. \fBworkspace N\fR still goes there, and the bar shows it while you are on it. Kept while empty, as a named one is. \fBranma.state().hidden\fR lists them.
+.TP
 \fBrename_pane [name]\fR
 Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title.
 .TP
@@ -1542,7 +1545,7 @@ Run a bar module again now, so data a plugin fetched in the background (a \fBran
 Show a toast (see Toasts\fR).
 .TP
 \fBranma.state()\fR
-\fB{ session, sessions, workspace, workspaces, names, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+\fB{ session, sessions, workspace, workspaces, names, hidden, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), its hidden workspaces (\fBhidden\fR, see \fBhide_workspace\fR), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
 .TP
 \fBranma.layouts()\fR
 Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBinit.lua\fR's (\fBsaved = false\fR) first, then the saved ones they do not shadow. Read when asked.
