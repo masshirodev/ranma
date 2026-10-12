@@ -3,3 +3,4 @@ AGENTS.local.md
 # Claude Design exports: the *_MOCK.txt beside them is what the tests read.
 doc/handoffs/**/*.zip
 __pycache__/
+/dist/

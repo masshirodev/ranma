@@ -1,0 +1,8 @@
+# dnf and zypper: ranma from its release builds. https://github.com/masshirodev/ranma
+[ranma]
+name=ranma
+baseurl=https://masshirodev.github.io/ranma/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://masshirodev.github.io/ranma/ranma.asc

@@ -219,6 +219,31 @@ hooks' gate for changes that did not come through these hooks: a
 contributor's pull request, or a push with a skip flag. The release workflow
 (`doc/RELEASING.md`) runs the tests again on the tagged commit.
 
+## Packages — `packaging/test/`
+
+Every way of installing ranma, tried on the distros it is for, in Docker:
+
+```sh
+packaging/test/build.sh             # build and package in ubuntu:22.04, as release.yml does, into dist/
+packaging/test/run.sh               # deb, rpm, script and repo
+packaging/test/run.sh nix           # the flake, built from source (minutes)
+```
+
+- `deb`: the `.deb` with apt on Ubuntu 22.04 and 24.04, Debian 12 and 13.
+- `rpm`: the `.rpm` with dnf on Fedora and Rocky 9 (glibc 2.34, the floor),
+  with zypper on openSUSE Tumbleweed.
+- `script`: `packaging/install.sh` as root and as a user, run twice, then
+  uninstalled; on Alpine it must refuse (musl); and against a config the
+  new build rejects, the old binary must come back.
+- `repo`: the apt and dnf repositories built by `packaging/repo/build.sh`
+  with a throwaway key, served over HTTP, installed from as the README says.
+
+Each install must run `--version` (naming where it came from),
+`--check-config`, `--dump-config`, and a `--standalone` that lives three
+seconds in a `script` PTY. The release workflow runs `deb rpm script` on an
+x86_64 and an arm64 runner and `repo` on x86_64 before it publishes anything.
+`build.sh` keeps its caches on `/mnt/hdd2/ranma-pkgtest` when that exists.
+
 ## By hand
 
 Not covered by any automated check: the `hover` event. tmux cannot send

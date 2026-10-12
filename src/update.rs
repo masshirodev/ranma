@@ -29,11 +29,12 @@ use crate::pane::AppEvent;
 
 /// The commit this binary was built from (`-dirty` if the tree had changes).
 pub const BUILD_SHA: &str = env!("RANMA_GIT_SHA");
-/// Who built this binary, when a package did: the release workflow and the AUR
-/// packages set `RANMA_PACKAGED` at build time ("a GitHub release", "the AUR
-/// (ranma-bin)"). Such a binary is updated by whatever installed it: it never
-/// checks its source, and `ranma update` and `leader U` say where to update
-/// instead of installing a second ranma into `~/.cargo/bin` beside it.
+/// Who built this binary, when a package did: the release workflow, the AUR
+/// packages and the Nix flake set `RANMA_PACKAGED` at build time, and
+/// `build.rs` sets it for a crate built from crates.io. Such a binary is
+/// updated by whatever installed it: it never checks its source, and `ranma
+/// update` and `leader U` say where to update instead of installing a second
+/// ranma into `~/.cargo/bin` beside it.
 pub const PACKAGED: Option<&str> = match option_env!("RANMA_PACKAGED") {
     Some(p) if p.is_empty() => None,
     p => p,

@@ -2589,6 +2589,19 @@ Rust, for predictable latency without a GC, and for the emulator:
   someone who chose releases. `ranma update` and `leader U` say where it came
   from instead. A compile-time marker, not a setting, because what installed a
   binary is a fact about the binary. Releases themselves: `doc/RELEASING.md`.
+- One binary per architecture, every channel (2026-10-12). The tarball, the
+  `.deb` and `.rpm`, the apt and dnf repositories, `install.sh`, `cargo
+  binstall`, npm and the AUR's `ranma-bin` all ship the file `release.yml`
+  linked on ubuntu-22.04, so a bug report from any of them is about the same
+  build, and each channel costs packaging, not a build of its own. The
+  exceptions build from source because that is what they are: `ranma-git`,
+  `cargo install`, and Nix (nixpkgs builds everything itself). The
+  repositories are on GitHub Pages, rebuilt whole from the last three
+  releases on each tag, so there is no branch of old binaries to keep and
+  nothing to run besides GitHub. Distributions' own archives (Debian, Fedora,
+  nixpkgs) are left to packagers who ask: each wants a maintainer who stays.
+  A crate from crates.io and a Nix build mark themselves packaged too
+  (`build.rs`), so neither offers to update from a clone.
 - Gaps are whole cells, never fractions (2026-10-08): a terminal cannot start a
   pane's grid part of a cell over, so `0.5` could only be rounded to something
   the file does not say. What a fraction was usually wanted for is a side on its

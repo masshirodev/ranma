@@ -1,12 +1,24 @@
 # Releasing
 
-A release is a `v*` tag. `.github/workflows/release.yml` builds it, tests it and
-publishes a GitHub release with one tarball; the AUR packages in
-`packaging/aur/` are updated from that by hand.
+A release is a `v*` tag. `.github/workflows/release.yml` builds it for x86_64
+and aarch64, installs every package on the distros it is for, and publishes:
+the GitHub release, the apt and dnf repositories on GitHub Pages, crates.io
+and npm. The AUR packages in `packaging/aur/` are updated from it by hand.
 
 ## What a release contains
 
-`ranma-<version>-x86_64-unknown-linux-gnu.tar.gz`, with its `.sha256` beside it:
+For each target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`),
+made by `packaging/package.sh` from one build:
+
+- `ranma-<version>-<target>.tar.gz` and its `.sha256`: the AUR's `ranma-bin`,
+  `install.sh`, `cargo binstall` and npm all unpack this.
+- `ranma_<version>-1_<amd64|arm64>.deb` and `ranma-<version>-1.<arch>.rpm`
+  (`[package.metadata.deb]` and `[package.metadata.generate-rpm]` in
+  `Cargo.toml`): the same binary and man pages under `/usr`, `git`
+  recommended, and the note after an upgrade that `ranma.install` prints for
+  pacman (`packaging/deb/postinst`, `packaging/rpm/post_install.sh`).
+
+The tarball holds:
 
 - `ranma`, the binary. Everything else it needs at run time is compiled in
   (the default `init.lua`, the default theme, the Lua types, Lua itself through
@@ -24,8 +36,9 @@ to a newer image raises the floor for every user, so do it on purpose.
 musl, which would give a static binary, was left out: its allocator is slow
 under the many small allocations a terminal emulator makes.
 
-**Packaged builds do not update themselves.** The workflow and `ranma-git`
-set `RANMA_PACKAGED` at build time, naming where the binary came from. Such a
+**Packaged builds do not update themselves.** The workflow, `ranma-git` and
+the Nix flake set `RANMA_PACKAGED` at build time, naming where the binary came
+from; `build.rs` sets it for a crate from crates.io. Such a
 ranma never fetches its source, `ranma update` and `leader U` point at the
 package manager instead, and `ranma --version` prints the name
 (`0.1.0 (<sha>, from the AUR (ranma-git))`). A build without it is a build
@@ -43,14 +56,62 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
    git push origin v0.2.0
    ```
 
-3. The workflow runs `cargo test`, builds, and creates the release with notes
-   generated from the commits since the last tag. The smoke test is not run
-   again there: CI (`.github/workflows/ci.yml`, `doc/TESTING.md`) ran it on
+3. The workflow runs `cargo test` and builds on both architectures, installs
+   the packages in Docker on each (`packaging/test/run.sh`, `doc/TESTING.md`),
+   and only then creates the release, with notes generated from the commits
+   since the last tag. After it: the Pages site, crates.io and npm. The smoke
+   test is not run again there: CI (`.github/workflows/ci.yml`) ran it on
    every push to `main`, so wait for it to be green on the commit you tag.
+4. Update the AUR packages (below).
 
-To try the build without releasing, run the workflow by hand
-(`gh workflow run release.yml`): it builds the same tarball as a run artifact
-and skips the release step.
+To try everything without releasing, run the workflow by hand
+(`gh workflow run release.yml`): it builds and install-tests every package as
+run artifacts and publishes nothing. On the workstation,
+`packaging/test/build.sh && packaging/test/run.sh` does the same for x86_64
+in a few minutes.
+
+## The other channels
+
+All on GitHub, all from the release's files; nothing below is built again.
+
+**The apt and dnf repositories** are the Pages site,
+https://masshirodev.github.io/ranma/ (Settings, Pages: source "GitHub
+Actions"; the `github-pages` environment allows `main` and `v*` tags). The
+`pages` job downloads the `.deb` and `.rpm` files of the last three releases,
+and `packaging/repo/build.sh` lays them out (`deb/` for apt, `rpm/` for dnf
+and zypper), signs them, and adds `install.sh`, `ranma.repo`, the public key
+and `index.html`. The site is rebuilt whole every time, so there is no branch
+to keep; three releases is how far back a user can still downgrade.
+
+**The signing key** is a dedicated ed25519 key, "ranma packages",
+fingerprint `91193BB09A931FAEA274C4F30792F721B44E7B30`, without a passphrase
+or an expiry. The private half is the Actions secret `RANMA_PKG_SIGNING_KEY`,
+the public half `packaging/repo/ranma.asc`. It signs the apt `InRelease` and
+`Release.gpg`, each `.rpm`, and the dnf `repomd.xml`. The workstation keeps
+a copy (`AGENTS.local.md` says where). Rotating it: a new key, the secret,
+`ranma.asc`, and a note in the release that users must fetch the key again.
+
+**`install.sh`** is `packaging/install.sh`, served from the site: it fetches
+the tarball for the machine, checks its sha256, and does what `./install.sh`
+does after a build (the config check with the old binary to fall back to,
+man pages, `ranma upgrade --all`). It refuses musl and a glibc older than
+2.34 with a pointer to building from source.
+
+**crates.io** (`cargo install ranma`, and `cargo binstall ranma` through
+`[package.metadata.binstall]`) is published by the `crates-io` job when the
+secret `CARGO_REGISTRY_TOKEN` is set, and skipped otherwise. `exclude` in
+`Cargo.toml` keeps the crate to what builds (no gif, no handoffs, no
+packaging). The first publish was by hand: `cargo publish`.
+
+**npm** is `@masshirodev/ranma` (unscoped `ranma` belongs to someone else),
+published by the `npm` job when the secret `NPM_TOKEN` is set.
+`packaging/npm/build.sh` makes three packages from the tarballs: one per
+platform holding the binary (`os`, `cpu` and `libc` set, so npm installs only
+the matching one) and the main package, whose `bin/ranma.js` runs it.
+
+**Nix** is `flake.nix`, built from source by nixpkgs' Rust; nothing to
+publish. When a dependency change breaks its build, `nix flake update`
+moves nixpkgs forward. `packaging/test/run.sh nix` builds it in a container.
 
 ## The AUR packages
 
