@@ -1545,7 +1545,7 @@ Show a toast (see Toasts\fR).
 Use that profile, or \fBnil\fR for none (see Profiles\fR).
 .TP
 \fBranma.client()\fR
-\fB{ cols, rows, mobile, remote, outer }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
+\fB{ cols, rows, mobile, remote, outer, focused }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, whether its window has the desktop's focus (\fBfocused\fR: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; \fBclient_focus\fR says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
 .TP
 \fBranma.unwatch(id)\fR
 Stop a \fBpane:watch\fR.
@@ -2381,6 +2381,9 @@ nothing; runs in the newly loaded config
 .TP
 \fBcopy\fR
 \fBtext\fR, \fBsource\fR (\fBcopy_mode\fR, \fBmouse\fR for a drag, \fBhints\fR, \fBosc52\fR for a program's own copy, \fBlua\fR for \fBranma.copy\fR), \fBpane\fR (where it came from; \fBnil\fR for \fBlua\fR) — ranma put text on the clipboard. \fBtext\fR is whatever was copied, \fBpasswords included\fR: a plugin that keeps it keeps them (\fBchoose_buffer\fR keeps its copies in memory only for that reason). A copy the hook makes itself (\fBranma.copy\fR inside it) does not fire it again.
+.TP
+\fBclient_focus\fR
+\fBfocused\fR — the window of the terminal driving the screen gained or lost the desktop's focus (you went to the browser and back), once per change; also \fBtrue\fR when a terminal attaches after the last one had lost it. Only the driving terminal's reports count (see "Several terminals on one server"). For "notify me when I am not looking at all".
 .TP
 \fBuser:<name>\fR
 whatever \fBranma.emit(name, data)\fR passed — a plugin's own event; see below
