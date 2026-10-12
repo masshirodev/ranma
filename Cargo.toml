@@ -1,6 +1,6 @@
 [package]
 name = "ranma"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
 description = "A tiling window manager for the terminal: i3's container tree and Hyprland's dwindle placement, where every window is a PTY"
