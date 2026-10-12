@@ -18,6 +18,11 @@ pub struct Workspace {
     /// A name given with rename_workspace; the bar shows it after the number.
     /// A named workspace stays even while empty: the name says it is wanted.
     pub name: Option<String>,
+    /// Kept out of the bar, the switcher and next/prev (`hide_workspace`):
+    /// where a plugin parks a program out of sight. `workspace N` still
+    /// goes there. Kept while empty, as a named one is.
+    #[serde(default)]
+    pub hidden: bool,
     /// Where tiled panes last floated, so floating one again puts it back there.
     pub float_memory: std::collections::HashMap<PaneId, Rect>,
     /// The tile last focused: the one `monocle` keeps on screen while a float

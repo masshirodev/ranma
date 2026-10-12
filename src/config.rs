@@ -829,6 +829,8 @@ pub struct StateSnapshot {
     pub workspaces: Vec<u8>,
     /// The current session's named workspaces, empty ones included.
     pub names: Vec<(u8, String)>,
+    /// Its hidden workspaces (`hide_workspace`).
+    pub hidden: Vec<u8>,
     /// Layouts `init.lua` declares, and where saved ones are (read only when
     /// `ranma.layouts()` asks: this snapshot is made before every call).
     pub layouts: Vec<String>,
@@ -2228,6 +2230,7 @@ fn install_api(
                 names.set(n, name)?;
             }
             t.set("names", names)?;
+            t.set("hidden", st.hidden)?;
             t.set("profile", st.profile)?;
             t.set("fullscreen", st.fullscreen)?;
             t.set("layout", st.layout)?;

@@ -227,6 +227,9 @@ pub enum Action {
     RenameSession(Option<String>),
     /// Name the current workspace (an empty name clears it); without one, ask.
     RenameWorkspace(Option<String>),
+    /// Keep a workspace (the current one, without a number) out of the bar,
+    /// the switcher and next/prev, or put it back.
+    HideWorkspace(Option<u8>, bool),
     /// Name the focused pane, overriding its title (empty clears); without one, ask.
     RenamePane(Option<String>),
     /// Open a new pane running this command line.
@@ -413,6 +416,8 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("session_accent", "<#rrggbb|colour|none>"),
     ("move_workspace_to_session", "[name|next|prev]"),
     ("rename_workspace", "[name]"),
+    ("hide_workspace", "[n]"),
+    ("show_workspace", "[n]"),
     ("rename_pane", "[name]"),
     ("exec", "<command line>"),
     ("exit_mode", ""),
@@ -897,6 +902,27 @@ impl FromStr for Action {
                     }),
             },
             "rename_workspace" => Ok(Action::RenameWorkspace(rest.map(str::to_string))),
+            "hide_workspace" | "show_workspace" => {
+                let hide = name == "hide_workspace";
+                match (first, second) {
+                    (None, _) => Ok(Action::HideWorkspace(None, hide)),
+                    (Some(n), None) => n
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|n| *n >= 1)
+                        .map(|n| Action::HideWorkspace(Some(n), hide))
+                        .ok_or(ActionError::BadArg {
+                            action: name.into(),
+                            arg: n.into(),
+                            expected: "a workspace number, 1-255",
+                        }),
+                    _ => Err(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: "one workspace number",
+                    }),
+                }
+            }
             "rename_pane" => Ok(Action::RenamePane(rest.map(str::to_string))),
             "session" => {
                 rest.map(|r| Action::Session(parse_session(r)))
@@ -1074,6 +1100,17 @@ impl fmt::Display for Action {
             Action::RenameSession(Some(n)) => write!(f, "rename_session {n}"),
             Action::RenameWorkspace(None) => f.write_str("rename_workspace"),
             Action::RenameWorkspace(Some(n)) => write!(f, "rename_workspace {n}"),
+            Action::HideWorkspace(n, hide) => {
+                f.write_str(if *hide {
+                    "hide_workspace"
+                } else {
+                    "show_workspace"
+                })?;
+                match n {
+                    Some(n) => write!(f, " {n}"),
+                    None => Ok(()),
+                }
+            }
             Action::RenamePane(None) => f.write_str("rename_pane"),
             Action::RenamePane(Some(n)) => write!(f, "rename_pane {n}"),
             Action::Session(t) => write!(f, "session {t}"),

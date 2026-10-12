@@ -275,6 +275,7 @@ function ranma.toast(text, opts) end
 ---@field workspace integer 0 while the scratchpad shows.
 ---@field workspaces integer[]
 ---@field names table<integer, string> the session's named workspaces
+---@field hidden integer[] its hidden workspaces (hide_workspace)
 ---@field profile string? the profile in use
 ---@field fullscreen boolean the current workspace is fullscreen
 ---@field layout string its layout
