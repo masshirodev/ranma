@@ -1,6 +1,6 @@
 pkgbase = ranma-bin
 	pkgdesc = A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY
-	pkgver = 0.2.1
+	pkgver = 0.2.2
 	pkgrel = 1
 	url = https://github.com/masshirodev/ranma
 	install = ranma.install
@@ -15,7 +15,7 @@ pkgbase = ranma-bin
 	optdepends = xdg-utils: opening links from hint mode
 	provides = ranma
 	conflicts = ranma
-	source = https://github.com/masshirodev/ranma/releases/download/v0.2.1/ranma-0.2.1-x86_64-unknown-linux-gnu.tar.gz
-	sha256sums = 883dbb473e58ac1b17cb623c65b1a4fe1315e82a288e7d766742417aea946051
+	source = https://github.com/masshirodev/ranma/releases/download/v0.2.2/ranma-0.2.2-x86_64-unknown-linux-gnu.tar.gz
+	sha256sums = 77b6432594dc836f9ad054f9434ef06d36b903e8b246cbd0690541d2fa03bbe4
 
 pkgname = ranma-bin
