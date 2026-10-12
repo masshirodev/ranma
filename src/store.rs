@@ -77,10 +77,19 @@ impl Store {
             .parent()
             .expect("a store's path is in a directory");
         std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
-        let tmp = self.path.with_extension("json.tmp");
+        // A temporary file of this write's own: two servers (two terminals)
+        // saving one plugin's store at once shared `x.json.tmp` before, and
+        // the second rename found it already moved ("No such file").
+        static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = self
+            .path
+            .with_extension(format!("json.{}.{n}.tmp", std::process::id()));
         std::fs::write(&tmp, text).map_err(|e| format!("writing {}: {e}", tmp.display()))?;
-        std::fs::rename(&tmp, &self.path)
-            .map_err(|e| format!("writing {}: {e}", self.path.display()))
+        std::fs::rename(&tmp, &self.path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            format!("writing {}: {e}", self.path.display())
+        })
     }
 }
 
@@ -195,6 +204,35 @@ mod tests {
         let d = std::env::temp_dir().join(format!("ranma-store-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
+    }
+
+    #[test]
+    fn two_servers_saving_one_store_at_once_both_succeed() {
+        let dir = tmp("race");
+        let writers: Vec<_> = (0..2)
+            .map(|w| {
+                let dir = dir.clone();
+                std::thread::spawn(move || {
+                    lua_with(&dir)
+                        .load(format!(
+                            r#"local s = ranma.store("hako")
+                            for i = 1, 300 do s:set("w{w}", i) end"#
+                        ))
+                        .exec()
+                        .map_err(|e| e.to_string())
+                })
+            })
+            .collect();
+        for w in writers {
+            w.join().unwrap().expect("no write lost its temporary file");
+        }
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(left.is_empty(), "temporary files left: {left:?}");
     }
 
     #[test]
