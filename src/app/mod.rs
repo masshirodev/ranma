@@ -6147,6 +6147,38 @@ mod tests {
     }
 
     #[test]
+    fn a_push_answers_its_own_filter_and_closing_from_it_tells_the_plugin() {
+        let mut a = app(None);
+        lua(&mut a, AGENTS);
+        lua(
+            &mut a,
+            r#"ran = {}
+            s:push { subtitle = "browse", filter = "plugin",
+              on_query = function(q) table.insert(ran, "query " .. q) end,
+              body = { { "row", id = "gitbar", name = "gitbar" } } }"#,
+        );
+        typed(&mut a, "/#git");
+        a.screen_timers(std::time::Instant::now() + std::time::Duration::from_secs(1));
+        assert_eq!(ran(&a), ["query #git"], "the pushed view's on_query");
+        // Another screen opening over the pushed view closes the screen: the
+        // plugin hears it, though the push gave no on_close of its own.
+        lua(&mut a, r#"ranma.screen { title = "other" }"#);
+        assert_eq!(ran(&a), ["query #git", "closed"]);
+        lua(
+            &mut a,
+            r#"ran = {}
+            local t = ranma.screen { title = "t" }
+            local ok, err = pcall(t.push, t, { filter = "plugin" })
+            table.insert(ran, tostring(ok) .. " " .. tostring(err))"#,
+        );
+        assert!(
+            ran(&a)[0].starts_with("false") && ran(&a)[0].contains("needs `on_query`"),
+            "{:?}",
+            ran(&a)
+        );
+    }
+
+    #[test]
     fn options_open_settings_on_the_plugins_group_and_esc_comes_back() {
         use crossterm::event::KeyCode;
         let config = crate::config::load_from(

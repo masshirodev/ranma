@@ -1994,9 +1994,12 @@ the second argument.
 .PP
 \fBOne step back: \fBs:push { ... }\fB and \fBs:pop()\fB.\fR A view over the list (a log,
 one item's commits) with its own \fBbody\fR, \fBsubtitle\fR, \fBcount\fR, \fBstatus\fR, \fBkeys\fR,
-\fBcard\fR and \fBfilter\fR. \fBesc\fR comes back to the list with its selection and its
-functions as they were, instead of closing; the bottom edge says \fBesc back\fR.
-One level deep, like settings' \fBo\fR: pushing over a pushed view replaces it.
+\fBcard\fR and \fBfilter\fR, which may be \fB"plugin"\fR with an \fBon_query\fR of its own (a
+catalogue searched by description or tag). \fBesc\fR comes back to the list with
+its selection and its functions as they were, instead of closing; the bottom
+edge says \fBesc back\fR. The screen's \fBon_close\fR still runs if the screen is
+closed from the pushed view. One level deep, like settings' \fBo\fR: pushing over
+a pushed view replaces it.
 .PP
 One screen at a time, in one slot shared with the settings panel: opening a
 screen closes settings (which asks first about unsaved edits) or the screen
