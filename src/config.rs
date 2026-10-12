@@ -882,6 +882,8 @@ pub enum Op {
     Tooltip(Option<crate::luaui::TooltipSpec>),
     /// Put text on the clipboard of the terminal driving ranma (OSC 52).
     Copy(String),
+    /// Run a bar module again now (`ranma.refresh_module`).
+    RefreshModule(String),
     /// Stop a `pane:watch`.
     Unwatch(u64),
 }
@@ -2092,6 +2094,18 @@ fn install_api(
     )?;
     ranma.set("json", json)?;
 
+    // A module whose data arrives later (a spawn's on_exit) shows it at
+    // once, instead of polling on an interval.
+    ranma.set(
+        "refresh_module",
+        lua.create_function(|lua, name: String| {
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.refresh_module only works inside binds, hooks, modules and timers, not at config load")
+            })?;
+            rt.ops.push(Op::RefreshModule(name));
+            Ok(())
+        })?,
+    )?;
     ranma.set(
         "copy",
         lua.create_function(|lua, text: String| {

@@ -138,14 +138,36 @@ pub fn screen_matches<T>(term: &Term<T>, regex: &mut RegexSearch) -> Vec<Seen> {
     out
 }
 
+/// How many rows of each text matched: what a watch remembers between looks.
+pub type SeenRows = std::collections::HashMap<String, usize>;
+
+pub fn seen_rows(now: &[Seen]) -> SeenRows {
+    let mut out = SeenRows::new();
+    for s in now {
+        *out.entry(s.row.clone()).or_default() += 1;
+    }
+    out
+}
+
 /// What is new since the last look: matches on rows whose text was not
-/// matched before. A prompt that stays, or scrolls up a row, is not news; one
-/// that goes and comes back is.
-pub fn new_matches(before: &std::collections::HashSet<String>, now: &[Seen]) -> Vec<Seen> {
-    now.iter()
-        .filter(|s| !before.contains(&s.row))
-        .cloned()
-        .collect()
+/// matched before, or matched on fewer rows. A prompt that stays, or scrolls
+/// up a row, is not news; one that goes and comes back is, and so is a second
+/// row like one already there (a dev server restarted under its old banner):
+/// the bottom-most ones past the count before are the new ones.
+pub fn new_matches(before: &SeenRows, now: &[Seen]) -> Vec<Seen> {
+    let counts = seen_rows(now);
+    let mut met = SeenRows::new();
+    let mut out = Vec::new();
+    for s in now {
+        let k = met.entry(s.row.clone()).or_default();
+        *k += 1;
+        let had = before.get(&s.row).copied().unwrap_or(0);
+        // Of this text's rows, the last (count - had) are the new ones.
+        if *k > had.min(counts[&s.row]) {
+            out.push(s.clone());
+        }
+    }
+    out
 }
 
 /// A link found under a cell, for a script.
@@ -372,9 +394,9 @@ mod tests {
             (1, 7, "proceed?")
         );
         assert_eq!(now[0].row, "Go on? proceed?");
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = SeenRows::new();
         assert_eq!(new_matches(&seen, &now).len(), 1, "first look: news");
-        seen.extend(now.iter().map(|s| s.row.clone()));
+        seen = seen_rows(&now);
         assert!(new_matches(&seen, &now).is_empty(), "still there: not news");
         // Scrolled up a row by more output: the same row's text, not news.
         let t = term("ok\r\nGo on? proceed?\r\n> 1. Yes\r\nmore");
@@ -382,6 +404,18 @@ mod tests {
         // Not in the scrollback: only the screen is looked at.
         let t = term("proceed?\r\na\r\nb\r\nc");
         assert!(screen_matches(&t, &mut re).is_empty());
+    }
+
+    #[test]
+    fn a_second_row_like_one_already_seen_is_news() {
+        // A dev server restarted under its old banner: the same text on a
+        // second row is a second match, and it is the lower one.
+        let mut re = RegexSearch::new("Local: ").unwrap();
+        let t = term("Local: x\r\n^C\r\nLocal: x");
+        let seen = seen_rows(&screen_matches(&term("Local: x"), &mut re));
+        let new = new_matches(&seen, &screen_matches(&t, &mut re));
+        assert_eq!(new.len(), 1);
+        assert_eq!(new[0].line, 2, "the new banner, not the old one");
     }
 
     #[test]

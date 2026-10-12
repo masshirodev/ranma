@@ -260,6 +260,10 @@ function ranma.json.encode(value) end
 ---@param text string
 function ranma.copy(text) end
 
+---Run a bar module again now (data fetched in the background shows at once).
+---@param name string
+function ranma.refresh_module(name) end
+
 ---A toast.
 ---@param text string
 ---@param opts? { urgent?: boolean, timeout?: number }
