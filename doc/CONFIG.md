@@ -675,7 +675,14 @@ exactly that, and leaves the mouse to your terminal the rest of the time.
 
 ## The bar
 
-The bar is a row of modules on three sides:
+The bar is on from the first start, at the bottom: the mode, the session and
+the workspaces on the left, the focused pane's title in the middle, the date on
+the right. Where it sits (`bar.position`: `top`, `bottom`, `hidden`), its
+colours and the pill shape around each module belong to the theme (see
+[Themes](#themes)); which modules it shows, to `init.lua`. The bar in the
+README's screenshot is `doc/examples/screenshot/`, both halves of it.
+
+It is a row of modules on three sides:
 
 ```lua
 ranma.bar {

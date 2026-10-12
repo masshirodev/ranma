@@ -1,0 +1,79 @@
+# sumi — ink, washi paper and hinoki wood. The airy variant.
+#
+#   ink      #141317  ground            washi    #e8e1d3  text
+#   hinoki   #d9a55b  focus / accent    ai       #7b93c9  floats, tabs
+#   shu      #e0533d  WM mode / urgent  matcha   #9db37a  occupied
+#   kasumi   #6e665c  dim               sumi-2   #2a2724  module pills
+
+[colors]
+border_active = "#d9a55b"
+border_inactive = "#3a3631"
+border_floating = "#7b93c9"
+bar_bg = "default"
+bar_fg = "#e8e1d3"
+bar_dim = "#6e665c"
+bar_accent = "#d9a55b"
+bar_urgent = "#e0533d"
+mode_fg = "#141317"
+mode_bg = "#e0533d"
+module_bg = "#2a2724"
+module_fg = "#e8e1d3"
+
+ws_active_fg = "#141317"
+ws_active_bg = "#d9a55b"
+ws_occupied = "#9db37a"
+ws_empty = "#6e665c"
+ws_urgent = "#e0533d"
+
+tab_active_fg = "#141317"
+tab_active_bg = "#7b93c9"
+tab_inactive_fg = "#a89f90"
+tab_inactive_bg = "#2a2724"
+
+picker_selected_fg = "#141317"
+picker_selected_bg = "#d9a55b"
+
+search_fg = "#141317"
+search_bg = "#9db37a"
+search_current_fg = "#141317"
+search_current_bg = "#d9a55b"
+selection_fg = "#141317"
+selection_bg = "#7b93c9"
+
+toast_fg = "#e8e1d3"
+toast_bg = "#2a2724"
+
+[border]
+style = "rounded"
+floating_style = "double"
+title = "top"
+title_align = "left"
+title_format = " {index} · {title} "
+indicator = "none"
+
+[gaps]
+inner = 1
+outer_horizontal = 2
+outer_vertical = 1
+
+[bar]
+position = "top"
+separator = " "
+workspace_format = " {n}[ {name}] "
+workspace_current_format = " {n}[ {name}] "
+# Nerd Font half-circles: every module becomes a pill.
+module_left = "\ue0b6"
+module_right = "\ue0b4"
+
+[panes]
+dim_unfocused = 0.35
+active_bg = "#17161a"
+inactive_bg = "#121114"
+
+[styles]
+mode = ["bold"]
+ws_active = ["bold"]
+title = ["dim"]
+title_active = ["bold"]
+accent = ["bold"]
+toast = []

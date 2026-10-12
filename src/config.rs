@@ -4183,6 +4183,34 @@ mod tests {
         assert!(cfg.plugins[0].error.is_none());
     }
 
+    /// The configurations in doc/examples are copied whole by readers, so one
+    /// the strict parser rejects would fail on the first thing they try.
+    #[test]
+    fn examples_load() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("doc/examples");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&root).unwrap() {
+            let dir = entry.unwrap().path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let cfg = load(Some(&dir)).unwrap_or_else(|e| panic!("{}: {e:#}", dir.display()));
+            assert!(
+                cfg.warnings.is_empty(),
+                "{}: {:?}",
+                dir.display(),
+                cfg.warnings
+            );
+            seen += 1;
+        }
+        assert!(seen > 0, "no examples under {}", root.display());
+
+        let shot = load(Some(&root.join("screenshot"))).unwrap();
+        assert_eq!(shot.theme.name, "sumi");
+        assert_eq!(shot.theme.bar.position, crate::theme::BarPosition::Top);
+        assert_eq!(shot.bar.center, ["pane_strip"]);
+    }
+
     #[test]
     fn a_failing_plugin_is_dropped_whole_and_the_rest_load() {
         let dir = config_tree(
