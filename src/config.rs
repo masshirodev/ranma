@@ -446,10 +446,14 @@ pub enum Event {
     /// The window of the terminal driving the screen gained or lost the
     /// desktop's focus.
     ClientFocus,
+    /// A bar module came on screen (placed in the bar, with a bar showing).
+    ModuleShown,
+    /// A bar module went off screen.
+    ModuleHidden,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 19] = [
+pub const EVENTS: [(&str, Event); 21] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -469,6 +473,8 @@ pub const EVENTS: [(&str, Event); 19] = [
     ("click", Event::Click),
     ("copy", Event::Copy),
     ("client_focus", Event::ClientFocus),
+    ("module_shown", Event::ModuleShown),
+    ("module_hidden", Event::ModuleHidden),
 ];
 
 impl Event {
@@ -831,6 +837,8 @@ pub struct StateSnapshot {
     pub names: Vec<(u8, String)>,
     /// Its hidden workspaces (`hide_workspace`).
     pub hidden: Vec<u8>,
+    /// The bar modules on screen now.
+    pub modules: Vec<String>,
     /// Layouts `init.lua` declares, and where saved ones are (read only when
     /// `ranma.layouts()` asks: this snapshot is made before every call).
     pub layouts: Vec<String>,
@@ -2124,6 +2132,18 @@ fn install_api(
     )?;
     ranma.set("json", json)?;
 
+    // Whether a module is on screen: placed in the bar, with a bar showing.
+    // A module that fetches only while seen asks this instead of keeping an
+    // interval just to find out.
+    ranma.set(
+        "module_shown",
+        lua.create_function(|lua, name: String| {
+            let rt = lua.app_data_ref::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.module_shown only works inside binds, hooks, modules and timers, not at config load")
+            })?;
+            Ok(rt.state.modules.contains(&name))
+        })?,
+    )?;
     // A module whose data arrives later (a spawn's on_exit) shows it at
     // once, instead of polling on an interval.
     ranma.set(
@@ -2231,6 +2251,7 @@ fn install_api(
             }
             t.set("names", names)?;
             t.set("hidden", st.hidden)?;
+            t.set("modules", st.modules)?;
             t.set("profile", st.profile)?;
             t.set("fullscreen", st.fullscreen)?;
             t.set("layout", st.layout)?;

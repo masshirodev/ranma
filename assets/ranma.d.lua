@@ -156,6 +156,8 @@ function ranma.unbind_all() end
 ---| "option_change"    # { key, value, previous, saved }
 ---| "copy"             # { text, source, pane }: source is copy_mode, mouse, hints, osc52 or lua
 ---| "client_focus"     # { focused }: the driving terminal's window gained or lost focus
+---| "module_shown"     # { name }: a bar module came on screen
+---| "module_hidden"    # { name }: a bar module went off screen
 ---| `user:${string}`   # a plugin's own event: what ranma.emit passed
 
 ---Run `fn` on an event. A plugin's own events are named "user:<name>".
@@ -264,6 +266,11 @@ function ranma.copy(text) end
 ---@param name string
 function ranma.refresh_module(name) end
 
+---Whether a bar module is on screen now (placed, with a bar showing).
+---@param name string
+---@return boolean
+function ranma.module_shown(name) end
+
 ---A toast.
 ---@param text string
 ---@param opts? { urgent?: boolean, timeout?: number }
@@ -276,6 +283,7 @@ function ranma.toast(text, opts) end
 ---@field workspaces integer[]
 ---@field names table<integer, string> the session's named workspaces
 ---@field hidden integer[] its hidden workspaces (hide_workspace)
+---@field modules string[] the bar modules on screen
 ---@field profile string? the profile in use
 ---@field fullscreen boolean the current workspace is fullscreen
 ---@field layout string its layout

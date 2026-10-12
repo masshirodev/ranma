@@ -211,6 +211,8 @@ pub struct App {
     lua_depth: u8,
     /// A `copy` hook is running: its own copies do not fire it again.
     in_copy_hook: bool,
+    /// The bar modules on screen at the last look (`module_shown`).
+    modules_shown: std::collections::BTreeSet<String>,
 
     /// Lua and exec module output, keyed by module name.
     module_values: HashMap<String, Segment>,
@@ -438,6 +440,7 @@ impl App {
             },
             lua_depth: 0,
             in_copy_hook: false,
+            modules_shown: Default::default(),
             module_values: HashMap::new(),
             module_due: HashMap::new(),
             lua_ui: None,
@@ -1535,8 +1538,35 @@ impl App {
         }
     }
 
+    /// The bar modules on screen: placed in the bar, with a bar showing.
+    fn shown_modules(&self) -> std::collections::BTreeSet<String> {
+        if self.bar_row().is_none() {
+            return Default::default();
+        }
+        self.config.bar.all().cloned().collect()
+    }
+
+    /// Tell plugins which of their modules came on screen or went off it:
+    /// a profile switch, a reload, the bar hidden or shown.
+    fn note_shown_modules(&mut self) {
+        let now = self.shown_modules();
+        if now == self.modules_shown {
+            return;
+        }
+        let was = std::mem::replace(&mut self.modules_shown, now.clone());
+        for name in now.difference(&was) {
+            let name = name.clone();
+            self.emit(HookEvent::ModuleShown, |t| t.set("name", name));
+        }
+        for name in was.difference(&now) {
+            let name = name.clone();
+            self.emit(HookEvent::ModuleHidden, |t| t.set("name", name));
+        }
+    }
+
     fn after_event(&mut self) {
         self.status_without_a_bar();
+        self.note_shown_modules();
         // A strip's view follows focus however it moved: a click, a hook, a
         // switcher. Relaid out, since what is on screen changed.
         if self.follow_view() {
@@ -1979,6 +2009,10 @@ impl App {
             Event::Resize(w, h) => {
                 self.screen = Rect::new(0, 0, w, h);
                 self.relayout();
+                // A module's wording may follow the width (a narrow
+                // terminal's shorter one): those without an interval only
+                // re-render on a change of state, which a resize is now.
+                self.render_state_modules();
             }
             Event::Mouse(m) => self.handle_mouse(m),
         }
@@ -3155,6 +3189,8 @@ impl App {
                     );
                 }
                 self.config = cfg;
+                // The new configuration's hooks hear what is on screen.
+                self.modules_shown.clear();
                 // A plugin's screen holds functions of the Lua that just went:
                 // it closes, without an on_close nobody is left to hear. The
                 // plugin, loaded again, opens it again if it wants it open.
@@ -3218,6 +3254,7 @@ impl App {
                 .iter()
                 .filter_map(|(n, w)| w.name.clone().map(|name| (*n, name)))
                 .collect(),
+            modules: self.shown_modules().into_iter().collect(),
             hidden: self
                 .workspaces
                 .iter()
@@ -5165,6 +5202,33 @@ mod tests {
         a.after_event();
         assert_eq!(a.status, None);
         assert_eq!(a.toasts.len(), 1, "no bar: a toast");
+    }
+
+    #[test]
+    fn plugins_hear_their_module_come_on_screen_and_go_off() {
+        let mut a = app(Some(
+            r#"heard = {}
+            ranma.module("feed", { render = function() return "x" end })
+            ranma.bar { right = { "feed", "clock" } }
+            ranma.profile("zen", { theme = { bar = { position = "hidden" } } })
+            ranma.on("module_shown", function(ev) if ev.name == "feed" then table.insert(heard, "shown") end end)
+            ranma.on("module_hidden", function(ev) if ev.name == "feed" then table.insert(heard, "hidden") end end)
+            ranma.bind("z", function() table.insert(heard, tostring(ranma.module_shown("feed"))) end)"#,
+        ));
+        a.after_event();
+        a.run_bind("z".parse().unwrap(), false);
+        a.run_action("profile zen".parse().unwrap());
+        a.after_event();
+        a.run_bind("z".parse().unwrap(), false);
+        a.run_action("profile none".parse().unwrap());
+        a.after_event();
+        a.after_event();
+        let heard: Vec<String> = a.config.lua.load("return heard").eval().unwrap();
+        assert_eq!(
+            heard,
+            ["shown", "true", "hidden", "false", "shown"],
+            "once per change"
+        );
     }
 
     #[test]
