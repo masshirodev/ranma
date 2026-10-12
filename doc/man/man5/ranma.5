@@ -567,7 +567,7 @@ Watch the focused pane for silence (tmux's \fBmonitor\-silence\fR): once it has 
 Open a pane running the command (through \fBsh \-c\fR), in the focused pane's directory.
 .TP
 \fBexit_mode\fR
-Leave WM mode.
+Leave WM mode (or a user mode). From a key, or from Lua (\fBranma.action("exit_mode")\fR), where it wins over the bind's own \fBexit = false\fR.
 .TP
 \fBleader\fR
 Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type \fBctrl+b\fR) or a script: \fBranma action leader\fR. Unlike the key, a second one does not send the leader to the program; \fBsend_leader\fR does that.

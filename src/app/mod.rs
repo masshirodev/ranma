@@ -3004,7 +3004,13 @@ impl App {
                     self.move_focused_to(SCRATCHPAD, false);
                 }
             }
-            Action::ExitMode => {}
+            // From a key, the bind's own exit already leaves; from Lua this
+            // is how a plugin does (it used to do nothing there).
+            Action::ExitMode => {
+                if self.mode != Mode::Normal {
+                    self.set_mode(Mode::Normal);
+                }
+            }
             // A tap, unlike the key, has no "again goes to the program": the
             // second one leaves, since a toolbar button is a toggle.
             Action::Leader if self.mode == Mode::Wm => self.set_mode(Mode::Normal),
@@ -4928,6 +4934,20 @@ mod tests {
         );
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.status.as_deref(), Some("200x50 false"));
+    }
+
+    #[test]
+    fn exit_mode_from_lua_leaves_wm_mode() {
+        let mut a = app(Some(
+            r#"ranma.bind("z", function() ranma.action("exit_mode") end, { exit = false })"#,
+        ));
+        a.set_mode(Mode::Wm);
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(
+            a.mode,
+            Mode::Normal,
+            "a bind that keeps WM mode asked to leave it"
+        );
     }
 
     /// `outer` says a ranma is around the terminal driving, as `drive` sets

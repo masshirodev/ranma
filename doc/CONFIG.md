@@ -319,7 +319,7 @@ sent them, which it is not asked to.
 | `respawn_pane` | In a pane that stayed after its program ended (`remain_on_exit`), run the same command again where it first started. A pane still running is left alone (`leader x r`). |
 | `monitor_silence [seconds\|off]` | Watch the focused pane for silence (tmux's `monitor-silence`): once it has printed and then stays quiet for the `monitor_silence` setting's seconds (or the number given), a toast says `quiet: <title>`, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles (`leader x s`); `off` stops. A build or a log you want to hear the end of. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
-| `exit_mode` | Leave WM mode. |
+| `exit_mode` | Leave WM mode (or a user mode). From a key, or from Lua (`ranma.action("exit_mode")`), where it wins over the bind's own `exit = false`. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
 | `paste_image` | Type the paths of the files copied on the clipboard, else of its image, into the focused pane (`leader v`), uploading them first when the pane runs `ssh`. See [Pasting files over ssh](#pasting-files-over-ssh). |
