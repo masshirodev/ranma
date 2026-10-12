@@ -1105,7 +1105,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | Function | Does |
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
-| `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. |
+| `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. With no bar on screen (`bar.position = "hidden"`, in the theme or a profile), it is a toast instead, as is every bar message, so nothing is said into nowhere. |
 | `ranma.json.decode(text)`, `ranma.json.encode(value)` | JSON both ways, for plugins that read tools' output (`ranma.spawn({ "ai", "peers", "--json" }, ...)`). Works at load too. `null` decodes to `nil`, so `if card.description then` is false for a null one: a key holding null is absent, and an array with nulls has holes (`#` is unreliable; count with the indices you expect). |
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
 | `ranma.refresh_module(name)` | Run a bar module again now, so data a plugin fetched in the background (a `ranma.spawn`'s `on_exit`) shows at once rather than at the next interval. |
