@@ -1544,6 +1544,21 @@ sends that group SIGTERM, and says whether the job was still running. A reload
 or ranma quitting does the same to every job the old configuration started,
 since nothing would hear them end. 64 may run at once.
 
+A job has this server's `RANMA_SOCKET` (not the one the server itself
+inherited, which is the outer ranma's when this one is nested) and, as
+`RANMA_PANE`, the pane focused when it was spawned. So the command line talks
+to the right ranma, and a **popup from a plugin** is a job that runs
+`ranma popup`: it does not block, and its answer comes to `on_exit`.
+
+```lua
+ranma.spawn({ "ranma", "popup", "-W", "60", "-H", "50", "-t", "branch", "--",
+              "git branch --format='%(refname:short)' | fzf" }, {
+  on_exit = function(r)
+    if r.code == 0 then ranma.pane():send(r.stdout) end
+  end,
+})
+```
+
 ## A plugin's state — `ranma.store(name)`
 
 The Lua state starts over on every reload and every upgrade. What a plugin

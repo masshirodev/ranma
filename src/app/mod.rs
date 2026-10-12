@@ -3290,7 +3290,8 @@ impl App {
                                 self.status = Some(format!("lua: {e}"));
                             }
                         }
-                        config::Op::Spawn(id, spec) => {
+                        config::Op::Spawn(id, mut spec) => {
+                            spec.pane = self.focused();
                             self.config.jobs.start(id, spec, self.tx.clone())
                         }
                         config::Op::Kill(id) => self.config.jobs.kill(id),
@@ -6048,6 +6049,35 @@ mod tests {
             }
         }
         assert_eq!(a.status.as_deref(), Some("one,two exit 4"));
+    }
+
+    #[test]
+    fn a_spawned_job_knows_the_pane_it_was_spawned_from() {
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        let run = |a: &mut App| {
+            a.status = None;
+            a.call_lua(|lua| {
+                lua.load(
+                    r#"ranma.spawn({ "sh", "-c", 'printf "%s" "${RANMA_PANE:-none}"' }, {
+                      on_exit = function(r) ranma.notify("pane " .. r.stdout) end })"#,
+                )
+                .exec()
+            })
+            .unwrap();
+            let until = Instant::now() + Duration::from_secs(5);
+            while a.status.is_none() && Instant::now() < until {
+                if let Ok(ev) = rx.recv_timeout(Duration::from_millis(100)) {
+                    a.handle(ev);
+                }
+            }
+            a.status.clone()
+        };
+        // None focused: none, not whatever RANMA_PANE the server inherited.
+        assert_eq!(run(&mut a).as_deref(), Some("pane none"));
+        with_pane(&mut a, 7);
+        assert_eq!(run(&mut a).as_deref(), Some("pane 7"));
     }
 
     fn key(a: &mut App, code: crossterm::event::KeyCode) {

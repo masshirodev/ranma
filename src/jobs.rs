@@ -192,6 +192,8 @@ pub struct SpawnSpec {
     pub timeout: Option<Duration>,
     /// Hand stdout over line by line (`on_line`) instead of keeping it.
     pub lines: bool,
+    /// The pane focused when it was spawned: its `RANMA_PANE`.
+    pub pane: Option<u64>,
 }
 
 /// What happens to a job, as the app hears it.
@@ -365,6 +367,7 @@ fn parse_spawn(lua: &Lua, cmd: Value, opts: Option<&Table>) -> mlua::Result<(Spa
         cwd: None,
         timeout: None,
         lines: false,
+        pane: None,
     };
     let mut hooks = Hooks::default();
     if let Some(t) = opts {
@@ -427,6 +430,17 @@ pub fn start(id: u64, spec: SpawnSpec, tx: Sender<AppEvent>) -> Option<i32> {
     if let Some(d) = &spec.cwd {
         cmd.current_dir(d);
     }
+    // This server's own socket, so a job can run `ranma popup`, `ranma open`
+    // or `ranma send` against it: the one the server inherited is the outer
+    // ranma's when this one is nested, or none. And the pane focused when it
+    // was spawned, as a pane's own commands have.
+    if let Some(sock) = crate::ipc::socket_path() {
+        cmd.env(crate::ipc::ENV, sock);
+    }
+    match spec.pane {
+        Some(p) => cmd.env("RANMA_PANE", p.to_string()),
+        None => cmd.env_remove("RANMA_PANE"),
+    };
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -594,6 +608,7 @@ mod tests {
             cwd: None,
             timeout: None,
             lines,
+            pane: None,
         }
     }
 
