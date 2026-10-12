@@ -239,7 +239,7 @@ function ranma.layout(name, def) end
 ---@param action string e.g. "workspace 3"
 function ranma.action(action) end
 
----A message in the bar.
+---A message in the bar (a toast while no bar is on screen).
 ---@param text string
 function ranma.notify(text) end
 

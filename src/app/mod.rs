@@ -1524,7 +1524,19 @@ impl App {
     }
 
     /// Fire hooks for whatever the event changed, and refresh state-driven modules.
+    /// With no bar on screen (a profile or theme hiding it), a bar message
+    /// has nowhere to show: it becomes a toast, as `ranma.toast` would make,
+    /// instead of being lost (zen.ranma's hidden bar, c241).
+    fn status_without_a_bar(&mut self) {
+        if self.status.is_some() && self.bar_row().is_none() {
+            let text = self.status.take().expect("checked");
+            self.status_seen = None;
+            self.toast(text, crate::toast::Level::Normal, None);
+        }
+    }
+
     fn after_event(&mut self) {
+        self.status_without_a_bar();
         // A strip's view follows focus however it moved: a click, a hook, a
         // switcher. Relaid out, since what is on screen changed.
         if self.follow_view() {
@@ -3856,6 +3868,7 @@ impl App {
     /// set in many places by assignment; noticing a new one here keeps them
     /// all on one clock without each having to start it.
     fn expire_status(&mut self, now: Instant) {
+        self.status_without_a_bar();
         let Some(text) = &self.status else {
             self.status_seen = None;
             return;
@@ -5130,6 +5143,28 @@ mod tests {
             a.workspace_list().iter().any(|w| w.0 == 99),
             "back in the bar"
         );
+    }
+
+    #[test]
+    fn a_message_with_no_bar_to_show_it_is_a_toast() {
+        let mut a = app(Some(
+            r#"ranma.profile("zen", { theme = { bar = { position = "hidden" } } })
+            ranma.bind("z", function() ranma.notify("build done") end)"#,
+        ));
+        a.run_bind("z".parse().unwrap(), false);
+        a.after_event();
+        assert_eq!(
+            a.status.as_deref(),
+            Some("build done"),
+            "with a bar, in the bar"
+        );
+        assert!(a.toasts.is_empty());
+        a.status = None;
+        a.run_action("profile zen".parse().unwrap());
+        a.run_bind("z".parse().unwrap(), false);
+        a.after_event();
+        assert_eq!(a.status, None);
+        assert_eq!(a.toasts.len(), 1, "no bar: a toast");
     }
 
     #[test]

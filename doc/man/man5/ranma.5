@@ -1530,7 +1530,7 @@ Inside a bind function, a hook, a module's \fBrender\fR, a timer, or a
 Run an action, as a bind would. Checked when called: a bad action is an error naming it.
 .TP
 \fBranma.notify("text")\fR
-Show a message in the bar for five seconds, or until the next key in WM mode.
+Show a message in the bar for five seconds, or until the next key in WM mode. With no bar on screen (\fBbar.position = "hidden"\fR, in the theme or a profile), it is a toast instead, as is every bar message, so nothing is said into nowhere.
 .TP
 \fBranma.json.decode(text)\fR, \fBranma.json.encode(value)\fR
 JSON both ways, for plugins that read tools' output (\fBranma.spawn({ "ai", "peers", "\-\-json" }, ...)\fR). Works at load too. \fBnull\fR decodes to \fBnil\fR, so \fBif card.description then\fR is false for a null one: a key holding null is absent, and an array with nulls has holes (\fB#\fR is unreliable; count with the indices you expect).
