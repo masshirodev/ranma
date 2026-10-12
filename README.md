@@ -41,7 +41,9 @@ and keeps them, shaped like lazy.nvim (without the lazy-loading): specs in
 Lua, a lockfile, and a screen to update, install and clean. It comes with
 ranma: the first start clones it, and a spec file in
 `~/.config/ranma/lua/plugins/` is all a plugin takes (`plugin_manager =
-"none"` opts out). A few to start from:
+"none"` opts out). **Browse** (`leader L`, then `B`) shows every plugin of the
+[official list](https://github.com/masshirodev/ranma-plugins), and of any list
+you add, installed with one key. A few to start from:
 
 - [history.ranma](https://github.com/masshirodev/history.ranma): search a
   pane's scrollback by regex and jump to a match

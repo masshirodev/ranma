@@ -14,6 +14,10 @@ badges, screens and a plugin's own store. `doc/CONFIG.md`, "Plugins", is the
 reference, and `ranma --dump-types` prints it for your editor. Name the
 repository `<name>.ranma` and it installs with
 [hako](https://github.com/masshirodev/hako.ranma), which ships with ranma.
+To have people find it, open a pull request adding it to the official list,
+[ranma-plugins](https://github.com/masshirodev/ranma-plugins): hako's Browse
+shows every plugin there, installed with one key. That repository says what
+its review checks.
 
 **The core takes the primitives a plugin cannot do without**: an event that
 does not exist yet, a value a plugin cannot read, a block a screen cannot
