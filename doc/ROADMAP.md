@@ -265,6 +265,19 @@ DESIGN.md, "More from tmux, in order". Built in this order, one card each.
 - [x] A layout per workspace, so one workspace can be a strip and the rest
   dwindle (`workspace_layout`, the handoff's "worth doing next to it")
 
-## Later, maybe
+## 14. Releases that break nothing by surprise
 
-- Bar widgets in Lua, on a throttled tick.
+ranma is released and packaged, so an upgrade now arrives through a package
+manager onto a running server and a config written for the last version. Strict
+parsing makes a renamed name an error, and `ranma upgrade` makes the handover a
+contract between two builds.
+
+- [ ] Design: what a release promises not to break (semver before and after
+  1.0, renames, the handover's version, plugin capability checks)
+- [ ] CI: the previous release against this build (its config, a handover
+  both ways, its client and server)
+- [ ] Renamed names: an old config name read as its new one, with a warning
+- [ ] `CHANGELOG.md`, with breaking changes first in the release notes
+
+Bar widgets in Lua, once listed here as "later, maybe", came in pieces:
+Lua and exec modules, `refresh_module` and `module_shown`.
