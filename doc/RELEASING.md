@@ -62,7 +62,8 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
    since the last tag. After it: the Pages site, crates.io and npm. The smoke
    test is not run again there: CI (`.github/workflows/ci.yml`) ran it on
    every push to `main`, so wait for it to be green on the commit you tag.
-4. Update the AUR packages (below).
+4. Approve the staged npm versions ("The other channels", npm).
+5. Update the AUR packages (below).
 
 To try everything without releasing, run the workflow by hand
 (`gh workflow run release.yml`): it builds and install-tests every package as
@@ -104,7 +105,22 @@ secret `CARGO_REGISTRY_TOKEN` is set, and skipped otherwise. `exclude` in
 packaging). The first publish was by hand: `cargo publish`.
 
 **npm** is `@masshirodev/ranma` (unscoped `ranma` belongs to someone else),
-published by the `npm` job when the secret `NPM_TOKEN` is set.
+*staged* by the `npm` job when the secret `NPM_TOKEN` is set, and live only
+once the maintainer approves it. The token is a granular one with "Read and
+write (stage only)": npm refuses a direct `npm publish` with it, and is
+removing direct publishing with tokens in January 2027 anyway. Staging needs
+npm 11.15+ and Node 22.14+, so the job installs a pinned npm. After a release,
+approve all three versions with 2FA, the platform packages before the main one
+(it depends on them):
+
+```sh
+npm stage list @masshirodev/ranma-linux-x64   # and -linux-arm64, and ranma
+npm stage approve <stage-id>
+```
+
+or in the "Staged Packages" tab on npmjs.com. Until they are approved,
+`npm install -g @masshirodev/ranma` still gets the previous version. A
+package's first staging publishes a public `0.0.0-stage` placeholder.
 `packaging/npm/build.sh` makes three packages from the tarballs: one per
 platform holding the binary (`os`, `cpu` and `libc` set, so npm installs only
 the matching one) and the main package, whose `bin/ranma.js` runs it.

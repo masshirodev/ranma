@@ -174,10 +174,15 @@ jobs:
           pattern: dist-*
           path: dist
           merge-multiple: true
-      - name: Publish, the platform packages first
+      # NPM_TOKEN is stage-only: npm refuses a direct publish with it, and
+      # ends direct publishing with tokens in January 2027. Each version waits
+      # for the maintainer's 2FA approval (doc/RELEASING.md). Staging needs
+      # npm 11.15+, newer than the one Node 22 bundles.
+      - name: Stage, the platform packages first
         if: env.NODE_AUTH_TOKEN != ''
         run: |
+          npm install -g npm@11.21.0
           packaging/npm/build.sh dist npm
           for p in ranma-linux-x64 ranma-linux-arm64 ranma; do
-            (cd "npm/$p" && npm publish --access public)
+            (cd "npm/$p" && npm stage publish --access public)
           done
