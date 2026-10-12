@@ -1,8 +1,9 @@
 -- The bar in README.md's screenshot, as close as ranma draws it today.
 --
--- Copy this directory over ~/.config/ranma (or point $RANMA_CONFIG_DIR at it)
--- and run `ranma --check-config`. The icons and the pill ends are Nerd Font
--- glyphs: without a Nerd Font in your terminal they show as boxes.
+-- Copy this directory over ~/.config/ranma and run `ranma --check-config`, or
+-- try it as doc/examples/README.md says (outside a running ranma, on a server
+-- of its own: a nested ranma draws no bar). The icons and the pill ends are
+-- Nerd Font glyphs: without a Nerd Font in your terminal they show as boxes.
 --
 -- What it does not reproduce is listed in doc/examples/README.md.
 

@@ -59,9 +59,10 @@ the program in the pane.
 **The bar is on by default, at the bottom, in plain colours.** The one in the
 screenshot above is a theme and a few modules:
 [`doc/examples/screenshot/`](doc/examples/screenshot) is that configuration,
-ready to copy (it needs a Nerd Font), and its
-[README](doc/examples/README.md) says what in the screenshot it cannot
-reproduce. [`doc/CONFIG.md`](doc/CONFIG.md), "The bar" and "Themes", covers
+ready to copy (it needs a Nerd Font). Its
+[README](doc/examples/README.md) says how to try it without touching your own
+config (not from inside a running ranma: a nested one hands its bar to the
+outer one), and what in the screenshot it cannot reproduce. [`doc/CONFIG.md`](doc/CONFIG.md), "The bar" and "Themes", covers
 the rest.
 
 ## Plugins
