@@ -209,6 +209,8 @@ pub struct App {
     /// What the last completed event left behind, for change detection.
     observed: Observed,
     lua_depth: u8,
+    /// A `copy` hook is running: its own copies do not fire it again.
+    in_copy_hook: bool,
 
     /// Lua and exec module output, keyed by module name.
     module_values: HashMap<String, Segment>,
@@ -435,6 +437,7 @@ impl App {
                 ..Default::default()
             },
             lua_depth: 0,
+            in_copy_hook: false,
             module_values: HashMap::new(),
             module_due: HashMap::new(),
             lua_ui: None,
@@ -1743,7 +1746,7 @@ impl App {
             // A program copying to the clipboard (OSC 52, e.g. nvim's "+y over
             // SSH): passed on to the host terminal, which owns the clipboard.
             // Reading the clipboard back is refused, alacritty_terminal's default.
-            TermEvent::ClipboardStore(_, text) => self.set_host_clipboard(&text),
+            TermEvent::ClipboardStore(_, text) => self.set_host_clipboard(&text, "osc52", Some(id)),
             TermEvent::ChildExit(status) => {
                 if let Some(code) = status.code() {
                     self.exit_codes.insert(id, code);
@@ -3276,7 +3279,7 @@ impl App {
                         config::Op::Screen(spec) => self.open_plugin_screen(*spec),
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
-                        config::Op::Copy(text) => self.set_host_clipboard(&text),
+                        config::Op::Copy(text) => self.set_host_clipboard(&text, "lua", None),
                         config::Op::Unwatch(id) => self.unwatch(id),
                         config::Op::Tooltip(spec) => {
                             self.tooltip = spec.and_then(|t| {
@@ -4934,6 +4937,22 @@ mod tests {
         );
         a.run_bind("z".parse().unwrap(), false);
         assert_eq!(a.status.as_deref(), Some("200x50 false"));
+    }
+
+    #[test]
+    fn the_copy_hook_hears_every_copy_but_its_own() {
+        let mut a = app(Some(
+            r#"heard = {}
+            ranma.on("copy", function(ev)
+              table.insert(heard, ev.source .. ":" .. ev.text .. ":" .. tostring(ev.pane))
+              ranma.copy("again")  -- a hook copying does not hear itself
+            end)
+            ranma.bind("z", function() ranma.copy("from lua") end)"#,
+        ));
+        a.run_bind("z".parse().unwrap(), false);
+        a.set_host_clipboard("a link", "hints", Some(3));
+        let heard: Vec<String> = a.config.lua.load("return heard").eval().unwrap();
+        assert_eq!(heard, ["lua:from lua:nil", "hints:a link:3"]);
     }
 
     #[test]
@@ -6672,8 +6691,8 @@ mod tests {
         a.run_action(Action::ChooseBuffer);
         assert!(a.picker.is_none());
         assert_eq!(a.status.as_deref(), Some("nothing copied yet"));
-        a.set_host_clipboard("first");
-        a.set_host_clipboard("make test\ncargo build");
+        a.set_host_clipboard("first", "lua", None);
+        a.set_host_clipboard("make test\ncargo build", "lua", None);
         a.run_action(Action::ChooseBuffer);
         let items = a.picker.as_ref().expect("open").visible();
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();

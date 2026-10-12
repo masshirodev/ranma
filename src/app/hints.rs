@@ -78,9 +78,9 @@ impl App {
         self.dirty = true;
         let h = self.hints.as_ref().expect("checked above");
         if let Some((_, link)) = h.links.iter().find(|(l, _)| *l == h.typed) {
-            let (target, open) = (link.target.clone(), h.open);
+            let (target, open, pane) = (link.target.clone(), h.open, h.pane);
             self.hints = None;
-            self.pick_link(&target, open);
+            self.pick_link(&target, open, pane);
         } else if !h.links.iter().any(|(l, _)| l.starts_with(h.typed.as_str())) {
             self.status = Some(format!("no link labelled {}", h.typed));
             self.hints = None;
@@ -90,7 +90,7 @@ impl App {
     /// Copy the link to the clipboard, or open it. Opening runs `xdg-open`
     /// where the server runs, which is only where you are when the terminal
     /// did not come over SSH; from afar it copies instead and says why.
-    fn pick_link(&mut self, target: &str, open: bool) {
+    fn pick_link(&mut self, target: &str, open: bool, pane: PaneId) {
         if open && !self.client_remote {
             let spawned = std::process::Command::new("sh")
                 .args([
@@ -106,7 +106,7 @@ impl App {
             });
             return;
         }
-        self.set_host_clipboard(target);
+        self.set_host_clipboard(target, "hints", Some(pane));
         self.status = Some(if open {
             format!("copied {target} (opening would happen on the server, not here)")
         } else {

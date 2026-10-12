@@ -2379,6 +2379,9 @@ nothing; runs in the newly loaded config
 \fBoption_change\fR
 \fBkey\fR, \fBvalue\fR, \fBprevious\fR, \fBsaved\fR — the settings panel changed an option: as an edit is made (\fBsaved\fR false), when it is put back, and once more for each edit saved (\fBsaved\fR true). \fBvalue\fR is \fBnil\fR for unset.
 .TP
+\fBcopy\fR
+\fBtext\fR, \fBsource\fR (\fBcopy_mode\fR, \fBmouse\fR for a drag, \fBhints\fR, \fBosc52\fR for a program's own copy, \fBlua\fR for \fBranma.copy\fR), \fBpane\fR (where it came from; \fBnil\fR for \fBlua\fR) — ranma put text on the clipboard. \fBtext\fR is whatever was copied, \fBpasswords included\fR: a plugin that keeps it keeps them (\fBchoose_buffer\fR keeps its copies in memory only for that reason). A copy the hook makes itself (\fBranma.copy\fR inside it) does not fire it again.
+.TP
 \fBuser:<name>\fR
 whatever \fBranma.emit(name, data)\fR passed — a plugin's own event; see below
 .PP

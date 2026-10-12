@@ -440,10 +440,13 @@ pub enum Event {
     /// A click with Ctrl or Alt held in a pane's text: the hook's, not the
     /// program's.
     Click,
+    /// ranma put text on the clipboard (copy mode, a drag, hints, a
+    /// program's OSC 52, ranma.copy).
+    Copy,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 17] = [
+pub const EVENTS: [(&str, Event); 18] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -461,6 +464,7 @@ pub const EVENTS: [(&str, Event); 17] = [
     ("hover", Event::Hover),
     ("option_change", Event::OptionChange),
     ("click", Event::Click),
+    ("copy", Event::Copy),
 ];
 
 impl Event {
