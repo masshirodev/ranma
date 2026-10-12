@@ -1,7 +1,7 @@
 # Maintainer: masshirodev <masshiro.iro.kk@gmail.com>
 # The prebuilt binary from a GitHub release. doc/RELEASING.md says how to bump it.
 pkgname=ranma-bin
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='A tiling terminal multiplexer: i3 container tree and Hyprland dwindle placement, where every window is a PTY'
 arch=('x86_64')
@@ -18,7 +18,7 @@ conflicts=('ranma')
 install=ranma.install
 _name="ranma-$pkgver-x86_64-unknown-linux-gnu"
 source=("$url/releases/download/v$pkgver/$_name.tar.gz")
-sha256sums=('0b88a660430eedffd77a72013e1ff1f06537e530adb2da8ba26a6cfaff772313')
+sha256sums=('a71b701e8ee00785c61c4be2544d27d6eeb841e99e4222ba7ffc42362c35f249')
 
 package() {
   cd "$_name"
