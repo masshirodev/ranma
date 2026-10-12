@@ -2602,6 +2602,18 @@ Rust, for predictable latency without a GC, and for the emulator:
   nixpkgs) are left to packagers who ask: each wants a maintainer who stays.
   A crate from crates.io and a Nix build mark themselves packaged too
   (`build.rs`), so neither offers to update from a clone.
+- Linux and macOS, not native Windows (2026-10-12). macOS is a Unix with
+  PTYs, Unix sockets, `setsid` and SIGWINCH, and every crate in the stack
+  supports it; what is Linux-only is `/proc` (the foreground program, a
+  pane's directory, the cpu and mem modules), `pidfd_open` (watching an
+  adopted child across an upgrade) and a few defaults (`xdg-open`, the
+  clipboard). Those go behind one `src/os/` module with a Linux and a macOS
+  half, so nothing else reads `/proc`. Native Windows would be a port of the
+  model itself: no process groups to name the foreground program, no `exec`
+  to hand a server's panes to a new build, ConPTY eating escapes, and a
+  config that assumes `sh`. The people who want a terminal window manager on
+  Windows are already in WSL2, which works, so the port would buy little.
+  Packages follow: Homebrew (Linux and macOS), no Scoop or winget.
 - Gaps are whole cells, never fractions (2026-10-08): a terminal cannot start a
   pane's grid part of a cell over, so `0.5` could only be rounded to something
   the file does not say. What a fraction was usually wanted for is a side on its
@@ -2618,6 +2630,8 @@ Rust, for predictable latency without a GC, and for the emulator:
   not that; see "Several terminals on one server".
 - An agent inbox or any AI integration in the core. A Lua hook can do that for
   someone who wants it.
+- Native Windows. WSL2 is the Windows story (see "Linux and macOS, not native
+  Windows").
 - Matching tmux feature for feature. The tmux shim is a stated subset for
   programs that drive tmux, grown only from its log (see above). What ranma
   took from tmux's styling and layouts it took in its own terms ("Looks",
