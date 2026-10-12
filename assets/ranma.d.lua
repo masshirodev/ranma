@@ -485,7 +485,7 @@ function Screen:ask(ask) end
 
 ---A view over this one (a log, one item of a list): esc comes back, with the
 ---selection kept. One level deep.
----@param t { body?: ranma.Block[], subtitle?: string, count?: string|integer, status?: { [1]: string, [2]: ranma.Role? }, keys?: ranma.ScreenKey[], card?: table, filter?: "names"|false }
+---@param t { body?: ranma.Block[], subtitle?: string, count?: string|integer, status?: { [1]: string, [2]: ranma.Role? }, keys?: ranma.ScreenKey[], card?: table, filter?: "names"|"plugin"|false, on_query?: fun(query: string) }
 function Screen:push(t) end
 
 ---Back from a push.

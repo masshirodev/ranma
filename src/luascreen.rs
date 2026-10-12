@@ -132,7 +132,13 @@ impl Update {
             }
         }
         if let Some(p) = self.push {
-            let p = *p;
+            let mut p = *p;
+            // Closing the screen from a pushed view (another screen opening
+            // over it) still tells the plugin: the view covers the list, not
+            // the screen.
+            if p.hooks.on_close.is_none() {
+                p.hooks.on_close = hooks.on_close.clone();
+            }
             if s.back.is_none() {
                 *back = Some(std::mem::replace(hooks, p.hooks));
             } else {
@@ -799,11 +805,14 @@ impl UserData for Handle {
             only(
                 &t,
                 &[
-                    "body", "subtitle", "count", "status", "keys", "card", "filter",
+                    "body", "subtitle", "count", "status", "keys", "card", "filter", "on_query",
                 ],
                 &who,
             )?;
             let mut hooks = Hooks::default();
+            if let Some(f) = t.get::<Option<Function>>("on_query")? {
+                hooks.on_query = Some(key(lua, f)?);
+            }
             let body = match t.get::<Option<Table>>("body")? {
                 Some(b) => blocks(lua, b, &mut hooks, &mut Vec::new(), &who)?,
                 None => Vec::new(),
@@ -812,13 +821,17 @@ impl UserData for Handle {
             let filter = match t.get::<Value>("filter")? {
                 Value::Nil | Value::Boolean(false) => Filter::Off,
                 Value::String(s) if s.to_str()?.as_ref() == "names" => Filter::Names,
+                Value::String(s) if s.to_str()?.as_ref() == "plugin" => Filter::Plugin,
                 other => {
                     return Err(err(format!(
-                        "{who}: `filter` is \"names\" or false, not {}",
+                        "{who}: `filter` is \"names\", \"plugin\" or false, not {}",
                         other.type_name()
                     )));
                 }
             };
+            if filter == Filter::Plugin && hooks.on_query.is_none() {
+                return Err(err(format!("{who}: filter = \"plugin\" needs `on_query`")));
+            }
             let view = Back {
                 status: status(t.get("status")?, &who)?,
                 subtitle: t.get("subtitle")?,

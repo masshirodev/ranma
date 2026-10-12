@@ -785,7 +785,11 @@ into the screen for every plugin, not into it:
 - **Paired keys** (`u/U update`), so 80 columns hold a row's three keys.
 - **One step back** (`s:push`): `esc` pops instead of closing. The app keeps
   the covered view's callbacks beside it, since a pushed body's rows have
-  functions of their own.
+  functions of their own. Since hako's Browse (2026-10-11) a push may answer
+  its own filter (`filter = "plugin"`, `on_query`): a catalogue is searched by
+  description and tag, which matching names cannot do. The screen's
+  `on_close` carries over to the pushed view, which used to drop it: a screen
+  closed from a pushed log never told its plugin.
 
 Plus `on_click` on a plugin's bar module (built-in modules were already
 clickable).

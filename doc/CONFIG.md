@@ -1456,9 +1456,12 @@ the second argument.
 
 **One step back: `s:push { ... }` and `s:pop()`.** A view over the list (a log,
 one item's commits) with its own `body`, `subtitle`, `count`, `status`, `keys`,
-`card` and `filter`. `esc` comes back to the list with its selection and its
-functions as they were, instead of closing; the bottom edge says `esc back`.
-One level deep, like settings' `o`: pushing over a pushed view replaces it.
+`card` and `filter`, which may be `"plugin"` with an `on_query` of its own (a
+catalogue searched by description or tag). `esc` comes back to the list with
+its selection and its functions as they were, instead of closing; the bottom
+edge says `esc back`. The screen's `on_close` still runs if the screen is
+closed from the pushed view. One level deep, like settings' `o`: pushing over
+a pushed view replaces it.
 
 One screen at a time, in one slot shared with the settings panel: opening a
 screen closes settings (which asks first about unsaved edits) or the screen
