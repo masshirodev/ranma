@@ -2616,8 +2616,8 @@ a workspace in the workspaces module, and the current one (see Formats\fR): \fB{
 \fBbar.module_left\fR, \fBmodule_right\fR
 drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
 .TP
-\fBbar.module_padding\fR
-\fB0\fR\-\fB4\fR: blank cells inside those caps, either side of a module's text, on its ground. \fB0\fR by default.
+\fBbar.module_padding_left\fR, \fBmodule_padding_right\fR
+\fB0\fR\-\fB4\fR: blank cells inside the left cap and the right one, on the module's ground. \fB0\fR by default. On a side with none, a filled chip that ends the module (the current workspace first in the list, with \fBchip_left\fR/\fBchip_right\fR set) has its own cap as the module's end, on the bar's ground, rather than the module's cap drawing a ring around it.
 .TP
 \fBbar.chip_left\fR, \fBchip_right\fR
 drawn before and after every filled chip (the current workspace, a \fBpane_strip\fR tab, \fBWM\fR), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a \fBworkspace_current_format\fR without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default.

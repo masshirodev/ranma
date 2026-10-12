@@ -215,29 +215,46 @@ pub fn stretch(seg: Segment, spare: usize) -> Segment {
 }
 
 /// A module between its caps (`bar.module_left` / `module_right`), its pieces
-/// on the module's ground, `padding` blank cells inside each cap. An empty
-/// module stays empty: it takes no room.
-pub fn boxed(seg: Segment, left: &str, right: &str, padding: u8) -> Segment {
+/// on the module's ground, `pad_left` and `pad_right` blank cells inside the
+/// caps. An empty module stays empty: it takes no room.
+///
+/// On a side with no padding, a chip's cap at the module's end (`rounded`) is
+/// that end: the module's cap beside it would only draw a ring of the
+/// module's ground around the chip, so it is left out and the chip's cap sits
+/// on the bar.
+pub fn boxed(seg: Segment, left: &str, right: &str, pad_left: u8, pad_right: u8) -> Segment {
     if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
         return seg;
     }
-    let cap = |t: &str| Piece::new(t, Style::Cap);
-    let pad = || Piece {
-        boxed: true,
-        ..Piece::new(" ".repeat(padding as usize), Style::Normal)
+    let chip_end = |cap: &str, pad: u8, p: Option<&Piece>| {
+        !cap.is_empty() && pad == 0 && p.is_some_and(|p| matches!(p.style, Style::ChipCap(_)))
     };
+    let own_left = chip_end(left, pad_left, seg.first());
+    let own_right = chip_end(right, pad_right, seg.last());
+    let cap = |t: &str| Piece::new(t, Style::Cap);
+    let pad = |n: u8| Piece {
+        boxed: true,
+        ..Piece::new(" ".repeat(n as usize), Style::Normal)
+    };
+    let last = seg.len() - 1;
     let mut out = Vec::with_capacity(seg.len() + 4);
-    if !left.is_empty() {
+    if !left.is_empty() && !own_left {
         out.push(cap(left));
     }
-    if padding > 0 {
-        out.push(pad());
+    if pad_left > 0 {
+        out.push(pad(pad_left));
     }
-    out.extend(seg.into_iter().map(|p| Piece { boxed: true, ..p }));
-    if padding > 0 {
-        out.push(pad());
+    out.extend(seg.into_iter().enumerate().map(|(i, p)| {
+        let at_edge = (i == 0 && own_left) || (i == last && own_right);
+        Piece {
+            boxed: !at_edge,
+            ..p
+        }
+    }));
+    if pad_right > 0 {
+        out.push(pad(pad_right));
     }
-    if !right.is_empty() {
+    if !right.is_empty() && !own_right {
         out.push(cap(right));
     }
     out
@@ -561,7 +578,7 @@ mod tests {
 
     #[test]
     fn a_boxed_module_is_its_caps_around_its_ground() {
-        let b = boxed(seg("cpu 3%"), "(", ")", 0);
+        let b = boxed(seg("cpu 3%"), "(", ")", 0, 0);
         let texts: Vec<(&str, Style, bool)> = b
             .iter()
             .map(|p| (p.text.as_str(), p.style, p.boxed))
@@ -575,15 +592,22 @@ mod tests {
             ]
         );
         assert!(
-            boxed(Vec::new(), "(", ")", 1).is_empty(),
+            boxed(Vec::new(), "(", ")", 1, 1).is_empty(),
             "an empty module takes no room"
         );
-        assert_eq!(boxed(seg("x"), "", "", 2), seg("x"), "no caps, no ground");
-        let padded: String = boxed(seg("x"), "(", ")", 2)
+        assert_eq!(
+            boxed(seg("x"), "", "", 2, 2),
+            seg("x"),
+            "no caps, no ground"
+        );
+        let padded: String = boxed(seg("x"), "(", ")", 2, 1)
             .iter()
             .map(|p| p.text.as_str())
             .collect();
-        assert_eq!(padded, "(  x  )", "padding sits inside the caps");
+        assert_eq!(
+            padded, "(  x )",
+            "padding sits inside the caps, a side each"
+        );
     }
 
     #[test]
@@ -609,6 +633,63 @@ mod tests {
             "a cap clicks as its chip"
         );
         assert_eq!(rounded(seg.clone(), "", ""), seg, "no caps: square chips");
+    }
+
+    #[test]
+    fn a_chip_at_a_modules_end_is_that_end_without_padding() {
+        let seg = vec![
+            Piece::new("1", Style::WsActive),
+            Piece::new("2", Style::WsOccupied),
+        ];
+        let shape = |left, right| {
+            boxed(rounded(seg.clone(), "<", ">"), "(", ")", left, right)
+                .iter()
+                .map(|p| (p.text.clone(), p.boxed))
+                .collect::<Vec<_>>()
+        };
+        let s = |t: &str, b| (t.to_string(), b);
+        assert_eq!(
+            shape(0, 0),
+            vec![
+                s("<", false),
+                s("1", true),
+                s(">", true),
+                s("2", true),
+                s(")", false)
+            ],
+            "the chip's cap starts the module, on the bar's ground"
+        );
+        assert_eq!(
+            shape(1, 1),
+            vec![
+                s("(", false),
+                s(" ", true),
+                s("<", true),
+                s("1", true),
+                s(">", true),
+                s("2", true),
+                s(" ", true),
+                s(")", false)
+            ],
+            "with padding the module's cap stays"
+        );
+        let flipped = vec![seg[1].clone(), seg[0].clone()];
+        let ends: Vec<(String, bool)> = boxed(rounded(flipped, "<", ">"), "(", ")", 1, 0)
+            .iter()
+            .map(|p| (p.text.clone(), p.boxed))
+            .collect();
+        assert_eq!(
+            ends,
+            vec![
+                s("(", false),
+                s(" ", true),
+                s("2", true),
+                s("<", true),
+                s("1", true),
+                s(">", false)
+            ],
+            "each side decides alone: padded left, the chip's cap ends it on the right"
+        );
     }
 
     #[test]

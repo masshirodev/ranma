@@ -36,7 +36,7 @@ for the pill ends and the icons.
   of its own; `workspaces`, `pane_strip`, `cpu`, `mem` are built in, the last
   two with an icon in their `format`; `clock` is redefined with one.
 - `themes/sumi.toml`: the colours, the bar on top, the pills
-  (`bar.module_left`/`module_right`, with `module_padding` inside them), the
+  (`bar.module_left`/`module_right`, with `module_padding_left`/`_right` inside them), the
   round current workspace and tabs inside them (`bar.chip_left`/`chip_right`),
   the rounded borders with `{index} · {title}`, the gaps (none under the
   panes), and the dimmed unfocused panes. The padding and chip keys need a

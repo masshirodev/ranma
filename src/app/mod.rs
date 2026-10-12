@@ -4495,7 +4495,8 @@ impl App {
                 s,
                 &theme_bar.module_left,
                 &theme_bar.module_right,
-                theme_bar.module_padding,
+                theme_bar.module_padding_left,
+                theme_bar.module_padding_right,
             )
         };
         let seg = |n: &String| {
