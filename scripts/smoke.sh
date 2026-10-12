@@ -34,6 +34,10 @@ STATE=$(mktemp -d)
 DATA=$(mktemp -d)
 mkdir -p "$DATA/ranma/hako/hako.ranma/lua/hako"
 echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako/init.lua"
+# The shells name themselves in the title, as Arch's /etc/bash.bashrc has them
+# do and Ubuntu's does not: steps read pane titles, which should not depend on
+# the distro the test runs on. Exported, so the private tmux passes it on.
+export PROMPT_COMMAND='printf "\033]0;%s@%s:%s\007" "$USER" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'
 # No SSH variables: the title names the host only where a step asks for it.
 ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
 # The server process of this test (the client is a separate, thinner process).
