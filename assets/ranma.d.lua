@@ -244,6 +244,7 @@ function ranma.notify(text) end
 ---JSON, for plugins that read command-line tools' output.
 ranma.json = {}
 
+---JSON null decodes to nil (a null key is absent; an array with nulls has holes).
 ---@param text string
 ---@return any
 function ranma.json.decode(text) end

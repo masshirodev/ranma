@@ -1530,7 +1530,7 @@ Run an action, as a bind would. Checked when called: a bad action is an error na
 Show a message in the bar for five seconds, or until the next key in WM mode.
 .TP
 \fBranma.json.decode(text)\fR, \fBranma.json.encode(value)\fR
-JSON both ways, for plugins that read tools' output (\fBranma.spawn({ "ai", "peers", "\-\-json" }, ...)\fR). Works at load too.
+JSON both ways, for plugins that read tools' output (\fBranma.spawn({ "ai", "peers", "\-\-json" }, ...)\fR). Works at load too. \fBnull\fR decodes to \fBnil\fR, so \fBif card.description then\fR is false for a null one: a key holding null is absent, and an array with nulls has holes (\fB#\fR is unreliable; count with the indices you expect).
 .TP
 \fBranma.copy(text)\fR
 Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too).
