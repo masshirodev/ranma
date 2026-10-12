@@ -1775,7 +1775,7 @@ end)
 | `session_switch` | `session`, `previous` (names) |
 | `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
 | `driver_change` | `cols`, `rows`, `mobile`, `remote`, `outer` (as `ranma.client()`), `previous_mobile` — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize. |
-| `command_started` | `pane`, `workspace`, `visible`, `title` — when a shell that marks its commands (below) starts one |
+| `command_started` | `pane`, `workspace`, `visible`, `title`, `command` — when a shell that marks its commands (below) starts one. `command` is its command line when the shell put it in the mark (`133;C;cmdline_url=…`, URL-encoded, as kitty's shell integration does; the zsh lines below do), else `nil` |
 | `cwd_change` | `pane`, `workspace`, `cwd`, `previous` (nil the first time), `host` — when a pane's shell is somewhere new. Heard from OSC 7 (`host` is the one it names, the far one over ssh), or read from `/proc` when a marked command finishes (`host` nil). |
 | `title_change` | `pane`, `workspace`, `visible`, `title`, `previous` — when a program sets a different title. Spinners set titles often: keep the function cheap. |
 | `bell` | `pane`, `workspace`, `visible`, `title` — every bell, seen or not (an unseen one also toasts, as before) |
@@ -1793,7 +1793,17 @@ start and end, with the OSC 133 marks most terminals understand. For zsh, in
 
 ```zsh
 _ranma_mark_end()   { local s=$?; print -n "\e]133;D;$s\a\e]133;A\a"; }
-_ranma_mark_start() { print -n "\e]133;C\a"; }
+_ranma_mark_start() {
+  # The command line goes in the mark, URL-encoded as kitty does it
+  # (cmdline_url): command_started's ev.command.
+  emulate -L zsh
+  local LC_ALL=C c url= i
+  for (( i = 1; i <= ${#1}; i++ )); do
+    c=${1[i]}
+    if [[ $c == [A-Za-z0-9._~/-] ]]; then url+=$c; else printf -v c '%%%02X' "'$c"; url+=$c; fi
+  done
+  print -rn -- $'\e]133;C;cmdline_url='$url$'\a'
+}
 precmd_functions+=(_ranma_mark_end)
 preexec_functions+=(_ranma_mark_start)
 ```

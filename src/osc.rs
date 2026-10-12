@@ -39,8 +39,9 @@ pub fn is_users_link(uri: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mark {
-    /// A command started (133;C).
-    CommandStarted,
+    /// A command started (133;C), with its command line when the shell put
+    /// it in the mark (kitty's `cmdline_url=`, or `cmdline=`).
+    CommandStarted { command: Option<String> },
     /// The shell said where it is (OSC 7, `file://host/path`): the host as
     /// written (the far one in a pane running ssh) and the path, decoded.
     Cwd { host: String, path: String },
@@ -283,7 +284,17 @@ impl Scanner {
                 match kind {
                     Some("C") => {
                         self.started = Some(now);
-                        out.push(Mark::CommandStarted);
+                        // `cmdline=` is the rest of the mark, `;` and all.
+                        let params = rest.split_once(';').map(|(_, p)| p).unwrap_or("");
+                        let command = params
+                            .split(';')
+                            .find_map(|p| p.strip_prefix("cmdline_url=").and_then(percent_decode))
+                            .or_else(|| {
+                                params
+                                    .find("cmdline=")
+                                    .map(|i| params[i + "cmdline=".len()..].to_string())
+                            });
+                        out.push(Mark::CommandStarted { command });
                     }
                     // D without a C before it is a prompt after nothing ran
                     // (the shell's first prompt, or an empty Enter).
@@ -360,6 +371,11 @@ fn file_url(s: &str) -> Option<(String, String)> {
     let rest = s.strip_prefix("file://")?;
     let slash = rest.find('/')?;
     let (host, path) = rest.split_at(slash);
+    Some((host.to_string(), percent_decode(path)?))
+}
+
+/// `%XX` escapes decoded; `None` when the result is not UTF-8.
+fn percent_decode(path: &str) -> Option<String> {
     let mut bytes = Vec::with_capacity(path.len());
     let raw = path.as_bytes();
     let mut i = 0;
@@ -377,7 +393,7 @@ fn file_url(s: &str) -> Option<(String, String)> {
         }
         i += 1;
     }
-    Some((host.to_string(), String::from_utf8(bytes).ok()?))
+    String::from_utf8(bytes).ok()
 }
 
 #[cfg(test)]
@@ -394,7 +410,7 @@ mod tests {
         );
         assert_eq!(
             s.feed(b"make\r\n\x1b]133;C\x07building...", t0),
-            vec![Mark::CommandStarted]
+            vec![Mark::CommandStarted { command: None }]
         );
         let later = t0 + Duration::from_secs(42);
         assert_eq!(
@@ -470,6 +486,27 @@ mod tests {
     }
 
     #[test]
+    fn a_command_start_carries_its_command_line_when_the_shell_says_it() {
+        let t = Instant::now();
+        let mut s = Scanner::default();
+        assert_eq!(
+            s.feed(
+                b"\x1b]133;C;cmdline_url=git%20commit%20-m%20%22x%3By%22\x07",
+                t
+            ),
+            vec![Mark::CommandStarted {
+                command: Some("git commit -m \"x;y\"".into())
+            }]
+        );
+        assert_eq!(
+            s.feed(b"\x1b]133;C;cmdline=a; b\x07", t),
+            vec![Mark::CommandStarted {
+                command: Some("a; b".into())
+            }]
+        );
+    }
+
+    #[test]
     fn sequences_split_across_reads_are_followed() {
         let t = Instant::now();
         let mut s = Scanner::default();
@@ -481,7 +518,7 @@ mod tests {
         assert_eq!(
             marks,
             vec![
-                Mark::CommandStarted,
+                Mark::CommandStarted { command: None },
                 Mark::CommandFinished {
                     exit: Some(7),
                     duration: Duration::ZERO

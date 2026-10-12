@@ -1792,7 +1792,7 @@ impl App {
                 // Placeholders already on screen may name this image now.
                 self.dirty = true;
             }
-            crate::osc::Mark::CommandStarted => {
+            crate::osc::Mark::CommandStarted { command } => {
                 let workspace = self.workspace_of(id);
                 let visible = self.visible.contains(&id);
                 let title = pane.label().to_string();
@@ -1800,7 +1800,8 @@ impl App {
                     t.set("pane", id)?;
                     t.set("workspace", workspace)?;
                     t.set("visible", visible)?;
-                    t.set("title", title)
+                    t.set("title", title)?;
+                    t.set("command", command)
                 });
             }
             crate::osc::Mark::Cwd { host, path } => self.saw_cwd(id, path, Some(host)),

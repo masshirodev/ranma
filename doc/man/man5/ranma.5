@@ -2356,7 +2356,7 @@ nothing; runs in the newly loaded config
 \fBcols\fR, \fBrows\fR, \fBmobile\fR, \fBremote\fR, \fBouter\fR (as \fBranma.client()\fR), \fBprevious_mobile\fR — when a terminal starts driving the screen: the first to attach, one typed in while another drove, the next one when the driver leaves, and after an upgrade. Not on a resize.
 .TP
 \fBcommand_started\fR
-\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR — when a shell that marks its commands (below) starts one
+\fBpane\fR, \fBworkspace\fR, \fBvisible\fR, \fBtitle\fR, \fBcommand\fR — when a shell that marks its commands (below) starts one. \fBcommand\fR is its command line when the shell put it in the mark (\fB133;C;cmdline_url=…\fR, URL\-encoded, as kitty's shell integration does; the zsh lines below do), else \fBnil\fR
 .TP
 \fBcwd_change\fR
 \fBpane\fR, \fBworkspace\fR, \fBcwd\fR, \fBprevious\fR (nil the first time), \fBhost\fR — when a pane's shell is somewhere new. Heard from OSC 7 (\fBhost\fR is the one it names, the far one over ssh), or read from \fB/proc\fR when a marked command finishes (\fBhost\fR nil).
@@ -2395,7 +2395,17 @@ start and end, with the OSC 133 marks most terminals understand. For zsh, in
 .RS 4
 .nf
 _ranma_mark_end()   { local s=$?; print \-n "\ee]133;D;$s\ea\ee]133;A\ea"; }
-_ranma_mark_start() { print \-n "\ee]133;C\ea"; }
+_ranma_mark_start() {
+  # The command line goes in the mark, URL\-encoded as kitty does it
+  # (cmdline_url): command_started's ev.command.
+  emulate \-L zsh
+  local LC_ALL=C c url= i
+  for (( i = 1; i <= ${#1}; i++ )); do
+    c=${1[i]}
+    if [[ $c == [A\-Za\-z0\-9._~/\-] ]]; then url+=$c; else printf \-v c '%%%02X' "'$c"; url+=$c; fi
+  done
+  print \-rn \-\- $'\ee]133;C;cmdline_url='$url$'\ea'
+}
 precmd_functions+=(_ranma_mark_end)
 preexec_functions+=(_ranma_mark_start)
 .fi
