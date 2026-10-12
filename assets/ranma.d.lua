@@ -204,7 +204,7 @@ function ranma.session(name, opts) end
 
 ---Overrides used over the base configuration while the profile is in use.
 ---@param name string
----@param def { set?: ranma.Settings, bar?: ranma.Bar, toolbars?: string[] }
+---@param def { set?: ranma.Settings, bar?: ranma.Bar, toolbars?: string[], theme?: table }
 function ranma.profile(name, def) end
 
 ---@class ranma.Toolbar
@@ -275,6 +275,10 @@ function ranma.toast(text, opts) end
 ---@field workspace integer 0 while the scratchpad shows.
 ---@field workspaces integer[]
 ---@field names table<integer, string> the session's named workspaces
+---@field profile string? the profile in use
+---@field fullscreen boolean the current workspace is fullscreen
+---@field layout string its layout
+---@field own_layout boolean the layout is its own (workspace_layout), not the setting
 ---@field focused integer?
 ---@field title string
 ---@field mode "wm"|"normal"|"copy"

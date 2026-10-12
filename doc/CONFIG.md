@@ -288,7 +288,7 @@ sent them, which it is not asked to.
 | `cycle_floats` | Raise the bottom-most floating pane and focus it (`leader f`); repeated, it walks through the pile. |
 | `toggle_group` | Make the container holding the focused pane tabbed, or split again. |
 | `group_next` / `group_prev` | Cycle the tabs of the group around the focused pane. |
-| `fullscreen` | Toggle the focused pane filling the workspace. |
+| `fullscreen [on\|off]` | Toggle the focused pane filling the workspace; `on` or `off` set it (a plugin that knows what it wants, without reading first). `ranma.state().fullscreen` says which it is. |
 | `workspace <ws>` | Go to a workspace: `1`-`99`, `next`, `prev` (wrapping in 1-10), `empty`, or `last`: the one shown before this, in this session (tmux's `last-window`; again comes back). Each session remembers its own. `workspace last` is `leader l`, tmux's key. |
 | `move_to_workspace <ws>` | Send the focused pane there and follow it. |
 | `move_to_workspace_silent <ws>` | Send it there and stay. |
@@ -1109,7 +1109,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
 | `ranma.refresh_module(name)` | Run a bar module again now, so data a plugin fetched in the background (a `ranma.spawn`'s `on_exit`) shows at once rather than at the next interval. |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
-| `ranma.state()` | `{ session, sessions, workspace, workspaces, names, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
+| `ranma.state()` | `{ session, sessions, workspace, workspaces, names, profile, fullscreen, layout, own_layout, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), the profile in use (or `nil`), whether the current workspace is fullscreen, its layout (`"dwindle"`, `"master"`, …) and whether that is its own (`workspace_layout`) rather than the `layout` setting, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.layouts()` | Every layout `load_layout NAME` takes: `{ { name, saved }, ... }`, `init.lua`'s (`saved = false`) first, then the saved ones they do not shadow. Read when asked. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer, focused }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, whether its window has the desktop's focus (`focused`: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; `client_focus` says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
@@ -1762,7 +1762,11 @@ ranma.on("driver_change", function(c)
 end)
 ```
 
-- `set` takes what `ranma.set` takes, except `theme` (read once, at load);
+- `set` takes what `ranma.set` takes, except `theme` (the theme's name, read
+  once, at load). `theme` takes theme keys, used over the theme while the
+  profile is: the frame, which `set` cannot reach, as in
+  `theme = { bar = { position = "hidden" }, border = { style = "none" } }`.
+  They are checked when `init.lua` loads, as strictly as a theme file;
   `bar` what `ranma.bar` takes; `toolbars` the names of the toolbars shown
   while it is in use, instead of the base's. Both are checked when `init.lua` loads, as
   strictly as the calls they mirror: a typo in a profile is a config error,

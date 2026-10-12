@@ -195,7 +195,7 @@ fn kind_of(a: &Action) -> Option<Result<(usize, u8), String>> {
         Action::NewPaneAt(d) => (3, dir(d)),
         Action::ToggleSplit => (4, 0),
         Action::Equalize => (5, 0),
-        Action::Fullscreen => (6, 0),
+        Action::Fullscreen(_) => (6, 0),
         Action::SwapMaster => (7, 0),
         Action::NewPane => (8, 0),
         Action::ClosePane => (9, 0),

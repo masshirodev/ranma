@@ -376,14 +376,14 @@ impl App {
             Action::SyncToggle if focused.is_some_and(|f| self.synced.contains(&f)) => {
                 ButtonState::Active
             }
-            Action::Fullscreen if ws.fullscreen => ButtonState::Active,
+            Action::Fullscreen(_) if ws.fullscreen => ButtonState::Active,
             Action::Leader if self.mode == Mode::Wm => ButtonState::Active,
             Action::Profile(p) if self.config.profile == *p => ButtonState::Active,
             Action::Toolbar(n, _) if self.config.toolbars_shown.contains(n) => ButtonState::Active,
             Action::ClosePane
             | Action::Send(_)
             | Action::SyncToggle
-            | Action::Fullscreen
+            | Action::Fullscreen(_)
             | Action::ToggleFloating
             | Action::CopyMode
             | Action::Hints

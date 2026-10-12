@@ -169,7 +169,8 @@ pub enum Action {
     ToggleGroup,
     GroupNext,
     GroupPrev,
-    Fullscreen,
+    /// Toggle the focused pane fullscreen; `on` or `off` set it.
+    Fullscreen(Option<bool>),
     Workspace(WorkspaceTarget),
     MoveToWorkspace(WorkspaceTarget),
     /// Move the pane without following it.
@@ -799,7 +800,16 @@ impl FromStr for Action {
             "toggle_group" => no_arg(Action::ToggleGroup),
             "group_next" => no_arg(Action::GroupNext),
             "group_prev" => no_arg(Action::GroupPrev),
-            "fullscreen" => no_arg(Action::Fullscreen),
+            "fullscreen" => match (first, second) {
+                (None, _) => Ok(Action::Fullscreen(None)),
+                (Some("on"), None) => Ok(Action::Fullscreen(Some(true))),
+                (Some("off"), None) => Ok(Action::Fullscreen(Some(false))),
+                _ => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "nothing (toggle), `on` or `off`",
+                }),
+            },
             "workspace" => Ok(Action::Workspace(parse_ws(name, first)?)),
             "move_to_workspace" => Ok(Action::MoveToWorkspace(parse_ws(name, first)?)),
             "move_to_workspace_silent" => Ok(Action::MoveToWorkspaceSilent(parse_ws(name, first)?)),
@@ -1028,7 +1038,9 @@ impl fmt::Display for Action {
             Action::ToggleGroup => f.write_str("toggle_group"),
             Action::GroupNext => f.write_str("group_next"),
             Action::GroupPrev => f.write_str("group_prev"),
-            Action::Fullscreen => f.write_str("fullscreen"),
+            Action::Fullscreen(None) => f.write_str("fullscreen"),
+            Action::Fullscreen(Some(true)) => f.write_str("fullscreen on"),
+            Action::Fullscreen(Some(false)) => f.write_str("fullscreen off"),
             Action::Workspace(w) => write!(f, "workspace {w}"),
             Action::MoveToWorkspace(w) => write!(f, "move_to_workspace {w}"),
             Action::MoveToWorkspaceSilent(w) => write!(f, "move_to_workspace_silent {w}"),
