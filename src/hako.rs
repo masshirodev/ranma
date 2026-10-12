@@ -68,6 +68,7 @@ pub fn clone_spec(tmp: &Path) -> SpawnSpec {
         cwd: None,
         timeout: Some(std::time::Duration::from_secs(300)),
         lines: false,
+        pane: None,
     }
 }
 

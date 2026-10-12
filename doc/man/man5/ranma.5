@@ -2098,6 +2098,23 @@ Its stdin is empty, and it runs in a process group of its own. \fBranma.kill(id)
 sends that group SIGTERM, and says whether the job was still running. A reload
 or ranma quitting does the same to every job the old configuration started,
 since nothing would hear them end. 64 may run at once.
+.PP
+A job has this server's \fBRANMA_SOCKET\fR (not the one the server itself
+inherited, which is the outer ranma's when this one is nested) and, as
+\fBRANMA_PANE\fR, the pane focused when it was spawned. So the command line talks
+to the right ranma, and a \fBpopup from a plugin\fR is a job that runs
+\fBranma popup\fR: it does not block, and its answer comes to \fBon_exit\fR.
+.PP
+.RS 4
+.nf
+ranma.spawn({ "ranma", "popup", "\-W", "60", "\-H", "50", "\-t", "branch", "\-\-",
+              "git branch \-\-format='%(refname:short)' | fzf" }, {
+  on_exit = function(r)
+    if r.code == 0 then ranma.pane():send(r.stdout) end
+  end,
+})
+.fi
+.RE
 .SH "A PLUGIN'S STATE — \fBranma.store(name)\fR"
 .PP
 The Lua state starts over on every reload and every upgrade. What a plugin
