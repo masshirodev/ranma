@@ -4209,7 +4209,6 @@ mod tests {
         assert_eq!(shot.theme.name, "sumi");
         assert_eq!(shot.theme.bar.position, crate::theme::BarPosition::Top);
         assert_eq!(shot.bar.center, ["pane_strip"]);
-        assert_eq!(shot.theme.bar.module_padding, 1);
         assert!(
             !shot.theme.bar.chip_left.is_empty(),
             "the round current workspace"

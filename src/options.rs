@@ -92,7 +92,7 @@ pub const GROUPS: [(&str, &str); 5] = [
 /// custom border's characters, text attributes, and the colour roles with a
 /// fallback of their own. The registry test checks that every key of the
 /// default theme is either an option or listed here.
-pub const NOT_IN_PANEL: [&str; 12] = [
+pub const NOT_IN_PANEL: [&str; 13] = [
     "border.chars",
     "gaps.outer_top",
     "gaps.outer_bottom",
@@ -100,7 +100,8 @@ pub const NOT_IN_PANEL: [&str; 12] = [
     "gaps.outer_right",
     "bar.module_left",
     "bar.module_right",
-    "bar.module_padding",
+    "bar.module_padding_left",
+    "bar.module_padding_right",
     "bar.chip_left",
     "bar.chip_right",
     "styles",

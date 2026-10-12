@@ -69,7 +69,8 @@ workspace_current_format = "{n}[ {name}]"
 # Nerd Font half-circles: every module becomes a pill.
 module_left = "\ue0b6"
 module_right = "\ue0b4"
-module_padding = 1
+module_padding_left = 0
+module_padding_right = 0
 chip_left = "\ue0b6"
 chip_right = "\ue0b4"
 

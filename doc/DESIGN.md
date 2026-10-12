@@ -982,7 +982,7 @@ is optional or has a default in the built-in theme, so a theme written before
 | `window-style`, `window-active-style` | `panes.inactive_bg`, `panes.active_bg`: the ground a program leaves as the default background |
 | `mode-style` | `colors.selection_fg`, `selection_bg`; unset, reversed as before |
 | `window-status-format`, `-current-format` | `bar.workspace_format`, `bar.workspace_current_format`, with `{n}` and `{name}` |
-| powerline status lines | `colors.module_bg` / `module_fg` and `bar.module_left` / `module_right`: each module on its own ground between two caps, `bar.module_padding` cells inside them; `bar.chip_left` / `chip_right` round the filled chips inside |
+| powerline status lines | `colors.module_bg` / `module_fg` and `bar.module_left` / `module_right`: each module on its own ground between two caps, `bar.module_padding_left` / `_right` cells inside them; `bar.chip_left` / `chip_right` round the filled chips inside |
 
 **Formats have placeholders and optional groups, and nothing else.** A part in
 `[...]` shows only when every placeholder in it has a value, which is all a
@@ -1011,9 +1011,11 @@ so a round current workspace sits inside a round module, as the README's
 screenshot has it. They were asked for after the screenshot turned out not to
 be reproducible: a theme could round a module but not what was inside it.
 Like the module caps they are drawn by ranma, take the chip's click, and are
-empty by default, so no existing theme changes. `bar.module_padding` (0-4)
-puts blank cells inside the module caps, which a module's own text cannot do
-for the built-ins. The large bar keeps square chips: `enlarge` pads them to a
+empty by default, so no existing theme changes. `bar.module_padding_left` and
+`_right` (0-4) put blank cells inside the module caps, a side each, which a
+module's own text cannot do for the built-ins. On a side with no padding, a
+chip that ends the module takes the module's cap's place: both caps there
+would draw a ring of the module's ground around the chip, which says nothing. The large bar keeps square chips: `enlarge` pads them to a
 thumb's width over all three rows, and a one-row cap would sit beside a
 three-row chip.
 

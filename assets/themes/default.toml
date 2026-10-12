@@ -106,8 +106,10 @@ workspace_current_format = " {n}[:{name}] "
 # is a pill. Empty: nothing.
 module_left = ""
 module_right = ""
-# Blank cells inside those caps, either side of a module's text (0-4).
-module_padding = 0
+# Blank cells inside the left cap and the right one (0-4). Where a filled
+# chip ends a module and its side has none, the chip's cap is the module's end.
+module_padding_left = 0
+module_padding_right = 0
 # Drawn before and after each filled chip (the current workspace, a
 # pane_strip tab, the WM mode sign) in the chip's own colour, on the module's
 # ground: the same glyphs round the chips inside a pill. Empty: square chips.
