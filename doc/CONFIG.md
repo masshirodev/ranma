@@ -680,7 +680,9 @@ the workspaces on the left, the focused pane's title in the middle, the date on
 the right. Where it sits (`bar.position`: `top`, `bottom`, `hidden`), its
 colours and the pill shape around each module belong to the theme (see
 [Themes](#themes)); which modules it shows, to `init.lua`. The bar in the
-README's screenshot is `doc/examples/screenshot/`, both halves of it.
+README's screenshot is `doc/examples/screenshot/`, both halves of it: round
+modules with padding inside them, and a round current workspace inside its
+pill (`bar.chip_left`, `chip_right`).
 
 It is a row of modules on three sides:
 
@@ -1941,6 +1943,8 @@ palette, say) styles toolbars too.
 | `bar.separator` | text drawn between two modules on the same side |
 | `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
+| `bar.module_padding` | `0`-`4`: blank cells inside those caps, either side of a module's text, on its ground. `0` by default. |
+| `bar.chip_left`, `chip_right` | drawn before and after every filled chip (the current workspace, a `pane_strip` tab, ` WM `), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a `workspace_current_format` without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default. |
 | `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
 | `panes.active_bg`, `inactive_bg` | the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's `window-active-style` and `window-style`); unset, the terminal's own. Unfocused text fades toward `inactive_bg`. |
 | `background.art` | text art drawn behind the panes, wherever none covers the workspace: the gaps, an empty workspace, around floats. A name is `~/.config/ranma/backgrounds/<name>.txt`, else a built-in (`dots`, `grid`, `waves`); a path (with `/`, or starting `~`) is that file. Plain text, or coloured with SGR escapes, which is what `chafa`, `jp2a --colors`, `lolcat -f` and `toilet --gay` write (`chafa --format symbols -s 80x24 cat.png > ~/.config/ranma/backgrounds/cat.txt`). Other escapes are dropped. A name that is neither is an error at load. Over an empty workspace the splash keeps only its keys, at the bottom. Unset: no background. |

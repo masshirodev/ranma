@@ -36,8 +36,12 @@ for the pill ends and the icons.
   of its own; `workspaces`, `pane_strip`, `cpu`, `mem` are built in, the last
   two with an icon in their `format`; `clock` is redefined with one.
 - `themes/sumi.toml`: the colours, the bar on top, the pills
-  (`bar.module_left`/`module_right`), the rounded borders with
-  `{index} · {title}`, the gaps, and the dimmed unfocused panes.
+  (`bar.module_left`/`module_right`, with `module_padding` inside them), the
+  round current workspace and tabs inside them (`bar.chip_left`/`chip_right`),
+  the rounded borders with `{index} · {title}`, the gaps (none under the
+  panes), and the dimmed unfocused panes. The padding and chip keys need a
+  ranma from `main` after 2026-10-12 (or the release after 0.2.3); an older one
+  rejects the theme, as it rejects any key it does not know.
 
 What the screenshot shows that this does not:
 

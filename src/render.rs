@@ -1567,6 +1567,11 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
         bar::Style::Cap => Style::default()
             .fg(color(c.module_bg.unwrap_or(c.bar_bg)))
             .bg(color(c.bar_bg)),
+        // A chip's edge: the chip's ground as text. Its own ground is the
+        // module's or the bar's, set where it is drawn.
+        bar::Style::ChipCap(chip) => {
+            Style::default().fg(piece_style(c, st, chip.style()).bg.unwrap_or(Color::Reset))
+        }
     }
 }
 

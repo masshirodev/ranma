@@ -4484,7 +4484,20 @@ impl App {
         let large = chrome.bar_size == crate::toolbar::Size::Large;
         // Chips a thumb can hit: padded to five columns and a column apart.
         let theme_bar = &self.config.theme.bar;
-        let wrap = |s: Segment| bar::boxed(s, &theme_bar.module_left, &theme_bar.module_right);
+        // The large bar pads its chips itself (`bar::enlarge`), full height.
+        let wrap = |s: Segment| {
+            let s = if large {
+                s
+            } else {
+                bar::rounded(s, &theme_bar.chip_left, &theme_bar.chip_right)
+            };
+            bar::boxed(
+                s,
+                &theme_bar.module_left,
+                &theme_bar.module_right,
+                theme_bar.module_padding,
+            )
+        };
         let seg = |n: &String| {
             let s = self.segment(n);
             wrap(

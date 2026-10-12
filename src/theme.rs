@@ -587,6 +587,12 @@ pub struct Bar {
     /// Drawn before and after each module, on `colors.module_bg`'s edge.
     pub module_left: String,
     pub module_right: String,
+    /// Blank cells inside a module's caps, either side of its text.
+    pub module_padding: u8,
+    /// Drawn before and after each filled chip (the current workspace, a
+    /// `pane_strip` tab, the mode) in the chip's own ground: rounded chips.
+    pub chip_left: String,
+    pub chip_right: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -848,9 +854,17 @@ fn check(t: &Theme) -> Result<(), String> {
             }
         }
     }
+    if t.bar.module_padding > 4 {
+        return Err(format!(
+            "bar.module_padding must be 0 to 4, not {}",
+            t.bar.module_padding
+        ));
+    }
     for (key, cap) in [
         ("bar.module_left", &t.bar.module_left),
         ("bar.module_right", &t.bar.module_right),
+        ("bar.chip_left", &t.bar.chip_left),
+        ("bar.chip_right", &t.bar.chip_right),
     ] {
         if cap.chars().any(char::is_control) {
             return Err(format!("{key}: no control characters"));
