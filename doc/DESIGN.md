@@ -864,9 +864,17 @@ parses them, on the emulator's thread, which holds the terminal while it
 reads. A line taken on the UI thread when the mark's event arrives is a
 race (a command's output is usually parsed by then). So the scanner tags the
 next character printed after a mark with an OSC 8 link of ranma's own
-(`ranma:133:D2.A`), and the grid keeps it on that cell: through scrolling,
-through reflow on a resize, and out with the scrollback, so `pane:marks()`
-is bounded to what is still there without anything to prune. The tag goes
+(`ranma:133:7:D2.A`, numbered so two alike are two marks), and the grid
+keeps it on that cell: through scrolling, through reflow on a resize, and out
+with the scrollback, so `pane:marks()` is bounded to what is still there
+without anything to prune. A prompt's tag (`A`, `B`) stays open until the
+next mark instead of covering one cell (2026-10-11, c239): shells draw their
+prompt again over itself (powerlevel10k's transient prompt on Enter, zsh on
+every resize, PROMPT_SP's `%`), a one-cell tag drawn over was gone, and with
+the user's own p10k setup `marks()` was always empty. Inside the run every
+redraw is tagged again. An output's tag (`C`) stays one cell; output is not
+redrawn, and a command that printed nothing (its `C` on a `%` zsh then
+erases) reads as output where it finished. The tag goes
 on a printed character only, never inside a sequence (a CSI's parameters or
 an `ESC ( B` are followed to their end first), and never while a program's
 own link is open (it would end it). Hints and `link_at` leave `ranma:133:`

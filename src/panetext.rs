@@ -239,15 +239,22 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
     let (top, bottom) = line_range(term);
     let cols = term.columns();
     let mut out: Vec<CommandMarks> = Vec::new();
+    // A prompt's tag covers every cell of it: each tag counts where it is
+    // first seen.
+    let mut seen = std::collections::HashSet::new();
     for l in top..=bottom {
         let row = &term.grid()[Line(l)];
         for c in 0..cols {
             let Some(h) = row[Column(c)].hyperlink() else {
                 continue;
             };
-            let Some(kinds) = h.uri().strip_prefix(crate::osc::TAG) else {
+            let Some(tag) = h.uri().strip_prefix(crate::osc::TAG) else {
                 continue;
             };
+            if !seen.insert(tag.to_string()) {
+                continue;
+            }
+            let kinds = tag.split_once(':').map(|(_, k)| k).unwrap_or(tag);
             for k in kinds.split('.') {
                 match k.split_at(k.len().min(1)) {
                     ("A", _) => out.push(CommandMarks {
@@ -281,6 +288,12 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
     }
     for m in &mut out {
         m.command = m.command.or(Some(m.prompt));
+        // It ran and printed nothing: its C was on a cell the shell drew
+        // over (zsh's PROMPT_SP `%`), and its output is the empty stretch
+        // before the next prompt.
+        if m.finished.is_some() && m.output.is_none() {
+            m.output = m.finished;
+        }
     }
     out
 }
