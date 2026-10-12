@@ -789,7 +789,9 @@ into the screen for every plugin, not into it:
   its own filter (`filter = "plugin"`, `on_query`): a catalogue is searched by
   description and tag, which matching names cannot do. The screen's
   `on_close` carries over to the pushed view, which used to drop it: a screen
-  closed from a pushed log never told its plugin.
+  closed from a pushed log never told its plugin. And `on_back`: `esc` pops a
+  view without the plugin asking, and a plugin redrawing in the background
+  (an install's progress) has to know which view it is drawing.
 
 Plus `on_click` on a plugin's bar module (built-in modules were already
 clickable).

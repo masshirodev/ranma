@@ -1996,8 +1996,10 @@ the second argument.
 one item's commits) with its own \fBbody\fR, \fBsubtitle\fR, \fBcount\fR, \fBstatus\fR, \fBkeys\fR,
 \fBcard\fR and \fBfilter\fR, which may be \fB"plugin"\fR with an \fBon_query\fR of its own (a
 catalogue searched by description or tag). \fBesc\fR comes back to the list with
-its selection and its functions as they were, instead of closing; the bottom
-edge says \fBesc back\fR. The screen's \fBon_close\fR still runs if the screen is
+its selection and its functions as they were, instead of closing, and calls
+the view's \fBon_back\fR (so a plugin that refreshes in the background knows which
+view it is drawing); the bottom edge says \fBesc back\fR. \fBs:pop()\fR calls nothing:
+the plugin asked for it. The screen's \fBon_close\fR still runs if the screen is
 closed from the pushed view. One level deep, like settings' \fBo\fR: pushing over
 a pushed view replaces it.
 .PP

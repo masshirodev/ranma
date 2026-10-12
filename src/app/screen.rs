@@ -287,11 +287,13 @@ impl App {
                 self.call_hook(&f, (row, text));
             }
             Outcome::Pop => {
+                let mut back = None;
                 if let Some(ps) = self.plugin_screen.as_mut()
                     && let Some(h) = ps.back_hooks.take()
                 {
-                    ps.hooks = h;
+                    back = std::mem::replace(&mut ps.hooks, h).on_back;
                 }
+                self.call_hook(&back, ());
             }
             Outcome::Query(_) => {
                 if let Some(ps) = self.plugin_screen.as_mut() {
