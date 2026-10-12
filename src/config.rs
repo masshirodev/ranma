@@ -2051,14 +2051,21 @@ fn install_api(
     // The runtime half: only meaningful while ranma is calling into Lua. During
     // config load there is no window manager to act on, so these refuse.
     // JSON for plugins that talk to command-line tools (`ai peers --json`,
-    // `gh ... --json`): serde both ways, null as nil.
+    // `gh ... --json`): serde both ways, null as nil. mlua's default makes
+    // null a sentinel, which is truthy: `if card.description then` would
+    // take a null description for one.
     let json = lua.create_table()?;
     json.set(
         "decode",
         lua.create_function(|lua, text: String| {
             let v: serde_json::Value = serde_json::from_str(&text)
                 .map_err(|e| rt_err(format!("ranma.json.decode: {e}")))?;
-            lua.to_value(&v)
+            lua.to_value_with(
+                &v,
+                mlua::serde::SerializeOptions::new()
+                    .serialize_none_to_null(false)
+                    .serialize_unit_to_null(false),
+            )
         })?,
     )?;
     json.set(
@@ -4768,5 +4775,12 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(e.contains("ranma.json.decode"), "{e}");
+        // null is nil, so `if x then` reads it as nothing.
+        let nil: bool = cfg
+            .lua
+            .load(r#"local t = ranma.json.decode('{"a": null, "b": [1, null, 3]}') return t.a == nil and not t.a and t.b[3] == 3 and t.b[2] == nil"#)
+            .eval()
+            .unwrap();
+        assert!(nil, "JSON null decodes to nil");
     }
 }
