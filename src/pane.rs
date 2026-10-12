@@ -143,6 +143,42 @@ struct ScanReader {
     /// output read after the placement, not yet looked at.
     out: Vec<u8>,
     raw: Vec<u8>,
+    /// A tag opened on a character split across reads: close it after this
+    /// many more bytes (see `osc`, "Tags").
+    close_after: Option<usize>,
+}
+
+/// What ends a tag: an OSC 8 with no address.
+const TAG_CLOSE: &[u8] = b"\x1b]8;;\x1b\\";
+
+/// The bytes a tag is: its opening OSC 8, then the character, then the close.
+fn tag_open(kinds: &str) -> Vec<u8> {
+    format!("\x1b]8;;{}{}\x1b\\", crate::osc::TAG, kinds).into_bytes()
+}
+
+/// How many bytes the UTF-8 character starting with `b` takes.
+fn char_len(b: u8) -> usize {
+    match b {
+        0xf0.. => 4,
+        0xe0.. => 3,
+        0xc0.. => 2,
+        _ => 1,
+    }
+}
+
+/// Put `text` in `buf[..*n]` at `at`, in place when it fits. When it does not,
+/// `buf[at..*n]` is handed back to be read again after `text`.
+fn insert(buf: &mut [u8], n: &mut usize, at: usize, text: &[u8]) -> Option<Vec<u8>> {
+    if *n + text.len() <= buf.len() {
+        buf.copy_within(at..*n, at + text.len());
+        buf[at..at + text.len()].copy_from_slice(text);
+        *n += text.len();
+        None
+    } else {
+        let rest = buf[at..*n].to_vec();
+        *n = at;
+        Some(rest)
+    }
 }
 
 /// While set, no pane reads its PTY: a server handing over to a new build
@@ -187,12 +223,26 @@ impl std::io::Read for ScanReader {
             self.raw.drain(..k);
             k
         };
+        // The close of a tag whose character a read split.
+        if let Some(k) = self.close_after.take() {
+            if k <= n {
+                if let Some(rest) = insert(buf, &mut n, k, TAG_CLOSE) {
+                    self.out = TAG_CLOSE.to_vec();
+                    let mut rest = rest;
+                    rest.append(&mut self.raw);
+                    self.raw = rest;
+                }
+            } else {
+                self.close_after = Some(k - n);
+            }
+        }
         let now = std::time::Instant::now();
         let mut at = 0;
         while at < n {
             let (marks, used) = self.scanner.feed_until_graphics(&buf[at..n], now);
             at += used;
             let mut placed = None;
+            let mut tag = None;
             for m in marks {
                 match m {
                     crate::osc::Mark::Graphics(body) => {
@@ -200,8 +250,47 @@ impl std::io::Read for ScanReader {
                         self.proxy.mark(crate::osc::Mark::Graphics(body));
                         placed = text;
                     }
+                    crate::osc::Mark::Tag(kinds) => tag = Some(kinds),
                     m => self.proxy.mark(m),
                 }
+            }
+            // A shell mark's tag around the character at `at`: open, the
+            // character, close (osc, "Tags"). The scan goes on from the
+            // open, which it reads as a link of ours and passes over.
+            if let Some(kinds) = tag {
+                let len = char_len(buf[at]);
+                let mut text = tag_open(&kinds);
+                if at + len <= n {
+                    text.extend_from_slice(&buf[at..at + len]);
+                    text.extend_from_slice(TAG_CLOSE);
+                    let mut whole = n;
+                    // Replace the character with open + character + close.
+                    buf.copy_within(at + len..n, at);
+                    whole -= len;
+                    if let Some(rest) = insert(buf, &mut whole, at, &text) {
+                        self.out = text;
+                        let mut rest = rest;
+                        rest.append(&mut self.raw);
+                        self.raw = rest;
+                        return Ok(at);
+                    }
+                    n = whole;
+                    at += text.len();
+                } else {
+                    self.close_after = Some(len - (n - at));
+                    if let Some(rest) = insert(buf, &mut n, at, &text) {
+                        // Read again from the character's start: all of it
+                        // comes before the close.
+                        self.close_after = Some(len);
+                        self.out = text;
+                        let mut rest = rest;
+                        rest.append(&mut self.raw);
+                        self.raw = rest;
+                        return Ok(at);
+                    }
+                    at += text.len();
+                }
+                continue;
             }
             // A direct placement: the placeholder cells go into the output
             // right after it, so they land at the cursor the program placed
@@ -532,6 +621,7 @@ impl Pane {
                 raw: Vec::new(),
                 file: master,
                 scanner: Default::default(),
+                close_after: None,
                 proxy: proxy.clone(),
             },
             inner: pty,
@@ -1031,6 +1121,114 @@ fn terminfo_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a shell printed, read through the PTY reader with reads of
+    /// `chunk` bytes into a buffer of `buf` (as the event loop does), parsed
+    /// by a real terminal: the commands its marks give.
+    fn through_the_reader(
+        bytes: &[u8],
+        chunk: usize,
+        buf: usize,
+    ) -> Term<alacritty_terminal::event::VoidListener> {
+        use std::io::{Read, Write};
+        let (r, mut w) = std::io::pipe().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut reader = ScanReader {
+            tee: Default::default(),
+            file: std::fs::File::from(std::os::fd::OwnedFd::from(r)),
+            scanner: Default::default(),
+            proxy: Proxy {
+                id: 1,
+                tx,
+                wakeup_pending: Default::default(),
+                live: Arc::new(AtomicBool::new(true)),
+            },
+            placer: Default::default(),
+            out: Vec::new(),
+            raw: Vec::new(),
+            close_after: None,
+        };
+        let config = alacritty_terminal::term::Config {
+            scrolling_history: 100,
+            ..Default::default()
+        };
+        let mut term = Term::new(
+            config,
+            &Size { cols: 20, rows: 6 },
+            alacritty_terminal::event::VoidListener,
+        );
+        let mut parser: alacritty_terminal::vte::ansi::Processor = Default::default();
+        let mut b = vec![0u8; buf];
+        for piece in bytes.chunks(chunk) {
+            w.write_all(piece).unwrap();
+            // Everything written comes back out, however the reader splits it.
+            loop {
+                let n = reader.read(&mut b).unwrap();
+                parser.advance(&mut term, &b[..n]);
+                if reader.out.is_empty() && reader.raw.is_empty() {
+                    break;
+                }
+            }
+        }
+        term
+    }
+
+    fn marks_through_the_reader(
+        bytes: &[u8],
+        chunk: usize,
+        buf: usize,
+    ) -> Vec<crate::panetext::CommandMarks> {
+        crate::panetext::marks(&through_the_reader(bytes, chunk, buf))
+    }
+
+    const SESSION: &[u8] = b"\x1b]133;A\x07\x1b[32m$\x1b[0m make\r\n\x1b]133;C\x07built\r\nok\r\n\
+        \x1b]133;D;2\x07\x1b]133;A\x07\x1b[32m$\x1b[0m \x1b]133;B\x07ls\r\n\x1b]133;C\x07\x1b]133;D;0\x07\x1b]133;A\x07\xc3\xa9$ ";
+
+    #[test]
+    fn marks_are_found_where_the_shell_put_them() {
+        let m = marks_through_the_reader(SESSION, 4096, 4096);
+        let line = |prompt, command, output, finished, exit| crate::panetext::CommandMarks {
+            prompt,
+            command: Some(command),
+            output,
+            finished,
+            exit,
+        };
+        assert_eq!(
+            m,
+            vec![
+                // make: output from line 1, finished (status 2) where the
+                // next prompt starts.
+                line(0, 0, Some(1), Some(3), Some(2)),
+                // ls: B on the prompt's line, no output, finished at once.
+                line(3, 3, Some(4), Some(4), Some(0)),
+                // The prompt waiting now: nothing run yet. Its first
+                // character is two bytes (é).
+                line(4, 4, None, None, None),
+            ]
+        );
+        // The tags draw nothing, and are nobody's link.
+        let t = through_the_reader(SESSION, 4096, 4096);
+        assert_eq!(
+            crate::panetext::lines(&t, 0, 4),
+            ["$ make", "built", "ok", "$ ls", "é$"]
+        );
+        assert_eq!(crate::panetext::link_at(&t, 0, 0), None);
+    }
+
+    #[test]
+    fn marks_survive_any_split_and_a_full_buffer() {
+        let whole = marks_through_the_reader(SESSION, 4096, 4096);
+        for chunk in [1, 2, 3, 5, 7] {
+            for buf in [8, 16, 64] {
+                assert_eq!(
+                    marks_through_the_reader(SESSION, chunk, buf),
+                    whole,
+                    "reads of {chunk} into a buffer of {buf}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn device_attributes_say_the_clipboard_is_passed_on() {

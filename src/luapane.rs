@@ -165,6 +165,24 @@ impl UserData for Handle {
             t.set("text", link.text)?;
             Ok(Some(t))
         });
+        m.add_method("marks", |lua, h, ()| {
+            let term = h.term()?;
+            let found = {
+                let term = term.lock();
+                panetext::marks(&term)
+            };
+            let out = lua.create_table()?;
+            for (i, m) in found.into_iter().enumerate() {
+                let t = lua.create_table()?;
+                t.set("prompt", m.prompt)?;
+                t.set("command", m.command)?;
+                t.set("output", m.output)?;
+                t.set("finished", m.finished)?;
+                t.set("exit", m.exit)?;
+                out.set(i + 1, t)?;
+            }
+            Ok(out)
+        });
         m.add_method("range", |_, h, ()| {
             let term = h.term()?;
             let term = term.lock();

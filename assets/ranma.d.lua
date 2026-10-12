@@ -374,6 +374,14 @@ function Pane:watch(pattern, fn) end
 ---@return { url: string, line: integer, col: integer, span: integer, text: string }?
 function Pane:link_at(line, col) end
 
+---Each command whose prompt is still in the scrollback, oldest first, from the
+---shell's OSC 133 marks: the line its prompt starts on, its command line
+---(OSC 133 B, else the prompt's line), its output (C) and where it finished
+---(D: the line the next prompt starts on), with its exit status. Lines as
+---:lines() numbers them. Empty for a shell that sends no marks.
+---@return { prompt: integer, command: integer, output: integer?, finished: integer?, exit: integer? }[]
+function Pane:marks() end
+
 ---This plugin's badge on the pane's border, after its title; no glyph takes
 ---it off. One per owner per pane, in the order owners first set one.
 ---@param owner string The plugin's name.

@@ -857,6 +857,23 @@ when a marked command finishes (`cd` is a command). There is no polling for it.
 A plugin's own events (`user:<name>`) run synchronously inside the emitting
 call, as Neovim's `User` autocommands do, with a depth limit for loops.
 
+**Shell marks in the grid** (`pane:marks()`, 2026-10-11). Where a prompt or
+a command's output starts is a position in the grid, and nobody can read it
+when the mark goes by: the PTY scanner sees the bytes before the emulator
+parses them, on the emulator's thread, which holds the terminal while it
+reads. A line taken on the UI thread when the mark's event arrives is a
+race (a command's output is usually parsed by then). So the scanner tags the
+next character printed after a mark with an OSC 8 link of ranma's own
+(`ranma:133:D2.A`), and the grid keeps it on that cell: through scrolling,
+through reflow on a resize, and out with the scrollback, so `pane:marks()`
+is bounded to what is still there without anything to prune. The tag goes
+on a printed character only, never inside a sequence (a CSI's parameters or
+an `ESC ( B` are followed to their end first), and never while a program's
+own link is open (it would end it). Hints and `link_at` leave `ranma:133:`
+out, and the renderer draws links as plain cells, so a tag shows nothing.
+`pane:marks()` reads the cells' links, which costs a scan of the scrollback
+per call: a plugin's key or hook, not a frame.
+
 **Watching a pane's screen** (`pane:watch`, 2026-10-09). The design first
 said "Rust matches completed lines". That was wrong for the agents it is for:
 a TUI such as Claude Code redraws a region, and its "Do you want to proceed?"

@@ -1778,6 +1778,8 @@ impl App {
                 self.nested_mark(id, m);
             }
             crate::osc::Mark::RanmaPasteImage => self.paste_image_asked(id),
+            // The reader puts tags into the output itself; none reach here.
+            crate::osc::Mark::Tag(_) => {}
             crate::osc::Mark::Graphics(body) => {
                 let out = self.graphics.handle(id, &body, self.host_graphics);
                 if !out.reply.is_empty() {
