@@ -9,7 +9,7 @@ repository = "https://github.com/masshirodev/ranma"
 readme = "README.md"
 keywords = ["terminal", "tiling", "window-manager", "multiplexer", "tui"]
 categories = ["command-line-utilities"]
-exclude = ["doc/briefs/", "doc/handoffs/", "doc/screenshot.png", "scripts/", ".githooks/"]
+exclude = ["doc/briefs/", "doc/handoffs/", "doc/screenshot.png", "doc/demo.gif", "doc/examples/screenshot/", "scripts/", ".githooks/", ".github/", "packaging/", "flake.nix", "flake.lock"]
 
 [dependencies]
 alacritty_terminal = "0.26"
@@ -29,3 +29,58 @@ signal-hook = "0.3"
 thiserror = "2"
 toml = "1"
 unicode-width = "0.2"
+
+# The packages below are made from the binary release.yml builds (doc/RELEASING.md),
+# never by a build of their own: every channel ships the same file.
+
+[package.metadata.deb]
+maintainer = "masshirodev <guilhermemrka@gmail.com>"
+copyright = "masshirodev"
+license-file = ["LICENSE-MIT", "0"]
+section = "utils"
+priority = "optional"
+depends = "$auto"
+recommends = "git"
+suggests = "wl-clipboard, xclip, openssh-client, xdg-utils"
+extended-description = """\
+i3's container tree and Hyprland's dwindle placement, where every window is a \
+PTY. Runs as a server that outlives its terminal, configured in Lua."""
+maintainer-scripts = "packaging/deb/"
+assets = [
+    ["target/release/ranma", "usr/bin/", "755"],
+    ["doc/man/man1/*", "usr/share/man/man1/", "644"],
+    ["doc/man/man5/*", "usr/share/man/man5/", "644"],
+    ["doc/man/man7/*", "usr/share/man/man7/", "644"],
+    ["LICENSE-MIT", "usr/share/doc/ranma/", "644"],
+    ["LICENSE-APACHE", "usr/share/doc/ranma/", "644"],
+    ["README.md", "usr/share/doc/ranma/", "644"],
+]
+
+[package.metadata.generate-rpm]
+summary = "A tiling window manager for the terminal"
+# Generated requirements name glibc symbol versions as [WEAK], which openSUSE
+# does not provide; the one real requirement is stated below.
+auto-req = "no"
+assets = [
+    { source = "target/release/ranma", dest = "/usr/bin/ranma", mode = "755" },
+    { source = "doc/man/man1/*", dest = "/usr/share/man/man1/", mode = "644", doc = true },
+    { source = "doc/man/man5/*", dest = "/usr/share/man/man5/", mode = "644", doc = true },
+    { source = "doc/man/man7/*", dest = "/usr/share/man/man7/", mode = "644", doc = true },
+    { source = "LICENSE-MIT", dest = "/usr/share/licenses/ranma/LICENSE-MIT", mode = "644" },
+    { source = "LICENSE-APACHE", dest = "/usr/share/licenses/ranma/LICENSE-APACHE", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/ranma/README.md", mode = "644", doc = true },
+]
+# Upgrades only ($1 is 2 or more): the same note as the AUR's and the .deb's.
+post_install_script = "packaging/rpm/post_install.sh"
+
+[package.metadata.generate-rpm.requires]
+glibc = ">= 2.34"
+
+[package.metadata.generate-rpm.recommends]
+git = "*"
+
+# cargo binstall ranma: the release tarball instead of a build.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }.tar.gz"
+bin-dir = "{ name }-{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"

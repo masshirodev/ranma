@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ranma packages</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1d1d1f; --bg: #fafafa; --code: #eceef1; --muted: #5b6270; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #e6e6e6; --bg: #16171a; --code: #24262b; --muted: #9aa1ad; } }
+  body { margin: 0 auto; max-width: 46rem; padding: 2rem 16px; font: 16px/1.55 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  pre { background: var(--code); padding: .8rem 1rem; border-radius: 6px; overflow-x: auto; font-size: 14px; }
+  code { font-family: ui-monospace, monospace; }
+  p.small { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>ranma packages</h1>
+<p>Release builds of <a href="https://github.com/masshirodev/ranma">ranma</a>, a tiling window manager for the terminal, for Linux with glibc 2.34 or newer, on x86_64 and aarch64. Every channel ships the same binary.</p>
+
+<h2>Any distro</h2>
+<pre><code>curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh</code></pre>
+
+<h2>Debian, Ubuntu</h2>
+<pre><code>sudo install -d /etc/apt/keyrings
+curl -fsSL https://masshirodev.github.io/ranma/ranma.asc | sudo tee /etc/apt/keyrings/ranma.asc &gt;/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/ranma.asc] https://masshirodev.github.io/ranma/deb stable main" | sudo tee /etc/apt/sources.list.d/ranma.list
+sudo apt update &amp;&amp; sudo apt install ranma</code></pre>
+
+<h2>Fedora, RHEL, openSUSE</h2>
+<pre><code>sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ranma/ranma.repo
+sudo dnf install ranma</code></pre>
+<p class="small">openSUSE: <code>sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo &amp;&amp; sudo zypper install ranma</code></p>
+
+<h2>Arch, Nix, cargo, npm</h2>
+<p>See <a href="https://github.com/masshirodev/ranma#install">the README's Install section</a>.</p>
+
+<p class="small">Signing key: <a href="ranma.asc">ranma.asc</a>, fingerprint <code>91193BB09A931FAEA274C4F30792F721B44E7B30</code>. After a package manager upgrades ranma, run <code>ranma --check-config &amp;&amp; ranma upgrade --all</code> as your user to move running servers onto it.</p>
+</body>
+</html>

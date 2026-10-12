@@ -92,13 +92,48 @@ you add, installed with one key. A few to start from:
 
 ## Install
 
-On Arch, from the AUR: `ranma-bin` (the release binary) or `ranma-git` (built
-from `main`). Elsewhere, each [release](https://github.com/masshirodev/ranma/releases)
-has a tarball for x86_64 Linux with glibc 2.34 or newer: put `ranma` on your
+Release builds run on any Linux with glibc 2.34 or newer (Ubuntu 22.04,
+Debian 12, Fedora 35, RHEL 9 and later), on x86_64 and aarch64.
+
+Any distro, into `~/.local` (or `/usr/local` as root); run it again to update:
+
+```sh
+curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh
+```
+
+Debian and Ubuntu, from the apt repository:
+
+```sh
+sudo install -d /etc/apt/keyrings
+curl -fsSL https://masshirodev.github.io/ranma/ranma.asc | sudo tee /etc/apt/keyrings/ranma.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/ranma.asc] https://masshirodev.github.io/ranma/deb stable main" \
+  | sudo tee /etc/apt/sources.list.d/ranma.list
+sudo apt update && sudo apt install ranma
+```
+
+Fedora, RHEL and openSUSE, from the dnf repository:
+
+```sh
+sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ranma/ranma.repo
+sudo dnf install ranma      # openSUSE: sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma
+```
+
+Arch, from the AUR: `ranma-bin` (the release binary) or `ranma-git` (built
+from `main`).
+
+Nix: `nix run github:masshirodev/ranma`, or `packages.<system>.default` /
+`overlays.default` of the flake in a NixOS or home-manager config.
+
+Rust users: `cargo binstall ranma` (the release binary) or `cargo install
+ranma` (built). npm: `npm install -g @masshirodev/ranma` (Node stays running
+beside each client; the others do not need it).
+
+Or by hand: each [release](https://github.com/masshirodev/ranma/releases) has
+the tarball, `.deb` and `.rpm` for both architectures. Put `ranma` on your
 `PATH` and the `man/` pages under a `share/man` beside it.
 
-pacman and a copied binary skip what `install.sh` does after an upgrade. Run
-it yourself:
+A package manager replaces the binary but skips what `install.sh` does after
+an upgrade. Run it yourself:
 
 ```sh
 ranma --check-config && ranma upgrade --all   # check the new build, then move running servers onto it

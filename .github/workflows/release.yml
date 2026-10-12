@@ -1,10 +1,12 @@
-# Builds the release binary and, on a v* tag, publishes it as a GitHub release.
-# doc/RELEASING.md is the procedure.
+# Builds the release binaries and packages and, on a v* tag, publishes them:
+# the GitHub release, the apt and dnf repositories on GitHub Pages, and, when
+# their tokens are set, crates.io and npm. doc/RELEASING.md is the procedure.
 #
-# The build runs on ubuntu-22.04 on purpose: a binary needs the glibc it was
+# The builds run on ubuntu-22.04 on purpose: a binary needs the glibc it was
 # linked against or newer, and 22.04's 2.35 is older than every current distro
 # (a build on Arch asks for whatever Arch has, 2.44 at the time of writing).
-# workflow_dispatch builds the same tarball as an artifact without releasing.
+# Every channel ships these two binaries; nothing is built twice.
+# workflow_dispatch builds and tests everything without publishing.
 name: release
 
 on:
@@ -13,20 +15,30 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
     env:
-      TARGET: x86_64-unknown-linux-gnu
+      TARGET: ${{ matrix.target }}
       # A packaged build never updates itself from source (src/update.rs).
-      RANMA_PACKAGED: "a release build (GitHub releases, or the AUR's ranma-bin)"
+      RANMA_PACKAGED: "a release build (update it with the package manager that installed it, or by running install.sh again)"
     steps:
       - uses: actions/checkout@v4
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
 
       - name: The tag matches Cargo.toml
         if: startsWith(github.ref, 'refs/tags/')
@@ -39,34 +51,133 @@ jobs:
         run: cargo test --locked --quiet
       - name: Build
         run: cargo build --locked --release --target "$TARGET"
-
       - name: Package
         run: |
-          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
-          name="ranma-$version-$TARGET"
-          mkdir -p "dist/$name"
-          cp "target/$TARGET/release/ranma" "dist/$name/"
-          cp -r doc/man "dist/$name/man"
-          cp LICENSE-MIT LICENSE-APACHE README.md "dist/$name/"
-          tar -C dist -czf "dist/$name.tar.gz" "$name"
-          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
-          echo "NAME=$name" >> "$GITHUB_ENV"
-          # The newest glibc symbol the binary asks for: the oldest distro it runs on.
-          objdump -T "dist/$name/ranma" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
-          "dist/$name/ranma" --version
+          packaging/package.sh "$TARGET"
+          "target/$TARGET/release/ranma" --version
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.NAME }}
-          path: |
-            dist/${{ env.NAME }}.tar.gz
-            dist/${{ env.NAME }}.tar.gz.sha256
+          name: dist-${{ matrix.target }}
+          path: dist/*
 
+  # Every package installed on the distros it is for, in Docker, on its own
+  # architecture: packaging/test/run.sh, which also runs on the workstation.
+  install-test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: deb, rpm and install.sh
+        run: packaging/test/run.sh deb rpm script
+      - name: The apt and dnf repositories
+        if: matrix.runner == 'ubuntu-24.04'
+        run: packaging/test/run.sh repo
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: install-test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256" \
+          gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  # The apt and dnf repositories, rebuilt whole from the last releases' packages
+  # (packaging/repo/build.sh keeps three of each) and deployed as the Pages site.
+  pages:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq apt-utils createrepo-c rpm
+      - name: The last releases' packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p pkgs
+          for tag in $(gh release list --limit 3 --json tagName -q '.[].tagName'); do
+            gh release download "$tag" --dir pkgs --pattern '*.deb' --pattern '*.rpm' || true
+          done
+          ls -l pkgs
+      - name: Signing key
+        env:
+          KEY: ${{ secrets.RANMA_PKG_SIGNING_KEY }}
+        run: |
+          printf '%s\n' "$KEY" | gpg --batch --import
+          echo "RANMA_PKG_KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')" >> "$GITHUB_ENV"
+      - name: Build the site
+        run: mkdir site && packaging/repo/build.sh pkgs site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  # Published only once the token is set as a repository secret, so a release
+  # without it still goes out everywhere else.
+  crates-io:
+    needs: release
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.CARGO_REGISTRY_TOKEN != ''
+      - if: env.CARGO_REGISTRY_TOKEN != ''
+        run: cargo publish --locked
+
+  npm:
+    needs: release
+    runs-on: ubuntu-24.04
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.NODE_AUTH_TOKEN != ''
+      - uses: actions/setup-node@v4
+        if: env.NODE_AUTH_TOKEN != ''
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        if: env.NODE_AUTH_TOKEN != ''
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Publish, the platform packages first
+        if: env.NODE_AUTH_TOKEN != ''
+        run: |
+          packaging/npm/build.sh dist npm
+          for p in ranma-linux-x64 ranma-linux-arm64 ranma; do
+            (cd "npm/$p" && npm publish --access public)
+          done

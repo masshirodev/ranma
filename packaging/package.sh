@@ -1,0 +1,35 @@
+#!/bin/sh
+# Package a built ranma into everything a release ships, in dist/:
+#
+#   ranma-<version>-<target>.tar.gz (+ .sha256)   the tarball: AUR ranma-bin,
+#                                                 install.sh, cargo binstall
+#   ranma_<version>-1_<arch>.deb                  apt, and by hand
+#   ranma-<version>-1.<arch>.rpm                  dnf and zypper, and by hand
+#
+# Usage: packaging/package.sh TARGET   (after cargo build --release --target TARGET)
+#
+# release.yml runs this, and so does packaging/test/build.sh in a container, so
+# what is tested locally is what ships. Needs cargo-deb and cargo-generate-rpm.
+set -eu
+
+target="${1:?usage: packaging/package.sh TARGET}"
+cd "$(dirname "$0")/.."
+bin="target/$target/release/ranma"
+[ -x "$bin" ] || { echo "no $bin: build it first" >&2; exit 1; }
+
+version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+name="ranma-$version-$target"
+mkdir -p "dist/$name"
+cp "$bin" "dist/$name/"
+cp -r doc/man "dist/$name/man"
+cp LICENSE-MIT LICENSE-APACHE README.md "dist/$name/"
+tar -C dist -czf "dist/$name.tar.gz" "$name"
+(cd dist && sha256sum "$name.tar.gz" >"$name.tar.gz.sha256")
+rm -r "dist/${name:?}"
+
+cargo deb --no-build --no-strip --target "$target" --output dist/
+cargo generate-rpm --target "$target" --output dist/
+
+# The newest glibc symbol the binary asks for: the oldest distro it runs on.
+objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+ls -l dist/
