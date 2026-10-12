@@ -8,7 +8,6 @@
 //! each look, so a hidden agent's prompt is still seen, at most ten times a
 //! second while it prints.
 
-use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::term::search::RegexSearch;
@@ -26,8 +25,8 @@ pub(super) struct Watch {
     pane: PaneId,
     regex: RegexSearch,
     f: std::rc::Rc<mlua::RegistryKey>,
-    /// The rows matched at the last look.
-    seen: HashSet<String>,
+    /// The rows matched at the last look, by text, how many of each.
+    seen: panetext::SeenRows,
 }
 
 impl App {
@@ -54,7 +53,7 @@ impl App {
                 pane,
                 regex,
                 f,
-                seen: HashSet::new(),
+                seen: Default::default(),
             },
         );
         // A first look now: a match already on screen is news too.
@@ -70,6 +69,22 @@ impl App {
     /// A pane printed: if something watches it, look at it soon.
     pub(super) fn watch_output(&mut self, pane: PaneId) {
         if self.watches.values().any(|w| w.pane == pane) {
+            self.watch_pending.insert(pane);
+            if self.watch_due.is_none() {
+                self.watch_due = Some(Instant::now() + WATCH_LOOK);
+            }
+        }
+    }
+
+    /// A command started in the pane: what its watches saw belongs to the
+    /// last run, and the same line printed again by this one is news.
+    pub(super) fn rewatch(&mut self, pane: PaneId) {
+        let mut any = false;
+        for w in self.watches.values_mut().filter(|w| w.pane == pane) {
+            w.seen.clear();
+            any = true;
+        }
+        if any {
             self.watch_pending.insert(pane);
             if self.watch_due.is_none() {
                 self.watch_due = Some(Instant::now() + WATCH_LOOK);
@@ -102,7 +117,7 @@ impl App {
                     for s in panetext::new_matches(&w.seen, &now) {
                         calls.push((w.f.clone(), pane, s));
                     }
-                    w.seen = now.into_iter().map(|s| s.row).collect();
+                    w.seen = panetext::seen_rows(&now);
                 }
             }
             // Out of sight, a pane sends one wakeup and then none until it is

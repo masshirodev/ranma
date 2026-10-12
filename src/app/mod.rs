@@ -1803,6 +1803,7 @@ impl App {
                     t.set("title", title)?;
                     t.set("command", command)
                 });
+                self.rewatch(id);
             }
             crate::osc::Mark::Cwd { host, path } => self.saw_cwd(id, path, Some(host)),
             crate::osc::Mark::CommandFinished { exit, duration } => {
@@ -3287,6 +3288,14 @@ impl App {
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
                         config::Op::Copy(text) => self.set_host_clipboard(&text, "lua", None),
+                        config::Op::RefreshModule(name) => {
+                            if self.config.modules.contains_key(&name) {
+                                self.run_module(&name);
+                            } else {
+                                self.status =
+                                    Some(format!("ranma.refresh_module: no module `{name}`"));
+                            }
+                        }
                         config::Op::Unwatch(id) => self.unwatch(id),
                         config::Op::Tooltip(spec) => {
                             self.tooltip = spec.and_then(|t| {
@@ -4975,6 +4984,19 @@ mod tests {
         a.handle(AppEvent::Input(Event::FocusGained));
         let heard: Vec<String> = a.config.lua.load("return heard").eval().unwrap();
         assert_eq!(heard, ["false/false", "true/true"], "once per change");
+    }
+
+    #[test]
+    fn a_module_shows_new_data_when_its_plugin_says_so() {
+        let mut a = app(Some(
+            r#"data = "old"
+            ranma.module("feed", { render = function() return data end })
+            ranma.bind("z", function() data = "new" ranma.refresh_module("feed") end)"#,
+        ));
+        a.run_module("feed");
+        assert_eq!(a.segment("feed")[0].text, "old");
+        a.run_bind("z".parse().unwrap(), false);
+        assert_eq!(a.segment("feed")[0].text, "new", "at once, no interval");
     }
 
     #[test]
