@@ -154,6 +154,9 @@ t_brew() {
     [ -f "$f" ] || printf '%064d  -\n' 0 >"$f"
   done
   sh packaging/brew/formula.sh "$version" "$sums" file:///dist >"$sums/ranma.rb"
+  # The container reads it as linuxbrew (uid 1000), which mktemp's 0700 shuts
+  # out wherever the caller is not uid 1000 too (a CI runner is 1001).
+  chmod 755 "$sums" && chmod 644 "$sums"/*
   EXTRA="-v $sums:/formula:ro -e HOMEBREW_NO_AUTO_UPDATE=1 -e HOMEBREW_NO_ANALYTICS=1" \
     case_ "brew formula from a tap" homebrew/brew:latest "
       brew tap-new --no-git local/test >/dev/null
