@@ -163,6 +163,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `scrollback_lines` | `10000` | Scrollback per pane. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot, except one bound with `{ exit = false }`). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
+| `wm_mode.hint_at` | `"bar"` | Where the which-key hint stands: `"bar"` (on the bar from its left end, by the mode), or `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` of the space the panes use, clear of the bar. A user mode may set its own. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout. It reads images only. Unset: `powershell.exe` under WSL, the pasteboard through `osascript` on macOS (nothing to install), `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
 | `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. See [ranma inside ranma](#ranma-inside-ranma). |
@@ -379,7 +380,8 @@ above). It is at most half the screen high and takes more columns on a
 wide one; groups that do not fit are named in its bottom frame
 (`+sessions · history · ranma`), and `? all keys` is there for the rest. A
 small screen gets the binds flowed without headings, and one under 30×6
-nothing. `wm_mode = { hint = false }` turns it off.
+nothing. `wm_mode = { hint = false }` turns it off, and `hint_at` moves it
+off the bar to a corner or the centre (`wm_mode = { hint_at = "top_right" }`).
 
 ## A scrolling layout
 
@@ -1865,6 +1867,7 @@ ranma.mode("resize", {
   },
   sticky = true,                           -- stay after a bind (default)
   hint = 1.5,                              -- its own which-key pause (below)
+  hint_at = "top_right",                   -- and where it stands; default: wm_mode.hint_at
   on_enter = function() end,
   on_exit = function() end,
 })

@@ -89,6 +89,10 @@ ranma.set {
     -- keys do (the which-key hint); after a key it waits twice as long before
     -- showing again. It never takes a key. false turns it off.
     hint = 0.5,
+    -- Where that panel stands: "bar" (on the bar, by the mode), "top_left",
+    -- "top_right", "bottom_left", "bottom_right" or "center" of the panes'
+    -- space. A ranma.mode may set its own hint_at.
+    hint_at = "bar",
   },
 
   -- What the mouse does outside WM mode:

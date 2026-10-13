@@ -244,6 +244,11 @@ Default: \fB0.5\fR
 .br
 Seconds of pause in WM mode before the which\-key hint shows (below), or \fBfalse\fR for never.
 .TP
+\fBwm_mode.hint_at\fR
+Default: \fB"bar"\fR
+.br
+Where the which\-key hint stands: \fB"bar"\fR (on the bar from its left end, by the mode), or \fB"top_left"\fR, \fB"top_right"\fR, \fB"bottom_left"\fR, \fB"bottom_right"\fR, \fB"center"\fR of the space the panes use, clear of the bar. A user mode may set its own.
+.TP
 \fBpaste.upload\fR
 Default: \fBtrue\fR
 .br
@@ -654,7 +659,8 @@ above). It is at most half the screen high and takes more columns on a
 wide one; groups that do not fit are named in its bottom frame
 (\fB+sessions · history · ranma\fR), and \fB? all keys\fR is there for the rest. A
 small screen gets the binds flowed without headings, and one under 30×6
-nothing. \fBwm_mode = { hint = false }\fR turns it off.
+nothing. \fBwm_mode = { hint = false }\fR turns it off, and \fBhint_at\fR moves it
+off the bar to a corner or the centre (\fBwm_mode = { hint_at = "top_right" }\fR).
 .SH "A SCROLLING LAYOUT"
 .PP
 \fBranma.set { layout = "scrolling" }\fR lays each workspace out as
@@ -2460,6 +2466,7 @@ ranma.mode("resize", {
   },
   sticky = true,                           \-\- stay after a bind (default)
   hint = 1.5,                              \-\- its own which\-key pause (below)
+  hint_at = "top_right",                   \-\- and where it stands; default: wm_mode.hint_at
   on_enter = function() end,
   on_exit = function() end,
 })

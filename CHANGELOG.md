@@ -15,6 +15,8 @@ commit log has the detail.
 
 ### Added
 
+- `wm_mode.hint_at`: where the which-key hint stands, on the bar (as
+  before) or in a corner or the centre; `ranma.mode` takes its own.
 - In a user mode, a key the mode does not bind runs its global bind
   (alt+arrows, alt+digits, ...) and the mode stays; before, it was
   swallowed. Plain WM mode is unchanged.

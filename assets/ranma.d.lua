@@ -42,7 +42,7 @@ ranma.config_dir = nil
 ---@field splash? boolean An empty workspace shows the logo and how to start.
 ---@field shell? string Program for new panes; nil means $SHELL, then /bin/sh.
 ---@field scrollback_lines? integer Scrollback per pane.
----@field wm_mode? { sticky?: boolean, hint?: number|false }
+---@field wm_mode? { sticky?: boolean, hint?: number|false, hint_at?: ranma.HintAt }
 ---@field paste? { upload?: boolean, image_command?: string }
 ---@field mouse? "click"|"hover"|"off"
 ---@field updates? "remind"|"prompt"|"off"
@@ -112,10 +112,13 @@ function ranma.get(key) end
 ---@param opts? ranma.BindOpts
 function ranma.bind(keys, action, opts) end
 
+---@alias ranma.HintAt "bar"|"top_left"|"top_right"|"bottom_left"|"bottom_right"|"center"
+
 ---@class ranma.Mode
 ---@field binds table<string, string|fun()|{ [1]: string|fun(), desc?: string, exit?: boolean }> Its keys: an action, a function, or either with options.
 ---@field label? string What the bar's mode module says while it is on; the name in capitals by default.
 ---@field sticky? boolean Stay in it after a bind fires (default true); Esc and Enter leave.
+---@field hint_at? ranma.HintAt Where its which-key hint stands; nil follows wm_mode.hint_at.
 ---@field hint? boolean|number Its which-key pause in seconds (0 to 10); false never shows the hint in it; true or nil follows wm_mode.hint.
 ---@field on_enter? fun()
 ---@field on_exit? fun()
