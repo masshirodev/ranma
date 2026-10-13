@@ -201,7 +201,7 @@ finally:
 PY
 T send-keys -t s "clear; python3 $CFG/mouse.py $CFG/mouse.log" Enter
 wait_for 'mouse-ready' || fail "mouse probe did not start"
-bx=$(( $(bar | sed 's/ 1\(:[a-z0-9]*\)\? .*//' | wc -m) + 1 ))
+bx=$(( $(bar | sed -E 's/ 1(:[a-z0-9]*)? .*//' | wc -m) + 1 ))
 by=$(screen | wc -l)
 for e in "35;$bx;${by}M" "0;$bx;${by}M" "0;$bx;${by}m"; do
   T send-keys -t s -l $'\e[<'"$e"; sleep 0.1
@@ -773,10 +773,10 @@ bar | grep -Eq '^ 1[: ]' || fail "not back on main after the session ended"
 # The pane menu: a right click in a shell opens it at the pointer; picking
 # Float floats the pane, and Tile from the same menu puts it back.
 T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
-screen | grep -q '│▌\? *Float' || fail "a right click did not open the pane menu"
+screen | grep -Eq '│▌? *Float' || fail "a right click did not open the pane menu"
 T send-keys -t s Enter; sleep 0.5
 T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
-screen | grep -q '│▌\? *Tile' || fail "the menu of a floated pane does not offer Tile"
+screen | grep -Eq '│▌? *Tile' || fail "the menu of a floated pane does not offer Tile"
 T send-keys -t s Enter; sleep 0.5
 
 # URL hints: a link printed in the pane gets a label; typing it copies the link.
