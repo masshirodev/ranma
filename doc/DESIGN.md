@@ -1050,6 +1050,24 @@ host's**. Decided with it:
   inner ranma should take the outer's palette too is a question for when
   someone wants it; the inner's own theme applies meanwhile.
 
+**Gradient borders, one colour per cell** (2026-10-12), Hyprland's
+`col.active_border = a b 45deg` in a terminal's terms. A border is a row of
+cells and each can have its own colour, so it is a gradient in steps: fine on
+a long edge, visible bands on a short one, and nothing like a pixel
+gradient; the docs say so. Decided with it:
+
+- **Separate keys, `border_*_gradient`**, not `border_active` taking a list:
+  that key is one colour to the settings panel, to the colours an inner ranma
+  borrows, and to every theme written; a second key leaves all of them as
+  they were.
+- **Per pane**, over its own border, as Hyprland does per window; a row
+  counts as two columns, so an angle looks like the angle.
+- **Static.** It is computed when the border is drawn, which is on change
+  only, and never rotates: that would be the animation the rendering rules
+  leave out.
+- **Never in WM mode.** The focused border's one mode colour is how you know
+  where the next action goes.
+
 **A border title naming `{program}` or `{cwd}` costs a frame nothing.** Both
 come from /proc, so they are read where the workspaces module's program
 names are, after a key or a pane's output and at most every 500 ms, for the

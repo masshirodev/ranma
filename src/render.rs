@@ -673,6 +673,73 @@ fn draw_edge(f: &mut Frame, app: &App, e: &crate::app::Edge) {
     }
 }
 
+/// The colour at `t` (0-1) along evenly spaced stops.
+fn gradient_at(stops: &[crate::hostcolors::Rgb], t: f32) -> Color {
+    let n = stops.len() - 1;
+    let pos = t.clamp(0.0, 1.0) * n as f32;
+    let i = (pos.floor() as usize).min(n.saturating_sub(1));
+    let f = pos - i as f32;
+    let (a, z) = (stops[i], stops[(i + 1).min(n)]);
+    let mix = |a: u8, z: u8| (a as f32 + (z as f32 - a as f32) * f).round() as u8;
+    Color::Rgb(mix(a.r, z.r), mix(a.g, z.g), mix(a.b, z.b))
+}
+
+/// Recolours the cells of `r`'s edge drawn in `edge`'s colour (the border
+/// and the title, not badges) along a gradient at `angle` degrees. A row
+/// counts double: a cell is about twice as tall as it is wide, so 45 runs
+/// corner to corner as it looks. Stops that cannot be known as RGB (an index
+/// the host did not report) leave the border one colour.
+fn gradient_edge(
+    f: &mut Frame,
+    r: crate::layout::Rect,
+    edge: Color,
+    stops: &[theme::Color],
+    angle: u16,
+    host: &crate::hostcolors::HostColors,
+) {
+    let rgb: Option<Vec<crate::hostcolors::Rgb>> = stops
+        .iter()
+        .map(|c| match *c {
+            theme::Color::Rgb(r, g, b) => Some(crate::hostcolors::Rgb { r, g, b }),
+            theme::Color::Indexed(i) => host.get(i as usize),
+            theme::Color::Default => host.fg,
+        })
+        .collect();
+    let Some(rgb) = rgb else {
+        return;
+    };
+    if r.w == 0 || r.h == 0 {
+        return;
+    }
+    let (sin, cos) = (angle as f32).to_radians().sin_cos();
+    let proj = |x: f32, y: f32| x * cos + y * 2.0 * sin;
+    let corners = [
+        proj(0.0, 0.0),
+        proj((r.w - 1) as f32, 0.0),
+        proj(0.0, (r.h - 1) as f32),
+        proj((r.w - 1) as f32, (r.h - 1) as f32),
+    ];
+    let lo = corners.iter().copied().fold(f32::MAX, f32::min);
+    let hi = corners.iter().copied().fold(f32::MIN, f32::max);
+    let span = (hi - lo).max(f32::EPSILON);
+    let screen = f.area();
+    let buf = f.buffer_mut();
+    for y in r.y..r.y + r.h {
+        for x in r.x..r.x + r.w {
+            let on_edge = y == r.y || y == r.y + r.h - 1 || x == r.x || x == r.x + r.w - 1;
+            if !on_edge || x >= screen.right() || y >= screen.bottom() {
+                continue;
+            }
+            let cell = &mut buf[(x, y)];
+            if cell.fg != edge {
+                continue;
+            }
+            let t = (proj((x - r.x) as f32, (y - r.y) as f32) - lo) / span;
+            cell.set_fg(gradient_at(&rgb, t));
+        }
+    }
+}
+
 fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     let theme = &app.config.theme;
     let b = &theme.border;
@@ -779,6 +846,25 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     }
     let r = view.outer;
     f.render_widget(block, rrect(r));
+    // A gradient: the edge's cells, recoloured one by one. Not in WM mode,
+    // whose one colour is the point.
+    let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
+    let stops = match (view.focused, mode_edge, view.floating) {
+        (_, true, _) => None,
+        (true, false, _) => c.border_active_gradient.as_deref(),
+        (false, _, true) => c.border_floating_gradient.as_deref(),
+        (false, _, false) => c.border_inactive_gradient.as_deref(),
+    };
+    if let Some(stops) = stops {
+        gradient_edge(
+            f,
+            r,
+            color(border),
+            stops,
+            b.gradient_angle,
+            &app.host_colors,
+        );
+    }
     if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
         let buf = f.buffer_mut();
         let (mx, my) = (r.x + r.w / 2, r.y + r.h / 2);
@@ -1763,6 +1849,76 @@ fn term_color(c: AColor, overrides: &alacritty_terminal::term::color::Colors) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_gradient_runs_along_its_angle_one_colour_per_cell() {
+        use crate::hostcolors::{HostColors, Rgb};
+        use ratatui::{Terminal, backend::TestBackend, widgets::Block};
+        let stops = [
+            Rgb { r: 0, g: 0, b: 0 },
+            Rgb {
+                r: 200,
+                g: 100,
+                b: 0,
+            },
+        ];
+        assert_eq!(gradient_at(&stops, 0.0), Color::Rgb(0, 0, 0));
+        assert_eq!(gradient_at(&stops, 0.5), Color::Rgb(100, 50, 0));
+        assert_eq!(gradient_at(&stops, 1.0), Color::Rgb(200, 100, 0));
+        let three = [stops[0], stops[1], Rgb { r: 0, g: 0, b: 250 }];
+        assert_eq!(
+            gradient_at(&three, 0.5),
+            Color::Rgb(200, 100, 0),
+            "the middle stop"
+        );
+
+        let draw = |angle: u16| {
+            let mut t = Terminal::new(TestBackend::new(11, 4)).unwrap();
+            t.draw(|f| {
+                let edge = Color::Rgb(9, 9, 9);
+                f.render_widget(
+                    Block::bordered().border_style(Style::default().fg(edge)),
+                    f.area(),
+                );
+                let stops = [theme::Color::Rgb(0, 0, 0), theme::Color::Rgb(100, 0, 0)];
+                let r = crate::layout::Rect::new(0, 0, 11, 4);
+                gradient_edge(f, r, edge, &stops, angle, &HostColors::default());
+            })
+            .unwrap();
+            t.backend().buffer().clone()
+        };
+        // 0: left to right, the same down a column.
+        let b = draw(0);
+        assert_eq!(b[(0, 0)].fg, Color::Rgb(0, 0, 0));
+        assert_eq!(b[(10, 0)].fg, Color::Rgb(100, 0, 0));
+        assert_eq!(b[(5, 0)].fg, Color::Rgb(50, 0, 0));
+        assert_eq!(b[(0, 3)].fg, b[(0, 0)].fg);
+        // 90: top to bottom, the same along a row.
+        let b = draw(90);
+        assert_eq!(b[(0, 0)].fg, Color::Rgb(0, 0, 0));
+        assert_eq!(b[(0, 3)].fg, Color::Rgb(100, 0, 0));
+        assert_eq!(b[(10, 0)].fg, b[(0, 0)].fg);
+        // An index the host never reported: one colour, as before.
+        let mut t = Terminal::new(TestBackend::new(5, 3)).unwrap();
+        t.draw(|f| {
+            let edge = Color::Rgb(9, 9, 9);
+            f.render_widget(
+                Block::bordered().border_style(Style::default().fg(edge)),
+                f.area(),
+            );
+            let stops = [theme::Color::Indexed(1), theme::Color::Rgb(1, 1, 1)];
+            gradient_edge(
+                f,
+                crate::layout::Rect::new(0, 0, 5, 3),
+                edge,
+                &stops,
+                0,
+                &HostColors::default(),
+            );
+        })
+        .unwrap();
+        assert_eq!(t.backend().buffer()[(4, 0)].fg, Color::Rgb(9, 9, 9));
+    }
 
     #[test]
     fn the_themes_palette_is_under_the_programs_own_colours() {

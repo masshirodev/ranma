@@ -2616,6 +2616,12 @@ toasts (their border is \fBbar_accent\fR, or \fBbar_urgent\fR when urgent)
 \fBcolors.module_bg\fR, \fBmodule_fg\fR
 a bar module's ground, between \fBbar.module_left\fR and \fBmodule_right\fR, and its \fBnormal\fR text there; unset, modules sit on \fBbar_bg\fR
 .TP
+\fBcolors.border_active_gradient\fR, \fBborder_inactive_gradient\fR, \fBborder_floating_gradient\fR
+two colours or more: the border runs through them along \fBborder.gradient_angle\fR instead of being one colour, spread over each pane's own border, one colour per cell (a terminal cannot shade inside a cell, so a short border shows the steps). Not while the focused border is in the WM\-mode colour. A colour the host terminal did not report (an index or \fBdefault\fR with no answer) leaves that border one colour. Unset, the one colour.
+.TP
+\fBborder.gradient_angle\fR
+\fB0\fR\-\fB359\fR degrees: \fB0\fR left to right, \fB90\fR top to bottom, clockwise. A row counts as two columns, so \fB45\fR runs corner to corner as it looks. \fB0\fR by default.
+.TP
 \fBborder.style\fR
 \fBrounded\fR, \fBplain\fR, \fBthick\fR, \fBdouble\fR, \fBascii\fR (\fB+ \- \e|\fR), \fBcustom\fR, \fBnone\fR
 .TP
