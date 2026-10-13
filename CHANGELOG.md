@@ -15,6 +15,13 @@ commit log has the detail.
 
 ### Added
 
+- **macOS**, arm64 and Intel: release tarballs, the Homebrew formula and
+  `install.sh`. What ranma asks of the OS (a pane's program, command line and
+  directory, cpu and mem, an adopted child's exit) comes from libproc,
+  sysctl, the host statistics and kqueue there. Configuration and state stay
+  in `~/.config`, `~/.cache` and `~/.local`, links open with `open`, and
+  `paste_image` reads the pasteboard through `osascript`. Tested in CI, not
+  yet by hand on a Mac.
 - `wm_mode.hint_at`: where the which-key hint stands, on the bar (as
   before) or in a corner or the centre; `ranma.mode` takes its own.
 - In a user mode, a key the mode does not bind runs its global bind
@@ -22,7 +29,6 @@ commit log has the detail.
   swallowed. Plain WM mode is unchanged.
 - `ranma.mode(name, { hint = ... })`: a user mode's own which-key pause;
   `false` keeps the hint out of that mode while WM mode keeps it.
-
 - Renamed names keep working: an old setting, theme key, action, event or
   option is read as its new name, with a warning naming the file and line,
   and `--check-config` still passes (CONFIG.md, "Updating").
