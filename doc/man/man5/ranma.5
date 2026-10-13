@@ -2453,6 +2453,9 @@ the global bind\fR's, if it has one
 (\fBalt+1\fR goes to workspace 1, \fBalt+left\fR focuses left) and the mode stays;
 any other is swallowed, as in WM mode. Plain WM mode does not do this: its
 own table gives some of those keys other meanings. The bar's mode module says its label.
+The mouse is the mouse of plain mode, not WM mode's: a press in a pane's text
+selects (or goes to a program that uses the mouse), \fBmouse = "hover"\fR focuses,
+and a float is moved by its border only.
 .PP
 .RS 4
 .nf

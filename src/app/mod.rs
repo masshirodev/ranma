@@ -2272,9 +2272,13 @@ impl App {
             _ => {}
         }
         match self.mode {
-            Mode::Wm => self.handle_mouse_wm(m),
+            // A user mode is WM mode underneath only for its keys: it is a way
+            // of typing at the program (vi.lua's NORMAL), so the mouse stays as
+            // it is outside WM mode -- selection, hover focus, the program's own
+            // clicks -- rather than grabbing floats.
+            Mode::Wm if self.user_mode.is_none() => self.handle_mouse_wm(m),
             // Copy mode handled its own mouse events before getting here.
-            Mode::Normal | Mode::Copy => self.handle_mouse_normal(m),
+            Mode::Wm | Mode::Normal | Mode::Copy => self.handle_mouse_normal(m),
         }
     }
 
@@ -6722,6 +6726,53 @@ mod tests {
         a.enter_wm(a.config.settings.leader);
         a.run_timers(a.hint_due.expect("due"));
         assert!(title(&a).starts_with("╭ ctrl+b "), "{}", title(&a));
+    }
+
+    #[test]
+    fn a_user_mode_keeps_the_mouse_of_normal_mode() {
+        use crossterm::event::{
+            KeyModifiers as K, MouseButton as B, MouseEvent as M, MouseEventKind as E,
+        };
+        let ev = |kind, x, y| M {
+            kind,
+            column: x,
+            row: y,
+            modifiers: K::NONE,
+        };
+        let mut a = app(Some(
+            r#"ranma.set { mouse = "hover" }
+               ranma.mode("vi", { label = "NORMAL", binds = { h = "send left" } })"#,
+        ));
+        for id in [1, 2] {
+            with_pane(&mut a, id);
+        }
+        a.workspaces.get_mut(&1).unwrap().focused = Some(1);
+        a.enter_user_mode("vi");
+        let f = a.frame();
+        let v2 = f.views.iter().find(|v| v.id == 2).unwrap().inner;
+        let (x, y) = (v2.x + 1, v2.y + 1);
+        // Hovering focuses, as it does outside WM mode.
+        a.handle_mouse(ev(E::Moved, x, y));
+        assert_eq!(a.focused(), Some(2), "hover focus");
+        // A press on a float is the program's (or a selection's), not WM
+        // mode's grab-anywhere move.
+        a.run_action(Action::ToggleFloating);
+        let f = a.frame();
+        let v2 = f.views.iter().find(|v| v.id == 2).unwrap();
+        assert!(v2.floating);
+        let (x, y) = (v2.inner.x + 1, v2.inner.y + 1);
+        a.handle_mouse(ev(E::Down(B::Left), x, y));
+        assert!(!matches!(a.drag, Some(Drag::Move { .. })), "{:?}", a.drag);
+        a.handle_mouse(ev(E::Up(B::Left), x, y));
+        assert!(a.user_mode.is_some(), "the mouse does not end the mode");
+        // Plain WM mode still grabs it.
+        a.enter_wm(a.config.settings.leader);
+        a.handle_mouse(ev(E::Down(B::Left), x, y));
+        assert!(
+            matches!(a.drag, Some(Drag::Move { id: 2, .. })),
+            "{:?}",
+            a.drag
+        );
     }
 
     #[test]

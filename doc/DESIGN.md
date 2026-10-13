@@ -1626,6 +1626,14 @@ keep their meaning, and plain WM mode still swallows what it does not bind,
 since it gives some of those chords meanings of its own (alt+digit moves the
 pane there).
 
+**A user mode keeps the mouse of plain mode** (2026-10-13): a mode is a
+key table, not the mouse. In it a press in a pane's text selects (or reaches
+a program that uses the mouse), `mouse = "hover"` focuses, and a right press
+opens the pane menu, as outside WM mode. Plain WM mode's grab-a-float-
+anywhere stays plain WM mode's. Routed the other way, vi.lua's NORMAL, where
+a pane rests most of the time, had no selection and no hover focus at all.
+Borders, the bar and toasts were the same in every mode already.
+
 **The hint may stand elsewhere** (`wm_mode.hint_at`, 2026-10-13): on the
 bar by the mode chip is still the default, since that is where the eye goes
 on pressing the leader, but a corner or the centre of the panes' space suits
