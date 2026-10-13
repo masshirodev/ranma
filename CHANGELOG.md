@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Fixed
 
+- `install.sh` warns when another `ranma` comes before the one it installed
+  in PATH (a release tarball in `~/.local/bin`). Servers started from that
+  one re-exec it on every upgrade, so the new build never ran, while the
+  install said they had moved to it.
 - In a pane that holds a ranma (over ssh), Ctrl/Alt+click, hover and
   `@pane` mouse binds are the inner ranma's, as keys are. The outer's
   `click` hook took them, so openpath on the outer looked for the inner
