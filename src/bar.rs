@@ -45,6 +45,9 @@ pub enum Style {
     /// `bar.chip_left` or `chip_right`: the edge of a filled chip, in that
     /// chip's ground on whatever it sits on.
     ChipCap(Chip),
+    /// One of the theme's own `[roles]`, resolved as the module ran (a
+    /// theme change runs the modules again).
+    Role(crate::theme::RoleDef),
 }
 
 /// The filled chips `bar.chip_left` / `chip_right` round.
@@ -82,14 +85,18 @@ impl Chip {
 }
 
 impl Style {
-    /// The styles a Lua module may ask for by name.
-    pub fn from_name(s: &str) -> Option<Style> {
+    /// The styles a Lua module may ask for by name: the four every theme
+    /// has, then the theme's own `[roles]`.
+    pub fn from_name(
+        s: &str,
+        roles: &std::collections::BTreeMap<String, crate::theme::RoleDef>,
+    ) -> Option<Style> {
         Some(match s {
             "normal" => Style::Normal,
             "dim" => Style::Dim,
             "accent" => Style::Accent,
             "urgent" => Style::Urgent,
-            _ => return None,
+            _ => Style::Role(*roles.get(s)?),
         })
     }
 }

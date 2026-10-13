@@ -1546,6 +1546,13 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
             .add_modifier(modifier(a))
     };
     match s {
+        bar::Style::Role(r) => {
+            let s = fg(r.fg, r.styles);
+            match r.bg {
+                Some(bg) => s.bg(color(bg)),
+                None => s,
+            }
+        }
         bar::Style::Normal => fg(c.bar_fg, st.bar),
         bar::Style::Dim => fg(c.bar_dim, st.dim),
         bar::Style::Accent => fg(c.bar_accent, st.accent),

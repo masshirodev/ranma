@@ -1125,7 +1125,7 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 .RE
 .TP
 \fBrender\fR
-A Lua function returning a string, or \fB{ text = "...", style = "..." }\fR with \fBstyle\fR one of \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR. \fBnil\fR hides the module.
+A Lua function returning a string, or \fB{ text = "...", style = "..." }\fR with \fBstyle\fR one of \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR, or a role the theme declares (\fB[roles.<name>]\fR, see Themes\fR); a name the theme does not have is drawn as \fBunknown style\fR in the urgent style. \fBnil\fR hides the module.
 .TP
 \fBexec\fR
 A command run by \fB/bin/sh \-c\fR, off ranma's own thread, killed (with anything it started) after 5 seconds. A slow command skips ticks instead of piling up.
@@ -2681,6 +2681,9 @@ the art's colours where it sets none: its text (unset, \fBbar_dim\fR) and the gr
 .TP
 \fBpalette.color0\fR \- \fBcolor15\fR, \fBpalette.foreground\fR, \fBpalette.background\fR
 \fB#rrggbb\fR: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and \fBls\fR alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256\-colour cube (16\-255) and truecolor text are left as the program sent them. \fBbackground\fR is the pane's ground where the program leaves the default, and \fBpanes.active_bg\fR / \fBinactive_bg\fR win over it. Needs a truecolor host terminal.
+.TP
+\fBroles.<name>\fR
+a style of the theme's own a module can ask for by name (\fBstyle = "git"\fR): \fBfg\fR (a colour), \fBbg\fR (optional; unset, the module's own ground), \fBstyles\fR (attributes, as \fB[styles]\fR). Not one of \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR, which are \fB[colors]\fR'; a name is letters, digits, \fB_\fR and \fB\-\fR. A theme that inherits has its parent's roles.
 .TP
 \fBstyles.<role>\fR
 text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR (a picker's selected label; bold by default), \fBpicker_title\fR, \fBpicker_query\fR, \fBpicker_current\fR, \fBpicker_error\fR (a picker's title, typed query, mark of where you are, and the palette's error row; all but \fBpicker_current\fR bold by default), \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.

@@ -155,6 +155,14 @@ scrollbar = "scrolled"
 # bottom_right, or tile: repeated across the whole area.
 align = "center"
 
+[roles]
+# Styles of the theme's own, for your bar modules: a Lua module returning
+# { text = ..., style = "git" } is drawn with [roles.git]. fg is a colour, bg
+# (optional) the module's ground, styles its attributes. None here.
+# [roles.git]
+# fg = "#f9e2af"
+# styles = ["bold"]
+
 [palette]
 # The colours programs in panes draw with: the sixteen ANSI colours (color0
 # black ... color7 white, color8-color15 their bright forms), the default
