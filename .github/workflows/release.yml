@@ -47,6 +47,11 @@ jobs:
           want="${GITHUB_REF_NAME#v}"
           have="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
           [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME, Cargo.toml $have"; exit 1; }
+      # The release notes are the version's CHANGELOG section: a tag without
+      # one stops here, before anything is built.
+      - name: CHANGELOG.md has the tag's section
+        if: startsWith(github.ref, 'refs/tags/')
+        run: scripts/changelog.sh "${GITHUB_REF_NAME#v}" >/dev/null
 
       - name: Test
         run: cargo test --locked --quiet
@@ -101,8 +106,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          scripts/changelog.sh "${GITHUB_REF_NAME#v}" >notes.md
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+            --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
 
   # The apt and dnf repositories, rebuilt whole from the last releases' packages
   # (packaging/repo/build.sh keeps three of each) and deployed as the Pages site.

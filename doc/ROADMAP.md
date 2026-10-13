@@ -292,7 +292,7 @@ contract between two builds.
   both ways, its client and server)
 - [ ] Renamed names: an old config name read as its new one, with a warning
 - [x] `ranma.has(name)`: plugins ask for a capability, not a version
-- [ ] `CHANGELOG.md`, with breaking changes first in the release notes
+- [x] `CHANGELOG.md`, with breaking changes first in the release notes
 
 Bar widgets in Lua, once listed here as "later, maybe", came in pieces:
 Lua and exec modules, `refresh_module` and `module_shown`.
