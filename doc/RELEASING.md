@@ -47,9 +47,15 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
 
 ## Cutting one
 
-1. Bump `version` in `Cargo.toml` (semver, starting at 0.1.0) and commit
-   the change, with `Cargo.lock`. The workflow refuses a tag that does not
-   match `Cargo.toml`.
+1. Write the version's section of `CHANGELOG.md`: rename `## [Unreleased]`
+   to `## [0.3.0] - YYYY-MM-DD`, open a new empty `[Unreleased]` above it,
+   and fix the compare links at the bottom. Breaking comes first and says
+   what to change in a config (DESIGN.md, "What a release promises not to
+   break", decides what is breaking and what a patch may hold). It is the
+   release notes: `scripts/changelog.sh 0.3.0` prints what will be published.
+   Then bump `version` in `Cargo.toml` (semver, starting at 0.1.0) and commit
+   both, with `Cargo.lock`. The workflow refuses a tag that does not match
+   `Cargo.toml`, or whose version has no CHANGELOG section.
 2. Tag and push:
 
    ```sh
@@ -59,8 +65,8 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
 
 3. The workflow runs `cargo test` and builds on both architectures, installs
    the packages in Docker on each (`packaging/test/run.sh`, `doc/TESTING.md`),
-   and only then creates the release, with notes generated from the commits
-   since the last tag. After it: the Pages site, crates.io and npm. The smoke
+   and only then creates the release, with the version's CHANGELOG section
+   as its notes. After it: the Pages site, crates.io and npm. The smoke
    test is not run again there: CI (`.github/workflows/ci.yml`) ran it on
    every push to `main`, so wait for it to be green on the commit you tag.
 4. Approve the staged npm versions ("The other channels", npm).
