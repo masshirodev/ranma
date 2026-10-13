@@ -13,6 +13,8 @@ commit log has the detail.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
 ### Added
 
 - **macOS**, arm64 and Intel: release tarballs, the Homebrew formula and
@@ -24,9 +26,6 @@ commit log has the detail.
   yet by hand on a Mac.
 - `wm_mode.hint_at`: where the which-key hint stands, on the bar (as
   before) or in a corner or the centre; `ranma.mode` takes its own.
-- In a user mode, a key the mode does not bind runs its global bind
-  (alt+arrows, alt+digits, ...) and the mode stays; before, it was
-  swallowed. Plain WM mode is unchanged.
 - `ranma.mode(name, { hint = ... })`: a user mode's own which-key pause;
   `false` keeps the hint out of that mode while WM mode keeps it.
 - Renamed names keep working: an old setting, theme key, action, event or
@@ -61,6 +60,9 @@ commit log has the detail.
 
 ### Changed
 
+- In a user mode, a key the mode does not bind runs its global bind
+  (alt+arrows, alt+digits, ...) and the mode stays; before, it was
+  swallowed. Plain WM mode is unchanged.
 - `leader U` updates in the background behind a toast with a spinner, which
   survives the server's own upgrade, instead of opening a floating pane.
 
@@ -163,7 +165,8 @@ manager; TOML themes; upgrading a running server in place; ranma inside ranma
 over SSH; copy mode, hints, images, and the tmux shim. README.md is the tour
 and doc/CONFIG.md the reference.
 
-[Unreleased]: https://github.com/masshirodev/ranma/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/masshirodev/ranma/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/masshirodev/ranma/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/masshirodev/ranma/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/masshirodev/ranma/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/masshirodev/ranma/compare/v0.2.1...v0.2.2
