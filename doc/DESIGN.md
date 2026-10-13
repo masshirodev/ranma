@@ -270,7 +270,9 @@ not a break, and can happen in a minor.
 events, bind and module options, and theme keys. Each parser looks a name up
 there before it calls it unknown. A name found there is read as its new
 name, and a warning names the file, the line, the old name and the new one,
-with the same position an error would give. `--check-config` prints the
+with the same position an error would give (built 2026-10-13: a Lua call
+names its file and line, a theme or `settings.toml` its file; an action
+parsed from a string, with no Lua frame to ask, names only itself). `--check-config` prints the
 warnings and still exits 0. A name in no table is an error, as today. This
 is not the lenient fallback that AGENTS.md forbids: every name the parser
 accepts is one it knows exactly. An old name stays in the table for at least

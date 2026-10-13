@@ -337,6 +337,9 @@ impl Latch {
 pub enum ActionError {
     #[error("unknown action `{0}`")]
     Unknown(String),
+    /// A name renames.rs lists as removed, with what to do instead.
+    #[error("{0}")]
+    Removed(String),
     #[error("`{action}` needs {expected}")]
     MissingArg {
         action: String,
@@ -503,6 +506,9 @@ impl FromStr for Action {
             Some((n, r)) => (n, Some(r.trim()).filter(|r| !r.is_empty())),
             None => (s, None),
         };
+        let name = crate::renames::name(crate::renames::Kind::Action, name, "action")
+            .map_err(ActionError::Removed)?;
+        let name = name.as_ref();
         let mut words = rest.map(|r| r.split_whitespace()).into_iter().flatten();
         let first = words.next();
         let second = words.next();

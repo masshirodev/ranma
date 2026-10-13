@@ -1064,10 +1064,13 @@ fn read_theme_table(name: &str, dirs: &[PathBuf]) -> Result<(toml::Table, String
         if path.is_file() {
             let src = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading {}", path.display()))?;
-            let table = src
+            let mut table = src
                 .parse::<toml::Table>()
                 .with_context(|| format!("parsing {}", path.display()))?;
-            return Ok((table, path.display().to_string()));
+            let origin = path.display().to_string();
+            crate::renames::table(crate::renames::Kind::Theme, &mut table, &origin)
+                .map_err(anyhow::Error::msg)?;
+            return Ok((table, origin));
         }
     }
     match builtin(name) {
@@ -1156,7 +1159,14 @@ pub fn load_over_unset(
     let resolved = resolve_table(name, dirs, &mut HashSet::new())?;
     let mut table = resolved.clone();
     if let Some(o) = overlay {
-        merge(&mut table, o.clone());
+        let mut o = o.clone();
+        crate::renames::table(
+            crate::renames::Kind::Theme,
+            &mut o,
+            "settings.toml's [theme]",
+        )
+        .map_err(anyhow::Error::msg)?;
+        merge(&mut table, o);
     }
     for k in unset {
         crate::options::remove(&mut table, k);

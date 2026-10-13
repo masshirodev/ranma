@@ -532,6 +532,7 @@ impl Event {
 impl FromStr for Event {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = crate::renames::name(crate::renames::Kind::Event, s, "ranma.on")?;
         EVENTS
             .iter()
             .find(|(n, _)| *n == s)
@@ -1352,6 +1353,11 @@ fn parse_bind(
         (false, false) => "exit, desc",
     };
     if let Some(t) = opts {
+        crate::renames::lua_table(
+            crate::renames::Kind::BindOption,
+            t,
+            &crate::renames::lua_where(lua, &format!("{who}(\"{keys}\")")),
+        )?;
         for pair in t.pairs::<String, Value>() {
             let (k, v) = pair?;
             match (k.as_str(), v) {
@@ -1692,8 +1698,9 @@ fn install_api(
                 }
                 Err(e) => return Err(rt_err(format!("ranma.set: {e}"))),
             };
+            let who = crate::renames::lua_where(lua, "ranma.set");
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
-            apply_set(&mut b, table, "ranma.set").map_err(rt_err)
+            apply_set(&mut b, table, &who).map_err(rt_err)
         })?,
     )?;
 
@@ -1996,6 +2003,11 @@ fn install_api(
     ranma.set(
         "module",
         lua.create_function(|lua, (name, opts): (String, Table)| {
+            crate::renames::lua_table(
+                crate::renames::Kind::ModuleOption,
+                &opts,
+                &crate::renames::lua_where(lua, &format!("ranma.module(\"{name}\")")),
+            )?;
             let mut keys = Vec::new();
             for pair in opts.pairs::<String, Value>() {
                 keys.push(pair?.0);
@@ -2721,6 +2733,8 @@ pub fn load_full(
     user_src: Option<&str>,
     hako_dir: Option<&Path>,
 ) -> Result<Config> {
+    // Renames said by an earlier load (a theme preview) are not this one's.
+    crate::renames::take();
     let lua = Lua::new();
     lua.set_app_data(Builder::default());
     let watchdog = Watchdog::default();
@@ -2845,6 +2859,9 @@ pub fn load_full(
             .expect("builder installed above");
         let file_set = b.set_table.clone();
         let mut apply = panel.set.clone();
+        // Renamed first, so an old name is not taken for a missing plugin's.
+        crate::renames::table(crate::renames::Kind::Setting, &mut apply, SETTINGS_FILE)
+            .map_err(anyhow::Error::msg)?;
         // A plugin that did not load leaves its saved options with nothing to
         // apply to. They are kept, for when it loads again, and said; one
         // broken plugin must not stop ranma from starting.
@@ -3028,7 +3045,7 @@ pub fn load_full(
         plugins,
         packages: builder.added,
         hako,
-        warnings,
+        warnings: crate::renames::take().into_iter().chain(warnings).collect(),
         watchdog,
         jobs,
         user_events,
@@ -3143,6 +3160,7 @@ fn known_key(b: &Builder, key: &str) -> bool {
 /// checked; the rest as ranma's own settings, parsed as strictly as ever.
 /// Both are kept in the builder's TOML, for the settings panel.
 fn apply_set(b: &mut Builder, mut t: toml::Table, who: &str) -> Result<(), String> {
+    crate::renames::table(crate::renames::Kind::Setting, &mut t, who)?;
     let mut plugin = toml::Table::new();
     let groups: Vec<String> = b.plugin_options.iter().map(|o| o.group.clone()).collect();
     for g in groups {
@@ -4482,6 +4500,79 @@ mod tests {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");
         }
+    }
+
+    /// renames.rs's test-only entries, through every parser that asks it.
+    #[test]
+    fn old_names_are_read_as_their_new_ones_with_a_warning() {
+        let dir = config_tree(
+            "renames",
+            &[
+                (
+                    "init.lua",
+                    r#"
+                    ranma.set { lead = "ctrl+a", theme = "t" }
+                    ranma.bind("x", "old_close_pane", { description = "close" })
+                    ranma.on("old_bell", function() end)
+                    ranma.module("m", { exec = "true", period = 5 })
+                    "#,
+                ),
+                (
+                    "themes/t.toml",
+                    "[colors]\nold_border_active = \"#ff0000\"\n",
+                ),
+            ],
+        );
+        let cfg = load_dir(Some(&dir), None).unwrap();
+        assert_eq!(cfg.settings.leader, "ctrl+a".parse().unwrap());
+        let x = &cfg.binds[&"x".parse().unwrap()];
+        assert!(matches!(&x.action, BindAction::Builtin(a) if *a == Action::ClosePane));
+        assert_eq!(x.desc.as_deref(), Some("close"));
+        assert!(cfg.hooks.contains_key(&Event::Bell));
+        assert_eq!(
+            cfg.modules["m"].interval,
+            Some(std::time::Duration::from_secs(5))
+        );
+        assert_eq!(
+            cfg.theme.colors.border_active,
+            crate::theme::Color::Rgb(0xff, 0, 0)
+        );
+        let w = cfg.warnings.join("\n");
+        for needle in [
+            "setting `lead` is now `leader`",
+            "action `old_close_pane` is now `close_pane`",
+            "event `old_bell` is now `bell`",
+            "bind option `description` is now `desc`",
+            "module option `period` is now `interval`",
+            "theme key `colors.old_border_active` is now `colors.border_active`",
+            // Where it is: the line in init.lua, and the theme's file.
+            "init.lua:2: ranma.set",
+            "t.toml",
+        ] {
+            assert!(w.contains(needle), "no `{needle}` in:\n{w}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let dir = config_tree(
+            "renames-file",
+            &[("settings.toml", "[set]\nlead = 'ctrl+q'\n")],
+        );
+        let cfg = load_dir(Some(&dir), None).unwrap();
+        assert_eq!(cfg.settings.leader, "ctrl+q".parse().unwrap());
+        assert!(
+            cfg.warnings
+                .iter()
+                .any(|w| w.contains("settings.toml: the setting `lead`")),
+            "{:?}",
+            cfg.warnings
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let e = format!(
+            "{:#}",
+            with_user(r#"ranma.bind("x", "old_gone")"#).unwrap_err()
+        );
+        assert!(e.contains("removed in 0.0.2"), "{e}");
     }
 
     #[test]

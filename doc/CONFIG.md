@@ -84,6 +84,18 @@ servers onto the new build.
 A build from commits the source has never seen (one installed from a
 development checkout, ahead of what is pushed) is behind nothing.
 
+**A renamed name keeps working, with a warning.** When a release renames a
+setting, theme key, action, event, or an option of `ranma.bind` or
+`ranma.module`, your file's old name is read as the new one. A warning names the
+file and the line (`init.lua:12: ranma.set: the setting `lead` is now
+`leader` (renamed in 0.3.0; the old name is read until 0.5.0)`). `ranma
+--check-config` prints these warnings and still passes, so a package upgrade
+never drops a shell to a plain one over a rename. Setting both the old and the
+new name is an error, since only you know which you meant. A name removed with
+no replacement is an error that says what to write instead. Each rename is
+listed in `CHANGELOG.md` under Deprecated, with the release that drops it, and
+in `src/renames.rs`. Anything else ranma does not know is an error, as always.
+
 Servers are named 1, 2, 3...; their sockets are in `$XDG_RUNTIME_DIR/ranma/` and
 their logs in `~/.cache/ranma/`.
 

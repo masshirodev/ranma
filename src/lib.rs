@@ -39,6 +39,7 @@ pub mod pipe;
 pub mod placement;
 pub mod proto;
 pub mod pty;
+pub mod renames;
 pub mod render;
 pub mod restore;
 pub mod screen;
