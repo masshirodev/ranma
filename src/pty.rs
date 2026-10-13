@@ -248,20 +248,22 @@ mod tests {
 
     fn pty(rows: u16, cols: u16) -> (RawFd, RawFd) {
         let (mut master, mut slave) = (0, 0);
-        let ws = libc::winsize {
+        let mut ws = libc::winsize {
             ws_row: rows,
             ws_col: cols,
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
         // SAFETY: openpty fills the two descriptors; the null names are allowed.
+        // Mutable pointers, since macOS's openpty takes them (Linux's takes
+        // const ones, which these coerce to).
         let r = unsafe {
             libc::openpty(
                 &mut master,
                 &mut slave,
                 std::ptr::null_mut(),
-                std::ptr::null(),
-                &ws,
+                std::ptr::null_mut(),
+                &raw mut ws,
             )
         };
         assert_eq!(r, 0);

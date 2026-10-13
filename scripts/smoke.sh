@@ -40,11 +40,19 @@ echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako
 export PROMPT_COMMAND='printf "\033]0;%s@%s:%s\007" "$USER" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'
 # No SSH variables: the title names the host only where a step asks for it.
 ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+# A process's command line and environment, one word a line: /proc on
+# Linux, ps on macOS (whose -E appends the environment to the command).
+proc_cmd() {
+  if [ -r "/proc/$1/cmdline" ]; then tr '\0' ' ' < "/proc/$1/cmdline"; else ps -ww -p "$1" -o command= 2>/dev/null; fi
+}
+proc_env() {
+  if [ -r "/proc/$1/environ" ]; then tr '\0' '\n' < "/proc/$1/environ"; else ps -wwE -p "$1" -o command= 2>/dev/null | tr ' ' '\n'; fi
+}
 # The server process of this test (the client is a separate, thinner process).
 server_pid() {
   for p in $(pgrep -x ranma); do
-    if tr '\0' ' ' < "/proc/$p/cmdline" | grep -q ' server ' &&
-      tr '\0' '\n' < "/proc/$p/environ" | grep -qx "XDG_RUNTIME_DIR=$RT"; then
+    if proc_cmd "$p" | grep -q ' server ' &&
+      proc_env "$p" | grep -qx "XDG_RUNTIME_DIR=$RT"; then
       echo "$p"
     fi
   done | tail -1
@@ -53,7 +61,7 @@ cleanup() {
   T kill-server 2>/dev/null || true
   # Servers outlive their terminals by design; the test's must not outlive it.
   for p in $(pgrep -x ranma); do
-    tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
+    proc_env "$p" | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
   done
   # /tmp is often a tmpfs, so what a run leaves there is memory until reboot.
   rm -rf "$CFG" "$RT" "$CACHE" "$STATE" "$DATA" "${TCONF:-}" "${MCFG:-}" "${FAKE:-}" "${LAZY:-}"
@@ -218,10 +226,16 @@ wait_for '╭' 8 || fail "the default border did not come back"
 # Idle: zero CPU over five seconds.
 PID=$(server_pid)
 [ -n "$PID" ] || fail "no ranma server process found"
-ticks() { awk '{print $14+$15}' "/proc/$PID/stat"; }
+# CPU time in hundredths of a second: utime + stime on Linux, ps's
+# [[h:]m]:s.cc on macOS, the same resolution.
+ticks() {
+  if [ -r "/proc/$PID/stat" ]; then awk '{print $14+$15}' "/proc/$PID/stat"
+  else ps -p "$PID" -o time= | awk -F'[:.]' '{ n = NF; c = $n; s = $(n-1); m = (n > 2) ? $(n-2) : 0; h = (n > 3) ? $(n-3) : 0; print ((h*60+m)*60+s)*100+c }'; fi
+}
+rss() { if [ -r "/proc/$PID/status" ]; then awk '/VmRSS/{print $2" "$3}' "/proc/$PID/status"; else echo "$(ps -p "$PID" -o rss=) kB"; fi; }
 a=$(ticks); sleep 5; b=$(ticks)
 [ $((b - a)) -le 1 ] || fail "idle CPU: $((b - a)) ticks in 5s"
-echo "idle: $((b - a)) ticks in 5s, RSS $(awk '/VmRSS/{print $2" "$3}' /proc/$PID/status)"
+echo "idle: $((b - a)) ticks in 5s, RSS $(rss)"
 
 # Flood: two million lines must finish and leave a correct screen.
 T send-keys -t s 'time seq 1 2000000' Enter
