@@ -231,6 +231,110 @@ server, `--all` every one; `install.sh` runs `ranma upgrade --all` after a
 good install, so installing a new build is enough. A server from before this
 existed does not know the request, and says so: it needs one last restart.
 
+### What a release promises not to break (2026-10-13, proposed)
+
+ranma is released and packaged (v0.1.0 to v0.2.4), so an upgrade arrives
+through a package manager, onto a running server and a config written for the
+last version. Two of ranma's own choices make a break expensive. Strict
+parsing turns a renamed name into an error, and a shell that starts ranma
+falls back to a plain shell. And `ranma upgrade` makes the handover file a
+contract between two builds. What each contract is, and what may change it:
+
+| Contract | Who writes the other side | What guards it |
+|---|---|---|
+| `init.lua` names (settings, actions, events, bind and module options) | the user | the rename table, `--check-config` |
+| theme keys, `settings.toml` | the user, matugen templates | the rename table |
+| the Lua API plugins call | hako and the `*.ranma` repositories | `ranma.has` |
+| the handover file (`app/upgrade.rs`) | the previous build | `VERSION`, CI against the last release |
+| client/server frames (`proto.rs`) | a client or server one build apart | defaulted `Hello` fields, CI |
+| the nested-bar OSC (`nestbar.rs`) | a ranma on another machine | its own protocol number (since 2026-10-03) |
+
+**1. What a version number promises.** Before 1.0 the scheme is
+`0.MINOR.PATCH`:
+
+- A **patch** changes none of the user-facing contracts. A config, theme or
+  plugin that worked on 0.2.4 works on 0.2.5 without a warning.
+- A **minor** may rename, or (rarely) remove. A rename always comes with its
+  old name mapped (point 2), so it is a warning and not a break. A removal is
+  a **Breaking** entry in the CHANGELOG (point 5), which says what to write
+  instead.
+- The handover and the frames are **never** allowed to break between
+  neighbouring releases, at any version. They are not public, but the person
+  upgrading cannot opt out of them, and a broken handover costs every shell.
+
+After 1.0 a removal needs a major. A rename with its old name still mapped is
+not a break, and can happen in a minor.
+
+**2. Renames: the old name is understood, not ignored.** One table
+(`src/renames.rs`) lists `(kind, old, new, since)` for settings, actions,
+events, bind and module options, and theme keys. Each parser looks a name up
+there before it calls it unknown. A name found there is read as its new
+name, and a warning names the file, the line, the old name and the new one,
+with the same position an error would give. `--check-config` prints the
+warnings and still exits 0. A name in no table is an error, as today. This
+is not the lenient fallback that AGENTS.md forbids: every name the parser
+accepts is one it knows exactly. An old name stays in the table for at least
+two minor releases (0.3 renames, 0.5 may drop it), and dropping it is a
+Breaking entry. A *removed* name with no replacement goes in the table too,
+as an error that says when it went and what to do instead, because
+"unknown setting" is the least useful thing to tell someone who did not
+change their file.
+
+**3. The handover's `VERSION`.** A build reads the handover of its own
+`VERSION`. `VERSION` bumps when an older reader would misread a newer
+file: a field renamed, removed, or given a new type or meaning. It also bumps
+when a newly added field is one whose loss an older build could not survive.
+Adding a field with `#[serde(default)]` that an older build can drop
+harmlessly (`looks`, `last_workspace`) does not bump it, and the handover's
+structs never get `deny_unknown_fields`. When `VERSION` bumps, the new build
+keeps a reader for the one before (read old, convert), so the forward path
+(the last release handing over to this one) always works.
+
+The backward path is narrower than it looks. A resume that fails re-execs the
+old build with the file *the old build wrote*, so the fallback never sees a
+newer file. A newer file reaches an older binary only on a **downgrade**
+(`pacman -U` of an old package, then `ranma upgrade`). There, an older
+`VERSION` refuses at `--check-handover`, nothing is exec'd, the server keeps
+running on the newer build, and the toast says to restart. Within one
+`VERSION` an older build reads a newer file and drops the fields it does not
+know.
+
+**4. Frames.** Every field added to `Hello` or `Status` is
+`#[serde(default)]`, as they have been. A new frame kind is a break, because
+both readers refuse a kind they do not know. So a server sends a new kind only
+to a client whose `Hello` said it understands it (a defaulted field), and a
+client sends nothing new to a server: what it has to add goes in `Hello`.
+`K_EVENT` carries crossterm's own serialisation of an event, so **a crossterm
+upgrade is a frame change**. CI catches it (an old client typing into a new
+server), and the dependency bump is reviewed as one.
+
+**5. Plugins ask what exists, not which version.** `ranma.has(name)` is
+true for a capability this build has: `"module.nested"`, `"hook.before_close"`,
+`"mouse"`, and so on. Comparing `ranma.version` is wrong twice over. A
+`ranma-git` build reports the last tag but has everything since. And a
+plugin cannot tell from a number which of several features landed in which
+release. The list of names is one constant in the source and one table in
+CONFIG.md, and a name once listed is never removed before 1.0. `ranma.version`
+stays, for showing. A plugin that needs a feature writes
+`if ranma.has and ranma.has("module.nested") then ... end`; `ranma.has`
+itself is absent before the release that adds it, which is what the guard is
+for.
+
+**6. CHANGELOG.md** follows Keep a Changelog 1.1: `## [Unreleased]` at the top,
+then `## [0.2.5] - 2026-10-14` per release, sections in the order
+**Breaking**, Added, Changed, Deprecated (renames: old name, new name, when the
+old one goes), Removed, Fixed. Breaking leads, and each Breaking entry says
+what to change in your files. `release.yml` uses the tag's section as the
+release notes, and refuses a tag whose version has none. Commit subjects
+stay what they are: a log for whoever reads the history, not for someone
+upgrading.
+
+**What CI checks** (ROADMAP 14): against the latest release's binary, its
+`--dump-config` and `--dump-theme` pass this build's `--check-config` (a
+failure is a rename without an entry in the table, or a Breaking entry made on
+purpose); a server it started hands over to this build and back; and each
+build's client attaches to the other's server.
+
 ### The model: sessions, workspaces, a tree, a float layer
 
 | Hyprland / i3 | ranma |

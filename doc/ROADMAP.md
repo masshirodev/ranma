@@ -286,11 +286,12 @@ manager onto a running server and a config written for the last version. Strict
 parsing makes a renamed name an error, and `ranma upgrade` makes the handover a
 contract between two builds.
 
-- [ ] Design: what a release promises not to break (semver before and after
+- [x] Design: what a release promises not to break (semver before and after
   1.0, renames, the handover's version, plugin capability checks)
 - [ ] CI: the previous release against this build (its config, a handover
   both ways, its client and server)
 - [ ] Renamed names: an old config name read as its new one, with a warning
+- [ ] `ranma.has(name)`: plugins ask for a capability, not a version
 - [ ] `CHANGELOG.md`, with breaking changes first in the release notes
 
 Bar widgets in Lua, once listed here as "later, maybe", came in pieces:
