@@ -561,6 +561,14 @@ pub fn builtin() -> Vec<Opt> {
             "arrows: marks on the focused pane's edges, pointing in.",
         ),
         opt(
+            "border.gradient_angle",
+            "looks",
+            "Gradient angle",
+            int(0, 359, 15, true),
+            Theme,
+            "Which way a gradient border (colors.border_*_gradient) runs: 0 left to right, 90 top to bottom.",
+        ),
+        opt(
             "gaps.inner",
             "looks",
             "Inner gap",
