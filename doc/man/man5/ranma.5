@@ -779,6 +779,15 @@ Glob (\fB*\fR, \fB?\fR) matched against the command an \fBexec\fR pane was opene
 \fBtitle\fR
 Glob matched against the pane's title; applied the first time the title matches, once per pane.
 .TP
+\fBprogram\fR
+Glob matched against the program in the pane's foreground (\fBssh\fR, \fBnvim\fR), once something runs there.
+.TP
+\fBcwd\fR
+Glob matched against the pane's directory, \fB~/\fR for home (\fB~/projects/*\fR).
+.TP
+\fBhost\fR
+Glob matched against the host the pane is connected to: where its \fBssh\fR goes, else the host a ranma inside it reports.
+.TP
 \fBfloat\fR
 Float the pane.
 .TP
@@ -787,10 +796,21 @@ Float the pane.
 .TP
 \fBworkspace\fR
 Move the pane to this workspace, following it unless \fBsilent = true\fR.
+.TP
+\fBname\fR
+Name the pane, as \fBrename_pane\fR.
+.TP
+\fBbadge\fR
+\fB{ glyph, word, role }\fR on the pane's border, as \fBpane:badge\fR\fR does (glyph 1\-2 characters, word 12 at most, role \fBnormal\fR, \fBdim\fR, \fBaccent\fR or \fBurgent\fR; the last two optional).
 .PP
-Give \fBcommand\fR or \fBtitle\fR, and at least one effect. Every matching rule applies,
-in the order written. Rules act on panes of the shown session, not in the
-scratchpad.
+Give something to match on and at least one effect. \fBprogram\fR, \fBcwd\fR and
+\fBhost\fR are read where the bar reads programs, after output or a key and at
+most every 500 ms, so a rule on them applies a moment after the program
+starts; every matcher a rule gives must match (\fBtitle\fR with them is part of
+the condition), and \fBcommand\fR cannot be mixed with them, since it is matched
+before anything runs. Every rule applies once per pane, in the order written.
+A rule's badge stays over a config reload. Rules act on panes of the shown
+session, not in the scratchpad.
 .PP
 A pane you float, tile, and float again goes back where it last floated.
 .SH "SESSIONS — \fBranma.session(name, opts)\fR"

@@ -1883,6 +1883,28 @@ apply the first time a title matches, once per pane and rule, because titles cha
 constantly (the shell sets one per prompt) and a pane that moves every time its
 title flickers is worse than no rule.
 
+**And what runs in it** (2026-10-12): `program` (the foreground program),
+`cwd` (its directory, `~/` for home) and `host` (where its `ssh` goes, else
+the host a ranma inside it reports). ranma already reads these for the bar,
+off the draw path, after output or a key and at most every 500 ms; the
+rules ride on that read, for panes some such rule has not matched yet, and
+cost nothing when no rule uses them. Decided with them:
+
+- **Every matcher a rule gives must match**, so `{ program = "ssh", host =
+  "prod*" }` is one condition. A title given beside them is part of it and
+  does not fire alone.
+- **`command` does not mix with them**: it is matched as the pane opens,
+  before anything runs, so a rule with both could never be checked at one
+  moment; mixing them is an error saying so.
+- **Once per pane and rule**, as title rules: an `ssh` that ends and starts
+  again does not move or rename the pane twice.
+- **`name` and `badge` are effects**, so a rule can mark a pane rather than
+  move it: a production host's pane named and badged in red. A rule's badge
+  belongs to the owner `rules`, and stays over a reload, since rules are not
+  run again on the panes they matched.
+- Grouping a matched pane with another (tabbing it) is left out for now:
+  which group it joins needs deciding first.
+
 ### Small things a terminal is expected to do
 
 - **New panes start where you are.** A new pane, an `exec`, a new session and an

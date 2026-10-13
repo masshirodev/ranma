@@ -472,13 +472,23 @@ ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
 | --- | --- |
 | `command` | Glob (`*`, `?`) matched against the command an `exec` pane was opened with; applied when it opens. |
 | `title` | Glob matched against the pane's title; applied the first time the title matches, once per pane. |
+| `program` | Glob matched against the program in the pane's foreground (`ssh`, `nvim`), once something runs there. |
+| `cwd` | Glob matched against the pane's directory, `~/` for home (`~/projects/*`). |
+| `host` | Glob matched against the host the pane is connected to: where its `ssh` goes, else the host a ranma inside it reports. |
 | `float` | Float the pane. |
 | `size` | `{ width%, height% }` of the workspace, each 10-100; implies `float`. |
 | `workspace` | Move the pane to this workspace, following it unless `silent = true`. |
+| `name` | Name the pane, as `rename_pane`. |
+| `badge` | `{ glyph, word, role }` on the pane's border, as [`pane:badge`](#pane-handles) does (glyph 1-2 characters, word 12 at most, role `normal`, `dim`, `accent` or `urgent`; the last two optional). |
 
-Give `command` or `title`, and at least one effect. Every matching rule applies,
-in the order written. Rules act on panes of the shown session, not in the
-scratchpad.
+Give something to match on and at least one effect. `program`, `cwd` and
+`host` are read where the bar reads programs, after output or a key and at
+most every 500 ms, so a rule on them applies a moment after the program
+starts; every matcher a rule gives must match (`title` with them is part of
+the condition), and `command` cannot be mixed with them, since it is matched
+before anything runs. Every rule applies once per pane, in the order written.
+A rule's badge stays over a config reload. Rules act on panes of the shown
+session, not in the scratchpad.
 
 A pane you float, tile, and float again goes back where it last floated.
 
