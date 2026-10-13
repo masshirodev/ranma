@@ -6,7 +6,8 @@
 # The builds run on ubuntu-22.04 on purpose: a binary needs the glibc it was
 # linked against or newer, and 22.04's 2.35 is older than every current distro
 # (a build on Arch asks for whatever Arch has, 2.44 at the time of writing).
-# Every channel ships these two binaries; nothing is built twice.
+# Every channel ships these binaries (two for Linux, two for macOS on its own
+# runners); nothing is built twice.
 # workflow_dispatch builds and tests everything without publishing.
 name: release
 
@@ -27,6 +28,11 @@ jobs:
             runner: ubuntu-22.04
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
+          # macOS: a tarball each, for Homebrew and install.sh (ROADMAP 15).
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     env:
       TARGET: ${{ matrix.target }}
@@ -38,6 +44,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
+        if: runner.os == 'Linux'
         with:
           tool: cargo-deb,cargo-generate-rpm
 
