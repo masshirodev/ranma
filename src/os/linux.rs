@@ -55,6 +55,10 @@ pub fn kernel_release() -> Option<String> {
     std::fs::read_to_string("/proc/sys/kernel/osrelease").ok()
 }
 
+/// Nothing to keep: `/proc/self/exe` opens the running binary whatever
+/// happened to its file.
+pub fn keep_running_binary() {}
+
 /// A path that opens the running binary even after the file it was started
 /// from has been replaced.
 pub fn running_binary() -> PathBuf {

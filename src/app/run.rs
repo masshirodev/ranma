@@ -328,6 +328,7 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
 static SERVER_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
 fn remember_exe() {
+    crate::os::keep_running_binary();
     if let Ok(p) = std::env::current_exe() {
         // A path that was already replaced reads "… (deleted)": not ours.
         let p = std::path::PathBuf::from(
