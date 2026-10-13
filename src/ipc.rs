@@ -52,13 +52,34 @@ pub fn socket_path() -> Option<&'static Path> {
 
 fn default_path() -> PathBuf {
     let pid = std::process::id();
-    match std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
-        Some(dir) => PathBuf::from(dir).join(format!("ranma-{pid}.sock")),
-        // SAFETY: getuid cannot fail.
-        None => {
-            std::env::temp_dir().join(format!("ranma-{}-{pid}.sock", unsafe { libc::getuid() }))
-        }
+    // SAFETY: getuid cannot fail.
+    let uid = unsafe { libc::getuid() };
+    match runtime_dir() {
+        Some(dir) => dir.join(format!("ranma-{pid}.sock")),
+        None => short_temp_dir().join(format!("ranma-{uid}-{pid}.sock")),
     }
+}
+
+/// `$XDG_RUNTIME_DIR`, when a socket in it fits in `sun_path`.
+fn runtime_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .filter(|d| fits(d))
+}
+
+/// Room for `ranma/<a name of 32 bytes>.sock` under `dir`. A socket path past
+/// `sun_path` cannot be bound at all, and macOS's `$TMPDIR` is a long
+/// `/var/folders/...` path to begin with.
+fn fits(dir: &Path) -> bool {
+    dir.as_os_str().len() + "/ranma/".len() + 32 + ".sock".len() <= crate::os::SOCKET_PATH_MAX
+}
+
+/// The temporary directory, else `/tmp` when that is too long for a socket.
+fn short_temp_dir() -> PathBuf {
+    Some(std::env::temp_dir())
+        .filter(|d| fits(d))
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
 }
 
 /// Removes the socket file when ranma exits.
@@ -74,10 +95,10 @@ impl Drop for Listening {
 /// Where ranma servers put their sockets: `$XDG_RUNTIME_DIR/ranma/<name>.sock`,
 /// private to the user.
 pub fn server_dir() -> PathBuf {
-    match std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
-        Some(dir) => PathBuf::from(dir).join("ranma"),
+    match runtime_dir() {
+        Some(dir) => dir.join("ranma"),
         // SAFETY: getuid cannot fail.
-        None => std::env::temp_dir().join(format!("ranma-{}", unsafe { libc::getuid() })),
+        None => short_temp_dir().join(format!("ranma-{}", unsafe { libc::getuid() })),
     }
 }
 
@@ -827,6 +848,18 @@ pub fn toast_request(text: &str, urgent: bool, timeout: Option<f64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_runtime_dir_too_long_for_a_socket_is_not_used() {
+        assert!(fits(Path::new("/run/user/1000")));
+        // macOS's $TMPDIR is about this long, and a socket must fit under it.
+        let tmpdir = Path::new("/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/");
+        assert_eq!(
+            fits(tmpdir),
+            tmpdir.as_os_str().len() + 44 <= crate::os::SOCKET_PATH_MAX
+        );
+        assert!(!fits(&Path::new("/").join("x".repeat(100))));
+    }
 
     #[test]
     fn toast_requests_round_trip() {

@@ -3109,7 +3109,21 @@ Rust, for predictable latency without a GC, and for the emulator:
   file (`program_name`, `command_line`, `cwd`, `foreground_group`,
   `pid_alive`, `read_cpu`/`read_mem`, `kernel_release`, `running_binary`,
   `child_exit_fd`), so the macOS half answers the same questions from
-  libproc, sysctl and kqueue without callers knowing. Native Windows would be a port of the
+  libproc, sysctl and kqueue without callers knowing. The paths and
+  defaults are decided too (2026-10-13). **Directories follow XDG on both**:
+  `$XDG_CONFIG_HOME` (and the cache, data and state ones) when absolute,
+  else `~/.config`, `~/.cache`, `~/.local/share`, `~/.local/state`, never
+  `~/Library`. A dotfiles repository puts `~/.config/ranma` there, the docs
+  name those paths, and on Linux it is what `dirs` answered. **Sockets fit
+  `sun_path`** (104 bytes on macOS, 108 on Linux): a runtime or temporary
+  directory with no room for `ranma/<32 bytes>.sock` is passed over for
+  `/tmp`, since macOS has no `$XDG_RUNTIME_DIR` and its `$TMPDIR` is a long
+  `/var/folders/...` path. **Links open with `open`**, which returns at once
+  and needs no `setsid` (macOS has no `setsid` command). **The clipboard is
+  the pasteboard through `osascript -l JavaScript`**: files copied in
+  Finder as their paths, else the image (PNG, or TIFF converted), like
+  WSL's PowerShell reader. `pngpaste` would read images only, and is one
+  more thing to install. Native Windows would be a port of the
   model itself: no process groups to name the foreground program, no `exec`
   to hand a server's panes to a new build, ConPTY eating escapes, and a
   config that assumes `sh`. The people who want a terminal window manager on

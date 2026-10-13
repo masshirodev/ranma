@@ -78,7 +78,7 @@ impl Source {
     /// The source for this process: `RANMA_SOURCE_DIR`, else the managed
     /// clone in the data directory.
     pub fn current() -> Result<Source> {
-        Source::from(std::env::var_os(SOURCE_ENV), dirs::data_dir())
+        Source::from(std::env::var_os(SOURCE_ENV), crate::os::data_home())
     }
 
     fn from(over: Option<std::ffi::OsString>, data: Option<PathBuf>) -> Result<Source> {
@@ -206,7 +206,7 @@ pub fn behind(dir: &Path, sha: &str, fetch: bool) -> Result<Behind> {
 }
 
 fn stamp_path() -> Option<PathBuf> {
-    dirs::cache_dir().map(|d| d.join("ranma").join("update-check"))
+    crate::os::cache_home().map(|d| d.join("ranma").join("update-check"))
 }
 
 /// Whether a check is due: none within `interval`, by any ranma.
@@ -318,7 +318,7 @@ pub enum Progress {
 
 impl JobFiles {
     pub fn new() -> Option<JobFiles> {
-        dirs::cache_dir().map(|d| JobFiles {
+        crate::os::cache_home().map(|d| JobFiles {
             dir: d.join("ranma"),
         })
     }

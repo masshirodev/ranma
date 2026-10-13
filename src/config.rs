@@ -1266,7 +1266,7 @@ pub fn config_dir() -> Option<PathBuf> {
     std::env::var_os("RANMA_CONFIG_DIR")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
-        .or_else(|| dirs::config_dir().map(|d| d.join("ranma")))
+        .or_else(|| crate::os::config_home().map(|d| d.join("ranma")))
 }
 
 fn rt_err(msg: impl Into<String>) -> mlua::Error {

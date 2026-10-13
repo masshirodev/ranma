@@ -94,10 +94,7 @@ fn spawn(
 
 /// The default log: `$XDG_STATE_HOME/ranma/logs/pane<ID>-<UTC time>.log`.
 pub fn default_log(id: crate::layout::PaneId) -> Option<PathBuf> {
-    let dir = dirs::state_dir()
-        .or_else(|| dirs::home_dir().map(|h| h.join(".local").join("state")))?
-        .join("ranma")
-        .join("logs");
+    let dir = crate::os::state_home()?.join("ranma").join("logs");
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?
