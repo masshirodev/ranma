@@ -84,6 +84,9 @@ pub struct PaneHandover {
     pub command: Option<String>,
     #[serde(default)]
     pub start_cwd: Option<std::path::PathBuf>,
+    /// Its own looks, as given (`pane:style`, a rule's `style`).
+    #[serde(default)]
+    pub looks: Option<toml::Table>,
 }
 
 impl PaneHandover {
@@ -135,6 +138,7 @@ impl App {
                     snapshot,
                     command: p.command.clone(),
                     start_cwd: p.start_cwd.clone(),
+                    looks: self.pane_looks.get(&id).map(|(t, _)| t.clone()),
                 })
             })
             .collect();
@@ -200,6 +204,11 @@ impl App {
             }
         }
         app.panes = adopted;
+        for p in &state.panes {
+            if let Some(t) = &p.looks {
+                app.style_pane(p.id, t.clone());
+            }
+        }
         app.next_id = state.next_id;
         app.workspaces = state.workspaces;
         app.current = state.current;

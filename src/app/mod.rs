@@ -283,6 +283,9 @@ pub struct App {
     rules_applied: HashSet<(PaneId, usize)>,
     /// The named group a rule put each pane in (`group = "servers"`).
     pane_groups: HashMap<PaneId, String>,
+    /// Each pane's own looks: what rules and `pane:style` set, merged, and
+    /// parsed (DESIGN.md, "Looks a single pane may override").
+    pub(super) pane_looks: HashMap<PaneId, (toml::Table, crate::theme::PaneLooks)>,
     /// The last pane that had focus anywhere. A new session or an empty
     /// scratchpad has no focused pane of its own, and still starts where you were.
     last_focused: Option<PaneId>,
@@ -486,6 +489,7 @@ impl App {
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
             pane_groups: HashMap::new(),
+            pane_looks: HashMap::new(),
             last_focused: None,
             last_workspace: None,
             host_colors: Default::default(),
@@ -1255,6 +1259,7 @@ impl App {
         self.panes.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
         self.pane_groups.remove(&id);
+        self.pane_looks.remove(&id);
         self.pane_ended(id);
         // A popup gives focus back to the pane it was opened from, if that is
         // still in the workspace shown, rather than to whichever neighbour.
@@ -4027,8 +4032,16 @@ impl App {
             self.announce();
         }
         // Only what a border title asks for is read, and only for panes on screen.
+        // Rules on what runs in a pane, before the border facts: a rule's
+        // style may give a pane a title that names its program.
+        self.apply_late_rules();
+        // A pane's own title format can name them where the theme's does not.
         let fmt = &self.config.theme.border.title_format;
-        let (program, cwd) = (fmt.uses("program"), fmt.uses("cwd"));
+        let own = |v: &str| self.pane_looks.values().any(|(_, l)| l.uses(v));
+        let (program, cwd) = (
+            fmt.uses("program") || own("program"),
+            fmt.uses("cwd") || own("cwd"),
+        );
         let facts: HashMap<PaneId, (Option<String>, Option<String>)> = if program || cwd {
             let home = dirs::home_dir();
             self.visible
@@ -4053,7 +4066,6 @@ impl App {
             self.pane_facts = facts;
             self.dirty = true;
         }
-        self.apply_late_rules();
     }
 
     /// A pane's title as its border shows it: `border.title_format`, with
@@ -4064,7 +4076,12 @@ impl App {
             return String::new();
         };
         let facts = self.pane_facts.get(&id);
-        self.config.theme.border.title_format.render(|v| match v {
+        let fmt = self
+            .pane_looks
+            .get(&id)
+            .and_then(|(_, l)| l.title_format.as_ref())
+            .unwrap_or(&self.config.theme.border.title_format);
+        fmt.render(|v| match v {
             "title" => Some(p.label().to_string()),
             "index" => {
                 let ws = match self.locate(id)? {
@@ -4878,6 +4895,35 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn a_panes_own_looks_merge_the_later_over_the_earlier() {
+        let mut a = app(Some(
+            r##"ranma.rule { command = "ssh prod*", style = { border_active = "#ff0000", title_format = " PROD " } }"##,
+        ));
+        for id in [1, 2] {
+            with_pane(&mut a, id);
+        }
+        a.apply_command_rules(2, "ssh prod-db");
+        assert!(a.pane_theme(1).is_none(), "an unstyled pane is the theme");
+        let t = a.pane_theme(2).unwrap();
+        assert_eq!(t.colors.border_active, crate::theme::Color::Rgb(255, 0, 0));
+        // pane:style later: replaces what it names, keeps the rest.
+        a.style_pane(2, toml::from_str(r##"border_active = "#0000ff""##).unwrap());
+        let t = a.pane_theme(2).unwrap();
+        assert_eq!(t.colors.border_active, crate::theme::Color::Rgb(0, 0, 255));
+        assert!(t.border.title_format.render(|_| None).contains("PROD"));
+        let err = format!(
+            "{:#}",
+            crate::config::load_from(
+                None,
+                None,
+                Some("ranma.rule { command = 'x', style = { colour = 'red' } }")
+            )
+            .unwrap_err()
+        );
+        assert!(err.contains("colour"), "{err}");
     }
 
     #[test]

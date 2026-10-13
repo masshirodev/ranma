@@ -577,6 +577,7 @@ ranma.profile("mobile", {
 --   ranma.rule { program = "ssh", host = "prod*", name = "PROD", badge = { "!", "prod", "urgent" } }
 --   ranma.rule { cwd = "~/work/*", badge = { "w", "work", "dim" } }
 --   ranma.rule { program = "ssh", group = "servers" }    -- every ssh pane, tabbed together
+--   ranma.rule { host = "prod*", style = { border_active = "#f38ba8", active_bg = "#200000" } }
 --
 -- Modules:
 --

@@ -335,7 +335,10 @@ fn draw_pane(
     let content = term.renderable_content();
     let rows = term.screen_lines() as i32;
     let inner = view.inner;
-    let colors = &app.config.theme.colors;
+    // The pane's own looks over the theme, when it has any.
+    let own = app.pane_theme(view.id);
+    let theme = own.as_ref().unwrap_or(&app.config.theme);
+    let colors = &theme.colors;
     let copy = app.copy_state().filter(|c| c.pane == view.id);
     let hit_style = Style::default()
         .fg(color(colors.search_fg))
@@ -344,8 +347,8 @@ fn draw_pane(
         .fg(color(colors.search_current_fg))
         .bg(color(colors.search_current_bg));
     let selection = content.selection;
-    let panes = &app.config.theme.panes;
-    let palette = &app.config.theme.palette;
+    let panes = &theme.panes;
+    let palette = &theme.palette;
     // The theme's palette under the program's own changes: the colour code
     // below reads one table either way, and pays nothing without a palette.
     let merged;
@@ -741,13 +744,17 @@ fn gradient_edge(
 }
 
 fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
-    let theme = &app.config.theme;
+    let own = app.pane_theme(view.id);
+    let theme = own.as_ref().unwrap_or(&app.config.theme);
     let b = &theme.border;
     let style = if view.floating { b.floating() } else { b.style };
     let Some(set) = border_set(b, style) else {
         return;
     };
-    let c = &app.colors();
+    let c = &match &own {
+        Some(t) => std::borrow::Cow::Borrowed(&t.colors),
+        None => app.colors(),
+    };
     // In WM mode the focused border takes the mode colour, so it is obvious which
     // pane the next action applies to.
     let border = match (view.focused, app.mode, view.floating) {

@@ -200,6 +200,7 @@ lets you style".
 - [x] `[roles.<name>]`: styles of a theme's own for bar modules
 - [x] Gradient borders, one colour per cell (`colors.border_*_gradient`)
 - [x] Window rules on `program`, `cwd` and `host`; `name`, `badge` and `group` effects
+- [x] A pane's own looks: a rule's `style`, `pane:style`
 - [x] `choose_theme`: a picker that shows each theme as it is selected
 - [x] The picker, redrawn (designed from `doc/briefs/done/PICKER.md`, held to
   `doc/handoffs/PICKER_MOCK.txt` cell for cell)

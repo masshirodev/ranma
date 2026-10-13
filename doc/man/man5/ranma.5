@@ -800,6 +800,9 @@ Move the pane to this workspace, following it unless \fBsilent = true\fR.
 \fBname\fR
 Name the pane, as \fBrename_pane\fR.
 .TP
+\fBstyle\fR
+The pane's own looks over the theme, as \fBpane:style\fR\fR takes them: \fBstyle = { border_active = "#f38ba8", title_format = " PROD {title} " }\fR.
+.TP
 \fBgroup\fR
 A name: tab the pane into the group of that name in its workspace (\fBgroup = "servers"\fR gathers every ssh pane into one set of tabs), started by the first pane to match. A floating pane is tiled first, so not with \fBfloat\fR or \fBsize\fR.
 .TP
@@ -1742,6 +1745,9 @@ Scroll so the line is on screen: a scrollback line lands mid\-view.
 .TP
 \fB:badge(owner, glyph, word, role)\fR
 Your plugin's mark on the pane's border, after its title: \fBp:badge("agents", "?", "waiting", "urgent")\fR. \fBowner\fR is your plugin's name; one badge per owner per pane, replaced by the next call, taken off with no glyph (\fBp:badge("agents")\fR). The glyph (one or two characters) carries the meaning without colour; the word (12 at most) goes first on a narrow pane; then the title is cut, calm badges go (dim, normal, accent), the title goes, and urgent badges last. Badges keep the order their owners first set one, and are cleared on a reload.
+.TP
+\fB:style(looks)\fR
+The pane's own looks over the theme, kept until it closes (over a reload and an upgrade, not a restored snapshot): \fBp:style { border_active = "#f38ba8", active_bg = "#200000" }\fR. Keys, all optional and strict: \fBborder_active\fR, \fBborder_inactive\fR, \fBborder_floating\fR and their \fB_gradient\fR lists, \fBgradient_angle\fR, \fBborder_style\fR and \fBfloating_style\fR (not \fBnone\fR: whether panes have borders is the layout's), \fBborder_chars\fR, \fBtitle\fR, \fBtitle_align\fR, \fBtitle_format\fR, \fBindicator\fR, \fBtitle_style\fR and \fBtitle_active_style\fR (attribute lists), \fBactive_bg\fR, \fBinactive_bg\fR, \fBdim_unfocused\fR, and \fBpalette = { color1 = "#…", … }\fR. A later call replaces the keys it names and keeps the rest (a rule's \fBstyle\fR included); \fBp:style()\fR clears them all.
 .TP
 \fB:copy_mode(line, col)\fR
 Focus it and enter copy mode with the cursor there, scrolled into view.
