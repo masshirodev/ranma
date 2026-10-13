@@ -345,11 +345,24 @@ fn draw_pane(
         .bg(color(colors.search_current_bg));
     let selection = content.selection;
     let panes = &app.config.theme.panes;
+    let palette = &app.config.theme.palette;
+    // The theme's palette under the program's own changes: the colour code
+    // below reads one table either way, and pays nothing without a palette.
+    let merged;
+    let table = if palette.is_empty() {
+        content.colors
+    } else {
+        merged = under(palette, content.colors);
+        &merged
+    };
     let ground = if view.focused {
         panes.active_bg
     } else {
         panes.inactive_bg
-    };
+    }
+    .or(palette
+        .background
+        .map(|theme::Hex(r, g, b)| theme::Color::Rgb(r, g, b)));
     let dim = Some(panes.dim_unfocused)
         .filter(|d| *d > 0.0 && !view.focused)
         .map(|amount| Dim {
@@ -400,19 +413,19 @@ fn draw_pane(
         } else {
             out.set_char(display_char(cell.c));
         }
-        let mut bg = term_color(cell.bg, content.colors);
+        let mut bg = term_color(cell.bg, table);
         // The program left the default background: the theme's ground, if any.
         if let (Color::Reset, Some(g)) = (bg, ground) {
             bg = color(g);
         }
         let mut style = Style {
-            fg: Some(term_color(cell.fg, content.colors)),
+            fg: Some(term_color(cell.fg, table)),
             bg: Some(bg),
             add_modifier: modifiers(cell.flags),
             ..Style::default()
         };
         if let Some(d) = &dim {
-            style = d.apply(style, cell, content.colors);
+            style = d.apply(style, cell, table);
         }
         let point = indexed.point;
         if let Some(c) = copy {
@@ -1694,6 +1707,26 @@ fn rgb_of(
     overrides[index].map(from).or_else(|| host.get(index))
 }
 
+/// The theme's palette with a program's own colour changes over it. The
+/// background is left out: it is the pane's ground (see `draw_pane`), which
+/// `panes.active_bg` and `inactive_bg` win over.
+fn under(
+    palette: &theme::Palette,
+    program: &alacritty_terminal::term::color::Colors,
+) -> alacritty_terminal::term::color::Colors {
+    let rgb = |theme::Hex(r, g, b)| alacritty_terminal::vte::ansi::Rgb { r, g, b };
+    let mut out = *program;
+    for (i, c) in palette.ansi().into_iter().enumerate() {
+        if out[i].is_none() {
+            out[i] = c.map(rgb);
+        }
+    }
+    if out[NamedColor::Foreground].is_none() {
+        out[NamedColor::Foreground] = palette.foreground.map(rgb);
+    }
+    out
+}
+
 /// A cell colour in host terms. Palette entries a program redefined (OSC 4/10/11)
 /// are honoured; everything else is left to the host's palette, so panes look
 /// like the rest of the user's terminal.
@@ -1732,6 +1765,56 @@ fn term_color(c: AColor, overrides: &alacritty_terminal::term::color::Colors) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_themes_palette_is_under_the_programs_own_colours() {
+        use alacritty_terminal::term::color::Colors;
+        use alacritty_terminal::vte::ansi::Rgb as ARgb;
+        let palette = theme::Palette {
+            color1: Some(theme::Hex(200, 0, 0)),
+            color4: Some(theme::Hex(0, 0, 200)),
+            foreground: Some(theme::Hex(9, 9, 9)),
+            background: Some(theme::Hex(1, 1, 1)),
+            ..Default::default()
+        };
+        let mut program = Colors::default();
+        program[4] = Some(ARgb { r: 1, g: 2, b: 3 });
+        let t = under(&palette, &program);
+        assert_eq!(
+            term_color(AColor::Indexed(1), &t),
+            Color::Rgb(200, 0, 0),
+            "the theme's red"
+        );
+        assert_eq!(
+            term_color(AColor::Named(NamedColor::Red), &t),
+            Color::Rgb(200, 0, 0),
+            "by name too"
+        );
+        assert_eq!(
+            term_color(AColor::Indexed(4), &t),
+            Color::Rgb(1, 2, 3),
+            "the program's own wins"
+        );
+        assert_eq!(
+            term_color(AColor::Indexed(2), &t),
+            Color::Indexed(2),
+            "unset: the host's"
+        );
+        assert_eq!(
+            term_color(AColor::Indexed(100), &t),
+            Color::Indexed(100),
+            "the 256 are left alone"
+        );
+        assert_eq!(
+            term_color(AColor::Named(NamedColor::Foreground), &t),
+            Color::Rgb(9, 9, 9)
+        );
+        // The background is the pane's ground, not a table entry.
+        assert_eq!(
+            term_color(AColor::Named(NamedColor::Background), &t),
+            Color::Reset
+        );
+    }
 
     #[test]
     fn colours_resolve_through_the_programs_palette_then_the_hosts() {

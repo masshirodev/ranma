@@ -2659,6 +2659,9 @@ the art's colours where it sets none: its text (unset, \fBbar_dim\fR) and the gr
 \fBpanes.scrollbar\fR
 \fBoff\fR, \fBscrolled\fR (the default), \fBon\fR: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's \fBpane\-scrollbars\fR). \fBscrolled\fR only while the view is scrolled back (the wheel, copy mode); \fBon\fR whenever the pane has history. Drawn as the heavy line in the border's colour (\fB#\fR with \fBascii\fR); a pane with no border has none.
 .TP
+\fBpalette.color0\fR \- \fBcolor15\fR, \fBpalette.foreground\fR, \fBpalette.background\fR
+\fB#rrggbb\fR: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and \fBls\fR alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256\-colour cube (16\-255) and truecolor text are left as the program sent them. \fBbackground\fR is the pane's ground where the program leaves the default, and \fBpanes.active_bg\fR / \fBinactive_bg\fR win over it. Needs a truecolor host terminal.
+.TP
 \fBstyles.<role>\fR
 text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR, \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
 .PP
