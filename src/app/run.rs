@@ -306,9 +306,11 @@ pub fn run_server(config: Config, name: &str) -> Result<()> {
     }
     start_background(&app, &tx);
     app.watcher = watch_config(tx, &app.config.packages);
+    app.server_name = Some(name.to_string());
     // A server started, not upgraded: it offers what the last one of its
     // name left (after a reboot, say).
     app.start_snapshots(name, true);
+    app.resume_update();
     let result = event_loop(
         &mut app,
         &rx,
@@ -440,8 +442,11 @@ pub fn run_server_resume(
     app.after_event();
     start_background(&app, &tx);
     app.watcher = watch_config(tx, &app.config.packages);
+    app.server_name = Some(name.to_string());
     // Taking a new build keeps the snapshots going and asks nothing.
     app.start_snapshots(name, false);
+    // `leader U` exec'd this server halfway through: its toast goes on.
+    app.resume_update();
     let result = event_loop(&mut app, &rx, &mut term, Some(name), Some(&buffer), clients);
     app.write_snapshot();
     result

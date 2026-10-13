@@ -2590,6 +2590,22 @@ Rust, for predictable latency without a GC, and for the emulator:
   often a dotfiles repository, and a clone does not belong in one.
   `RANMA_SOURCE_DIR` overrides it for one run; a variable, not a setting, so
   it is never left pointing at a branch.
+- An update is a toast, not a pane (2026-10-12). `leader U` used to open a
+  floating pane running the pull and the build, which covered the work for
+  minutes of cargo output nobody read. It now runs in the background, and a
+  toast says the step and the time it has taken, with a spinner. **The
+  spinner is the one animation ranma draws**, and it is allowed because it
+  moves a character, not the layout: one toast's cells change every 120 ms,
+  only while a job runs, and an idle ranma still draws nothing. Animations
+  of panes, floats or toasts sliding stay out (see above). The job outlives
+  the server that started it, in a way: `install.sh` ends with `ranma
+  upgrade --all`, which exec's that very server, and the new image keeps no
+  thread or pipe of the old one. So the job reports only through files in
+  `~/.cache/ranma` (its log, its step, its exit status written last), and
+  `update.running` names the server that started it and the job's pid. The
+  server that comes back from the exec, the same pid and so still the job's
+  parent, finds the job under its name and shows the toast again; no other
+  server does. A failure keeps the log and the toast opens it.
 - A packaged binary leaves updates to its package (2026-10-11). Release
   builds and the AUR packages set `RANMA_PACKAGED` at build time, and such a
   ranma never checks its source: updating from a clone would install a second

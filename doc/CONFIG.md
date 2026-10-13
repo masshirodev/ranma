@@ -45,7 +45,7 @@ shells as you left them.
 | `ranma attach --mobile NAME` | Say this terminal is a phone or a tablet, as `RANMA_MOBILE=1` does for plain `ranma` and `attach`. `init.lua` reads it in `ranma.client()` and `driver_change`, to switch to a touch layout; ranma itself changes nothing for it. |
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
 | `ranma upgrade [NAME]` / `--all` | Move a server (the one this runs in, when no name is given) or all of them to the installed build **without closing anything**: shells, panes, scrollback and the terminal attached all stay. `install.sh` does `--all` after every good install. |
-| `ranma update` / `--check` | Pull ranma's source and install it (`--check` only says how far behind it is). `leader U` does the same in a floating pane. See [Updating](#updating). |
+| `ranma update` / `--check` | Pull ranma's source and install it (`--check` only says how far behind it is). `leader U` does the same in the background, with a toast. See [Updating](#updating). |
 | `ranma --standalone` | No server: ranma in this terminal only, ending with it. |
 | `leader d` (`detach`) | Leave this terminal; the server keeps running. |
 | `leader S` (`server_switcher`) | The servers, from inside ranma: `Enter` moves this terminal to one, `Ctrl+X` kills one. |
@@ -60,6 +60,15 @@ need not be anywhere in particular: a binary built in one place and copied to
 another machine, or a checkout moved after installing, updates all the same.
 An update is that clone's `git pull --ff-only && ./install.sh`; servers move to
 the new build in place.
+
+`leader U` runs it out of sight: a toast shows a spinner, the step (pulling,
+building) and how long it has taken, and stays until it is done. Your server
+moves to the new build partway through and the toast carries on. It ends as
+`ranma updated to <commit>`, or, in red, `ranma update failed`; a click on the
+failed one opens the log (`~/.cache/ranma/update.log`, kept until the next
+update) in a floating pane. Clicking the running toast away does not stop the
+update, and it comes back on the next spinner frame, since it is the only sign
+of the update. `ranma update` in a shell prints the same steps where you ran it.
 
 `RANMA_SOURCE_DIR=/path/to/checkout ranma update` pulls and installs from
 another checkout instead, to try a branch not pushed yet. It must be a ranma
