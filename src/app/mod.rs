@@ -2588,11 +2588,7 @@ impl App {
         // back, after twice the wait: looking between deliberate presses
         // should not make it flash.
         self.hint_on = false;
-        self.hint_due = self
-            .config
-            .settings
-            .wm_mode_hint
-            .map(|d| Instant::now() + d * 2);
+        self.hint_due = self.hint_delay().map(|d| Instant::now() + d * 2);
         let Some(chord) = chord else {
             return;
         };
@@ -2648,7 +2644,7 @@ impl App {
             self.folder.push(chord);
             self.hint_on = hint_was_on;
             self.hint_due = (!hint_was_on)
-                .then_some(self.config.settings.wm_mode_hint)
+                .then_some(self.hint_delay())
                 .flatten()
                 .map(|d| Instant::now() + d);
             return;
@@ -2866,6 +2862,16 @@ impl App {
             .map_or(self.config.settings.wm_mode_sticky, |m| m.sticky)
     }
 
+    /// The pause before the which-key hint shows, or `None` for never: the
+    /// user mode's own `hint` while one is on, else `wm_mode.hint`.
+    pub fn hint_delay(&self) -> Option<std::time::Duration> {
+        self.user_mode
+            .as_ref()
+            .and_then(|m| self.config.modes.get(m))
+            .and_then(|m| m.hint)
+            .unwrap_or(self.config.settings.wm_mode_hint)
+    }
+
     /// The label the bar's mode module shows for a user mode that is on.
     pub fn user_mode_label(&self) -> Option<&str> {
         let m = self.config.modes.get(self.user_mode.as_ref()?)?;
@@ -2885,6 +2891,9 @@ impl App {
         self.hide_pane_numbers();
         self.set_mode(Mode::Wm);
         self.user_mode = Some(name.to_string());
+        // The mode's own pause, not the one WM mode started on the way in.
+        self.hint_on = false;
+        self.hint_due = self.hint_delay().map(|d| Instant::now() + d);
         if let Some(key) = enter
             && let Ok(f) = self.config.lua.registry_value::<Function>(&key)
         {
@@ -4479,9 +4488,8 @@ impl App {
                         .nested_path()
                         .iter()
                         .rev()
-                        .map(|r| r.mode.as_str())
-                        .find(|m| *m != "normal" && !m.is_empty())
-                        .map(|m| Piece::new(format!(" {} ", m.to_uppercase()), Style::Mode));
+                        .find_map(|r| r.mode_chip())
+                        .map(|m| Piece::new(format!(" {m} "), Style::Mode));
                     std::iter::once(Piece::new(bar::NESTED_SIGN, Style::Dim))
                         .chain(inner)
                         .collect()
@@ -6613,6 +6621,41 @@ mod tests {
         let mut off = app(Some("ranma.set { wm_mode = { hint = false } }"));
         off.enter_wm(leader);
         assert!(off.hint_due.is_none());
+    }
+
+    #[test]
+    fn a_user_mode_has_its_own_hint_and_its_label_reaches_the_outer_bar() {
+        let mut a = app(Some(
+            r#"ranma.mode("quiet", { label = "NORMAL", hint = false, binds = { h = "send left" } })
+               ranma.mode("slow", { hint = 2, binds = { h = "send left" } })
+               ranma.mode("same", { hint = true, binds = { h = "send left" } })"#,
+        ));
+        let t = Instant::now();
+        a.enter_user_mode("quiet");
+        assert!(a.hint_due.is_none(), "hint = false: never due");
+        let r = a.own_report();
+        assert_eq!(
+            (r.mode.as_str(), r.mode_label.as_deref()),
+            ("wm", Some("NORMAL"))
+        );
+        assert_eq!(r.mode_chip().as_deref(), Some("NORMAL"));
+        a.enter_user_mode("slow");
+        assert!(a.hint_due.unwrap() >= t + Duration::from_secs(2));
+        a.enter_user_mode("same");
+        assert!(
+            a.hint_due.unwrap() < t + Duration::from_secs(1),
+            "follows wm_mode.hint"
+        );
+        // Plain WM mode reports no label, so the outer says WM as before.
+        a.enter_wm(a.config.settings.leader);
+        let r = a.own_report();
+        assert_eq!(r.mode_label, None);
+        assert_eq!(r.mode_chip().as_deref(), Some("WM"));
+        assert!(
+            crate::config::load_from(None, None, Some(r#"ranma.mode("m", { hint = 11 })"#))
+                .err()
+                .is_some_and(|e| e.to_string().contains("seconds from 0 to 10"))
+        );
     }
 
     fn names(app: &App) -> Vec<Option<String>> {
