@@ -1617,6 +1617,15 @@ off `set_mode`, not off keys. A bind naming a mode no `ranma.mode` declares
 is refused at load, as an unknown action is; the check waits for the end of
 the file, since a bind may come before its mode.
 
+**A user mode lets the global binds through** (2026-10-13): a key its
+table does not bind runs the global bind for it, and the mode stays. A mode
+is keys added over typing (a NORMAL that sends hjkl as arrows, a resize
+mode), and losing alt+arrows or alt+digits inside it made it a place to
+leave rather than a layer. Its own binds win, Esc, Enter and the leader
+keep their meaning, and plain WM mode still swallows what it does not bind,
+since it gives some of those chords meanings of its own (alt+digit moves the
+pane there).
+
 **A user mode may set its own which-key pause** (`hint`, 2026-10-13),
 because the hint is for keys not yet learned, and a small mode is learned
 long before WM mode's whole table is: turning it off for one should not

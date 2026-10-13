@@ -1848,7 +1848,11 @@ itself only takes the screen), typing at the desk brings the desk's back.
 A mode of your own is WM mode with a key table of its own: a resize mode, a
 git mode, keys that only make sense together. The `mode NAME` action enters
 it; its keys run until Esc or Enter (or a bind with `exit = true`), and the
-leader goes back to WM mode's keys. The bar's mode module says its label.
+leader goes back to WM mode's keys. A key the mode does not bind is still
+the [global bind](#binds--ranmabindkeys-action-opts)'s, if it has one
+(`alt+1` goes to workspace 1, `alt+left` focuses left) and the mode stays;
+any other is swallowed, as in WM mode. Plain WM mode does not do this: its
+own table gives some of those keys other meanings. The bar's mode module says its label.
 
 ```lua
 ranma.mode("resize", {

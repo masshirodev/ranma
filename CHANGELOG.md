@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- In a user mode, a key the mode does not bind runs its global bind
+  (alt+arrows, alt+digits, ...) and the mode stays; before, it was
+  swallowed. Plain WM mode is unchanged.
 - `ranma.mode(name, { hint = ... })`: a user mode's own which-key pause;
   `false` keeps the hint out of that mode while WM mode keeps it.
 
