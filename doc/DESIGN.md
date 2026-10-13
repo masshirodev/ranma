@@ -2994,6 +2994,19 @@ background processes for the one thing the server is for.
   send the leader to the program, because a toolbar face that cannot undo
   itself is a trap on a touch screen. `send_leader` still sends it. `latch
   ctrl` stays an action, for a terminal without Termux's row.
+- **A `keyboard` action** (2026-10-13): a button that opens the phone's
+  keyboard, in the default touch toolbar's slot that was `send esc` (Termux's
+  extra-keys row has Esc, as it has Ctrl). Termux shows its keyboard for a tap
+  on the terminal only when no mouse tracking is on, and ranma always tracks
+  the mouse, so a tap on a pane opened nothing. There is no escape sequence
+  that asks Termux for the keyboard, and the phone runs no ranma that could,
+  so the action works the check instead: it turns mouse reporting off for
+  1.5 s, or until a key arrives. Termux decides at `onSingleTapConfirmed`,
+  300 ms after the touch began, while the tap's click reached ranma at the
+  finger's lift, so the reporting is usually off before the same tap is
+  judged and that tap opens the keyboard; on a slow link the next tap does.
+  Every terminal on the server stops reporting for that moment, since mouse
+  modes go out to all of them alike; a moment is the cost.
 - **`layout = "monocle"`** with a **`pane_strip`**: one pane on screen, the
   others as tabs.
 - **Large** bar, toolbars and pickers; a picker at large size is a **sheet**

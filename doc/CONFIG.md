@@ -346,6 +346,7 @@ sent them, which it is not asked to.
 | `exit_mode` | Leave WM mode (or a user mode). From a key, or from Lua (`ranma.action("exit_mode")`), where it wins over the bind's own `exit = false`. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
+| `keyboard` | Open the phone's on-screen keyboard, for a toolbar button. Termux opens it for a tap only when no program tracks the mouse, and ranma always does, so this turns mouse reporting off for 1.5 seconds, or until a key is typed: the tap that ran it usually opens the keyboard, and if not, the next one does. Elsewhere it does nothing you would see. |
 | `paste_image` | Type the paths of the files copied on the clipboard, else of its image, into the focused pane (`leader v`), uploading them first when the pane runs `ssh`. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
 | `toolbar <name> [on\|off\|toggle]` | Show, hide or flip a toolbar (see [Toolbars](#toolbars--ranmatoolbarname-def)); toggle without a word. Until the next profile switch, which shows the profile's. |
@@ -1756,6 +1757,7 @@ ranma.toolbar("touch", {
     { "◆", "leader", text = "leader" },
     { "⌃", "latch ctrl", text = "ctrl" },
     { "⎋", "send esc" },
+    { "⌨", "keyboard", text = "keys" },
     { "⊞", "workspace_switcher" },
     { "✕", "close_pane" },
     { "!", function() ranma.notify("hi") end },
@@ -1845,6 +1847,12 @@ Host vps
 and let the far side's sshd take it (`/etc/ssh/sshd_config`, then reload
 sshd): `AcceptEnv RANMA_*`. Without that line sshd drops the variable
 silently, and the phone gets the desk's layout.
+
+A tap on a pane does not open the phone's keyboard: Termux opens it only
+when nothing tracks the mouse, and ranma does. The default touch toolbar's
+`⌨` button (the `keyboard` action) opens it. Esc and Ctrl are on Termux's
+extra-keys row, so the default toolbar has no buttons for them; a terminal
+without that row adds `{ "⎋", "send esc" }` and `{ "⌃", "latch ctrl" }`.
 
 When the phone and the desk both show a server, the screen follows the one
 last typed in (see [Servers](#servers-closing-the-terminal-does-not-end-ranma)),

@@ -171,6 +171,8 @@ mobile view").
   switched to
 - [x] A `leader` action, and the touch toolbar's leader in place of Ctrl
   (Termux's extra-keys row has Ctrl already)
+- [x] A `keyboard` action, and the touch toolbar's keyboard button in place of
+  Esc (Termux's extra-keys row has Esc too)
 
 ## 9. Files into a pane that runs ssh
 

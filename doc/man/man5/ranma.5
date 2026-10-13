@@ -607,6 +607,9 @@ Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a
 \fBsend_leader\fR
 Send the leader chord to the focused program.
 .TP
+\fBkeyboard\fR
+Open the phone's on\-screen keyboard, for a toolbar button. Termux opens it for a tap only when no program tracks the mouse, and ranma always does, so this turns mouse reporting off for 1.5 seconds, or until a key is typed: the tap that ran it usually opens the keyboard, and if not, the next one does. Elsewhere it does nothing you would see.
+.TP
 \fBpaste_image\fR
 Type the paths of the files copied on the clipboard, else of its image, into the focused pane (\fBleader v\fR), uploading them first when the pane runs \fBssh\fR. See Pasting files over ssh\fR.
 .TP
@@ -2348,6 +2351,7 @@ ranma.toolbar("touch", {
     { "◆", "leader", text = "leader" },
     { "⌃", "latch ctrl", text = "ctrl" },
     { "⎋", "send esc" },
+    { "⌨", "keyboard", text = "keys" },
     { "⊞", "workspace_switcher" },
     { "✕", "close_pane" },
     { "!", function() ranma.notify("hi") end },
@@ -2445,6 +2449,12 @@ Host vps
 and let the far side's sshd take it (\fB/etc/ssh/sshd_config\fR, then reload
 sshd): \fBAcceptEnv RANMA_*\fR. Without that line sshd drops the variable
 silently, and the phone gets the desk's layout.
+.PP
+A tap on a pane does not open the phone's keyboard: Termux opens it only
+when nothing tracks the mouse, and ranma does. The default touch toolbar's
+\fB⌨\fR button (the \fBkeyboard\fR action) opens it. Esc and Ctrl are on Termux's
+extra\-keys row, so the default toolbar has no buttons for them; a terminal
+without that row adds \fB{ "⎋", "send esc" }\fR and \fB{ "⌃", "latch ctrl" }\fR.
 .PP
 When the phone and the desk both show a server, the screen follows the one
 last typed in (see Servers\fR),
