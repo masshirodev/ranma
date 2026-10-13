@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install ranma from its latest release, for any Linux with glibc 2.34 or newer:
+# Install ranma from its latest release, for any Linux with glibc 2.34 or newer,
+# and macOS:
 #
 #   curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh
 #
@@ -100,13 +101,17 @@ main() {
     exit 0
   fi
 
-  [ "$(uname -s)" = Linux ] || fail "ranma runs on Linux only (it reads /proc); WSL2 works"
+  case "$(uname -s)" in
+    Linux) os=unknown-linux-gnu ;;
+    Darwin) os=apple-darwin ;;
+    *) fail "ranma runs on Linux and macOS; WSL2 works. Build from source: $repo#install" ;;
+  esac
   case "$(uname -m)" in
-    x86_64 | amd64) target=x86_64-unknown-linux-gnu ;;
-    aarch64 | arm64) target=aarch64-unknown-linux-gnu ;;
+    x86_64 | amd64) target="x86_64-$os" ;;
+    aarch64 | arm64) target="aarch64-$os" ;;
     *) fail "no release build for $(uname -m). Build from source: $repo#install" ;;
   esac
-  check_libc
+  [ "$os" = apple-darwin ] || check_libc
   command -v tar >/dev/null || fail "needs tar"
 
   # A package manager's ranma first on PATH would hide this one.

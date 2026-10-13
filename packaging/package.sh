@@ -2,7 +2,9 @@
 # Package a built ranma into everything a release ships, in dist/:
 #
 #   ranma-<version>-<target>.tar.gz (+ .sha256)   the tarball: AUR ranma-bin,
-#                                                 install.sh, cargo binstall
+#                                                 install.sh, cargo binstall,
+#                                                 Homebrew (the only file for
+#                                                 an apple-darwin target)
 #   ranma_<version>-1_<arch>.deb                  apt, and by hand
 #   ranma-<version>-1.<arch>.rpm                  dnf and zypper, and by hand
 #
@@ -24,12 +26,21 @@ cp "$bin" "dist/$name/"
 cp -r doc/man "dist/$name/man"
 cp LICENSE-MIT LICENSE-APACHE README.md "dist/$name/"
 tar -C dist -czf "dist/$name.tar.gz" "$name"
-(cd dist && sha256sum "$name.tar.gz" >"$name.tar.gz.sha256")
+# macOS has shasum, not sha256sum; the line they write is the same.
+if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
+(cd dist && $sum "$name.tar.gz" >"$name.tar.gz.sha256")
 rm -r "dist/${name:?}"
 
-cargo deb --no-build --no-strip --target "$target" --output dist/
-cargo generate-rpm --target "$target" --output dist/
-
-# The newest glibc symbol the binary asks for: the oldest distro it runs on.
-objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+case "$target" in
+  *-apple-darwin)
+    # A tarball only: Homebrew and install.sh unpack it.
+    otool -L "$bin"
+    ;;
+  *)
+    cargo deb --no-build --no-strip --target "$target" --output dist/
+    cargo generate-rpm --target "$target" --output dist/
+    # The newest glibc symbol the binary asks for: the oldest distro it runs on.
+    objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+    ;;
+esac
 ls -l dist/

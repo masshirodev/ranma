@@ -118,7 +118,7 @@ sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ran
 sudo dnf install ranma      # openSUSE: sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma
 ```
 
-Homebrew (Linux for now): `brew install masshirodev/tap/ranma`.
+Homebrew (Linux, and macOS from 0.3.0): `brew install masshirodev/tap/ranma`.
 
 Arch, from the AUR: `ranma-bin` (the release binary).
 
@@ -148,14 +148,18 @@ From source:
 ./install.sh --uninstall
 ```
 
-**Linux only.** ranma reads `/proc` to know what runs in each pane, so it does
-not work on macOS or the BSDs. WSL2 works.
+**Linux and macOS** (macOS from 0.3.0, arm64 and Intel). WSL2 works. The BSDs
+and native Windows do not: what ranma asks the OS about a pane (its program,
+its directory) is answered by `/proc` on Linux and libproc on macOS, and
+nothing else is written yet (doc/DESIGN.md, "Linux and macOS, not native
+Windows").
 
 Needs Rust 1.88 or newer (`cargo`) and a C compiler (ranma builds its Lua from
 source). Optional, at run time:
 
 - `wl-paste` (wl-clipboard) or `xclip` for `paste_image` on Wayland or X11;
-  under WSL it uses `powershell.exe`. Any other command can be set with
+  under WSL it uses `powershell.exe`, and on macOS `osascript`, which is
+  always there. Any other command can be set with
   `paste.image_command`.
 - OpenSSH (`ssh`) on both ends for pasting files into a pane that runs ssh.
 - `xdg-open` for opening links from hint mode.
