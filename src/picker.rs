@@ -138,6 +138,9 @@ pub struct Picker {
     /// its `complete` offers: a typed line naming one is run, not parsed as
     /// an action.
     pub user_commands: Vec<(String, Vec<String>)>,
+    /// Rows the list shows, for Page Up/Down; the app sets it from the
+    /// layout before a key (0: not known, a page is then 10).
+    pub page: usize,
 }
 
 impl Picker {
@@ -152,6 +155,7 @@ impl Picker {
             touched: false,
             scroll: 0,
             user_commands: Vec::new(),
+            page: 0,
         }
     }
 
@@ -452,6 +456,14 @@ impl Picker {
             KeyCode::Char('n' | 'j') if ctrl => {
                 self.selected = (self.selected + 1).min(n.saturating_sub(1))
             }
+            // A page keeps one row of the last in view, as less and vim do.
+            KeyCode::PageUp => self.selected = self.selected.saturating_sub(self.step()),
+            KeyCode::PageDown => {
+                self.selected = (self.selected + self.step()).min(n.saturating_sub(1))
+            }
+            // The query has no cursor to move, so Home and End are the list's.
+            KeyCode::Home => self.selected = 0,
+            KeyCode::End => self.selected = n.saturating_sub(1),
             KeyCode::Backspace => {
                 self.query.pop();
                 self.selected = 0;
@@ -467,6 +479,13 @@ impl Picker {
             _ => {}
         }
         Outcome::Open
+    }
+
+    fn step(&self) -> usize {
+        match self.page {
+            0 => 10,
+            h => h.saturating_sub(1).max(1),
+        }
     }
 
     pub fn paste(&mut self, text: &str) {
@@ -639,6 +658,30 @@ mod tests {
                 "{code:?}"
             );
         }
+    }
+
+    #[test]
+    fn page_keys_home_and_end_move_the_selection() {
+        let mut p = Picker::new(Kind::Panes, "", items(&["a"; 30]));
+        key(&mut p, KeyCode::End);
+        assert_eq!(p.selected, 29);
+        key(&mut p, KeyCode::Home);
+        assert_eq!(p.selected, 0);
+        // Unknown height: a page is 10.
+        key(&mut p, KeyCode::PageDown);
+        assert_eq!(p.selected, 10);
+        // A list of 8 rows: a page keeps one in view.
+        p.page = 8;
+        key(&mut p, KeyCode::PageDown);
+        assert_eq!(p.selected, 17);
+        key(&mut p, KeyCode::PageUp);
+        key(&mut p, KeyCode::PageUp);
+        key(&mut p, KeyCode::PageUp);
+        assert_eq!(p.selected, 0, "clamped at the top");
+        for _ in 0..10 {
+            key(&mut p, KeyCode::PageDown);
+        }
+        assert_eq!(p.selected, 29, "and at the bottom");
     }
 
     #[test]

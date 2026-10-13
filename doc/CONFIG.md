@@ -1263,6 +1263,7 @@ open, and it has the keyboard.
 | Key | |
 | --- | --- |
 | `↑↓` `j` `k` | Move. `tab` jumps to the next group, `shift+tab` back. |
+| `pageup` `pagedown`, `home` `end` | A page (the rows on screen, less one), and the first and last option. |
 | `←→` `h` `l` | Change the value: the next choice, on/off, a step of a number, the theme's next colour. |
 | `enter` | Type a value (a number, a colour, text), or flip a choice. `enter` applies it, `esc` cancels, `ctrl+u` clears. |
 | `r` | Back to the default. |
@@ -1334,7 +1335,12 @@ ranma.input {
 They are ranma's own picker and prompt, drawn and matched as the switchers
 are (fuzzy, best first). An item is a string, or a table with a `label` and an
 optional `detail` shown dimmed after it (not matched). Any other fields ride
-along: `on_select` gets the item itself. Up to 10 000 items. Both open when
+along: `on_select` gets the item itself. Up to 10 000 items.
+
+Keys in every picker: `↑↓` (or `ctrl+p` `ctrl+n`, `ctrl+k` `ctrl+j`) move,
+`pageup` `pagedown` move a page (the rows shown, less one), `home` `end` go
+to the first and last item, `enter` picks, `esc` cancels, `ctrl+u` clears
+what was typed. Both open when
 your function returns and call back once something is chosen, inside the same
 budget as a bind. A callback may open the next picker. Only from a bind, hook,
 module or timer.
@@ -1415,7 +1421,9 @@ not while it runs.
 A row's `group` names the options group `o` opens while that row is selected
 (a plugin manager's rows are other plugins), over the screen's own `group`.
 
-Keys: ranma keeps `↑↓` `j` `k` (move), `tab` (next heading), `/` (filter),
+Keys: ranma keeps `↑↓` `j` `k` (move), `pageup` `pagedown` (a page, less
+one row kept in view), `home` `end` (the first and last row), `tab` (next
+heading), `/` (filter),
 `esc` (close) and `?` (keys), plus `←→` `h` `l` and `enter` on an editable row.
 A screen or row binding one of them is an error naming it. `space` peeks
 (the screen folds to its selected row at the bottom) and `o` opens the

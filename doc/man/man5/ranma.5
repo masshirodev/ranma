@@ -1778,6 +1778,9 @@ open, and it has the keyboard.
 \fB↑↓\fR \fBj\fR \fBk\fR
 Move. \fBtab\fR jumps to the next group, \fBshift+tab\fR back.
 .TP
+\fBpageup\fR \fBpagedown\fR, \fBhome\fR \fBend\fR
+A page (the rows on screen, less one), and the first and last option.
+.TP
 \fB←→\fR \fBh\fR \fBl\fR
 Change the value: the next choice, on/off, a step of a number, the theme's next colour.
 .TP
@@ -1868,7 +1871,12 @@ ranma.input {
 They are ranma's own picker and prompt, drawn and matched as the switchers
 are (fuzzy, best first). An item is a string, or a table with a \fBlabel\fR and an
 optional \fBdetail\fR shown dimmed after it (not matched). Any other fields ride
-along: \fBon_select\fR gets the item itself. Up to 10 000 items. Both open when
+along: \fBon_select\fR gets the item itself. Up to 10 000 items.
+.PP
+Keys in every picker: \fB↑↓\fR (or \fBctrl+p\fR \fBctrl+n\fR, \fBctrl+k\fR \fBctrl+j\fR) move,
+\fBpageup\fR \fBpagedown\fR move a page (the rows shown, less one), \fBhome\fR \fBend\fR go
+to the first and last item, \fBenter\fR picks, \fBesc\fR cancels, \fBctrl+u\fR clears
+what was typed. Both open when
 your function returns and call back once something is chosen, inside the same
 budget as a bind. A callback may open the next picker. Only from a bind, hook,
 module or timer.
@@ -1963,7 +1971,9 @@ not while it runs.
 A row's \fBgroup\fR names the options group \fBo\fR opens while that row is selected
 (a plugin manager's rows are other plugins), over the screen's own \fBgroup\fR.
 .PP
-Keys: ranma keeps \fB↑↓\fR \fBj\fR \fBk\fR (move), \fBtab\fR (next heading), \fB/\fR (filter),
+Keys: ranma keeps \fB↑↓\fR \fBj\fR \fBk\fR (move), \fBpageup\fR \fBpagedown\fR (a page, less
+one row kept in view), \fBhome\fR \fBend\fR (the first and last row), \fBtab\fR (next
+heading), \fB/\fR (filter),
 \fBesc\fR (close) and \fB?\fR (keys), plus \fB←→\fR \fBh\fR \fBl\fR and \fBenter\fR on an editable row.
 A screen or row binding one of them is an error naming it. \fBspace\fR peeks
 (the screen folds to its selected row at the bottom) and \fBo\fR opens the

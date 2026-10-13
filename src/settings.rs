@@ -820,6 +820,8 @@ pub struct Panel {
     /// Opened from a plugin's screen (`o`): only its group is listed, out of
     /// this many options, and `esc` goes back to the screen of this title.
     pub scope: Option<(usize, String)>,
+    /// Rows the list showed when last drawn, for Page Up/Down (0: not drawn).
+    pub list_rows: std::cell::Cell<usize>,
 }
 
 /// What a key asks of the app.
@@ -861,6 +863,7 @@ impl Panel {
             themes,
             error: None,
             scope: None,
+            list_rows: std::cell::Cell::new(0),
         }
     }
 
@@ -908,6 +911,12 @@ impl Panel {
     }
 
     fn step_selection(&mut self, down: bool) {
+        self.step_by(if down { 1 } else { -1 });
+    }
+
+    /// Moves the selection by `by` options, clamped to the list; `isize::MIN`
+    /// and `MAX` are the first and the last.
+    fn step_by(&mut self, by: isize) {
         let list = self.list();
         let Some(cur) = self.sel_index(&list) else {
             return;
@@ -915,14 +924,21 @@ impl Panel {
         let opts: Vec<usize> = (0..list.len())
             .filter(|i| matches!(list[*i], Item::Opt(_)))
             .collect();
-        let at = opts.iter().position(|i| *i == cur).unwrap_or(0);
-        let next = if down {
-            (at + 1).min(opts.len().saturating_sub(1))
-        } else {
-            at.saturating_sub(1)
-        };
-        if let Some(i) = opts.get(next) {
-            self.select_at(&list, *i);
+        if opts.is_empty() {
+            return;
+        }
+        let at = opts.iter().position(|i| *i == cur).unwrap_or(0) as isize;
+        let next = at.saturating_add(by).clamp(0, opts.len() as isize - 1);
+        self.select_at(&list, opts[next as usize]);
+    }
+
+    /// A page: the rows the list showed, less one kept in view. Headings
+    /// count as rows, so a page of options is a little shorter than the
+    /// screen, never longer.
+    fn page(&self) -> usize {
+        match self.list_rows.get() {
+            0 => 10,
+            n => n.saturating_sub(1).max(1),
         }
     }
 
@@ -1161,6 +1177,10 @@ impl Panel {
             match k.code {
                 KeyCode::Up => self.step_selection(false),
                 KeyCode::Down => self.step_selection(true),
+                KeyCode::PageUp => self.step_by(-(self.page() as isize)),
+                KeyCode::PageDown => self.step_by(self.page() as isize),
+                KeyCode::Home => self.step_by(isize::MIN),
+                KeyCode::End => self.step_by(isize::MAX),
                 KeyCode::Left => return self.changed(false),
                 KeyCode::Right => return self.changed(true),
                 KeyCode::Enter => self.filtering = false,
@@ -1182,6 +1202,10 @@ impl Panel {
         match (k.code, ch) {
             (KeyCode::Up, _) | (_, Some('k')) => self.step_selection(false),
             (KeyCode::Down, _) | (_, Some('j')) => self.step_selection(true),
+            (KeyCode::PageUp, _) => self.step_by(-(self.page() as isize)),
+            (KeyCode::PageDown, _) => self.step_by(self.page() as isize),
+            (KeyCode::Home, _) => self.step_by(isize::MIN),
+            (KeyCode::End, _) => self.step_by(isize::MAX),
             (KeyCode::Left, _) | (_, Some('h')) => return self.changed(false),
             (KeyCode::Right, _) | (_, Some('l')) => return self.changed(true),
             (KeyCode::Tab, _) => self.next_group(false),
@@ -1496,6 +1520,7 @@ impl Panel {
             off = sel_idx as i32 - l + 3;
         }
         off = off.clamp(0, (list.len() as i32 - l).max(0));
+        self.list_rows.set(l.max(0) as usize);
         for i in 0..l {
             let Some(it) = list.get((off + i) as usize) else {
                 break;
@@ -2692,6 +2717,28 @@ mod tests {
 
     fn eff(p: &Panel, k: &str) -> V {
         p.entries.iter().find(|e| e.opt.key == k).unwrap().eff()
+    }
+
+    #[test]
+    fn page_keys_home_and_end_move_through_the_options() {
+        let mut p = Panel::new(fixture("rounded"), vec![], vec![]);
+        let k = |p: &mut Panel, code| p.key(&KeyEvent::new(code, KeyModifiers::NONE));
+        let first = p.sel.clone();
+        k(&mut p, KeyCode::End);
+        let last = p.sel.clone();
+        assert_ne!(first, last);
+        k(&mut p, KeyCode::Home);
+        assert_eq!(p.sel, first);
+        // A list drawn 4 rows tall: a page is 3 options.
+        p.list_rows.set(4);
+        k(&mut p, KeyCode::PageDown);
+        let paged = p.sel.clone();
+        press(&mut p, "^^^");
+        assert_eq!(p.sel, first, "three up from a page down is the start");
+        k(&mut p, KeyCode::PageDown);
+        k(&mut p, KeyCode::PageUp);
+        assert_eq!(p.sel, first);
+        assert_ne!(paged, first);
     }
 
     #[test]

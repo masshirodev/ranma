@@ -644,9 +644,11 @@ impl App {
     }
 
     pub(super) fn picker_key(&mut self, key: &KeyEvent) {
+        let page = self.picker_layout().map_or(0, |l| l.list.h as usize);
         let Some(p) = self.picker.as_mut() else {
             return;
         };
+        p.page = page;
         let outcome = p.key(key);
         p.touched = true;
         self.dirty = true;
