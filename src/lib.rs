@@ -34,6 +34,7 @@ pub mod paste;
 pub mod picker;
 pub mod pickerview;
 pub mod pipe;
+pub mod placement;
 pub mod proto;
 pub mod pty;
 pub mod render;

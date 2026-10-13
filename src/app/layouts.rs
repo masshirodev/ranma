@@ -97,8 +97,18 @@ impl App {
                     Layout::Master => "one pane on the left, the rest stacked",
                     Layout::Monocle => "one pane at a time, the others as tabs",
                     Layout::Scrolling => "a strip of columns wider than the screen",
+                    Layout::Lua(_) => "a placement in Lua",
                 }
                 .into(),
+                target: Target::Run(format!("workspace_layout {}", l.name())),
+                current: own == Some(l),
+            }
+        }));
+        items.extend(self.config.placements.iter().map(|(id, _)| {
+            let l = Layout::Lua(*id);
+            Item {
+                label: l.name().into(),
+                detail: "a placement in Lua".into(),
                 target: Target::Run(format!("workspace_layout {}", l.name())),
                 current: own == Some(l),
             }

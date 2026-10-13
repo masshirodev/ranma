@@ -36,6 +36,7 @@ mod nested;
 pub use nested::NestLabel;
 mod paste;
 mod pickerspec;
+mod placements;
 mod query;
 mod rules;
 mod run;
@@ -306,6 +307,10 @@ pub struct App {
     pub server_name: Option<String>,
     /// The theme to put back if the theme picker closes without a choice.
     theme_preview: Option<themes::Preview>,
+    /// What each workspace's placement policy last arranged, and the state
+    /// table it keeps between calls (see `placements`).
+    placement_shapes: HashMap<u8, placements::Shape>,
+    placement_state: HashMap<u8, std::rc::Rc<mlua::RegistryKey>>,
     /// The pane holding a mouse selection, cleared by the next click or key.
     selection_pane: Option<PaneId>,
     /// The last left click, for double and triple clicks: when, where, how many.
@@ -500,6 +505,8 @@ impl App {
             update_log: None,
             server_name: None,
             theme_preview: None,
+            placement_shapes: HashMap::new(),
+            placement_state: HashMap::new(),
             layouts_dir: crate::layouts::dir(),
             snapshots: None,
             snapshot_due: None,
@@ -995,6 +1002,8 @@ impl App {
                 ws.tree.arrange_master(ratio);
             }
         }
+        // And a policy in Lua, when the workspace's shape changed.
+        self.arrange_placements();
         // A strip, likewise; and out of one when the layout changed.
         self.arrange_strips();
         self.follow_view();
@@ -1116,6 +1125,9 @@ impl App {
             Layout::Monocle => Placement::Dwindle,
             // Not used: a strip opens a column (below).
             Layout::Scrolling => Placement::Dwindle,
+            // Placed as dwindle would, then given the policy's tree by
+            // relayout; dwindle is also what a failing policy leaves.
+            Layout::Lua(_) => Placement::Dwindle,
         };
         let strip = self.strip_here();
         let width = self.config.settings.scroll_width.weight();
@@ -2898,6 +2910,13 @@ impl App {
                 }
                 self.relayout();
             }
+            // On a workspace a Lua policy lays out, these are its messages.
+            Action::Move(_)
+            | Action::Resize(..)
+            | Action::Equalize
+            | Action::SwapMaster
+            | Action::ToggleSplit
+                if !floating && self.placement_message(&action.to_string()) => {}
             Action::Move(dir) => {
                 if let Some(id) = focused
                     && let Some(n) = layout::neighbour(&self.focus_rects(), id, dir)
@@ -3214,6 +3233,9 @@ impl App {
                 if self.watcher.is_some() {
                     self.watcher = watch_config(self.tx.clone(), &self.config.packages);
                 }
+                // A placement's state lived in the old Lua: policies start over.
+                self.placement_state.clear();
+                self.placement_shapes.clear();
                 // The plugins that set them start over too; a rule's stay, as
                 // rules are not run again on panes they matched.
                 for list in self.badges.values_mut() {
@@ -4895,6 +4917,85 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn a_placement_in_lua_lays_the_workspace_out_and_hears_its_keys() {
+        let mut a = app(Some(
+            r#"
+            ranma.placement("left-big", function(ws)
+              if ws.message == "equalize" then ws.state.even = true end
+              local rest = {}
+              for i = 2, #ws.panes do rest[#rest + 1] = ws.panes[i] end
+              local right = #rest == 1 and rest[1] or ranma.v(table.unpack(rest))
+              if #ws.panes == 1 then return ws.panes[1] end
+              return ranma.h(ws.state.even and 0.5 or 0.7, ws.panes[1], right)
+            end)
+            ranma.placement("broken", function(ws) return ranma.h(ws.panes[1], nil) end)
+            ranma.set { layout = "left-big" }
+            "#,
+        ));
+        for id in [1, 2, 3] {
+            with_pane(&mut a, id);
+        }
+        a.relayout();
+        let rects = |a: &App| -> HashMap<PaneId, Rect> {
+            a.workspaces[&1]
+                .tree
+                .layout(Rect::new(0, 0, 100, 40), 0)
+                .into_iter()
+                .collect()
+        };
+        let r = rects(&a);
+        assert_eq!(r[&1].w, 70, "the first pane takes 70%: {r:?}");
+        assert_eq!(
+            (r[&2].x, r[&3].x),
+            (70, 70),
+            "the rest stacked on the right"
+        );
+        assert!(r[&2].y < r[&3].y);
+        // A key on this workspace is the policy's message.
+        a.run_action(Action::Equalize);
+        assert_eq!(
+            rects(&a)[&1].w,
+            50,
+            "the policy kept state from the message"
+        );
+        // A broken policy: dwindle stays, and the toast names the node.
+        a.config.settings.layout = Layout::Lua(crate::placement::find("broken").unwrap());
+        with_pane(&mut a, 4);
+        a.relayout();
+        assert_eq!(
+            a.workspaces[&1].tree.panes().len(),
+            4,
+            "the tree is dwindle's, whole"
+        );
+        let toasts: Vec<String> = a
+            .toast_layout()
+            .iter()
+            .map(|(t, _, _)| t.text.clone())
+            .collect();
+        assert!(
+            toasts
+                .iter()
+                .any(|t| t.contains("broken") && t.contains("two children or more")),
+            "{toasts:?}"
+        );
+        // Naming a policy this configuration does not declare is a load error.
+        let err = format!(
+            "{:#}",
+            crate::config::load_from(None, None, Some(r#"ranma.set { layout = "left-big" }"#))
+                .unwrap_err()
+        );
+        assert!(err.contains("no ranma.placement"), "{err}");
+        assert!(
+            crate::config::load_from(
+                None,
+                None,
+                Some(r#"ranma.placement("dwindle", function() end)"#)
+            )
+            .is_err()
+        );
     }
 
     #[test]

@@ -204,9 +204,6 @@ ranma.bind("y", { folder = "layouts", group = "ranma" })
 ranma.bind("y s", "save_layout")
 ranma.bind("y l", "load_layout")
 ranma.bind("y w", "workspace_layout")
--- And t: every theme, each shown as the selection reaches it; Enter keeps it
--- (in settings.toml), Esc puts the old one back.
-ranma.bind("y t", "choose_theme", { desc = "themes" })
 -- Or declare one here, a container's panes in its list part:
 --   ranma.layout("kumiko", {
 --     split = "horizontal",
@@ -215,6 +212,19 @@ ranma.bind("y t", "choose_theme", { desc = "themes" })
 --       { cwd = "~/projects/kumiko", command = "yarn run dev" },
 --       { cwd = "~/projects/kumiko" } },
 --   })
+-- A layout policy of your own goes beside dwindle and master: its function
+-- returns a tree of splits (ranma.h side by side, ranma.v stacked), and
+-- `ranma layout-preview NAME 120x40 --panes 4` draws it. CONFIG.md has more.
+--   ranma.placement("wide-left", function(ws)
+--     local p = ws.panes
+--     if #p == 1 then return p[1] end
+--     local rest = { table.unpack(p, 2) }
+--     return ranma.h(0.65, p[1], #rest == 1 and rest[1] or ranma.v(table.unpack(rest)))
+--   end)
+--   ranma.set { layout = "wide-left" }
+-- And t: every theme, each shown as the selection reaches it; Enter keeps it
+-- (in settings.toml), Esc puts the old one back.
+ranma.bind("y t", "choose_theme", { desc = "themes" })
 ranma.bind("alt+return", "fullscreen")
 ranma.bind("shift+m", "swap_master")
 -- Layout "scrolling" only (elsewhere they say so and do nothing): { and }

@@ -1,0 +1,24 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-LAYOUT-PREVIEW 1 "" "ranma 0.2.4" "ranma manual"
+.SH NAME
+ranma\-layout\-preview \- Draw what a \fBranma.placement\fR from your config lays out, as numbered boxes, without a server: \fBranma layout\-preview centred 120x40 \-\-panes 4\fR
+.SH SYNOPSIS
+\fBranma layout\-preview\fR [\fB\-\-panes\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fINAME\fR> [\fISIZE\fR] 
+.SH DESCRIPTION
+Draw what a \fBranma.placement\fR from your config lays out, as numbered boxes, without a server: \fBranma layout\-preview centred 120x40 \-\-panes 4\fR
+.SH OPTIONS
+.TP
+\fB\-\-panes\fR \fI<PANES>\fR [default: 3]
+How many panes to lay out
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fINAME\fR>
+The placement\*(Aqs name
+.TP
+[\fISIZE\fR] [default: 80x24]
+The area, WIDTHxHEIGHT in cells
+.SH "SEE ALSO"
+\fBranma\fR(1)
