@@ -159,7 +159,7 @@ pub const COLOR_ROLES: [(&str, &str, &str); 27] = [
     (
         "mode_bg",
         "Mode bg",
-        "The mode chip, the focused border in WM mode, and the border of pickers and this panel.",
+        "The mode chip, the focused border in WM mode, and the border of this panel.",
     ),
     (
         "ws_active_fg",

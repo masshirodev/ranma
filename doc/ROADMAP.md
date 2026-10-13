@@ -193,6 +193,9 @@ lets you style".
 - [x] Border titles (`title`, `title_align`, `title_format`), `indicator`,
   `ascii` and `custom` line sets, `floating_style`
 - [x] `panes.active_bg` / `inactive_bg`, selection colours
+- [x] `[palette]`: the colours programs in panes draw with, under their own
+- [x] The picker, redrawn (designed from `doc/briefs/done/PICKER.md`, held to
+  `doc/handoffs/PICKER_MOCK.txt` cell for cell)
 - [x] Workspace formats, module grounds and caps
 
 - [x] A server's snapshot, written after activity and on exit, offered by a

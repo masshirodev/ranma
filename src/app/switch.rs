@@ -3,7 +3,6 @@
 //! every action).
 
 use crossterm::event::{KeyEvent, MouseEvent, MouseEventKind};
-use unicode_width::UnicodeWidthStr;
 
 use super::{App, SCRATCHPAD};
 use crate::keys::Chord;
@@ -26,74 +25,13 @@ impl App {
     }
 
     pub fn picker_layout(&self) -> Option<PickerLayout> {
-        let p = self.picker.as_ref()?;
-        let s = self.screen;
-        let items = p.visible().len() as u16;
-        // Never wider or taller than the screen: a terminal a few cells wide
-        // (a nested ranma in a narrow pane) still gets a picker, cut short,
-        // rather than a panic.
-        let fit = s.w.saturating_sub(4).max(10).min(s.w);
-        // A menu opens at the pointer, as small as its entries, kept on screen.
-        if p.kind == Kind::Menu
-            && let Some((mx, my)) = self.menu_at
-        {
-            let widest = p
-                .visible()
-                .iter()
-                .map(|it| {
-                    UnicodeWidthStr::width(it.label.as_str())
-                        + UnicodeWidthStr::width(it.detail.as_str())
-                })
-                .max()
-                .unwrap_or(10)
-                .max(UnicodeWidthStr::width(p.title.as_str()));
-            let w = (widest as u16 + 7).min(s.w);
-            let h = (items.max(1) + 3).min(s.h);
-            let outer = Rect::new(
-                mx.min(s.right().saturating_sub(w)),
-                my.min(s.bottom().saturating_sub(h)),
-                w,
-                h,
-            );
-            let inner = outer.inset(1, 1);
-            let list = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
-            return Some(PickerLayout {
-                outer,
-                query: Rect::new(inner.x, inner.y, inner.w, inner.h.min(1)),
-                list,
-                offset: p.selected.saturating_sub(list.h.saturating_sub(1) as usize),
-            });
-        }
-        let (w, h) = if p.is_prompt() {
-            // A prompt is one row between borders, as wide as its text needs:
-            // cutting a question short is worse than a wide box.
-            let text = p
-                .message
-                .as_deref()
-                .map(UnicodeWidthStr::width)
-                .unwrap_or(40)
-                .max(UnicodeWidthStr::width(p.title.as_str()) + 2);
-            ((text as u16 + 4).max(30).min(fit), 3.min(s.h))
-        } else {
-            // Border, query row, the items (at least one row), border.
-            let max_h = (s.h * 3 / 5).max(5);
-            (fit.min(72), (items.max(1) + 3).min(max_h).min(s.h))
-        };
-        let outer = Rect::new(
-            s.x + s.w.saturating_sub(w) / 2,
-            s.y + (s.h.saturating_sub(h)) / 3,
-            w,
-            h,
-        );
-        let inner = outer.inset(1, 1);
-        let query = Rect::new(inner.x, inner.y, inner.w, inner.h.min(1));
-        let list = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
-        let offset = p.selected.saturating_sub(list.h.saturating_sub(1) as usize);
+        let (spec, placed) = self.picker_placed()?;
+        let (outer, query, list) = super::pickerspec::rects(&placed);
         Some(PickerLayout {
             outer,
             query,
             list,
-            offset,
+            offset: spec.offset,
         })
     }
 

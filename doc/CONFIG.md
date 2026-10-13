@@ -1932,17 +1932,18 @@ Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 | `colors.ws_active_fg`, `ws_active_bg`, `ws_occupied`, `ws_empty`, `ws_urgent` | the workspaces module |
 | `colors.ws_activity` | a workspace that printed while not shown (`monitor_activity`); unset, `bar_accent` |
 | `colors.tab_active_fg`, `tab_active_bg`, `tab_inactive_fg`, `tab_inactive_bg` | tab bars of groups |
-| `colors.picker_selected_fg`, `picker_selected_bg` | the selected row in switchers and help |
+| `colors.picker_selected_fg`, `picker_selected_bg` | the selection colour: the touch sheet's and the settings panel's selected row; pickers take their accent and their selected row's tint from `picker_selected_bg` |
+| `colors.picker_fg`, `picker_bg` | a picker's text (labels, the query, a question) and its ground, border included; unset, `toast_fg` / `toast_bg` |
+| `colors.picker_border`, `picker_dim` | a picker's border and the rule under its query, and its quiet text (details, the count, the placeholder, the footer's words); unset, `bar_dim` |
+| `colors.picker_accent` | the prompt glyph, the selection's `▌`, the `●` of where you are, `+` and `run`, the active palette mode, the scroll thumb; unset, `picker_selected_bg` |
+| `colors.picker_cursor_bg` | the selected row's ground; unset, `picker_selected_bg` mixed 22% into `picker_bg` (or `border_inactive` when the colours cannot be known) |
+| `colors.picker_error` | the palette's error row; unset, `bar_urgent` |
 | `colors.toolbar_bg` | a toolbar's row and the gaps between its buttons; unset, `bar_bg` |
 | `colors.button_fg`, `button_bg` | a button, and the entries of a large picker; unset, `tab_inactive_fg` / `tab_inactive_bg` |
 | `colors.button_pressed_fg`, `button_pressed_bg` | a button held down; unset, the button's colours reversed |
 | `colors.button_active_fg`, `button_active_bg` | a toggle that is on, the button whose list is open, and `leader` in WM mode; unset, `tab_active_fg` / `tab_active_bg` |
 | `colors.button_latched_fg`, `button_latched_bg` | a latched or locked modifier; unset, `mode_fg` / `mode_bg` |
 | `colors.button_disabled_fg` | a button that cannot run now, on `button_bg`; unset, `bar_dim` |
-
-The toolbar keys are optional: each follows the role it names when unset, so
-a theme that only sets the older roles (one rendered from the wallpaper's
-palette, say) styles toolbars too.
 | `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
 | `colors.selection_fg`, `selection_bg` | copy mode's selection; unset, the cells are reversed |
 | `colors.toast_fg`, `toast_bg` | toasts (their border is `bar_accent`, or `bar_urgent` when urgent) |
@@ -1969,7 +1970,11 @@ palette, say) styles toolbars too.
 | `colors.background_fg`, `background_bg` | the art's colours where it sets none: its text (unset, `bar_dim`) and the ground under the whole area (unset, the terminal's own) |
 | `panes.scrollbar` | `off`, `scrolled` (the default), `on`: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's `pane-scrollbars`). `scrolled` only while the view is scrolled back (the wheel, copy mode); `on` whenever the pane has history. Drawn as the heavy line in the border's colour (`#` with `ascii`); a pane with no border has none. |
 | `palette.color0` - `color15`, `palette.foreground`, `palette.background` | `#rrggbb`: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and `ls` alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256-colour cube (16-255) and truecolor text are left as the program sent them. `background` is the pane's ground where the program leaves the default, and `panes.active_bg` / `inactive_bg` win over it. Needs a truecolor host terminal. |
-| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected`, `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
+| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected` (a picker's selected label; bold by default), `picker_title`, `picker_query`, `picker_current`, `picker_error` (a picker's title, typed query, mark of where you are, and the palette's error row; all but `picker_current` bold by default), `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
+
+The toolbar and picker keys are optional: each follows the role it names when
+unset, so a theme that only sets the older roles (one rendered from the
+wallpaper's palette, say) styles toolbars and pickers too.
 
 A cell is about twice as tall as it is wide, so outer gaps look even at
 `outer_horizontal = 2 * outer_vertical`.
