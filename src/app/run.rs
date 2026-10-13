@@ -540,7 +540,7 @@ fn upgrade(
         )));
     }
     // The old build, kept to go back to if the new one fails anyway.
-    std::fs::copy("/proc/self/exe", &prev)
+    std::fs::copy(crate::os::running_binary(), &prev)
         .map_err(|e| give_up(format!("keeping the old build: {e}")))?;
     let _ = reply.send(Ok(format!(
         "server {name} is taking the new build

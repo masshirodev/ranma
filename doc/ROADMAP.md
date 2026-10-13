@@ -304,7 +304,7 @@ daily-driver set (nested ranma over SSH, an upgrade in place, the bar's cpu and
 mem) by hand on a Mac.
 
 - [ ] A Homebrew tap serving the Linux release binaries, bumped by release.yml
-- [ ] `src/os/`: everything that reads `/proc` or opens a pidfd behind one
+- [x] `src/os/`: everything that reads `/proc` or opens a pidfd behind one
   module, Linux unchanged
 - [ ] The macOS half: foreground program, command line and directory from
   libproc, cpu and mem from the host, child exit from kqueue

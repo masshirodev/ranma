@@ -97,9 +97,7 @@ pub fn sweep_parts(dest: &Path) {
         let Some(pid) = file.strip_prefix(&prefix) else {
             continue;
         };
-        let alive = pid
-            .parse::<u32>()
-            .is_ok_and(|pid| Path::new(&format!("/proc/{pid}")).exists());
+        let alive = pid.parse::<u32>().is_ok_and(crate::os::pid_alive);
         if !alive {
             let _ = std::fs::remove_dir_all(entry.path());
         }

@@ -46,13 +46,7 @@ impl AdoptedPty {
         // SAFETY: the caller hands the descriptor over.
         let reader = unsafe { File::from_raw_fd(fd) };
         let writer = reader.try_clone()?;
-        // SAFETY: a plain syscall; the result is checked.
-        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0) };
-        if raw < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: pidfd_open returned a new descriptor.
-        let pidfd = unsafe { OwnedFd::from_raw_fd(raw as RawFd) };
+        let pidfd = crate::os::child_exit_fd(pid)?;
         Ok(AdoptedPty {
             reader,
             writer,

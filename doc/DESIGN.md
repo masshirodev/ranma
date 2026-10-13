@@ -2952,7 +2952,11 @@ Rust, for predictable latency without a GC, and for the emulator:
   pane's directory, the cpu and mem modules), `pidfd_open` (watching an
   adopted child across an upgrade) and a few defaults (`xdg-open`, the
   clipboard). Those go behind one `src/os/` module with a Linux and a macOS
-  half, so nothing else reads `/proc`. Native Windows would be a port of the
+  half, so nothing else reads `/proc`. Its surface is per question, not per
+  file (`program_name`, `command_line`, `cwd`, `foreground_group`,
+  `pid_alive`, `read_cpu`/`read_mem`, `kernel_release`, `running_binary`,
+  `child_exit_fd`), so the macOS half answers the same questions from
+  libproc, sysctl and kqueue without callers knowing. Native Windows would be a port of the
   model itself: no process groups to name the foreground program, no `exec`
   to hand a server's panes to a new build, ConPTY eating escapes, and a
   config that assumes `sh`. The people who want a terminal window manager on

@@ -157,7 +157,7 @@ fn is_windows_path(t: &str) -> bool {
 
 /// Whether this server runs under WSL, where the clipboard is Windows'.
 pub fn wsl() -> bool {
-    let release = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok();
+    let release = crate::os::kernel_release();
     is_wsl(|v| std::env::var(v).ok(), release.as_deref())
 }
 
