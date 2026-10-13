@@ -72,7 +72,11 @@ impl App {
                 return;
             }
         }
-        let mut panel = Panel::new(entries, self.palette(), theme_names());
+        let mut panel = Panel::new(
+            entries,
+            self.palette(),
+            crate::theme::names(config::config_dir().as_deref()),
+        );
         panel.scope = scope.map(|(_, back)| (all, back));
         self.settings = Some(SettingsState {
             panel,
@@ -364,7 +368,7 @@ impl App {
         self.dirty = true;
     }
 
-    fn emit_option_change(
+    pub(super) fn emit_option_change(
         &mut self,
         key: &str,
         value: Option<Value>,
@@ -398,28 +402,4 @@ fn strip_who(e: String) -> String {
     e.strip_prefix("settings: ")
         .map(str::to_string)
         .unwrap_or(e)
-}
-
-/// The themes the panel's `theme` option cycles through: the built-in and
-/// every file in the config's `themes/`.
-fn theme_names() -> Vec<String> {
-    let mut out = vec![crate::theme::DEFAULT_THEME_NAME.to_string()];
-    for dir in crate::theme::theme_dirs(config::config_dir().as_deref()) {
-        let mut names: Vec<String> = std::fs::read_dir(dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter_map(|e| {
-                let p = e.path();
-                if p.extension()? != "toml" {
-                    return None;
-                }
-                Some(p.file_stem()?.to_string_lossy().into_owned())
-            })
-            .filter(|n| !out.contains(n))
-            .collect();
-        names.sort();
-        out.extend(names);
-    }
-    out
 }

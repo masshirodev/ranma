@@ -166,6 +166,8 @@ pub enum Action {
     PaneMenu,
     /// The workspaces of the shown session, filterable; a new name opens one.
     WorkspaceSwitcher,
+    /// The themes, each shown as it is selected; Enter keeps one.
+    ChooseTheme,
     ToggleGroup,
     GroupNext,
     GroupPrev,
@@ -268,6 +270,7 @@ impl Action {
                 | Action::PasteImage
                 | Action::PaneSwitcher
                 | Action::WorkspaceSwitcher
+                | Action::ChooseTheme
                 | Action::SaveLayout(_)
                 | Action::LoadLayout(_)
                 | Action::WorkspaceLayout(None)
@@ -434,6 +437,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("send", "<key chord>"),
     ("pane_menu", ""),
     ("workspace_switcher", ""),
+    ("choose_theme", ""),
     ("latch", "<ctrl|alt|shift>"),
     ("quit", "[now]"),
 ];
@@ -723,6 +727,7 @@ impl FromStr for Action {
             "server_switcher" => no_arg(Action::ServerSwitcher),
             "pane_menu" => no_arg(Action::PaneMenu),
             "workspace_switcher" => no_arg(Action::WorkspaceSwitcher),
+            "choose_theme" => no_arg(Action::ChooseTheme),
             "toolbar" => match (first, second) {
                 (Some(n), op) => {
                     let show = match op {
@@ -1058,6 +1063,7 @@ impl fmt::Display for Action {
             Action::Send(c) => write!(f, "send {c}"),
             Action::PaneMenu => f.write_str("pane_menu"),
             Action::WorkspaceSwitcher => f.write_str("workspace_switcher"),
+            Action::ChooseTheme => f.write_str("choose_theme"),
             Action::Latch(m) => write!(f, "latch {}", m.name()),
             Action::Profile(None) => f.write_str("profile none"),
             Action::Profile(Some(n)) => write!(f, "profile {n}"),

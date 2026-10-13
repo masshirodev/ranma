@@ -204,6 +204,9 @@ ranma.bind("y", { folder = "layouts", group = "ranma" })
 ranma.bind("y s", "save_layout")
 ranma.bind("y l", "load_layout")
 ranma.bind("y w", "workspace_layout")
+-- And t: every theme, each shown as the selection reaches it; Enter keeps it
+-- (in settings.toml), Esc puts the old one back.
+ranma.bind("y t", "choose_theme", { desc = "themes" })
 -- Or declare one here, a container's panes in its list part:
 --   ranma.layout("kumiko", {
 --     split = "horizontal",

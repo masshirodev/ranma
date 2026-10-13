@@ -587,10 +587,15 @@ impl App {
             return;
         };
         p.page = page;
+        let before = (p.selected, p.query.clone());
         let outcome = p.key(key);
         p.touched = true;
+        let moved = before != (p.selected, p.query.clone());
         self.dirty = true;
         self.picker_outcome(outcome);
+        if moved {
+            self.preview_theme();
+        }
     }
 
     pub(super) fn picker_paste(&mut self, text: &str) {
@@ -641,6 +646,7 @@ impl App {
                     };
                 }
                 self.dirty = true;
+                self.preview_theme();
             }
             _ => {}
         }
@@ -705,6 +711,7 @@ impl App {
                             self.run_action(crate::action::Action::ScratchpadToggle);
                         }
                     }
+                    (_, Target::Theme(name)) => self.choose_theme(name),
                     (_, Target::Workspace(n)) => self.run_action(crate::action::Action::Workspace(
                         crate::action::WorkspaceTarget::Index(n),
                     )),

@@ -3541,7 +3541,7 @@ mod tests {
         let cfg = with_user(r#"ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#)
             .unwrap();
         let mine = cfg.binds[&y].folder().unwrap();
-        assert_eq!((mine.name.as_str(), mine.binds.len()), ("mine", 4));
+        assert_eq!((mine.name.as_str(), mine.binds.len()), ("mine", 5));
         let cfg = with_user(
             r#"ranma.unbind("y") ranma.bind("y", { folder = "mine" }) ranma.bind("y n", "detach")"#,
         )

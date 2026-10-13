@@ -506,6 +506,9 @@ Every pane in every session, filterable; picking one goes there.
 \fBworkspace_switcher\fR
 The shown session's workspaces, filterable, the current one marked \fB●\fR, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers \fBnew workspace: NAME\fR, which opens an empty one by that name.
 .TP
+\fBchoose_theme\fR
+Every theme (the built\-in and \fB~/.config/ranma/themes/*.toml\fR), the one in use marked \fB●\fR. Each is shown as the selection reaches it (arrows, the wheel, typing); \fBEnter\fR keeps it, writing \fBtheme\fR to \fBsettings.toml\fR, and \fBEsc\fR (or closing the picker any other way) puts the old one back. A theme that would not load says why on its row and is not shown. \fBleader y t\fR.
+.TP
 \fBpane_menu\fR
 The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (\fBleader x m\fR). Centred, or a sheet on a touch screen.
 .TP

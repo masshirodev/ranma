@@ -46,6 +46,7 @@ mod session;
 mod settings;
 mod snapshots;
 mod switch;
+mod themes;
 mod touch;
 mod updating;
 mod watch;
@@ -298,6 +299,8 @@ pub struct App {
     update_log: Option<(u64, std::path::PathBuf)>,
     /// This server's name (`None` standalone), for what it leaves on disk.
     pub server_name: Option<String>,
+    /// The theme to put back if the theme picker closes without a choice.
+    theme_preview: Option<themes::Preview>,
     /// The pane holding a mouse selection, cleared by the next click or key.
     selection_pane: Option<PaneId>,
     /// The last left click, for double and triple clicks: when, where, how many.
@@ -489,6 +492,7 @@ impl App {
             update_job: None,
             update_log: None,
             server_name: None,
+            theme_preview: None,
             layouts_dir: crate::layouts::dir(),
             snapshots: None,
             snapshot_due: None,
@@ -2981,6 +2985,7 @@ impl App {
                 }
             }
             Action::WorkspaceSwitcher => self.open_workspace_switcher(),
+            Action::ChooseTheme => self.open_theme_picker(),
             Action::Update => {
                 // Out of sight, with a toast saying how it goes (see `updating`).
                 if let Some(by) = crate::update::PACKAGED {

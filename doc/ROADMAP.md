@@ -194,6 +194,7 @@ lets you style".
   `ascii` and `custom` line sets, `floating_style`
 - [x] `panes.active_bg` / `inactive_bg`, selection colours
 - [x] `[palette]`: the colours programs in panes draw with, under their own
+- [x] `choose_theme`: a picker that shows each theme as it is selected
 - [x] The picker, redrawn (designed from `doc/briefs/done/PICKER.md`, held to
   `doc/handoffs/PICKER_MOCK.txt` cell for cell)
 - [x] Workspace formats, module grounds and caps
