@@ -1855,6 +1855,9 @@ the [global bind](#binds--ranmabindkeys-action-opts)'s, if it has one
 (`alt+1` goes to workspace 1, `alt+left` focuses left) and the mode stays;
 any other is swallowed, as in WM mode. Plain WM mode does not do this: its
 own table gives some of those keys other meanings. The bar's mode module says its label.
+The mouse is the mouse of plain mode, not WM mode's: a press in a pane's text
+selects (or goes to a program that uses the mouse), `mouse = "hover"` focuses,
+and a float is moved by its border only.
 
 ```lua
 ranma.mode("resize", {

@@ -66,6 +66,10 @@ commit log has the detail.
 
 ### Fixed
 
+- In a user mode the mouse works as it does outside WM mode: dragging in a
+  pane selects, `mouse = "hover"` focuses, programs that use the mouse get
+  their clicks, and right-click opens the pane menu. It was WM mode's mouse,
+  which does none of those.
 - In a user mode the which-key hint is titled with the mode's label, not
   the leader, and its keys are under the label rather than `yours`.
 - A ranma inside another one shows its user mode's label in the outer bar
