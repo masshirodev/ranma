@@ -758,6 +758,34 @@ In WM mode the mouse always belongs to ranma: click to focus, drag a floating pa
 anywhere with the left button, resize it with the right. `mouse = "off"` limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.
 
+### Mouse binds — `ranma.mouse(spec, action)`
+
+```lua
+ranma.mouse("alt+middle@pane", "close_pane")          -- the pane clicked, not the focused one
+ranma.mouse("double@border", "toggle_floating")
+ranma.mouse("alt+wheel_up@pane", "workspace prev")
+ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
+```
+
+A spec is `[ctrl+][alt+][shift+]EVENT@TARGET`. Events: `left`, `middle`,
+`right`, `double` (a second left press on the same cell within 400 ms),
+`wheel_up`, `wheel_down`. Targets: `pane` (a pane's text), `border` (its
+border and title edge), `background` (where no pane is: the gaps, an empty
+workspace, around floats). The action is an action as a bind takes it, or a
+function, which gets `{ pane, x, y, workspace }` (`pane` is `nil` on the
+background).
+
+The pane under the pointer is focused before the action runs, so a bind acts
+on what you clicked. A bind comes before ranma's own handling of that press,
+in every mode, and takes it: it does not also reach the program or start a
+drag. Two things stay with their owners and are refused at load, saying why:
+a bind in a pane's text without `ctrl` or `alt` (plain presses and the wheel
+there are its program's, and Shift is the terminal's own selection), and a
+plain `left@border`, which moves and resizes panes. The bar and tab bars keep
+their own clicks (a module's `on_click`). A later `ranma.mouse` for the same
+spec replaces the earlier. With a bind on `alt+…@pane`, the `click` hook no
+longer hears that combination.
+
 ## The bar
 
 The bar is on from the first start, at the bottom: the mode, the session and

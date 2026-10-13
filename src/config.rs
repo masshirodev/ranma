@@ -1064,6 +1064,7 @@ struct Builder {
     title_nested: bool,
     rules: Vec<Rule>,
     placements: Vec<(crate::placement::PolicyId, std::rc::Rc<mlua::RegistryKey>)>,
+    mouse_binds: Vec<(crate::mouse::Spec, BindAction)>,
     session_accents: HashMap<String, theme::Color>,
     profiles: HashMap<String, Profile>,
     toolbars: Vec<(String, ToolbarDef)>,
@@ -1118,6 +1119,8 @@ pub struct Config {
     pub title_nested: bool,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
+    /// `ranma.mouse` binds, the latest for a spec winning.
+    pub mouse_binds: Vec<(crate::mouse::Spec, BindAction)>,
     /// `ranma.placement`s, in the order declared: a policy and its function.
     pub placements: Vec<(crate::placement::PolicyId, std::rc::Rc<mlua::RegistryKey>)>,
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
@@ -2193,6 +2196,35 @@ fn install_api(
     )?;
 
     ranma.set(
+        "mouse",
+        lua.create_function(|lua, (spec, action): (String, Value)| {
+            let spec: crate::mouse::Spec = spec
+                .parse()
+                .map_err(|e: String| rt_err(format!("ranma.mouse: {e}")))?;
+            let action = match action {
+                Value::String(s) => {
+                    let s = s.to_str()?.to_string();
+                    BindAction::Builtin(
+                        s.parse::<Action>()
+                            .map_err(|e| rt_err(format!("ranma.mouse: `{s}`: {e}")))?,
+                    )
+                }
+                Value::Function(f) => BindAction::Lua(Rc::new(lua.create_registry_value(f)?)),
+                other => {
+                    return Err(rt_err(format!(
+                        "ranma.mouse: the action is an action's name or a function, not a {}",
+                        other.type_name()
+                    )));
+                }
+            };
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            b.mouse_binds.retain(|(s, _)| *s != spec);
+            b.mouse_binds.push((spec, action));
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "placement",
         lua.create_function(|lua, (name, f): (String, mlua::Function)| {
             crate::placement::valid_name(&name)
@@ -2962,6 +2994,7 @@ pub fn load_full(
         title_nested: builder.title_nested,
         rules: builder.rules,
         placements: builder.placements,
+        mouse_binds: builder.mouse_binds,
         session_accents: builder.session_accents,
         layouts: builder.layouts,
         theme,

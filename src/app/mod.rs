@@ -307,6 +307,8 @@ pub struct App {
     pub server_name: Option<String>,
     /// The theme to put back if the theme picker closes without a choice.
     theme_preview: Option<themes::Preview>,
+    /// The last left press a mouse bind saw, for a double click.
+    bind_click: Option<(Instant, u16, u16)>,
     /// What each workspace's placement policy last arranged, and the state
     /// table it keeps between calls (see `placements`).
     placement_shapes: HashMap<u8, placements::Shape>,
@@ -505,6 +507,7 @@ impl App {
             update_log: None,
             server_name: None,
             theme_preview: None,
+            bind_click: None,
             placement_shapes: HashMap::new(),
             placement_state: HashMap::new(),
             layouts_dir: crate::layouts::dir(),
@@ -2066,6 +2069,81 @@ impl App {
 
     /// The pane under a point, topmost first (the scratchpad and floats are drawn
     /// last), among the panes of the active workspace.
+    /// A `ranma.mouse` bind for this event, if one matches: run it, with
+    /// focus on the pane under the pointer first, and say so. A press or
+    /// the wheel on a pane's text, its border, or the background; the bar
+    /// and tab bars keep their own clicks.
+    fn mouse_bind(&mut self, m: &MouseEvent) -> bool {
+        use crate::mouse::{Event, Target};
+        use crossterm::event::KeyModifiers as K;
+        if self.config.mouse_binds.is_empty() || self.drag.is_some() {
+            return false;
+        }
+        let (x, y) = (m.column, m.row);
+        let event = match m.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let now = Instant::now();
+                let double = self.bind_click.is_some_and(|(t, cx, cy)| {
+                    now.duration_since(t) < Duration::from_millis(400) && (cx, cy) == (x, y)
+                });
+                self.bind_click = (!double).then_some((now, x, y));
+                if double { Event::Double } else { Event::Left }
+            }
+            MouseEventKind::Down(MouseButton::Middle) => Event::Middle,
+            MouseEventKind::Down(MouseButton::Right) => Event::Right,
+            MouseEventKind::ScrollUp => Event::WheelUp,
+            MouseEventKind::ScrollDown => Event::WheelDown,
+            _ => return false,
+        };
+        if self.bar_rect().is_some_and(|b| b.contains(x, y)) {
+            return false;
+        }
+        let frame = self.frame();
+        let (target, pane) = match self.pane_at(&frame, x, y) {
+            Some(v) if v.inner.contains(x, y) => (Target::Pane, Some(v.id)),
+            Some(v) => (Target::Border, Some(v.id)),
+            None => (Target::Background, None),
+        };
+        let spec = crate::mouse::Spec {
+            ctrl: m.modifiers.contains(K::CONTROL),
+            alt: m.modifiers.contains(K::ALT),
+            shift: m.modifiers.contains(K::SHIFT),
+            event,
+            target,
+        };
+        let Some(action) = self
+            .config
+            .mouse_binds
+            .iter()
+            .find(|(s, _)| *s == spec)
+            .map(|(_, a)| a.clone())
+        else {
+            return false;
+        };
+        if let Some(id) = pane {
+            self.focus(id);
+        }
+        match action {
+            BindAction::Builtin(a) => self.run_action(a),
+            BindAction::Lua(key) => {
+                if let Ok(f) = self.config.lua.registry_value::<Function>(&key) {
+                    let ws = self.current;
+                    self.call_lua(|lua| {
+                        let t = lua.create_table()?;
+                        t.set("pane", pane)?;
+                        t.set("x", x)?;
+                        t.set("y", y)?;
+                        t.set("workspace", ws)?;
+                        f.call::<()>(t)
+                    });
+                }
+            }
+            BindAction::Folder(_) => {}
+        }
+        self.dirty = true;
+        true
+    }
+
     fn pane_at(&self, frame: &Frame, x: u16, y: u16) -> Option<PaneView> {
         frame
             .views
@@ -2160,6 +2238,11 @@ impl App {
             self.update_toast_clicked(id);
             self.toasts.dismiss(id);
             self.dirty = true;
+            return;
+        }
+        // A mouse bind of the user's comes before ranma's own handling, in
+        // every mode (see `mouse_bind`).
+        if self.mouse_bind(&m) {
             return;
         }
         // Borders are ranma's in every mode: the top one moves, the others resize.
@@ -4964,6 +5047,56 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn mouse_binds_act_on_the_pane_under_the_pointer() {
+        use crossterm::event::{
+            KeyModifiers as K, MouseButton as B, MouseEvent as M, MouseEventKind as E,
+        };
+        let ev = |kind, x, y, modifiers| M {
+            kind,
+            column: x,
+            row: y,
+            modifiers,
+        };
+        let mut a = app(Some(
+            r#"
+            ranma.mouse("alt+middle@pane", "close_pane")
+            ranma.mouse("double@background", function(e) clicked = e.workspace end)
+            "#,
+        ));
+        for id in [1, 2] {
+            with_pane(&mut a, id);
+        }
+        a.workspaces.get_mut(&1).unwrap().focused = Some(1);
+        let f = a.frame();
+        let v2 = f.views.iter().find(|v| v.id == 2).unwrap().inner;
+        let (x, y) = (v2.x + 1, v2.y + 1);
+        // A plain middle press in a pane is its program's: no bind.
+        assert!(!a.mouse_bind(&ev(E::Down(B::Middle), x, y, K::NONE)));
+        a.handle_mouse(ev(E::Down(B::Middle), x, y, K::ALT));
+        assert!(!a.workspaces[&1].contains(2), "the pane clicked closed");
+        assert!(a.workspaces[&1].contains(1), "not the one that had focus");
+
+        let mut b = app(Some(
+            r#"ranma.mouse("double@background", function(e) clicked = e.workspace end)"#,
+        ));
+        b.handle_mouse(ev(E::Down(B::Left), 10, 5, K::NONE));
+        assert!(
+            b.config
+                .lua
+                .globals()
+                .get::<Option<u8>>("clicked")
+                .unwrap()
+                .is_none(),
+            "one press is not a double"
+        );
+        b.handle_mouse(ev(E::Down(B::Left), 10, 5, K::NONE));
+        assert_eq!(
+            b.config.lua.globals().get::<Option<u8>>("clicked").unwrap(),
+            Some(1)
+        );
     }
 
     #[test]
