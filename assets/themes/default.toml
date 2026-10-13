@@ -59,6 +59,14 @@ tab_inactive_bg = "#313244"
 # purpose: bar_accent.
 # ws_activity = ...
 
+# Borders that run through colours instead of one, along border.gradient_angle:
+# two or more, spread over each pane's border, one colour per cell (a short
+# border shows the steps). Not in WM mode, whose one colour is the point.
+# Unset here on purpose: the one colour above.
+# border_active_gradient = ["#89b4fa", "#f5c2e7"]
+# border_inactive_gradient = ["#45475a", "#313244"]
+# border_floating_gradient = ["#f5c2e7", "#fab387"]
+
 # Pickers: help, the command palette, the switchers, plugin pickers, prompts.
 # Unset here on purpose: each follows the role after it, so a theme that sets
 # only the older roles styles pickers too.
@@ -94,6 +102,9 @@ title_align = "left"
 title_format = " {title} "
 # none | arrows: arrows on the focused pane's edges, pointing in.
 indicator = "none"
+# Which way a gradient border runs (colors.border_*_gradient), in degrees:
+# 0 left to right, 90 top to bottom, clockwise.
+gradient_angle = 0
 
 [gaps]
 # Measured in cells. A terminal cell is roughly twice as tall as it is wide,

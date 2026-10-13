@@ -186,6 +186,14 @@ pub struct Colors {
     pub picker_cursor_bg: Option<Color>,
     #[serde(default)]
     pub picker_error: Option<Color>,
+    // Borders that run through colours along `border.gradient_angle`, one
+    // colour per cell; unset, the one colour above. Two or more.
+    #[serde(default)]
+    pub border_active_gradient: Option<Vec<Color>>,
+    #[serde(default)]
+    pub border_inactive_gradient: Option<Vec<Color>>,
+    #[serde(default)]
+    pub border_floating_gradient: Option<Vec<Color>>,
 }
 
 impl Colors {
@@ -355,6 +363,10 @@ pub struct Border {
     pub title_align: Align,
     pub title_format: Format,
     pub indicator: Indicator,
+    /// Which way a border gradient runs, in degrees: 0 left to right, 90 top
+    /// to bottom, clockwise.
+    #[serde(default)]
+    pub gradient_angle: u16,
 }
 
 impl Border {
@@ -1034,6 +1046,27 @@ pub fn load_over_unset(
 /// What serde cannot see: placeholders by key, and `chars` where `custom`
 /// needs them.
 fn check(t: &Theme) -> Result<(), String> {
+    if t.border.gradient_angle >= 360 {
+        return Err(format!(
+            "border.gradient_angle must be 0-359, not {}",
+            t.border.gradient_angle
+        ));
+    }
+    for (k, g) in [
+        ("border_active_gradient", &t.colors.border_active_gradient),
+        (
+            "border_inactive_gradient",
+            &t.colors.border_inactive_gradient,
+        ),
+        (
+            "border_floating_gradient",
+            &t.colors.border_floating_gradient,
+        ),
+    ] {
+        if g.as_ref().is_some_and(|g| g.len() < 2) {
+            return Err(format!("colors.{k}: a gradient needs two colours or more"));
+        }
+    }
     for name in t.roles.keys() {
         if BUILTIN_STYLES.contains(&name.as_str()) {
             return Err(format!(
@@ -1207,6 +1240,32 @@ mod tests {
         assert!(err.contains("built-in style"), "{err}");
         let err = format!("{:#}", load("typo", &[dir]).unwrap_err());
         assert!(err.contains("colour"), "{err}");
+    }
+
+    #[test]
+    fn a_gradient_needs_two_colours_and_an_angle_under_360() {
+        let dir = tmp_dir("gradient");
+        std::fs::write(
+            dir.join("g.toml"),
+            "[colors]\nborder_active_gradient = [\"#ff0000\", \"blue\"]\n[border]\ngradient_angle = 45\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("one.toml"),
+            "[colors]\nborder_active_gradient = [\"#ff0000\"]\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("angle.toml"), "[border]\ngradient_angle = 400\n").unwrap();
+        let t = load("g", std::slice::from_ref(&dir)).unwrap();
+        assert_eq!(
+            t.colors.border_active_gradient,
+            Some(vec![Color::Rgb(255, 0, 0), Color::Indexed(4)])
+        );
+        assert_eq!(t.border.gradient_angle, 45);
+        let err = format!("{:#}", load("one", std::slice::from_ref(&dir)).unwrap_err());
+        assert!(err.contains("two colours"), "{err}");
+        let err = format!("{:#}", load("angle", &[dir]).unwrap_err());
+        assert!(err.contains("0-359"), "{err}");
     }
 
     #[test]
