@@ -1634,7 +1634,11 @@ a program that uses the mouse), `mouse = "hover"` focuses, and a right press
 opens the pane menu, as outside WM mode. Plain WM mode's grab-a-float-
 anywhere stays plain WM mode's. Routed the other way, vi.lua's NORMAL, where
 a pane rests most of the time, had no selection and no hover focus at all.
-Borders, the bar and toasts were the same in every mode already.
+Borders, the bar and toasts were the same in every mode already. **The
+focused pane's cursor stays shown in a user mode** for the same reason: its
+keys are typed into the pane (hjkl as arrows), and moving a cursor that
+cannot be seen is guesswork. Plain WM mode still hides it, since its keys
+are ranma's.
 
 **The hint may stand elsewhere** (`wm_mode.hint_at`, 2026-10-13): on the
 bar by the mode chip is still the default, since that is where the eye goes
