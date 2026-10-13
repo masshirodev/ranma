@@ -24,3 +24,9 @@ jobs:
         run: |
           sudo apt-get install -y -qq tmux
           scripts/smoke.sh
+      # The latest release against this build: its config, a handover both
+      # ways, its client on this server and back (scripts/compat.sh).
+      - name: Against the last release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/compat.sh
