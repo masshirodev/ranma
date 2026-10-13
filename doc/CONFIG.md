@@ -699,6 +699,12 @@ Over SSH, three levels deep, each machine starting ranma: with
   modules](#your-own-modules--ranmamodulename-opts)) changes this; the default
   `datetime` and `clock` are `"own"`. The ranma inside must be a build that
   reports its modules; an older one leaves this bar's modules as they were.
+- **The pointer in its text is the inner's**, as keys are. Ctrl/Alt+click
+  there reaches the inner ranma's `click` hook (its openpath, which knows its
+  machine's paths), not this one's; this one's `hover` hook and its
+  `ranma.mouse` binds on `@pane` leave that text alone too. Borders, the bar
+  and binds on `@border` or `@background` stay this one's. Both need a build
+  that knows this only on the outer side.
 - A program could set a title starting with the mark and get the leader passed to
   it; `outer_leader` still reaches ranma. `nested = "off"` turns all of it off.
 - `title_host` puts the machine's name in the mark, so the terminal's tab says

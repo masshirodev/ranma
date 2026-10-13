@@ -15,6 +15,11 @@ commit log has the detail.
 
 ### Fixed
 
+- In a pane that holds a ranma (over ssh), Ctrl/Alt+click, hover and
+  `@pane` mouse binds are the inner ranma's, as keys are. The outer's
+  `click` hook took them, so openpath on the outer looked for the inner
+  machine's path on its own and the click did nothing. Only the outer needs
+  this build.
 - In a user mode the focused pane's cursor is shown, so a mode that moves
   it (vi.lua's NORMAL, hjkl as arrows) is not moving it blind. Plain WM
   mode still hides it.

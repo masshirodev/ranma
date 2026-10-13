@@ -2100,6 +2100,7 @@ impl App {
         }
         let frame = self.frame();
         let (target, pane) = match self.pane_at(&frame, x, y) {
+            Some(v) if v.inner.contains(x, y) && self.hosts_inner_ranma(v.id) => return false,
             Some(v) if v.inner.contains(x, y) => (Target::Pane, Some(v.id)),
             Some(v) => (Target::Border, Some(v.id)),
             None => (Target::Background, None),
@@ -2306,7 +2307,8 @@ impl App {
                 crossterm::event::KeyModifiers::CONTROL | crossterm::event::KeyModifiers::ALT,
             )
             && self.config.hooks.contains_key(&HookEvent::Click)
-            && let Some(v) = under.filter(|v| v.inner.contains(x, y))
+            && let Some(v) =
+                under.filter(|v| v.inner.contains(x, y) && !self.hosts_inner_ranma(v.id))
         {
             let offset = self
                 .panes
@@ -3926,7 +3928,7 @@ impl App {
         let frame = self.frame();
         let at = self
             .pane_at(&frame, x, y)
-            .filter(|v| v.inner.contains(x, y))
+            .filter(|v| v.inner.contains(x, y) && !self.hosts_inner_ranma(v.id))
             .and_then(|v| {
                 let offset = self.panes.get(&v.id)?.term.lock().grid().display_offset() as i32;
                 let line = i32::from(y - v.inner.y) - offset;
@@ -4158,6 +4160,16 @@ impl App {
     }
 
     /// Whether keys go straight to a ranma running in the focused pane.
+    /// A ranma runs in this pane and is passed through to: the pointer in its
+    /// text is the inner's, as keys are, so the outer's click and hover hooks
+    /// and its mouse binds on pane text leave it alone. Otherwise a Ctrl+click
+    /// over ssh is the outer's openpath's, looking for the path on the wrong
+    /// machine, and never reaches the ranma that shows the path.
+    pub fn hosts_inner_ranma(&self, id: PaneId) -> bool {
+        self.config.settings.nested == config::NestedMode::Auto
+            && self.panes.get(&id).is_some_and(|p| p.hosts_ranma())
+    }
+
     pub fn passes_through(&self) -> bool {
         self.config.settings.nested == config::NestedMode::Auto
             && self.focused_pane().is_some_and(|p| p.hosts_ranma())
@@ -7884,6 +7896,45 @@ mod tests {
         let id = a.focused().unwrap();
         pump(&mut a, &rx, |a| a.panes[&id].hosts_ranma());
         (a, id)
+    }
+
+    #[test]
+    fn the_pointer_in_an_inner_ranmas_text_is_the_inners() {
+        use crossterm::event::{
+            KeyModifiers as K, MouseButton as B, MouseEvent as M, MouseEventKind as E,
+        };
+        let (mut a, id) = with_ranma_inside(
+            r#"ranma.on("click", function() clicked = true end)
+               ranma.on("hover", function() hovered = true end)
+               ranma.mouse("alt+right@pane", function() bound = true end)"#,
+        );
+        let v = a.frame().views.into_iter().find(|v| v.id == id).unwrap();
+        let (x, y) = (v.inner.x + 1, v.inner.y + 1);
+        let ev = |kind, modifiers| M {
+            kind,
+            column: x,
+            row: y,
+            modifiers,
+        };
+        a.handle_mouse(ev(E::Down(B::Right), K::CONTROL));
+        a.handle_mouse(ev(E::Up(B::Right), K::CONTROL));
+        a.handle_mouse(ev(E::Down(B::Right), K::ALT));
+        a.handle_mouse(ev(E::Up(B::Right), K::ALT));
+        a.handle_mouse(ev(E::Moved, K::NONE));
+        assert!(a.hover_at.is_none(), "no hover over the inner's text");
+        let g = a.config.lua.globals();
+        for name in ["clicked", "bound"] {
+            assert!(g.get::<Option<bool>>(name).unwrap().is_none(), "{name}");
+        }
+        // With nesting off the pane is plain text to this ranma, hooks and all.
+        a.config.settings.nested = config::NestedMode::Off;
+        a.handle_mouse(ev(E::Down(B::Right), K::CONTROL));
+        a.handle_mouse(ev(E::Down(B::Right), K::ALT));
+        a.handle_mouse(ev(E::Moved, K::NONE));
+        assert!(a.hover_at.is_some());
+        for name in ["clicked", "bound"] {
+            assert_eq!(g.get::<Option<bool>>(name).unwrap(), Some(true), "{name}");
+        }
     }
 
     fn text(seg: &Segment) -> String {

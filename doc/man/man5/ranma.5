@@ -1053,6 +1053,13 @@ modules\fR) changes this; the default
 \fBdatetime\fR and \fBclock\fR are \fB"own"\fR. The ranma inside must be a build that
 reports its modules; an older one leaves this bar's modules as they were.
 .IP \(bu 2
+\fBThe pointer in its text is the inner's\fR, as keys are. Ctrl/Alt+click
+there reaches the inner ranma's \fBclick\fR hook (its openpath, which knows its
+machine's paths), not this one's; this one's \fBhover\fR hook and its
+\fBranma.mouse\fR binds on \fB@pane\fR leave that text alone too. Borders, the bar
+and binds on \fB@border\fR or \fB@background\fR stay this one's. Both need a build
+that knows this only on the outer side.
+.IP \(bu 2
 A program could set a title starting with the mark and get the leader passed to
 it; \fBouter_leader\fR still reaches ranma. \fBnested = "off"\fR turns all of it off.
 .IP \(bu 2
