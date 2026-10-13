@@ -435,11 +435,25 @@ bar | grep -q ' S ' && fail "the scratchpad did not empty ($(bar))"
 # leader down, so the inner one's WM mode opens and the outer one's does not.
 # The inner one as if reached over SSH: its host reaches the outer terminal's
 # title, once, however many ranmas pass it out.
+# A module both define, saying which side ran it: SSH_CONNECTION is the
+# inner's alone.
+cat > "$CFG/plugin/where.lua" <<'LUA'
+ranma.module("where", { interval = 1, render = function()
+  return os.getenv("SSH_CONNECTION") and "where:far" or "where:desk"
+end })
+ranma.bar { right = { "where", "datetime" } }
+LUA
+sleep 0.5
 T send-keys -t s "SSH_CONNECTION='10.0.0.1 1 10.0.0.2 22' $BIN" Enter
 # One bar for both: the outer bar shows the inner's workspaces in brackets,
 # and the inner, shown there, draws no bar of its own (see nestbar).
 for _ in $(seq 1 40); do bar | grep -q ' \[1' && break; sleep 0.25; done
 bar | grep -q ' \[1' || fail "the outer bar does not show the inner's workspaces ($(bar))"
+# Its modules replace the outer's of the same name, not beside them.
+for _ in $(seq 1 20); do bar | grep -q 'where:far' && break; sleep 0.25; done
+bar | grep -q 'where:far' || fail "the outer bar does not show the inner's module ($(bar))"
+bar | grep -q 'where:desk' && fail "the outer bar shows its own module beside the inner's ($(bar))"
+rm "$CFG/plugin/where.lua"; sleep 0.5
 screen | head -n -1 | grep -q '│ 1[: ]' && fail "the inner ranma still draws its own bar"
 # The terminal window losing focus is not the inner losing the outer's focus:
 # the outer still shows its workspaces, so the inner must not draw its bar

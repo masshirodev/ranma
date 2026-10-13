@@ -181,6 +181,7 @@ function ranma.bar(bar) end
 ---@field exec? string A shell command; its first line is the text.
 ---@field format? string For exec: %s is the output line.
 ---@field interval? number Seconds between runs (required for exec).
+---@field nested? "follow"|"own"|"hide" Whose value it shows while the focus is in a ranma inside this one.
 
 ---Define a bar module, or configure a built-in one.
 ---@param name string

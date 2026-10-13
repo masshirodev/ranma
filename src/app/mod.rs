@@ -4457,7 +4457,7 @@ impl App {
                 None => Vec::new(),
             },
             _ => {
-                let seg = self.module_values.get(name).cloned().unwrap_or_default();
+                let seg = self.module_value(name);
                 match self.click_modules().iter().position(|m| m == name) {
                     Some(i) => seg
                         .into_iter()
@@ -7223,6 +7223,126 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// An app whose focused pane announces a ranma inside it, as one over
+    /// ssh does, for a test to hand that pane's reports to.
+    fn with_ranma_inside(user: &str) -> (App, PaneId) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(None, None, Some(user)).unwrap();
+        let mut a = App::new(config, tx, 100, 10);
+        let set = format!(
+            "exec printf '\\033]2;{}inner\\007'; sleep 5",
+            crate::pane::NESTED_MARKER
+        );
+        a.run_action(set.parse().unwrap());
+        let id = a.focused().unwrap();
+        pump(&mut a, &rx, |a| a.panes[&id].hosts_ranma());
+        (a, id)
+    }
+
+    fn text(seg: &Segment) -> String {
+        seg.iter().map(|p| p.text.clone()).collect()
+    }
+
+    #[test]
+    fn modules_follow_the_ranma_inside_by_name() {
+        let (mut a, id) = with_ranma_inside(
+            r#"ranma.module("disk", { render = function() return "/ 10%" end })
+            ranma.module("clock", { nested = "own", render = function() return "12:00" end })
+            ranma.module("branch", { nested = "hide", render = function() return "main" end })
+            ranma.module("song", { render = function() return "song" end,
+                                   on_click = function() end })
+            ranma.bar { right = { "disk", "clock", "branch", "song" } }"#,
+        );
+        for (n, v) in [
+            ("disk", "/ 10%"),
+            ("clock", "12:00"),
+            ("branch", "main"),
+            ("song", "song"),
+        ] {
+            a.set_module_value(n.into(), vec![Piece::new(v, Style::Normal)]);
+        }
+        let report = format!(
+            r#"{{"v":{},"modules":{{"disk":[{{"text":"/ 71%","style":"urgent"}}],
+                "clock":[{{"text":"03:00"}}],"song":[{{"text":"far","style":"no-such-role"}}]}}}}"#,
+            crate::nestbar::PROTOCOL
+        );
+        a.reports
+            .insert(id, crate::nestbar::Report::parse(&report).unwrap());
+
+        let disk = a.segment("disk");
+        assert_eq!(text(&disk), "/ 71%", "the far machine's, not this one's");
+        assert_eq!(disk[0].style, Style::Urgent);
+        assert_eq!(text(&a.segment("clock")), "12:00", "own: the desk's clock");
+        assert_eq!(text(&a.segment("branch")), "", "hide: not reported inside");
+        let song = a.segment("song");
+        assert_eq!(text(&song), "far");
+        assert_eq!(song[0].style, Style::Normal, "a role this theme lacks");
+        assert_eq!(song[0].click, Some(Click::Module(0)), "clicks stay local");
+
+        // Focus off the ranma: every module is this one's again.
+        a.reports.clear();
+        assert_eq!(text(&a.segment("disk")), "/ 10%");
+        assert_eq!(text(&a.segment("branch")), "main");
+    }
+
+    #[test]
+    fn a_ranma_reports_the_modules_it_draws() {
+        let (mut a, id) = with_ranma_inside(
+            r#"ranma.module("disk", { render = function() return "/ 10%" end })
+            ranma.module("unplaced", { render = function() return "x" end })
+            ranma.bar { right = { "disk", "datetime" } }"#,
+        );
+        a.set_module_value("disk".into(), vec![Piece::new("/ 10%", Style::Dim)]);
+        let own = a.own_report();
+        assert_eq!(own.modules["disk"][0].text, "/ 10%");
+        assert_eq!(own.modules["disk"][0].style, "dim");
+        assert!(own.modules.contains_key("datetime"));
+        assert!(
+            !own.modules.contains_key("unplaced"),
+            "only what the bar holds"
+        );
+        assert!(
+            !own.modules.contains_key("workspaces"),
+            "built-ins go as before"
+        );
+
+        // Three levels: what this one reports for disk is what it draws, the
+        // value from the ranma inside it.
+        let report = format!(
+            r#"{{"v":{},"modules":{{"disk":[{{"text":"/ 71%"}}]}}}}"#,
+            crate::nestbar::PROTOCOL
+        );
+        a.reports
+            .insert(id, crate::nestbar::Report::parse(&report).unwrap());
+        assert_eq!(a.own_report().modules["disk"][0].text, "/ 71%");
+    }
+
+    #[test]
+    fn a_yielded_bar_keeps_its_modules_running() {
+        let mut a = app(Some(
+            r#"ranma.module("feed", { interval = 5, render = function() return "f" end })
+            ranma.bar { right = { "feed" } }"#,
+        ));
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        assert!(a.bar_yielded());
+        assert!(
+            a.shown_modules().contains("feed"),
+            "drawn one level up, so still shown here"
+        );
+    }
+
+    #[test]
+    fn a_modules_nested_option_is_parsed_strictly() {
+        let load = |s: &str| crate::config::load_from(None, None, Some(s));
+        assert!(load(r#"ranma.module("cpu", { nested = "own" })"#).is_ok());
+        let err = load(r#"ranma.module("m", { nested = "x", render = function() end })"#)
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(err.contains("nested = \"x\""), "{err}");
+        assert!(load(r#"ranma.module("mem", { nested = "nope" })"#).is_err());
     }
 
     #[test]

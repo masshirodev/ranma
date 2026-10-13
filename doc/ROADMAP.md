@@ -133,6 +133,9 @@ an outer shows it.
   `[colors]`, sent with the answer at attach and laid over its own leniently
 - [x] `pane_strip` shows the panes of the innermost ranma on the path with
   two or more, from the report's `panes`
+- [x] Bar modules follow the nested path: the report's `modules`, drawn in
+  place of the outer's modules of the same name (`nested = "follow"`,
+  `"own"`, `"hide"`); the clocks stay the desk's
 
 ## 7. Upgrading without closing anything
 

@@ -620,6 +620,17 @@ Over SSH, three levels deep, each machine starting ranma: with
   on either side, the bars look as they always did. `ranma.module("workspaces",
   { nested = "all" })` expands every workspace holding a ranma, not only the
   one you are in; `"off"` never expands any.
+- **Modules follow the focus inside.** While the focused pane runs a ranma,
+  a module in this bar that the ranma inside also has shows *its* value: `disk`
+  says the far machine's `/`, `git` the branch of the pane focused there. It
+  replaces this bar's module of the same name rather than adding a second one,
+  and a module the ranma inside does not have keeps this one's value. Style
+  roles go by name and are drawn with this theme; one it does not declare is
+  drawn plain. A click on a module still runs this ranma's `on_click`. Each
+  module's `nested` option (`"follow"`, `"own"`, `"hide"`, see [your own
+  modules](#your-own-modules--ranmamodulename-opts)) changes this; the default
+  `datetime` and `clock` are `"own"`. The ranma inside must be a build that
+  reports its modules; an older one leaves this bar's modules as they were.
 - A program could set a title starting with the mark and get the leader passed to
   it; `outer_leader` still reaches ranma. `nested = "off"` turns all of it off.
 - `title_host` puts the machine's name in the mark, so the terminal's tab says
@@ -735,13 +746,14 @@ to a normal one (see [Toolbars](#toolbars--ranmatoolbarname-def)).
 | `title` | The focused pane's title; nothing while that pane runs a ranma reporting to this one, which shows its title on its own pane's border (the same words twice otherwise) | `nested = "hide"` (default) or `"show"` |
 | `panes` | How many panes are open | — |
 | `pane_strip` | The panes of the current workspace as tabs (` zsh  nvim `, `◇` before a float), the focused one in the active-tab colours; click one to focus it. Nothing with one pane. Monocle's strip, in the bar. With a ranma inside the focused pane (over ssh), the panes of the innermost one that has two or more, since that is where focus is; a click there focuses the holding pane. | — |
-| `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`) |
-| `mem` | Memory in use (total minus available), from `/proc/meminfo` (`mem 24.1G`). Urgent at 90% of total and above. | `interval` (default `5`), `format` (`%s` is `24.1G`, default `"mem %s"`) |
+| `cpu` | CPU in use since the last tick, from `/proc/stat` (`cpu 12%`); nothing on the first tick, which has no earlier sample. Urgent at 90% and above. | `interval` (seconds, default `2`), `format` (`%s` is `12%`, default `"cpu %s"`), `nested` (as for [your own modules](#your-own-modules--ranmamodulename-opts)) |
+| `mem` | Memory in use (total minus available), from `/proc/meminfo` (`mem 24.1G`). Urgent at 90% of total and above. | `interval` (default `5`), `format` (`%s` is `24.1G`, default `"mem %s"`), `nested` |
 
 Two more come defined in Lua in the defaults, and are redefined like any module:
 `datetime` (`Mon 28 Sep  14:45`, the default on the right) and `clock` (`14:45`).
-For another format, e.g.
-`ranma.module("datetime", { interval = 60, render = function() return os.date("%Y-%m-%d %H:%M") end })`.
+Both are `nested = "own"`: the desk's time, even while the focus is in a ranma
+on a machine in another time zone. For another format, e.g.
+`ranma.module("datetime", { interval = 60, nested = "own", render = function() return os.date("%Y-%m-%d %H:%M") end })`.
 
 Options go through `ranma.module` with the built-in's name:
 `ranma.module("workspaces", { show = "all" })`, `ranma.module("cpu", { interval
@@ -772,6 +784,7 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 | `format` | For `exec`: the text, with `%s` replaced by the output line. |
 | `interval` | Seconds between runs; required for `exec`. Aligned to the wall clock: `60` runs on the minute, not 60 s after ranma started. |
 | `on_click` | A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable. |
+| `nested` | Whose value it shows while the focused pane runs a ranma inside this one (over ssh): `"follow"` (default) shows that ranma's module of the same name when it has one, and this one's otherwise; `"own"` always shows this one's (a clock); `"hide"` follows, but shows nothing when the ranma inside has no module of that name (something about the focused pane, which is wrong about a pane running ssh). See [ranma inside ranma](#ranma-inside-ranma). |
 
 Give exactly one of `render` or `exec`. A module that fails shows its error in the
 `urgent` style instead of its text. Modules never run while a frame is drawn; the

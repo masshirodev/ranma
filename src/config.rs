@@ -557,7 +557,12 @@ impl ModuleKind {
     }
 }
 
-fn system_module(name: &str, interval: Option<f64>, format: Option<String>) -> Option<ModuleDef> {
+fn system_module(
+    name: &str,
+    interval: Option<f64>,
+    format: Option<String>,
+    nested: ModuleNested,
+) -> Option<ModuleDef> {
     let default = SYSTEM_MODULES.iter().find(|(n, _)| *n == name)?.1;
     Some(ModuleDef {
         on_click: None,
@@ -565,6 +570,7 @@ fn system_module(name: &str, interval: Option<f64>, format: Option<String>) -> O
             interval.unwrap_or(default),
         )),
         kind: ModuleKind::system(name, format)?,
+        nested,
     })
 }
 
@@ -576,6 +582,36 @@ pub struct ModuleDef {
     pub kind: ModuleKind,
     /// A function a click on the module calls (a plugin's own module).
     pub on_click: Option<Rc<RegistryKey>>,
+    /// Whose value it shows while the focus is in a ranma inside this one.
+    pub nested: ModuleNested,
+}
+
+/// What a module draws while the focused pane runs a ranma that reports its
+/// own modules (DESIGN.md, "The bar's modules follow the nested path").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModuleNested {
+    /// The innermost ranma's module of the same name, when one reports it;
+    /// this one's own otherwise.
+    #[default]
+    Follow,
+    /// Always this ranma's own: a fact about the desk, like its clock.
+    Own,
+    /// As `Follow`, but blank when no ranma inside reports it: a fact about
+    /// the focused pane that is wrong about a pane running ssh.
+    Hide,
+}
+
+impl ModuleNested {
+    fn parse(name: &str, opts: &Table) -> mlua::Result<ModuleNested> {
+        match opts.get::<Option<String>>("nested")?.as_deref() {
+            None | Some("follow") => Ok(ModuleNested::Follow),
+            Some("own") => Ok(ModuleNested::Own),
+            Some("hide") => Ok(ModuleNested::Hide),
+            Some(other) => Err(rt_err(format!(
+                "ranma.module(\"{name}\"): nested = \"{other}\" (expected \"follow\", \"own\" or \"hide\")"
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -1964,9 +2000,12 @@ fn install_api(
                 return Ok(());
             }
             if SYSTEM_MODULES.iter().any(|(n, _)| *n == name) {
-                if let Some(k) = keys.iter().find(|k| !["interval", "format"].contains(&k.as_str())) {
+                if let Some(k) = keys
+                    .iter()
+                    .find(|k| !["interval", "format", "nested"].contains(&k.as_str()))
+                {
                     return Err(rt_err(format!(
-                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format; `{k}` is not one"
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format, nested; `{k}` is not one"
                     )));
                 }
                 let interval = opts.get::<Option<f64>>("interval")?;
@@ -1975,7 +2014,9 @@ fn install_api(
                         "ranma.module(\"{name}\"): interval must be positive, not {secs}"
                     )));
                 }
-                let def = system_module(&name, interval, opts.get("format")?).expect("listed above");
+                let nested = ModuleNested::parse(&name, &opts)?;
+                let def = system_module(&name, interval, opts.get("format")?, nested)
+                    .expect("listed above");
                 lua.app_data_mut::<Builder>()
                     .ok_or_else(loading_only)?
                     .modules
@@ -1984,12 +2025,16 @@ fn install_api(
             }
             if let Some(k) = keys
                 .iter()
-                .find(|k| !["render", "exec", "format", "interval", "on_click"].contains(&k.as_str()))
+                .find(|k| {
+                    !["render", "exec", "format", "interval", "on_click", "nested"]
+                        .contains(&k.as_str())
+                })
             {
                 return Err(rt_err(format!(
-                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click)"
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click, nested)"
                 )));
             }
+            let nested = ModuleNested::parse(&name, &opts)?;
             let on_click = match opts.get::<Option<Function>>("on_click")? {
                 Some(f) => Some(Rc::new(lua.create_registry_value(f)?)),
                 None => None,
@@ -2038,6 +2083,7 @@ fn install_api(
                         interval,
                         kind,
                         on_click,
+                        nested,
                     },
                 );
             Ok(())
@@ -2680,7 +2726,7 @@ pub fn load_full(
     let named: Vec<String> = builder.bar.all().cloned().collect();
     for name in named {
         if !builder.modules.contains_key(&name)
-            && let Some(def) = system_module(&name, None, None)
+            && let Some(def) = system_module(&name, None, None, ModuleNested::Follow)
         {
             builder.modules.insert(name, def);
         }

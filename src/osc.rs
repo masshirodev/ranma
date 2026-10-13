@@ -27,7 +27,7 @@
 use std::time::{Duration, Instant};
 
 /// Longer than any mark, notification or nested ranma's report worth keeping.
-const MAX: usize = 16 * 1024;
+pub const MAX: usize = 16 * 1024;
 
 /// The address of a shell mark's tag (see the module's doc).
 pub const TAG: &str = "ranma:133:";

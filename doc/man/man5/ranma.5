@@ -964,6 +964,18 @@ on either side, the bars look as they always did. \fBranma.module("workspaces",
 { nested = "all" })\fR expands every workspace holding a ranma, not only the
 one you are in; \fB"off"\fR never expands any.
 .IP \(bu 2
+\fBModules follow the focus inside.\fR While the focused pane runs a ranma,
+a module in this bar that the ranma inside also has shows \fIits\fR value: \fBdisk\fR
+says the far machine's \fB/\fR, \fBgit\fR the branch of the pane focused there. It
+replaces this bar's module of the same name rather than adding a second one,
+and a module the ranma inside does not have keeps this one's value. Style
+roles go by name and are drawn with this theme; one it does not declare is
+drawn plain. A click on a module still runs this ranma's \fBon_click\fR. Each
+module's \fBnested\fR option (\fB"follow"\fR, \fB"own"\fR, \fB"hide"\fR, see your own
+modules\fR) changes this; the default
+\fBdatetime\fR and \fBclock\fR are \fB"own"\fR. The ranma inside must be a build that
+reports its modules; an older one leaves this bar's modules as they were.
+.IP \(bu 2
 A program could set a title starting with the mark and get the leader passed to
 it; \fBouter_leader\fR still reaches ranma. \fBnested = "off"\fR turns all of it off.
 .IP \(bu 2
@@ -1109,17 +1121,18 @@ Shows: The panes of the current workspace as tabs (\fBzsh  nvim\fR, \fB◇\fR be
 \fBcpu\fR
 Shows: CPU in use since the last tick, from \fB/proc/stat\fR (\fBcpu 12%\fR); nothing on the first tick, which has no earlier sample. Urgent at 90% and above.
 .br
-\fBinterval\fR (seconds, default \fB2\fR), \fBformat\fR (\fB%s\fR is \fB12%\fR, default \fB"cpu %s"\fR)
+\fBinterval\fR (seconds, default \fB2\fR), \fBformat\fR (\fB%s\fR is \fB12%\fR, default \fB"cpu %s"\fR), \fBnested\fR (as for your own modules\fR)
 .TP
 \fBmem\fR
 Shows: Memory in use (total minus available), from \fB/proc/meminfo\fR (\fBmem 24.1G\fR). Urgent at 90% of total and above.
 .br
-\fBinterval\fR (default \fB5\fR), \fBformat\fR (\fB%s\fR is \fB24.1G\fR, default \fB"mem %s"\fR)
+\fBinterval\fR (default \fB5\fR), \fBformat\fR (\fB%s\fR is \fB24.1G\fR, default \fB"mem %s"\fR), \fBnested\fR
 .PP
 Two more come defined in Lua in the defaults, and are redefined like any module:
 \fBdatetime\fR (\fBMon 28 Sep  14:45\fR, the default on the right) and \fBclock\fR (\fB14:45\fR).
-For another format, e.g.
-\fBranma.module("datetime", { interval = 60, render = function() return os.date("%Y\-%m\-%d %H:%M") end })\fR.
+Both are \fBnested = "own"\fR: the desk's time, even while the focus is in a ranma
+on a machine in another time zone. For another format, e.g.
+\fBranma.module("datetime", { interval = 60, nested = "own", render = function() return os.date("%Y\-%m\-%d %H:%M") end })\fR.
 .PP
 Options go through \fBranma.module\fR with the built\-in's name:
 \fBranma.module("workspaces", { show = "all" })\fR, \fBranma.module("cpu", { interval
@@ -1158,6 +1171,9 @@ Seconds between runs; required for \fBexec\fR. Aligned to the wall clock: \fB60\
 .TP
 \fBon_click\fR
 A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable.
+.TP
+\fBnested\fR
+Whose value it shows while the focused pane runs a ranma inside this one (over ssh): \fB"follow"\fR (default) shows that ranma's module of the same name when it has one, and this one's otherwise; \fB"own"\fR always shows this one's (a clock); \fB"hide"\fR follows, but shows nothing when the ranma inside has no module of that name (something about the focused pane, which is wrong about a pane running ssh). See ranma inside ranma\fR.
 .PP
 Give exactly one of \fBrender\fR or \fBexec\fR. A module that fails shows its error in the
 \fBurgent\fR style instead of its text. Modules never run while a frame is drawn; the
