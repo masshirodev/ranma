@@ -8200,6 +8200,35 @@ mod tests {
     }
 
     #[test]
+    fn a_user_mode_shows_the_programs_cursor_and_plain_wm_mode_does_not() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(r#"ranma.mode("vi", { label = "NORMAL", binds = { h = "send left" } })"#),
+        )
+        .unwrap();
+        let mut a = App::new(config, tx, 40, 10);
+        a.run_action(r#"exec printf ready; sleep 5"#.parse().unwrap());
+        pump(&mut a, &rx, |a| screen(a).join("\n").contains("ready"));
+        let cursor = |a: &App| {
+            use ratatui::backend::TestBackend;
+            let mut t = ratatui::Terminal::new(TestBackend::new(40, 10)).unwrap();
+            let mut c = None;
+            t.draw(|f| c = crate::render::draw(f, a)).unwrap();
+            c
+        };
+        assert!(cursor(&a).is_some(), "shown outside WM mode");
+        a.enter_user_mode("vi");
+        assert!(
+            cursor(&a).is_some(),
+            "and in a user mode, typed into the pane"
+        );
+        a.enter_wm(a.config.settings.leader);
+        assert!(cursor(&a).is_none(), "plain WM mode's keys are ranma's");
+    }
+
+    #[test]
     fn a_direct_placement_is_drawn_as_placeholders_where_the_cursor_was() {
         let (tx, rx) = std::sync::mpsc::channel();
         let config = crate::config::load_from(None, None, None).unwrap();

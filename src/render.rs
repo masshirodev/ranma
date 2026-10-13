@@ -519,7 +519,13 @@ fn draw_pane(
         });
     }
 
-    if !(view.focused && matches!(app.mode, Mode::Normal | Mode::Copy)) {
+    // A user mode is WM mode for its keys only: it is typed into the pane
+    // (vi.lua's hjkl), so the program's cursor stays where it can be seen.
+    let typing = match app.mode {
+        Mode::Normal | Mode::Copy => true,
+        Mode::Wm => app.user_mode_label().is_some(),
+    };
+    if !(view.focused && typing) {
         return None;
     }
     let c = content.cursor;

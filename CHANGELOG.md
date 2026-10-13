@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Fixed
 
+- In a user mode the focused pane's cursor is shown, so a mode that moves
+  it (vi.lua's NORMAL, hjkl as arrows) is not moving it blind. Plain WM
+  mode still hides it.
 - In a user mode the outer leader opens WM mode, as the leader does. It was
   sent to the program instead, and the mode dropped.
 
