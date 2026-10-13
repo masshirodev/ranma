@@ -41,7 +41,10 @@ echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako
 # would fill the border and push a badge off it.
 export PROMPT_COMMAND='h=${HOSTNAME%%.*}; printf "\033]0;%s@%s:%s\007" "$USER" "${h:0:12}" "${PWD/#$HOME/\~}"'
 # No SSH variables: the title names the host only where a step asks for it.
-ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
+# The panes' shell: the bash on PATH. macOS's /bin/bash is 3.2, which keeps
+# a raw terminal past its prompt and writes ${PWD/#$HOME/\~} with the backslash.
+PANE_SHELL="$(command -v bash)"
+ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=$PANE_SHELL"
 # A process's command line and environment, one word a line: /proc on
 # Linux, ps on macOS (whose -E appends the environment to the command).
 proc_cmd() {
@@ -403,7 +406,7 @@ wait_for 'POPUP=popped-ok/4' 20 || fail "ranma popup did not return the output a
 
 # The tmux shim, the way Claude Code's agent teams drive it: a placeholder pane
 # split off in the background, named, its process replaced, then killed.
-T send-keys -t s "SHIM_MARK=from-caller $BIN tmux-shim -- bash -c 'P=\$(tmux split-window -d -h -l 70% -P -F \"#{pane_id}\" -- cat); tmux select-pane -t \$P -T shimmed; tmux respawn-pane -k -t \$P -- \"echo respawned-ok; printenv SHIM_MARK TMUX_PANE; sleep 30\"; echo SHIM=\$P; sleep 2; tmux kill-pane -t \$P; tmux -V'" Enter
+T send-keys -t s "SHIM_MARK=from-caller $BIN tmux-shim -- bash -c 'P=\$(tmux split-window -d -h -l 70% -P -F \"#{pane_id}\" -- cat); tmux select-pane -t \$P -T shimmed; tmux respawn-pane -k -t \$P -- \"echo respawned-ok; printenv SHIM_MARK; printenv TMUX_PANE; sleep 30\"; echo SHIM=\$P; sleep 2; tmux kill-pane -t \$P; tmux -V'" Enter
 wait_for '╭ shimmed' 20 || fail "the tmux shim did not open and name a pane"
 wait_for 'respawned-ok' 12 || fail "respawn-pane did not replace the pane's process"
 # It runs with the environment of the command the shim was started for, and
