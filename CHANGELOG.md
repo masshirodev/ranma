@@ -13,6 +13,11 @@ commit log has the detail.
 
 ## [Unreleased]
 
+### Fixed
+
+- In a user mode the outer leader opens WM mode, as the leader does. It was
+  sent to the program instead, and the mode dropped.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added

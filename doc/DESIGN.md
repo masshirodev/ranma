@@ -1611,7 +1611,9 @@ the which-key hint, the bar's chip, stickiness, `exit` per bind) carries
 over, and only the table changes. Esc and Enter leave it even unbound,
 because a mode with no way out is a trap; the leader returns to WM mode's
 own keys rather than sending itself on, since in a user mode the leader
-reads as "back to the usual". `on_enter` and `on_exit` run on every way in
+reads as "back to the usual". The outer leader, likewise, opens WM mode
+as it does outside it (2026-10-13), rather than reading as WM mode's "pressed
+twice", which sends it to the program and drops the mode. `on_enter` and `on_exit` run on every way in
 and out, including a click or a hook that changes mode, because they hang
 off `set_mode`, not off keys. A bind naming a mode no `ranma.mode` declares
 is refused at load, as an unknown action is; the check waits for the end of

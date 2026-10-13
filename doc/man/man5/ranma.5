@@ -2448,7 +2448,7 @@ itself only takes the screen), typing at the desk brings the desk's back.
 A mode of your own is WM mode with a key table of its own: a resize mode, a
 git mode, keys that only make sense together. The \fBmode NAME\fR action enters
 it; its keys run until Esc or Enter (or a bind with \fBexit = true\fR), and the
-leader goes back to WM mode's keys. A key the mode does not bind is still
+leader (or the outer leader) goes back to WM mode's keys. A key the mode does not bind is still
 the global bind\fR's, if it has one
 (\fBalt+1\fR goes to workspace 1, \fBalt+left\fR focuses left) and the mode stays;
 any other is swallowed, as in WM mode. Plain WM mode does not do this: its

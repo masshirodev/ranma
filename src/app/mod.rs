@@ -2616,6 +2616,13 @@ impl App {
                 self.leave_user_mode();
                 return;
             }
+            // The outer leader is what it is outside WM mode: WM mode, opened
+            // by it. The branch below means "pressed twice", and would send it
+            // to the program and drop the mode, which a user mode never asked.
+            if chord == outer {
+                self.enter_wm(outer);
+                return;
+            }
             // A key the mode leaves unbound is still the global bind's, and the
             // mode stays: a user mode adds keys over typing, it does not take
             // the always-on ones away. Plain WM mode still swallows them.
@@ -6726,6 +6733,21 @@ mod tests {
         a.enter_wm(a.config.settings.leader);
         a.run_timers(a.hint_due.expect("due"));
         assert!(title(&a).starts_with("╭ ctrl+b "), "{}", title(&a));
+    }
+
+    #[test]
+    fn the_outer_leader_in_a_user_mode_opens_wm_mode() {
+        use crossterm::event::{KeyCode as C, KeyModifiers as K};
+        let mut a = app(Some(
+            r#"ranma.set { outer_leader = "ctrl+alt+b" }
+               ranma.mode("vi", { label = "NORMAL", binds = { h = "send left" } })"#,
+        ));
+        with_pane(&mut a, 1);
+        a.enter_user_mode("vi");
+        a.handle_key(KeyEvent::new(C::Char('b'), K::CONTROL | K::ALT));
+        assert_eq!(a.mode, Mode::Wm, "still WM mode, not dropped to normal");
+        assert!(a.user_mode.is_none(), "with WM mode's keys, not the mode's");
+        assert_eq!(a.wm_chord(), a.config.settings.outer_leader);
     }
 
     #[test]
