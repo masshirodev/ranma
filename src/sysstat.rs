@@ -17,6 +17,13 @@ pub struct Mem {
     pub available_kib: u64,
 }
 
+impl CpuSample {
+    /// A sample from idle and total ticks, where the OS counts them itself.
+    pub fn from_ticks(idle: u64, total: u64) -> CpuSample {
+        CpuSample { idle, total }
+    }
+}
+
 /// At or above this percentage the module turns urgent.
 pub const URGENT_PERCENT: u8 = 90;
 
