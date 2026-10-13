@@ -589,6 +589,12 @@ ranma.profile("mobile", {
 --   ranma.rule { program = "ssh", group = "servers" }    -- every ssh pane, tabbed together
 --   ranma.rule { host = "prod*", style = { border_active = "#f38ba8", active_bg = "#200000" } }
 --
+-- Mouse binds: [ctrl+][alt+][shift+]EVENT@TARGET (left, middle, right, double,
+-- wheel_up, wheel_down; pane needs ctrl or alt, border, background). The pane
+-- under the pointer is focused first.
+--   ranma.mouse("alt+middle@pane", "close_pane")
+--   ranma.mouse("double@border", "toggle_floating")
+--
 -- Modules:
 --
 --   ranma.module("load", { interval = 5, exec = "cut -d' ' -f1 /proc/loadavg", format = "load %s" })

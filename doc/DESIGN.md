@@ -1985,6 +1985,29 @@ Decided:
 - Under `theme_colors = "outer"`, a pane's own colours still win over the
   outer's: they were asked for about that pane.
 
+### Mouse binds (2026-10-13)
+
+The mouse did what ranma decided (focus, drag a border, a menu on the right
+button), and a plugin heard only Ctrl or Alt clicks in a pane's text, through
+the `click` hook. `ranma.mouse("alt+middle@pane", "close_pane")` lets a
+config bind the rest. Decided:
+
+- **Its own function and table**, not mouse names among the keys: a click
+  has a place as well as a chord, and the which-key hint and help list keys.
+- **Three targets**: a pane's text, a pane's border, the background. Not the
+  bar or tab bars, whose pieces already have their own clicks (`on_click`).
+- **Nothing is taken from its owner**: a pane's plain presses and wheel are
+  its program's (and Shift is the terminal's selection), so a bind there needs
+  Ctrl or Alt; a plain left press on a border is the drag that moves and
+  resizes, so it cannot be bound. Both are load errors saying why.
+- **It acts on what was clicked**: the pane under the pointer is focused
+  first, so `close_pane` closes that pane.
+- **A bind wins and takes the press**, in every mode, before ranma's own
+  handling and before the `click` hook; one press, one effect.
+- `double` is a second left press on the same cell within 400 ms; the first
+  press still does what it did, so a double click on a pane's text still
+  focuses on the first.
+
 ### A hook that can say no: `before_close` (2026-10-13)
 
 Hooks only hear; `before_close` is the one that answers. Returning `false`

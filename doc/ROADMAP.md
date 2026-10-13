@@ -202,6 +202,8 @@ lets you style".
 - [x] Window rules on `program`, `cwd` and `host`; `name`, `badge` and `group` effects
 - [x] A pane's own looks: a rule's `style`, `pane:style`
 - [x] Placements in Lua: `ranma.placement`, `ranma.h` / `ranma.v`, messages from the keys, `ranma layout-preview`
+- [x] Mouse binds: `ranma.mouse`, on a pane's text, its border or the background
+- [x] Hooks: `layout_change`, `pane_resize`, `float_change`, `workspace_rename`, `before_close`
 - [x] `choose_theme`: a picker that shows each theme as it is selected
 - [x] The picker, redrawn (designed from `doc/briefs/done/PICKER.md`, held to
   `doc/handoffs/PICKER_MOCK.txt` cell for cell)

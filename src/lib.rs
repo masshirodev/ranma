@@ -25,6 +25,7 @@ pub mod luapane;
 pub mod luascreen;
 pub mod luaui;
 pub mod man;
+pub mod mouse;
 pub mod nestbar;
 pub mod options;
 pub mod osc;

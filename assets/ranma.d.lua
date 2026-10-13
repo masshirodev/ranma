@@ -205,6 +205,14 @@ function ranma.module(name, def) end
 ---@param rule ranma.Rule
 function ranma.rule(rule) end
 
+---A mouse bind: "[ctrl+][alt+][shift+]EVENT@TARGET", events left, middle,
+---right, double, wheel_up, wheel_down; targets pane (needs ctrl or alt),
+---border (not a plain left), background. The pane under the pointer is
+---focused first; the bind takes the press.
+---@param spec string
+---@param action string|fun(e: { pane: integer?, x: integer, y: integer, workspace: integer })
+function ranma.mouse(spec, action) end
+
 ---A session's options.
 ---@param name string
 ---@param opts { accent?: string }

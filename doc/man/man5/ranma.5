@@ -1112,6 +1112,35 @@ A left click just goes there, as before.
 In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
 anywhere with the left button, resize it with the right. \fBmouse = "off"\fR limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.
+.SS "Mouse binds — \fBranma.mouse(spec, action)\fR"
+.PP
+.RS 4
+.nf
+ranma.mouse("alt+middle@pane", "close_pane")          \-\- the pane clicked, not the focused one
+ranma.mouse("double@border", "toggle_floating")
+ranma.mouse("alt+wheel_up@pane", "workspace prev")
+ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
+.fi
+.RE
+.PP
+A spec is \fB[ctrl+][alt+][shift+]EVENT@TARGET\fR. Events: \fBleft\fR, \fBmiddle\fR,
+\fBright\fR, \fBdouble\fR (a second left press on the same cell within 400 ms),
+\fBwheel_up\fR, \fBwheel_down\fR. Targets: \fBpane\fR (a pane's text), \fBborder\fR (its
+border and title edge), \fBbackground\fR (where no pane is: the gaps, an empty
+workspace, around floats). The action is an action as a bind takes it, or a
+function, which gets \fB{ pane, x, y, workspace }\fR (\fBpane\fR is \fBnil\fR on the
+background).
+.PP
+The pane under the pointer is focused before the action runs, so a bind acts
+on what you clicked. A bind comes before ranma's own handling of that press,
+in every mode, and takes it: it does not also reach the program or start a
+drag. Two things stay with their owners and are refused at load, saying why:
+a bind in a pane's text without \fBctrl\fR or \fBalt\fR (plain presses and the wheel
+there are its program's, and Shift is the terminal's own selection), and a
+plain \fBleft@border\fR, which moves and resizes panes. The bar and tab bars keep
+their own clicks (a module's \fBon_click\fR). A later \fBranma.mouse\fR for the same
+spec replaces the earlier. With a bind on \fBalt+…@pane\fR, the \fBclick\fR hook no
+longer hears that combination.
 .SH "THE BAR"
 .PP
 The bar is on from the first start, at the bottom: the mode, the session and
