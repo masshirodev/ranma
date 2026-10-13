@@ -8,7 +8,7 @@ updated from it by hand.
 
 ## What a release contains
 
-For each target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`),
+For each Linux target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`),
 made by `packaging/package.sh` from one build:
 
 - `ranma-<version>-<target>.tar.gz` and its `.sha256`: the AUR's `ranma-bin`,
@@ -18,6 +18,14 @@ made by `packaging/package.sh` from one build:
   `Cargo.toml`): the same binary and man pages under `/usr`, `git`
   recommended, and the note after an upgrade that `ranma.install` prints for
   pacman (`packaging/deb/postinst`, `packaging/rpm/post_install.sh`).
+
+For each macOS target (`aarch64-apple-darwin` on macos-15,
+`x86_64-apple-darwin` on macos-15-intel), only the tarball and its `.sha256`:
+Homebrew and `install.sh` are how it is installed there, and the formula gains
+its `on_macos` blocks from these files (`packaging/brew/formula.sh`). The
+binaries are not signed or notarised. Homebrew and a `curl | sh` install do not
+quarantine what they download, so Gatekeeper does not stop them, while a
+tarball opened from a browser would need `xattr -d com.apple.quarantine`.
 
 The tarball holds:
 

@@ -216,6 +216,14 @@ Run it before a release, and after any change to `app/upgrade.rs`,
 serialisation is the `K_EVENT` frame). It was checked to fail on a handover
 `VERSION` bumped with no reader for the old one.
 
+The smoke is written to run on both. Where GNU and BSD tools differ it uses
+the common form: `sed '$d'` for all but the last row (BSD `head` takes no
+negative count), `sed -E` (BSD `sed` has no `\?`), one name to a `printenv`,
+`mktemp` with no `--suffix`, and `ps` where there is no `/proc`. Its panes run
+the `bash` on `PATH`, and a probe that sets the terminal raw puts it back.
+Each of these once failed on macOS, or passed there without checking
+anything.
+
 ## Git hooks — `.githooks/`
 
 The gate above, run by git. There is no husky
@@ -244,7 +252,9 @@ a hook cannot tell which a change touches. On a machine where CPU is scarce,
 `.github/workflows/ci.yml` runs on every push to `main` and every pull
 request, on ubuntu-22.04: `cargo fmt --check`, clippy with `-D warnings`,
 `cargo test --locked`, the smoke test (tmux installed from apt), and
-`scripts/compat.sh` against the latest release. It is the
+`scripts/compat.sh` against the latest release. A `macos` job runs clippy, the
+tests and the smoke on macos-15 (arm64) and macos-15-intel, with tmux and a
+current bash from Homebrew (macOS's own bash is 3.2). It is the
 hooks' gate for changes that did not come through these hooks: a
 contributor's pull request, or a push with a skip flag. The release workflow
 (`doc/RELEASING.md`) runs the tests again on the tagged commit, and its

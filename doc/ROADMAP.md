@@ -302,15 +302,16 @@ Lua and exec modules, `refresh_module` and `module_shown`.
 The decision is DESIGN.md's "Linux and macOS, not native Windows". The exit
 test: the smoke script and the whole test suite on a macOS runner, and the
 daily-driver set (nested ranma over SSH, an upgrade in place, the bar's cpu and
-mem) by hand on a Mac.
+mem) by hand on a Mac. The first half passes (2026-10-13: the suite and the
+smoke on macos-15 and macos-15-intel in ci.yml); the second waits for a Mac.
 
 - [ ] A Homebrew tap serving the Linux release binaries, bumped by release.yml
 - [x] `src/os/`: everything that reads `/proc` or opens a pidfd behind one
   module, Linux unchanged
-- [ ] The macOS half: foreground program, command line and directory from
+- [x] The macOS half: foreground program, command line and directory from
   libproc, cpu and mem from the host, child exit from kqueue
 - [x] Paths: sockets under the 104-byte `sun_path` limit, the config in
   `~/.config/ranma` rather than `~/Library/Application Support`
 - [x] Defaults: `open` for links, an image paste command
-- [ ] CI and release: macOS builds (arm64 and x86_64), the smoke test there,
+- [x] CI and release: macOS builds (arm64 and x86_64), the smoke test there,
   macOS tarballs in the release and the tap
