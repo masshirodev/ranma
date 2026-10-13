@@ -37,7 +37,9 @@ echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako
 # The shells name themselves in the title, as Arch's /etc/bash.bashrc has them
 # do and Ubuntu's does not: steps read pane titles, which should not depend on
 # the distro the test runs on. Exported, so the private tmux passes it on.
-export PROMPT_COMMAND='printf "\033]0;%s@%s:%s\007" "$USER" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'
+# The host is cut to 12 characters: a CI runner's name (macOS's run to sixty)
+# would fill the border and push a badge off it.
+export PROMPT_COMMAND='h=${HOSTNAME%%.*}; printf "\033]0;%s@%s:%s\007" "$USER" "${h:0:12}" "${PWD/#$HOME/\~}"'
 # No SSH variables: the title names the host only where a step asks for it.
 ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=/bin/bash"
 # A process's command line and environment, one word a line: /proc on
@@ -180,13 +182,19 @@ done
 # release and the motion over the bar went to the focused pane, clamped to its
 # nearest row, so a mouse-driven program was clicked on its bottom line.
 cat > "$CFG/mouse.py" <<'PY'
-import os, sys, tty
+import os, sys, termios, tty
+# Put back what it found: an older bash (macOS's 3.2) keeps the raw mode at
+# its next prompt, and every newline after it lands a column on.
+saved = termios.tcgetattr(0)
 tty.setraw(0)
-os.write(1, b"\x1b[?1003h\x1b[?1006hmouse-ready\r\n")
-with open(sys.argv[1], "wb", buffering=0) as log:
-    while (b := os.read(0, 256)) and b != b"q":
-        log.write(b)
-os.write(1, b"\x1b[?1003l\x1b[?1006l")
+try:
+    os.write(1, b"\x1b[?1003h\x1b[?1006hmouse-ready\r\n")
+    with open(sys.argv[1], "wb", buffering=0) as log:
+        while (b := os.read(0, 256)) and b != b"q":
+            log.write(b)
+    os.write(1, b"\x1b[?1003l\x1b[?1006l")
+finally:
+    termios.tcsetattr(0, termios.TCSADRAIN, saved)
 PY
 T send-keys -t s "clear; python3 $CFG/mouse.py $CFG/mouse.log" Enter
 wait_for 'mouse-ready' || fail "mouse probe did not start"
