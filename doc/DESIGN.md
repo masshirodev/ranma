@@ -2487,44 +2487,48 @@ with the outer's colours instead. Decided:
   terminal with no ranma around it brings the inner's own colours back, and
   a config reload lays the outer's over the new theme again.
 
-**The bar's modules follow the nested path** (2026-10-12, proposed, not
-built). The nested bar carries an inner ranma's workspaces, mode and status,
-but none of its modules. So with the VPS's ranma focused inside the PC's,
-the PC's bar keeps showing the PC's `disk` and `git`: the first describes
-the wrong machine, and the second describes whatever directory the
-`ssh vps` pane started in. Worse, the inner's own modules are not merely
-undrawn: its bar is yielded, so `shown_modules` is empty and a plugin that
-fetches only while its module is seen (bar-extras, hours, kumiko) has stopped
-fetching altogether. Proposed:
+**The bar's modules follow the nested path** (2026-10-12, c310). The nested
+bar carried an inner ranma's workspaces, mode and status, but none of its
+modules. So with the VPS's ranma focused inside the PC's, the PC's bar kept
+showing the PC's `disk` and `git`: the first describes the wrong machine,
+and the second describes whatever directory the `ssh vps` pane started in.
+The inner's modules kept running (a yielded bar still has its edge row, so
+`shown_modules` counts them and `module_shown` fires), but nobody saw them.
+Decided:
 
-- **The inner reports its modules' output.** A protocol version 3 report
-  gains `modules`: name to rendered segment (text and style role), for every
-  module in the inner's bar configuration. Older outers skip the field. A
-  yielded inner counts these modules as shown, since they *are* shown, one
-  level up, so `module_shown` fires and fetching plugins wake.
-- **Replace by name, never append.** While the path runs through a nested
-  ranma (the outer's focused pane, or its shown scratchpad, holds one), a
-  module in the outer's bar that the innermost reporting ranma also reports
-  is drawn from that ranma's value. `disk` then says the VPS's `/`, and `git`
-  says the branch of the pane focused on the VPS. Putting them side by side
-  would double every module and leave the reader to work out which is which.
-  A module the inner does not report keeps the outer's value: `datetime` and
-  `nowplaying` are facts about the desk, not about the pane.
-- **A module may opt out of following.** `ranma.module(name, { nested =
-  "own" })` always draws the outer's value (a clock fixed to the desk's time
-  zone). The default is `"follow"`. A third value, `"hide"`, blanks a module
-  the inner does not report, for those that make no sense about the outer
-  once the focus is across the connection (`git` on an `ssh` pane).
-- **Style roles travel by name.** They are drawn with the outer's theme,
-  which already declares them or falls back the way any unknown role does,
-  the same leniency as `theme_colors`.
-- **Clicks stay local.** A click on a followed module runs the outer's
-  `on_click`, if it has one. Forwarding clicks would mean carrying actions
-  across the wire, and that belongs to the message channel below, not to
-  the report.
-- **Cost is bounded by the report's existing throttle.** A module's value
-  changes at its interval at most, and the report is already re-sent only
-  when it differs.
+- **The inner reports its modules' output.** The report gains `modules`:
+  name to pieces (text, and style by name), for every module of its own
+  (`config.modules`, so plugins' and `cpu`/`mem`, not the built-ins the
+  report already carries) that its bar configuration places. No protocol
+  bump: like `panes` and `scratch_nest`, an outer that does not know the
+  field skips it, and an inner that sends none leaves the outer as it was.
+- **Replace by name, never append.** While the outer's focused pane runs a
+  ranma that reports, a module in the outer's bar takes its value from the
+  innermost ranma on the path (`nested_path`) that reports one of that
+  name. `disk` then says the VPS's `/`, and `git` the branch of the pane
+  focused on the VPS. Side by side would double every module and leave the
+  reader to work out which is which. A module no ranma inside reports keeps
+  the outer's value.
+- **What a ranma draws is what it reports**, so a chain of three carries
+  the innermost value all the way out without the outer knowing the depth.
+- **`nested` on `ranma.module`**: `"follow"` (default), `"own"` (always the
+  outer's: a clock), `"hide"` (follow, but blank when nothing inside
+  reports it, for facts about the focused pane that are wrong about an ssh
+  pane). The default `datetime` and `clock` are `"own"`: the desk's time is
+  the one wanted, even focused on a machine in UTC. Follow is the default
+  because most modules a plugin adds describe where the focus is.
+- **Style roles travel by name**, looked up by definition on the way out
+  (two roles defined alike are one style there, whichever name goes) and
+  resolved against the outer's theme on the way in. A name the outer's
+  theme lacks is drawn plain, not as `unknown style`: the wire is lenient
+  for the same reason `theme_colors` is, two builds with two themes.
+- **Clicks stay local.** A followed module runs the outer's `on_click`.
+  Forwarding clicks would carry actions across the wire, which belongs to
+  a message channel, not to the report.
+- **Never at the cost of the workspaces.** The outer's OSC reader drops a
+  sequence past 16 KiB whole, so a report that would exceed it goes without
+  its modules. A report is re-sent only when it differs, so a module's
+  traffic is bounded by its interval.
 
 Not part of this: a channel for plugins themselves (`ranma.send_outer` /
 `send_inner`, delivered as `user:<name>` on the other side), which a badge

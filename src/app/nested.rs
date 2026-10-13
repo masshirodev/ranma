@@ -16,7 +16,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::{App, Frame, Mode, SCRATCHPAD, chord_bytes};
 use crate::action::{Action, WorkspaceTarget};
 use crate::bar::Segment;
-use crate::config::{BindAction, NestedMode};
+use crate::config::{BindAction, ModuleNested, NestedMode};
 use crate::layout::PaneId;
 use crate::nestbar::{self, Report, Ws};
 
@@ -186,6 +186,42 @@ impl App {
                 .into_iter()
                 .map(|(_, label, focused)| nestbar::Chip { label, focused })
                 .collect(),
+            modules: self
+                .config
+                .bar
+                .all()
+                .filter(|n| self.config.modules.contains_key(*n))
+                .map(|n| {
+                    let seg = self.module_value(n);
+                    (n.clone(), nestbar::to_wire(&seg, &self.config.theme.roles))
+                })
+                .collect(),
+        }
+    }
+
+    /// A module's value as this ranma draws it: from the innermost ranma on
+    /// the focus path that reports one of that name, unless the module keeps
+    /// its own (`nested = "own"`); blank for `"hide"` when none does. What
+    /// is drawn is also what this ranma reports, so a chain of three carries
+    /// the innermost's value all the way out.
+    pub(super) fn module_value(&self, name: &str) -> Segment {
+        let own = || self.module_values.get(name).cloned().unwrap_or_default();
+        let nested = self
+            .config
+            .modules
+            .get(name)
+            .map_or(ModuleNested::Follow, |m| m.nested);
+        if nested == ModuleNested::Own {
+            return own();
+        }
+        let path = self.nested_path();
+        if path.is_empty() {
+            return own();
+        }
+        match path.iter().rev().find_map(|r| r.modules.get(name)) {
+            Some(w) => nestbar::from_wire(w, &self.config.theme.roles),
+            None if nested == ModuleNested::Hide => Vec::new(),
+            None => own(),
         }
     }
 
@@ -233,7 +269,12 @@ impl App {
         if !self.client_outer || self.config.settings.nested != NestedMode::Auto {
             return;
         }
-        let r = self.own_report();
+        let mut r = self.own_report();
+        // An outer drops an OSC past its reader's limit whole, workspaces and
+        // all; the modules are the part a bar can do without.
+        if nestbar::report_osc(&r).len() > crate::osc::MAX {
+            r.modules.clear();
+        }
         if self.last_report.as_ref() != Some(&r) {
             self.host_out.push(nestbar::report_osc(&r));
             self.last_report = Some(r);

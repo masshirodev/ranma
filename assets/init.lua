@@ -445,8 +445,12 @@ ranma.module("title", { nested = "hide" })
 
 -- A module is a Lua function or a shell command. Timed modules tick on the wall
 -- clock: interval = 60 fires on the minute, not 60 s after ranma started.
+-- While the focus is in a ranma inside this one (over ssh), a module that ranma
+-- also has shows its value instead (nested = "follow", the default); "own" keeps
+-- this one's, as the clocks do, and "hide" blanks one the ranma inside lacks.
 ranma.module("clock", {
   interval = 60,
+  nested = "own",
   render = function() return os.date("%H:%M") end,
 })
 
@@ -455,6 +459,7 @@ ranma.module("clock", {
 -- interval = 1 for seconds).
 ranma.module("datetime", {
   interval = 60,
+  nested = "own",
   render = function() return os.date("%a %d %b  %H:%M") end,
 })
 

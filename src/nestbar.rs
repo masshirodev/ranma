@@ -8,12 +8,15 @@
 //! outer does not know, or none at all, leaves that workspace as it always
 //! was. Pure: reports in, bar pieces out.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use unicode_width::UnicodeWidthStr;
 
 use crate::bar::{Click, Piece, Segment, Style};
 use crate::layout::PaneId;
+use crate::theme::RoleDef;
 
 /// The protocol this build speaks. A report or an answer from `OLDEST` up
 /// to here is understood; anything else is ignored, and its holder is drawn
@@ -83,6 +86,58 @@ pub struct Report {
     /// shows them. An outer that does not know the field ignores it.
     #[serde(default)]
     pub panes: Vec<Chip>,
+    /// Its bar modules' output, by name: with no bar of its own, the outer
+    /// draws these in place of its own modules of the same name (DESIGN.md,
+    /// "The bar's modules follow the nested path"). An outer that does not
+    /// know the field ignores it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub modules: BTreeMap<String, Vec<WirePiece>>,
+}
+
+/// A piece of a module's output on the wire: its text, and its style by
+/// name (`normal`, `dim`, `accent`, `urgent`, or one of the theme's roles).
+/// The name is resolved against the outer's theme, so a role the outer does
+/// not declare is drawn plain.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WirePiece {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub style: String,
+}
+
+/// A module's segment as it goes out: each piece's style by name, a role
+/// looked up by its definition (two roles defined alike are the same style
+/// here, whichever name goes). Styles a module cannot produce go as plain.
+pub fn to_wire(seg: &[Piece], roles: &BTreeMap<String, RoleDef>) -> Vec<WirePiece> {
+    seg.iter()
+        .map(|p| WirePiece {
+            text: p.text.clone(),
+            style: match p.style {
+                Style::Dim => "dim".into(),
+                Style::Accent => "accent".into(),
+                Style::Urgent => "urgent".into(),
+                Style::Role(def) => roles
+                    .iter()
+                    .find(|(_, d)| **d == def)
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default(),
+                _ => String::new(),
+            },
+        })
+        .collect()
+}
+
+/// A module's segment as it came in, in this theme's styles. Lenient, as
+/// the colours are: the two ends are different builds with different
+/// themes, so a style this theme does not have is drawn plain rather than
+/// as an error.
+pub fn from_wire(w: &[WirePiece], roles: &BTreeMap<String, RoleDef>) -> Segment {
+    w.iter()
+        .map(|p| {
+            let style = Style::from_name(&p.style, roles).unwrap_or(Style::Normal);
+            Piece::new(p.text.clone(), style)
+        })
+        .collect()
 }
 
 /// A pane as a `pane_strip` chip names it.
@@ -806,6 +861,7 @@ mod tests {
             sticky: true,
             ws,
             panes: Vec::new(),
+            modules: BTreeMap::new(),
         }
     }
 
@@ -1427,6 +1483,48 @@ mod tests {
     fn a_report_without_panes_parses() {
         let r = Report::parse(r#"{"v":2,"ws":[]}"#).unwrap();
         assert!(r.panes.is_empty());
+        assert!(r.modules.is_empty());
+    }
+
+    #[test]
+    fn modules_go_out_by_style_name_and_come_back_in_this_theme() {
+        use crate::theme::{Attrs, Color};
+        let git = RoleDef {
+            fg: Color::Rgb(255, 136, 0),
+            bg: None,
+            styles: Attrs::bold(),
+        };
+        let roles = BTreeMap::from([("git".to_string(), git)]);
+        let seg = vec![
+            Piece::new(" main", Style::Role(git)),
+            Piece::new(" +2", Style::Urgent),
+            Piece::new(" ws", Style::WsActive),
+        ];
+        let w = to_wire(&seg, &roles);
+        let styles: Vec<&str> = w.iter().map(|p| p.style.as_str()).collect();
+        assert_eq!(styles, ["git", "urgent", ""]);
+        let back = from_wire(&w, &roles);
+        assert_eq!(back[0].style, Style::Role(git));
+        assert_eq!(back[1].style, Style::Urgent);
+        assert_eq!(back[2].style, Style::Normal);
+        // Another theme, without the role: plain, never an error.
+        assert_eq!(from_wire(&w, &BTreeMap::new())[0].style, Style::Normal);
+
+        let mut r = report(1, Vec::new());
+        assert!(
+            !String::from_utf8(report_osc(&r))
+                .unwrap()
+                .contains("modules"),
+            "nothing on the wire when there is nothing to say"
+        );
+        r.modules.insert("git".into(), w);
+        let bytes = report_osc(&r);
+        let json = std::str::from_utf8(&bytes).unwrap();
+        let json = json
+            .strip_prefix("\x1b]51377;report;")
+            .and_then(|j| j.strip_suffix('\x07'))
+            .unwrap();
+        assert_eq!(Report::parse(json).unwrap(), r);
     }
 
     /// The scratchpad holds a ranma like a workspace does: shown, `S`
