@@ -176,6 +176,10 @@ pub enum Clipboard {
     /// `powershell.exe`, saving an image to a file: WSLg's Wayland bridge
     /// carries text reliably and images not.
     Wsl,
+    /// `osascript` running JavaScript for Automation against the pasteboard:
+    /// file URLs when Finder copied files, else the image (PNG, or TIFF made
+    /// PNG), with nothing to install.
+    Mac,
     /// `wl-paste`.
     Wayland,
     /// `xclip`.
@@ -186,10 +190,11 @@ pub enum Clipboard {
 }
 
 /// The configured command, else the platform's: WSL's (`wsl`, from [`wsl`]),
-/// else what the environment the server started in offers.
+/// macOS's (`mac`), else what the environment the server started in offers.
 pub fn clipboard(
     custom: Option<&str>,
     wsl: bool,
+    mac: bool,
     env: impl Fn(&str) -> Option<String>,
 ) -> Option<Clipboard> {
     let set = |v: &str| env(v).is_some_and(|s| !s.is_empty());
@@ -197,6 +202,8 @@ pub fn clipboard(
         Some(Clipboard::Shell(c.to_string()))
     } else if wsl {
         Some(Clipboard::Wsl)
+    } else if mac {
+        Some(Clipboard::Mac)
     } else if set("WAYLAND_DISPLAY") {
         Some(Clipboard::Wayland)
     } else if set("DISPLAY") {
@@ -205,6 +212,28 @@ pub fn clipboard(
         None
     }
 }
+
+/// macOS's pasteboard, read by `osascript -l JavaScript -e this PATH`: the
+/// paths of copied files after a `files` line, else the image written to
+/// PATH as PNG and `image` printed, else nothing.
+const MAC_PASTEBOARD: &str = r#"ObjC.import("AppKit");
+function run(argv) {
+  var pb = $.NSPasteboard.generalPasteboard;
+  var urls = pb.readObjectsForClassesOptions($([$.NSURL]), $({ NSPasteboardURLReadingFileURLsOnlyKey: true }));
+  if (urls && urls.count > 0) {
+    var out = ["files"];
+    for (var i = 0; i < urls.count; i++) out.push(urls.objectAtIndex(i).path.js);
+    return out.join("\n");
+  }
+  var png = pb.dataForType("public.png");
+  if (png.isNil()) {
+    var tiff = pb.dataForType("public.tiff");
+    if (tiff.isNil()) return "";
+    png = $.NSBitmapImageRep.imageRepWithData(tiff).representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $());
+  }
+  png.writeToFileAtomically(argv[0], true);
+  return "image";
+}"#;
 
 /// The argv reading the clipboard as `mime` (`TARGETS` lists what it holds).
 fn read_argv(c: &Clipboard, mime: &str) -> Vec<String> {
@@ -533,6 +562,33 @@ fn from_clipboard(
             let mut lines = out.lines().map(str::trim).filter(|l| !l.is_empty());
             if lines.next() == Some("files") {
                 return Ok(lines.map(|w| Named::Windows(w.to_string())).collect());
+            }
+            let bytes = std::fs::read(&tmp).map_err(|_| NOTHING.to_string());
+            let _ = std::fs::remove_file(&tmp);
+            bytes?
+        }
+        Clipboard::Mac => {
+            let dir = local_dir()?;
+            let tmp = dir.join(format!(".clipboard-{}.png", std::process::id()));
+            let r = run(
+                Command::new("osascript")
+                    .args(["-l", "JavaScript", "-e", MAC_PASTEBOARD])
+                    .arg(&tmp),
+                None,
+                cancel,
+                deadline,
+            );
+            let out = match r {
+                Ok(out) => out,
+                Err(e) => {
+                    let _ = std::fs::remove_file(&tmp);
+                    return Err(e);
+                }
+            };
+            let out = String::from_utf8_lossy(&out);
+            let mut lines = out.lines().map(str::trim).filter(|l| !l.is_empty());
+            if lines.next() == Some("files") {
+                return Ok(lines.map(|p| Named::Local(PathBuf::from(p))).collect());
             }
             let bytes = std::fs::read(&tmp).map_err(|_| NOTHING.to_string());
             let _ = std::fs::remove_file(&tmp);
@@ -888,7 +944,7 @@ mod tests {
             }
         };
         assert_eq!(
-            clipboard(None, true, env(&[("WAYLAND_DISPLAY", "wayland-0")])),
+            clipboard(None, true, false, env(&[("WAYLAND_DISPLAY", "wayland-0")])),
             Some(Clipboard::Wsl),
             "WSLg sets WAYLAND_DISPLAY too"
         );
@@ -896,12 +952,13 @@ mod tests {
             clipboard(
                 None,
                 false,
+                false,
                 env(&[("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0")])
             ),
             Some(Clipboard::Wayland)
         );
         assert_eq!(
-            clipboard(None, false, env(&[("DISPLAY", ":0")])),
+            clipboard(None, false, false, env(&[("DISPLAY", ":0")])),
             Some(Clipboard::X11)
         );
         assert_eq!(
@@ -912,9 +969,14 @@ mod tests {
             read_argv(&Clipboard::X11, "TARGETS"),
             s(&["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"])
         );
-        assert_eq!(clipboard(None, false, env(&[])), None);
+        assert_eq!(clipboard(None, false, false, env(&[])), None);
         assert_eq!(
-            clipboard(Some("pngpaste -"), true, env(&[("DISPLAY", ":0")])),
+            clipboard(None, false, true, env(&[("DISPLAY", ":0")])),
+            Some(Clipboard::Mac),
+            "a Mac with XQuartz still has the pasteboard"
+        );
+        assert_eq!(
+            clipboard(Some("pngpaste -"), true, false, env(&[("DISPLAY", ":0")])),
             Some(Clipboard::Shell("pngpaste -".into()))
         );
     }

@@ -88,21 +88,16 @@ impl App {
     }
 
     /// Copy the link to the clipboard, or open it. Opening runs `xdg-open`
-    /// where the server runs, which is only where you are when the terminal
+    /// (`open` on macOS) where the server runs, which is only where you are when the terminal
     /// did not come over SSH; from afar it copies instead and says why.
     fn pick_link(&mut self, target: &str, open: bool, pane: PaneId) {
         if open && !self.client_remote {
             let spawned = std::process::Command::new("sh")
-                .args([
-                    "-c",
-                    "setsid xdg-open \"$1\" >/dev/null 2>&1 </dev/null &",
-                    "sh",
-                    target,
-                ])
+                .args(["-c", crate::os::OPEN_URL_SH, "sh", target])
                 .status();
             self.status = Some(match spawned {
                 Ok(s) if s.success() => format!("opening {target}"),
-                _ => format!("could not run xdg-open for {target}"),
+                _ => format!("could not run {} for {target}", crate::os::OPEN_URL_PROGRAM),
             });
             return;
         }

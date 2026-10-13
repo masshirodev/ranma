@@ -309,8 +309,8 @@ mem) by hand on a Mac.
   module, Linux unchanged
 - [ ] The macOS half: foreground program, command line and directory from
   libproc, cpu and mem from the host, child exit from kqueue
-- [ ] Paths: sockets under the 104-byte `sun_path` limit, the config in
+- [x] Paths: sockets under the 104-byte `sun_path` limit, the config in
   `~/.config/ranma` rather than `~/Library/Application Support`
-- [ ] Defaults: `open` for links, an image paste command
+- [x] Defaults: `open` for links, an image paste command
 - [ ] CI and release: macOS builds (arm64 and x86_64), the smoke test there,
   macOS tarballs in the release and the tap

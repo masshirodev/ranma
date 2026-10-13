@@ -346,9 +346,7 @@ pub fn valid_name(name: &str) -> bool {
 
 /// Where `save_layout` writes: state, not configuration.
 pub fn dir() -> Option<PathBuf> {
-    dirs::state_dir()
-        .or_else(|| dirs::home_dir().map(|h| h.join(".local").join("state")))
-        .map(|d| d.join("ranma").join("layouts"))
+    crate::os::state_home().map(|d| d.join("ranma").join("layouts"))
 }
 
 fn path_in(dir: &Path, name: &str) -> PathBuf {

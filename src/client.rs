@@ -75,7 +75,7 @@ pub fn choose(servers: &[Status], name: Option<&str>) -> (String, bool) {
 }
 
 fn log_path(name: &str) -> Option<PathBuf> {
-    dirs::cache_dir().map(|d| d.join("ranma").join(format!("server-{name}.log")))
+    crate::os::cache_home().map(|d| d.join("ranma").join(format!("server-{name}.log")))
 }
 
 /// Start `ranma server --name NAME` in a session of its own, so it outlives this

@@ -152,8 +152,8 @@ ranma.set {
   -- first and the paths there typed instead, so the program across can open
   -- them. A chain of ranmas over ssh passes them along, each one uploading to
   -- the next. image_command: what paste_image (leader v) reads an image off
-  -- the clipboard with, a shell command writing PNG to stdout ("pngpaste -"
-  -- on macOS), instead of the platform's: powershell.exe under WSL, wl-paste
+  -- the clipboard with, a shell command writing PNG to stdout, instead of
+  -- the platform's: powershell.exe under WSL, osascript on macOS, wl-paste
   -- on Wayland, xclip on X11, which read copied files first.
   paste = {
     upload = true,
@@ -338,7 +338,7 @@ ranma.bind("/", "search")
 ranma.bind("[", "copy_mode")
 -- Links: o labels every link on the focused pane's screen (URLs in the text
 -- and OSC 8 links); type a label to copy that link, or type it in capitals
--- to open it with xdg-open. Esc cancels.
+-- to open it with xdg-open (open on macOS). Esc cancels.
 ranma.bind("o", "hints")
 -- v pastes the files copied on the clipboard (in a file manager), else its
 -- image, as paths: into a pane running ssh they are uploaded to the far side
