@@ -268,13 +268,7 @@ pub fn spawn_checker(tx: Sender<AppEvent>, interval: Duration) {
 /// first update in a pane shows the clone too.
 pub fn install_command(source: &Source) -> String {
     let dir = shell_quote(&source.dir().to_string_lossy());
-    let clone = match source {
-        Source::Managed(_) => format!(
-            "{{ [ -e {dir} ] || git clone {url} {dir}; }} && ",
-            url = shell_quote(REPO_URL)
-        ),
-        Source::Override(_) => String::new(),
-    };
+    let clone = clone_step(source);
     format!(
         "{clone}{{ [ -d {dir}/.git ] || {{ echo {dir}' is not a git checkout; move it aside.'; false; }}; }} \
          && cd {dir} && git pull --ff-only && ./install.sh; status=$?; echo; \
@@ -282,6 +276,173 @@ pub fn install_command(source: &Source) -> String {
          in place (anything that could not is named above).'; \
          else echo \"Update failed (exit $status); nothing was replaced.\"; fi"
     )
+}
+
+fn clone_step(source: &Source) -> String {
+    let dir = shell_quote(&source.dir().to_string_lossy());
+    match source {
+        Source::Managed(_) => format!(
+            "{{ [ -e {dir} ] || git clone {url} {dir}; }} && ",
+            url = shell_quote(REPO_URL)
+        ),
+        Source::Override(_) => String::new(),
+    }
+}
+
+// ---- an update in the background (`leader U`) ----------------------------------------
+//
+// `leader U` runs the update out of sight and says how it goes in a toast. The
+// job outlives the server that started it in one way: `install.sh` ends with
+// `ranma upgrade --all`, which exec's that very server into the new build, and
+// the new image knows nothing of the old one's threads or pipes. So the job
+// talks only through files in the cache directory: its output goes to a log,
+// its step to `update.phase`, and its exit status to `update.status`, written
+// last. `update.running` names the server that started it and the job's pid,
+// so the server that comes back from the exec (the same pid, so still the
+// job's parent) picks the toast up again, and no other server does.
+
+/// The files of a background update, in `dir` (`~/.cache/ranma`).
+#[derive(Debug, Clone)]
+pub struct JobFiles {
+    pub dir: PathBuf,
+}
+
+/// How a background update is going.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Progress {
+    /// Still running, at this step (`clone`, `pull`, `build`).
+    Running(String),
+    /// Finished with this exit status.
+    Done(i32),
+}
+
+impl JobFiles {
+    pub fn new() -> Option<JobFiles> {
+        dirs::cache_dir().map(|d| JobFiles {
+            dir: d.join("ranma"),
+        })
+    }
+
+    pub fn log(&self) -> PathBuf {
+        self.dir.join("update.log")
+    }
+    fn marker(&self) -> PathBuf {
+        self.dir.join("update.running")
+    }
+    fn phase(&self) -> PathBuf {
+        self.dir.join("update.phase")
+    }
+    fn status(&self) -> PathBuf {
+        self.dir.join("update.status")
+    }
+    fn commit(&self) -> PathBuf {
+        self.dir.join("update.commit")
+    }
+
+    /// The commit a finished update installed, short.
+    pub fn installed(&self) -> Option<String> {
+        let c = std::fs::read_to_string(self.commit()).ok()?;
+        Some(c.trim().to_string()).filter(|c| !c.is_empty())
+    }
+
+    /// The shell script the job runs: `install_command`'s steps, each saying
+    /// where it is, and the status written last (renamed into place, so a
+    /// reader never sees half of it).
+    fn script(&self, source: &Source) -> String {
+        let q = |p: PathBuf| shell_quote(&p.to_string_lossy());
+        let (phase, status, commit) = (q(self.phase()), q(self.status()), q(self.commit()));
+        let dir = shell_quote(&source.dir().to_string_lossy());
+        format!(
+            "echo clone > {phase}; {{ {clone}{{ [ -d {dir}/.git ] || {{ echo {dir}' is not a git checkout; move it aside.'; false; }}; }} \
+             && cd {dir} && echo pull > {phase} && git pull --ff-only \
+             && echo build > {phase} && ./install.sh; }}; s=$?; \
+             git -C {dir} rev-parse --short HEAD > {commit} 2>/dev/null; \
+             echo $s > {status}.tmp && mv {status}.tmp {status}",
+            clone = clone_step(source),
+        )
+    }
+
+    /// Starts the update in the background for the server `server`, and
+    /// returns the job's pid. Its output goes to the log, replacing the last.
+    pub fn start(&self, source: &Source, server: &str) -> Result<u32> {
+        std::fs::create_dir_all(&self.dir)
+            .with_context(|| format!("creating {}", self.dir.display()))?;
+        for f in [self.phase(), self.status(), self.commit(), self.marker()] {
+            let _ = std::fs::remove_file(f);
+        }
+        let log = std::fs::File::create(self.log())
+            .with_context(|| format!("creating {}", self.log().display()))?;
+        let child = {
+            use std::os::unix::process::CommandExt;
+            let mut cmd = Command::new("sh");
+            for v in GIT_REDIRECTS {
+                cmd.env_remove(v);
+            }
+            cmd.arg("-c")
+                .arg(self.script(source))
+                .stdin(Stdio::null())
+                .stdout(log.try_clone()?)
+                .stderr(log)
+                // Its own group: a signal meant for the server's foreground
+                // never reaches the build.
+                .process_group(0)
+                .spawn()
+                .context("starting the update")?
+        };
+        let pid = child.id();
+        // Reaped by pid when it finishes (`reap`), maybe by the next image.
+        std::mem::forget(child);
+        std::fs::write(self.marker(), format!("{server}\n{pid}\n"))
+            .with_context(|| format!("writing {}", self.marker().display()))?;
+        Ok(pid)
+    }
+
+    /// The job this server started, if one is still on record: its pid.
+    pub fn owned_by(&self, server: &str) -> Option<u32> {
+        let text = std::fs::read_to_string(self.marker()).ok()?;
+        let mut lines = text.lines();
+        (lines.next()? == server)
+            .then(|| lines.next()?.trim().parse().ok())
+            .flatten()
+    }
+
+    pub fn progress(&self) -> Progress {
+        if let Ok(s) = std::fs::read_to_string(self.status())
+            && let Ok(code) = s.trim().parse()
+        {
+            return Progress::Done(code);
+        }
+        let phase = std::fs::read_to_string(self.phase()).unwrap_or_default();
+        Progress::Running(phase.trim().to_string())
+    }
+
+    /// The job is over: forget it (the log stays, for reading).
+    pub fn clear(&self) {
+        for f in [self.phase(), self.status(), self.commit(), self.marker()] {
+            let _ = std::fs::remove_file(f);
+        }
+    }
+}
+
+/// Whether a process with this pid exists.
+pub fn alive(pid: u32) -> bool {
+    // SAFETY: signal 0 only checks that the process exists.
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
+/// Collects a finished job, so it does not stay a zombie. Not our child (a
+/// server started afresh since) is fine: there is nothing to collect.
+pub fn reap(pid: u32) {
+    let wait = move |flags| {
+        let mut status = 0;
+        // SAFETY: waiting on one pid of ours.
+        unsafe { libc::waitpid(pid as libc::pid_t, &mut status, flags) }
+    };
+    // The status is written just before the shell exits: if it has not yet,
+    // a thread waits the last moment out rather than the UI.
+    if wait(libc::WNOHANG) == 0 {
+        std::thread::spawn(move || wait(0));
+    }
 }
 
 fn shell_quote(s: &str) -> String {
@@ -324,6 +485,75 @@ mod tests {
 
     fn head(dir: &Path) -> String {
         git(dir, &["rev-parse", "HEAD"]).unwrap()
+    }
+
+    #[test]
+    fn a_background_update_reports_its_steps_and_status_through_files() {
+        let root = std::env::temp_dir().join(format!("ranma-job-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (up, co) = (root.join("upstream"), root.join("checkout"));
+        std::fs::create_dir_all(&up).unwrap();
+        run(&up, &["init", "-q", "-b", "main"]);
+        std::fs::write(
+            up.join("install.sh"),
+            "#!/bin/sh\necho built\nexit ${STATUS:-0}\n",
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let f = up.join("install.sh");
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        run(&up, &["add", "install.sh"]);
+        run(&up, &["commit", "-q", "-m", "one"]);
+        run(&root, &["clone", "-q", up.to_str().unwrap(), "checkout"]);
+        let files = JobFiles {
+            dir: root.join("cache"),
+        };
+        let source = Source::Override(co.clone());
+
+        let wait = |files: &JobFiles| {
+            for _ in 0..200 {
+                if let Progress::Done(c) = files.progress() {
+                    return c;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            panic!("the job never finished");
+        };
+        let pid = files.start(&source, "work").unwrap();
+        assert_eq!(files.owned_by("work"), Some(pid));
+        assert_eq!(
+            files.owned_by("other"),
+            None,
+            "only its own server picks it up"
+        );
+        assert_eq!(wait(&files), 0);
+        reap(pid);
+        let installed = files
+            .installed()
+            .expect("the installed commit is on record");
+        assert!(
+            head(&co).starts_with(&installed),
+            "{installed} is the checkout's HEAD"
+        );
+        let log = std::fs::read_to_string(files.log()).unwrap();
+        assert!(log.contains("built"), "the output is in the log: {log:?}");
+        files.clear();
+        assert_eq!(files.owned_by("work"), None);
+        assert_eq!(files.progress(), Progress::Running(String::new()));
+
+        // A failing install is a status, and the log keeps what it said.
+        std::fs::write(co.join("install.sh"), "#!/bin/sh\necho broke\nexit 3\n").unwrap();
+        let pid = files.start(&source, "work").unwrap();
+        assert_eq!(wait(&files), 3);
+        reap(pid);
+        assert!(
+            std::fs::read_to_string(files.log())
+                .unwrap()
+                .contains("broke")
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

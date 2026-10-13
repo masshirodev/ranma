@@ -74,6 +74,49 @@ impl Toasts {
         }
     }
 
+    /// A toast that stays until it is changed or dismissed (a job's
+    /// progress): its id, for `set`.
+    pub fn push_sticky(&mut self, text: impl Into<String>, now: Instant) -> u64 {
+        // A day stands in for "until changed": the job changes it long before.
+        self.push(text, Level::Normal, Duration::from_secs(86_400), now);
+        self.next_id
+    }
+
+    /// Change a toast in place: its text, its level, and how long it has
+    /// left from now. False if it is gone (dismissed, or pushed out).
+    pub fn set(
+        &mut self,
+        id: u64,
+        text: impl Into<String>,
+        level: Level,
+        timeout: Duration,
+        now: Instant,
+    ) -> bool {
+        let Some(t) = self.list.iter_mut().find(|t| t.id == id) else {
+            return false;
+        };
+        t.text = text.into();
+        t.level = level;
+        t.expires = now + timeout;
+        true
+    }
+
+    /// The id the last push got.
+    pub fn last_id(&self) -> u64 {
+        self.next_id
+    }
+
+    /// Dismiss the toasts whose text starts with `prefix`; true if any went.
+    pub fn dismiss_text_prefix(&mut self, prefix: &str) -> bool {
+        let before = self.list.len();
+        self.list.retain(|t| !t.text.starts_with(prefix));
+        self.list.len() != before
+    }
+
+    pub fn contains(&self, id: u64) -> bool {
+        self.list.iter().any(|t| t.id == id)
+    }
+
     /// Drop expired toasts; true if any went.
     pub fn expire(&mut self, now: Instant) -> bool {
         let before = self.list.len();

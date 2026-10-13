@@ -62,7 +62,7 @@ Quit server NAME and everything in it, without asking.
 Move a server (the one this runs in, when no name is given) or all of them to the installed build \fBwithout closing anything\fR: shells, panes, scrollback and the terminal attached all stay. \fBinstall.sh\fR does \fB\-\-all\fR after every good install.
 .TP
 \fBranma update\fR / \fB\-\-check\fR
-Pull ranma's source and install it (\fB\-\-check\fR only says how far behind it is). \fBleader U\fR does the same in a floating pane. See Updating\fR.
+Pull ranma's source and install it (\fB\-\-check\fR only says how far behind it is). \fBleader U\fR does the same in the background, with a toast. See Updating\fR.
 .TP
 \fBranma \-\-standalone\fR
 No server: ranma in this terminal only, ending with it.
@@ -84,6 +84,15 @@ need not be anywhere in particular: a binary built in one place and copied to
 another machine, or a checkout moved after installing, updates all the same.
 An update is that clone's \fBgit pull \-\-ff\-only && ./install.sh\fR; servers move to
 the new build in place.
+.PP
+\fBleader U\fR runs it out of sight: a toast shows a spinner, the step (pulling,
+building) and how long it has taken, and stays until it is done. Your server
+moves to the new build partway through and the toast carries on. It ends as
+\fBranma updated to <commit>\fR, or, in red, \fBranma update failed\fR; a click on the
+failed one opens the log (\fB~/.cache/ranma/update.log\fR, kept until the next
+update) in a floating pane. Clicking the running toast away does not stop the
+update, and it comes back on the next spinner frame, since it is the only sign
+of the update. \fBranma update\fR in a shell prints the same steps where you ran it.
 .PP
 \fBRANMA_SOURCE_DIR=/path/to/checkout ranma update\fR pulls and installs from
 another checkout instead, to try a branch not pushed yet. It must be a ranma

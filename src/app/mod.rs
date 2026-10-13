@@ -46,6 +46,7 @@ mod settings;
 mod snapshots;
 mod switch;
 mod touch;
+mod updating;
 mod watch;
 
 pub use touch::{ButtonState, SheetLayout};
@@ -290,6 +291,12 @@ pub struct App {
     drop_preview: Option<(PaneId, Dir)>,
     /// The source has commits this binary lacks (see `update`).
     update_available: Option<crate::update::Behind>,
+    /// A `leader U` running in the background (see `updating`).
+    update_job: Option<updating::UpdateJob>,
+    /// The failed update's toast and its log, opened by a click on it.
+    update_log: Option<(u64, std::path::PathBuf)>,
+    /// This server's name (`None` standalone), for what it leaves on disk.
+    pub server_name: Option<String>,
     /// The pane holding a mouse selection, cleared by the next click or key.
     selection_pane: Option<PaneId>,
     /// The last left click, for double and triple clicks: when, where, how many.
@@ -478,6 +485,9 @@ impl App {
             toasts: Default::default(),
             drop_preview: None,
             update_available: None,
+            update_job: None,
+            update_log: None,
+            server_name: None,
             layouts_dir: crate::layouts::dir(),
             snapshots: None,
             snapshot_due: None,
@@ -2111,6 +2121,7 @@ impl App {
                 .find(|(_, r, _)| r.contains(m.column, m.row))
                 .map(|(t, _, _)| t.id)
         {
+            self.update_toast_clicked(id);
             self.toasts.dismiss(id);
             self.dirty = true;
             return;
@@ -2970,33 +2981,12 @@ impl App {
             }
             Action::WorkspaceSwitcher => self.open_workspace_switcher(),
             Action::Update => {
-                // In a float, so the pull and the build can be watched, and the
-                // pane stays until a key is pressed so the result can be read.
+                // Out of sight, with a toast saying how it goes (see `updating`).
                 if let Some(by) = crate::update::PACKAGED {
                     self.status = Some(crate::update::packaged_message(by));
                     return;
                 }
-                let source = match crate::update::Source::current() {
-                    Ok(s) => s,
-                    Err(e) => {
-                        self.status = Some(format!("update failed: {e:#}"));
-                        return;
-                    }
-                };
-                let cmd = format!(
-                    "{}; printf '\\npress a key to close'; read -rsn1 _",
-                    crate::update::install_command(&source)
-                );
-                match self.open_pane_at(Some(&cmd), None, None) {
-                    Ok(id) => {
-                        if !self.scratch_shown {
-                            self.toggle_floating_pane(id);
-                        }
-                        self.rename_pane(id, "ranma update");
-                        self.update_available = None;
-                    }
-                    Err(e) => self.status = Some(format!("update failed: {e:#}")),
-                }
+                self.start_update();
             }
             Action::CycleFloats => {
                 if self.active_mut().cycle_floats().is_some() {
@@ -3940,6 +3930,7 @@ impl App {
             .chain(self.hover_due)
             .chain(self.screen_deadline())
             .chain(self.watch_due)
+            .chain(self.update_due())
             .min()
     }
 
@@ -4162,6 +4153,7 @@ impl App {
         if self.snapshot_due.is_some_and(|t| t <= now) {
             self.write_snapshot();
         }
+        self.update_tick(now);
         if self.toasts.expire(now) {
             self.dirty = true;
         }
