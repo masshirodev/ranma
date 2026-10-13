@@ -1629,6 +1629,28 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
     }
 }
 
+/// What `ranma.has` answers true for: features a plugin may need to test
+/// for, named once and never removed before 1.0 (DESIGN.md, "What a release
+/// promises not to break"). A new feature a plugin could depend on adds its
+/// name here, and to CONFIG.md's table, in the same change.
+pub const CAPABILITIES: &[&str] = &[
+    "border.gradient",
+    "hook.before_close",
+    "hook.float_change",
+    "hook.layout_change",
+    "hook.pane_resize",
+    "hook.workspace_rename",
+    "module.nested",
+    "mouse",
+    "pane.style",
+    "placement",
+    "rule.group",
+    "rule.match",
+    "rule.style",
+    "theme.palette",
+    "theme.roles",
+];
+
 fn install_api(
     lua: &Lua,
     config_dir: Option<&Path>,
@@ -1639,6 +1661,10 @@ fn install_api(
 ) -> mlua::Result<()> {
     let ranma = lua.create_table()?;
     ranma.set("version", env!("CARGO_PKG_VERSION"))?;
+    ranma.set(
+        "has",
+        lua.create_function(|_, name: String| Ok(CAPABILITIES.contains(&name.as_str())))?,
+    )?;
     if let Some(dir) = config_dir {
         ranma.set("config_dir", dir.display().to_string())?;
     }
@@ -3604,6 +3630,27 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn ranma_has_names_a_capability_and_nothing_else() {
+        with_user(
+            r#"
+            assert(ranma.has("module.nested"))
+            assert(ranma.has("hook.before_close"))
+            assert(ranma.has("nope") == false)
+            "#,
+        )
+        .unwrap();
+        // A hook capability names an event this build has.
+        for c in CAPABILITIES.iter().filter_map(|c| c.strip_prefix("hook.")) {
+            assert!(EVENTS.iter().any(|(n, _)| *n == c), "no event `{c}`");
+        }
+        // CONFIG.md's table is the list a plugin author reads.
+        let doc = include_str!("../doc/CONFIG.md");
+        for c in CAPABILITIES {
+            assert!(doc.contains(&format!("| `{c}` |")), "CONFIG.md lacks `{c}`");
+        }
     }
 
     #[test]

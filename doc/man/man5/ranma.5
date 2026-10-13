@@ -2673,6 +2673,66 @@ end)
 \fBranma.version\fR is the ranma version; \fBranma.config_dir\fR the directory the config
 was read from. The Lua standard library is fully available — the config is your own
 code, not a sandbox.
+.PP
+\fBranma.has(name)\fR is true when this build has a capability. A plugin asks it
+rather than comparing \fBranma.version\fR, which says nothing useful about a
+\fBranma\-git\fR build between releases. \fBranma.has\fR itself is new in 0.3.0, so a
+plugin that may meet an older ranma checks that it exists first:
+.PP
+.RS 4
+.nf
+local nested = ranma.has and ranma.has("module.nested")
+ranma.module("branch", { lua = branch, nested = nested and "hide" or nil })
+.fi
+.RE
+.PP
+A name is never removed before 1.0. An unknown name is simply false, so check
+the spelling against this table:
+.TP
+\fBborder.gradient\fR
+\fBcolors.border_*_gradient\fR and \fBborder.gradient_angle\fR
+.TP
+\fBhook.before_close\fR
+the \fBbefore_close\fR event, whose handler can keep a pane
+.TP
+\fBhook.float_change\fR
+the \fBfloat_change\fR event
+.TP
+\fBhook.layout_change\fR
+the \fBlayout_change\fR event
+.TP
+\fBhook.pane_resize\fR
+the \fBpane_resize\fR event
+.TP
+\fBhook.workspace_rename\fR
+the \fBworkspace_rename\fR event
+.TP
+\fBmodule.nested\fR
+\fBranma.module\fR's \fBnested\fR option (\fBfollow\fR, \fBown\fR, \fBhide\fR)
+.TP
+\fBmouse\fR
+\fBranma.mouse\fR binds
+.TP
+\fBpane.style\fR
+\fBpane:style\fR and a rule's \fBstyle\fR
+.TP
+\fBplacement\fR
+\fBranma.placement\fR policies
+.TP
+\fBrule.group\fR
+a window rule's \fBgroup\fR
+.TP
+\fBrule.match\fR
+window rules matching \fBprogram\fR, \fBcwd\fR and \fBhost\fR
+.TP
+\fBrule.style\fR
+a window rule's \fBstyle\fR
+.TP
+\fBtheme.palette\fR
+a theme's \fB[palette]\fR
+.TP
+\fBtheme.roles\fR
+a theme's \fB[roles.<name>]\fR
 .SH "THEMES"
 .PP
 A theme is \fB~/.config/ranma/themes/<name>.toml\fR, selected with
