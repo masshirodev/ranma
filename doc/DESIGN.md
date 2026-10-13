@@ -1211,8 +1211,10 @@ Where it departs from the handoff, and why:
   is not a match.
 - A user command (`ranma.command`) has no bound key but has a description:
   it goes after the argument hint, dim, where the key column would be empty.
-- Menus (the right-click pane and workspace menus) are the `key` variation
-  and still open at the pointer: the mock does not draw them.
+- Menus (the right-click pane and workspace menus) are the `key` variation,
+  still open at the pointer, and are as narrow as their entries rather than
+  44 wide: a launcher's width on a right-click menu covers what was clicked.
+  The mock does not draw them.
 - The questions keep their wording; only the answers moved to the footer.
   The restore question's are `↵ restore · r restore and run · esc not now`.
 
