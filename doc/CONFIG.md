@@ -305,6 +305,7 @@ sent them, which it is not asked to.
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
 | `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
 | `workspace_switcher` | The shown session's workspaces, filterable, the current one marked `●`, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers `new workspace: NAME`, which opens an empty one by that name. |
+| `choose_theme` | Every theme (the built-in and `~/.config/ranma/themes/*.toml`), the one in use marked `●`. Each is shown as the selection reaches it (arrows, the wheel, typing); `Enter` keeps it, writing `theme` to `settings.toml`, and `Esc` (or closing the picker any other way) puts the old one back. A theme that would not load says why on its row and is not shown. `leader y t`. |
 | `pane_menu` | The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (`leader x m`). Centred, or a sheet on a touch screen. |
 | `session_switcher` | The sessions, filterable, opened on the current one (marked `●`). A name that does not exist offers to create it; `Ctrl+R` renames the selected one. |
 | `new_session [name]` | Create a session and switch to it; without a name it is numbered. |

@@ -42,6 +42,8 @@ pub enum Target {
     NewWorkspace,
     /// The item at this index of a picker a plugin opened (`ranma.picker`).
     Lua(usize),
+    /// A theme, by name (`choose_theme`).
+    Theme(String),
 }
 
 /// What the palette shows, by the query's first character.
@@ -100,6 +102,8 @@ pub enum Kind {
     Buffers,
     /// A list a plugin opened (`ranma.picker`).
     Lua,
+    /// The themes (`choose_theme`): each shown as the selection reaches it.
+    Themes,
     /// A one-line prompt a plugin opened (`ranma.input`).
     LuaInput,
 }

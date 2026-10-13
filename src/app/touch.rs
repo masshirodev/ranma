@@ -616,6 +616,7 @@ impl App {
     pub(super) fn close_picker(&mut self) {
         self.picker = None;
         self.sheet_from = None;
+        self.end_theme_preview();
         self.dirty = true;
     }
 

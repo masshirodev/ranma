@@ -851,6 +851,31 @@ pub fn theme_dirs(config_dir: Option<&Path>) -> Vec<PathBuf> {
     config_dir.map(|d| d.join("themes")).into_iter().collect()
 }
 
+/// Every theme there is, by name: the built-in, then the files in the
+/// config's `themes/`, sorted. What the settings panel's `theme` cycles
+/// through and `choose_theme` lists.
+pub fn names(config_dir: Option<&Path>) -> Vec<String> {
+    let mut out = vec![DEFAULT_THEME_NAME.to_string()];
+    for dir in theme_dirs(config_dir) {
+        let mut found: Vec<String> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path();
+                if p.extension()? != "toml" {
+                    return None;
+                }
+                Some(p.file_stem()?.to_string_lossy().into_owned())
+            })
+            .filter(|n| !out.contains(n))
+            .collect();
+        found.sort();
+        out.extend(found);
+    }
+    out
+}
+
 fn builtin(name: &str) -> Option<&'static str> {
     (name == DEFAULT_THEME_NAME).then_some(DEFAULT_THEME_SRC)
 }
@@ -1111,6 +1136,18 @@ mod tests {
         assert_eq!(t.gaps.outer(), [3, 2, 1, 0]);
         let d = load("default", &[]).unwrap();
         assert_eq!(d.gaps.outer(), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn names_are_the_builtin_then_the_files_sorted() {
+        let dir = tmp_dir("names");
+        let themes = dir.join("themes");
+        std::fs::create_dir_all(&themes).unwrap();
+        for f in ["zeta.toml", "alpha.toml", "notes.txt"] {
+            std::fs::write(themes.join(f), "").unwrap();
+        }
+        assert_eq!(names(Some(&dir)), ["default", "alpha", "zeta"]);
+        assert_eq!(names(None), ["default"]);
     }
 
     #[test]

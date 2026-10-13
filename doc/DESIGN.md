@@ -1223,6 +1223,25 @@ in a `picker_match` role (it needs `fuzzy_score` to return positions), and a
 preview beside the pane and layout switchers on wide screens. The touch
 sheet is unchanged on purpose: big faces and the full slab suit a thumb.
 
+### A theme picker that shows each theme (2026-10-12)
+
+`choose_theme` (`leader y t`) lists every theme and shows each one as
+the selection reaches it: choosing a theme by its name alone is choosing
+blind, and the settings panel's `theme` row cycles through them one key
+press at a time, with everything else on the panel in the way. Decided:
+
+- **Shown, not saved, until Enter.** Moving loads the theme the way the
+  configuration does (the file, `settings.toml`'s `[theme]` over it) and
+  puts it in force; `Esc`, a click outside, or anything else that closes the
+  picker puts the one it opened on back. Enter writes `theme` to
+  `settings.toml`, as the settings panel would, so it survives a restart and
+  wins over `init.lua`'s `ranma.set { theme = ... }`, as every panel setting
+  does.
+- **A broken theme is listed with its error**, not hidden: it is a file you
+  have, and the error is the useful thing to know about it. It is never
+  shown or chosen.
+- The picker is the plain list variation, so it looks like every other.
+
 ### Copy mode is alacritty's vi mode
 
 alacritty_terminal already has a vi cursor independent of the program's, the
