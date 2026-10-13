@@ -65,6 +65,8 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
 
 3. The workflow runs `cargo test` and builds on both architectures, installs
    the packages in Docker on each (`packaging/test/run.sh`, `doc/TESTING.md`),
+   checks the x86_64 build against the latest release (`scripts/compat.sh`:
+   its config, a handover both ways, its client and server),
    and only then creates the release, with the version's CHANGELOG section
    as its notes. After it: the Pages site, crates.io and npm. The smoke
    test is not run again there: CI (`.github/workflows/ci.yml`) ran it on

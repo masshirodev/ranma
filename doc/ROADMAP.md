@@ -288,7 +288,7 @@ contract between two builds.
 
 - [x] Design: what a release promises not to break (semver before and after
   1.0, renames, the handover's version, plugin capability checks)
-- [ ] CI: the previous release against this build (its config, a handover
+- [x] CI: the previous release against this build (its config, a handover
   both ways, its client and server)
 - [x] Renamed names: an old config name read as its new one, with a warning
 - [x] `ranma.has(name)`: plugins ask for a capability, not a version

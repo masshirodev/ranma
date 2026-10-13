@@ -187,6 +187,35 @@ and private `XDG_RUNTIME_DIR`/`XDG_CACHE_HOME`, so its servers can never meet
 yours; it kills any it leaves on exit.
 About 15 seconds. Run it when a change touches `app`, `pane`, `render` or `input`.
 
+## Against the last release — `scripts/compat.sh`
+
+What an upgrade through a package manager does: a server and a config from the
+last release meet this build (DESIGN.md, "What a release promises not to
+break"). Nothing else tests it, because the smoke runs one build against
+itself. It downloads the latest release's x86_64 tarball with `gh` (or takes a
+binary as its argument), builds this tree (or takes `RANMA_NEW`), and checks,
+each in a private headless tmux with private runtime, config, cache and data
+dirs:
+
+| Step | Passes when | A failure means |
+| --- | --- | --- |
+| config | the release's `--dump-config` and `--dump-theme` pass this build's `--check-config`; warnings are printed and allowed | a name was renamed without an entry in `src/renames.rs`, or removed (a Breaking entry, on purpose) |
+| forward | a server the release started takes this build with `ranma upgrade`: same pid, a shell variable kept, `ranma ls` no longer saying "other build" | the handover's `VERSION` moved without a reader for the old one, or a field broke |
+| old client | the release's client attaches to this build's server, draws, and its typing reaches the pane | a frame or `Hello` change an older client cannot read |
+| back | the server goes back to the release's binary the same way, or, when the handover's format moved on, refuses with the server and its shell intact | a downgrade can lose a server |
+| new client | this build's client attaches to the release's server and types into it | a frame or `Hello` change an older server cannot read |
+
+The upgrades work as a package manager's do: the server runs a file at a
+fixed path, the new binary is moved over it, and `ranma upgrade` is asked. The
+build check is `ranma ls`, not the toast, because an earlier toast may still
+be on screen. With no release yet it says so and passes. About 20 seconds after
+the build.
+
+Run it before a release, and after any change to `app/upgrade.rs`,
+`proto.rs`, a name in the config, or the crossterm version (its event
+serialisation is the `K_EVENT` frame). It was checked to fail on a handover
+`VERSION` bumped with no reader for the old one.
+
 ## Git hooks — `.githooks/`
 
 The gate above, run by git. There is no husky
@@ -214,10 +243,13 @@ a hook cannot tell which a change touches. On a machine where CPU is scarce,
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull
 request, on ubuntu-22.04: `cargo fmt --check`, clippy with `-D warnings`,
-`cargo test --locked`, and the smoke test (tmux installed from apt). It is the
+`cargo test --locked`, the smoke test (tmux installed from apt), and
+`scripts/compat.sh` against the latest release. It is the
 hooks' gate for changes that did not come through these hooks: a
 contributor's pull request, or a push with a skip flag. The release workflow
-(`doc/RELEASING.md`) runs the tests again on the tagged commit.
+(`doc/RELEASING.md`) runs the tests again on the tagged commit, and its
+`compat` job runs `scripts/compat.sh` with the binary it is about to publish
+against the latest release, before anything is published.
 
 ## Packages — `packaging/test/`
 
