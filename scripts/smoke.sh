@@ -439,7 +439,7 @@ T send-keys -t s C-b; sleep 0.3; T send-keys -t s s; sleep 0.6
 T send-keys -t s "$BIN" Enter
 for _ in $(seq 1 40); do bar | grep -q ' S \[1' && break; sleep 0.25; done
 bar | grep -q ' S \[1' || fail "the outer bar does not show the scratchpad's ranma's workspaces ($(bar))"
-screen | head -n -1 | grep -q '│ 1[: ]' && fail "the ranma in the scratchpad draws its own bar"
+screen | sed '$d' | grep -q '│ 1[: ]' && fail "the ranma in the scratchpad draws its own bar"
 # Hidden (the outer leader: keys go to the inner now), S counts what is inside.
 T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s s
 for _ in $(seq 1 20); do bar | grep -q ' S\[1\] ' && break; sleep 0.25; done
@@ -479,12 +479,12 @@ for _ in $(seq 1 20); do bar | grep -q 'where:far' && break; sleep 0.25; done
 bar | grep -q 'where:far' || fail "the outer bar does not show the inner's module ($(bar))"
 bar | grep -q 'where:desk' && fail "the outer bar shows its own module beside the inner's ($(bar))"
 rm "$CFG/plugin/where.lua"; sleep 0.5
-screen | head -n -1 | grep -q '│ 1[: ]' && fail "the inner ranma still draws its own bar"
+screen | sed '$d' | grep -q '│ 1[: ]' && fail "the inner ranma still draws its own bar"
 # The terminal window losing focus is not the inner losing the outer's focus:
 # the outer still shows its workspaces, so the inner must not draw its bar
 # over its bottom row too (two bars, one above the other).
 T send-keys -t s -l $'\e[O'; sleep 0.6
-screen | head -n -1 | grep -q '│ 1[: ]' && fail "the window losing focus made the inner ranma draw a second bar"
+screen | sed '$d' | grep -q '│ 1[: ]' && fail "the window losing focus made the inner ranma draw a second bar"
 bar | grep -q ' \[1' || fail "the outer bar stopped showing the inner's workspaces when the window lost focus ($(bar))"
 T send-keys -t s -l $'\e[I'; sleep 0.4
 # The outer moved away (its own leader, then 2): the holder collapses to
@@ -509,7 +509,7 @@ T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s s
 for _ in $(seq 1 20); do bar | grep -q ' S ' && break; sleep 0.25; done
 sleep 0.6
 screen | grep -q '^│╭' && fail "the outer framed the inner ranma under its scratchpad"
-screen | head -n -1 | grep -q '│ 1[: ]' && fail "the outer's scratchpad made the inner ranma draw its bar"
+screen | sed '$d' | grep -q '│ 1[: ]' && fail "the outer's scratchpad made the inner ranma draw its bar"
 T send-keys -t s exit Enter
 for _ in $(seq 1 20); do bar | grep -q ' \[1' && break; sleep 0.25; done
 bar | grep -q ' \[1' || fail "closing the scratchpad did not give the inner its workspaces back ($(bar))"
@@ -530,10 +530,10 @@ T send-keys -t s Escape; sleep 0.3
 # with them, and the inner still draws no bar of its own (the compact label,
 # doc/briefs/done/UNFOCUSED_BAR.md). Closing the pane gives it all back.
 T send-keys -t s C-M-b; sleep 0.3; T send-keys -t s t
-label() { screen | head -n -1 | grep -E ' \[1[^]]*\] ─╯'; }
+label() { screen | sed '$d' | grep -E ' \[1[^]]*\] ─╯'; }
 for _ in $(seq 1 20); do label >/dev/null && break; sleep 0.25; done
 label >/dev/null || fail "the unfocused inner ranma's border carries no label ($(screen | tail -3))"
-screen | head -n -1 | grep -q '│ 1[: ]' && fail "the unfocused inner ranma drew its own bar"
+screen | sed '$d' | grep -q '│ 1[: ]' && fail "the unfocused inner ranma drew its own bar"
 # A click on its workspace in the label focuses the inner pane (and goes
 # there), never starting a resize of the border it sits on.
 LINE=$(screen | grep -n -E ' \[1[^]]*\] ─╯' | head -1)
