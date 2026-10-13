@@ -1014,6 +1014,7 @@ impl App {
             .map(|v| (v.id, v.inner))
             .chain(frame.hidden.iter().copied())
             .collect();
+        let mut resized = Vec::new();
         for (id, inner) in sizes {
             // Panes being resized by the mouse keep their PTY size until the
             // button is released: one resize, not one per mouse event.
@@ -1022,12 +1023,21 @@ impl App {
                 Some(Drag::Edge { .. }) => continue,
                 _ => {}
             }
-            if let Some(p) = self.panes.get_mut(&id) {
-                p.resize(Size {
+            if let Some(p) = self.panes.get_mut(&id)
+                && p.resize(Size {
                     cols: inner.w,
                     rows: inner.h,
-                });
+                })
+            {
+                resized.push((id, p.size));
             }
+        }
+        for (id, size) in resized {
+            self.emit(HookEvent::PaneResize, |t| {
+                t.set("pane", id)?;
+                t.set("cols", size.cols)?;
+                t.set("rows", size.rows)
+            });
         }
         // A peek is on screen too: its output is worth a frame.
         self.visible = frame
@@ -2854,7 +2864,9 @@ impl App {
                 }
             }
             Action::ClosePane => {
-                if let Some(id) = focused {
+                if let Some(id) = focused
+                    && self.close_allowed(id)
+                {
                     self.close_pane(id);
                 }
             }
@@ -3893,6 +3905,41 @@ impl App {
     }
 
     /// Call every hook for `event` with a payload table filled in by `fill`.
+    /// Ask the `before_close` hooks: one returning `false` keeps the pane.
+    /// One that errors does not: a broken hook must not trap a pane.
+    fn close_allowed(&mut self, id: PaneId) -> bool {
+        let Some(keys) = self.config.hooks.get(&HookEvent::BeforeClose) else {
+            return true;
+        };
+        let funcs: Vec<Function> = keys
+            .iter()
+            .filter_map(|k| self.config.lua.registry_value(k).ok())
+            .collect();
+        let workspace = self.locate(id);
+        let (title, program) = self.panes.get(&id).map_or((String::new(), None), |p| {
+            (p.label().to_string(), p.program())
+        });
+        for f in funcs {
+            let Ok(t) = self.config.lua.create_table() else {
+                continue;
+            };
+            let filled = t
+                .set("pane", id)
+                .and_then(|()| t.set("workspace", workspace))
+                .and_then(|()| t.set("title", title.clone()))
+                .and_then(|()| t.set("program", program.clone()));
+            if filled.is_err() {
+                continue;
+            }
+            if let Some(Value::Boolean(false)) = self.call_lua(|_| f.call::<Value>(t)) {
+                self.status
+                    .get_or_insert_with(|| "a before_close hook kept the pane".into());
+                return false;
+            }
+        }
+        true
+    }
+
     fn emit(&mut self, event: HookEvent, fill: impl FnOnce(&Table) -> mlua::Result<()>) {
         let Some(keys) = self.config.hooks.get(&event) else {
             return;
@@ -4917,6 +4964,67 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn the_new_hooks_fire_and_before_close_can_keep_a_pane() {
+        let mut a = app(Some(
+            r#"
+            seen = {}
+            local function note(name) return function(e)
+              seen[#seen + 1] = name .. ":" .. tostring(e.pane or e.workspace)
+                .. ":" .. tostring(e.layout or e.name or e.floating or e.cols or "")
+            end end
+            for _, ev in ipairs { "layout_change", "float_change", "workspace_rename", "pane_resize" } do
+              ranma.on(ev, note(ev))
+            end
+            ranma.on("before_close", function(e) return e.pane ~= 2 end)
+            "#,
+        ));
+        for id in [1, 2] {
+            with_pane(&mut a, id);
+        }
+        let seen = |a: &App| -> Vec<String> {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        let clear = |a: &App| {
+            a.config.lua.load("seen = {}").exec().unwrap();
+        };
+        a.run_action(Action::WorkspaceLayout(Some(
+            crate::action::LayoutPick::Named(Layout::Master),
+        )));
+        assert!(
+            seen(&a).contains(&"layout_change:1:master".to_string()),
+            "{:?}",
+            seen(&a)
+        );
+        clear(&a);
+        a.rename_workspace(1, "code");
+        a.rename_workspace(1, "code");
+        assert_eq!(
+            seen(&a)
+                .iter()
+                .filter(|s| s.starts_with("workspace_rename"))
+                .count(),
+            1,
+            "a rename to the same name is no event: {:?}",
+            seen(&a)
+        );
+        clear(&a);
+        a.toggle_floating_pane(2);
+        assert!(
+            seen(&a).contains(&"float_change:2:true".to_string()),
+            "{:?}",
+            seen(&a)
+        );
+        // before_close: 2 is kept, 1 is not.
+        a.workspaces.get_mut(&1).unwrap().focused = Some(2);
+        a.run_action(Action::ClosePane);
+        assert!(a.workspaces[&1].contains(2), "the hook kept pane 2");
+        a.workspaces.get_mut(&1).unwrap().focused = Some(1);
+        a.run_action(Action::ClosePane);
+        assert!(!a.workspaces[&1].contains(1), "pane 1 closed");
     }
 
     #[test]

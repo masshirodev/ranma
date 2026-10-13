@@ -2553,6 +2553,21 @@ nothing; runs in the newly loaded config
 \fBmodule_shown\fR, \fBmodule_hidden\fR
 \fBname\fR — a bar module came on screen or went off it: placed in the bar with a bar showing, or not (a profile switch, a reload, the bar hidden). A module that fetches only while it is seen starts and stops on these, with \fBranma.refresh_module\fR to show what it fetched, instead of keeping an interval to find out. A new configuration hears every module on screen as shown.
 .TP
+\fBlayout_change\fR
+\fBworkspace\fR, \fBlayout\fR, \fBprevious\fR (names) — \fBworkspace_layout\fR gave a workspace a layout of its own, or the setting back.
+.TP
+\fBpane_resize\fR
+\fBpane\fR, \fBcols\fR, \fBrows\fR — a pane's terminal changed size: once the size settled (a mouse drag says it when the button is released), only for panes whose size really changed. A host resize changes every pane on screen, so keep it cheap.
+.TP
+\fBfloat_change\fR
+\fBpane\fR, \fBfloating\fR — a pane floated, or was tiled again.
+.TP
+\fBworkspace_rename\fR
+\fBworkspace\fR, \fBname\fR (\fBnil\fR when cleared), \fBprevious\fR — a workspace was named, renamed or its name cleared; not when the name stays the same.
+.TP
+\fBbefore_close\fR
+\fBpane\fR, \fBworkspace\fR, \fBtitle\fR, \fBprogram\fR — the close key, the pane menu or a toolbar button is about to close a pane. \fBReturn \fBfalse\fB to keep it\fR (a picker asking, say, for a pane still running something); anything else lets it close, and so does a hook that errors, so a broken hook never traps a pane. Not asked when a program ends, on \fBpane:close()\fR, on quit or on detach. Within a bind's time budget.
+.TP
 \fBuser:<name>\fR
 whatever \fBranma.emit(name, data)\fR passed — a plugin's own event; see below
 .PP

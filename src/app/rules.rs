@@ -214,7 +214,7 @@ impl App {
         let area = self.workspace_area();
         let gap = self.config.theme.gaps.inner;
         let ws = self.active_mut();
-        match ws.take(id) {
+        let floated = match ws.take(id) {
             Some(None) => {
                 let cascade = ws.cascade(area, 60, 60);
                 let r = ws
@@ -224,6 +224,7 @@ impl App {
                     .unwrap_or(cascade);
                 ws.floating.push((id, r));
                 ws.focused = Some(id);
+                Some(true)
             }
             Some(Some(r)) => {
                 ws.float_memory.insert(id, r);
@@ -242,9 +243,16 @@ impl App {
                     Placement::Dwindle,
                 );
                 ws.focused = Some(id);
+                Some(false)
             }
-            None => {}
-        }
+            None => None,
+        };
         self.relayout();
+        if let Some(floating) = floated {
+            self.emit(crate::config::Event::FloatChange, |t| {
+                t.set("pane", id)?;
+                t.set("floating", floating)
+            });
+        }
     }
 }

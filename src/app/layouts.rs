@@ -131,6 +131,7 @@ impl App {
                 LayoutPick::Named(l) => Some(l),
             };
             let n = self.current;
+            let previous = self.active().layout.unwrap_or(self.config.settings.layout);
             self.active_mut().layout = own;
             self.active_mut().fullscreen = false;
             self.status = Some(match own {
@@ -141,6 +142,12 @@ impl App {
                 ),
             });
             self.relayout();
+            let now = own.unwrap_or(self.config.settings.layout);
+            self.emit(crate::config::Event::LayoutChange, |t| {
+                t.set("workspace", n)?;
+                t.set("layout", now.name())?;
+                t.set("previous", previous.name())
+            });
         }
         self.dirty = true;
     }

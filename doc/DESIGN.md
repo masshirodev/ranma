@@ -1985,6 +1985,25 @@ Decided:
 - Under `theme_colors = "outer"`, a pane's own colours still win over the
   outer's: they were asked for about that pane.
 
+### A hook that can say no: `before_close` (2026-10-13)
+
+Hooks only hear; `before_close` is the one that answers. Returning `false`
+keeps the pane, which is tmux's `confirm-before` for a pane still running
+something, written in Lua with whatever question a plugin wants to ask.
+Decided:
+
+- **Only your closing asks**: the close key, the pane menu, a toolbar
+  button. A program ending is not a request, `pane:close()` is a plugin's
+  own decision, and quitting or detaching must never stall on a question.
+- **Only `false` keeps it.** `nil`, any other value and an error let it
+  close: a hook with a bug must not make panes unclosable.
+- **The same time budget as a bind**, so a hook that hangs is stopped and
+  the pane closes.
+
+With it (2026-10-13): `layout_change`, `pane_resize` (once per settled size,
+only panes whose size changed), `float_change` and `workspace_rename` (not
+when the name stays).
+
 ### Small things a terminal is expected to do
 
 - **New panes start where you are.** A new pane, an `exec`, a new session and an

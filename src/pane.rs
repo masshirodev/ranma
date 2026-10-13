@@ -758,17 +758,19 @@ impl Pane {
         let _ = self.sender.send(Msg::Input(bytes.into().into()));
     }
 
-    pub fn resize(&mut self, size: Size) {
+    /// Whether the size changed.
+    pub fn resize(&mut self, size: Size) -> bool {
         let size = Size {
             cols: size.cols.max(2),
             rows: size.rows.max(1),
         };
         if size == self.size {
-            return;
+            return false;
         }
         self.size = size;
         self.term.lock().resize(size);
         let _ = self.sender.send(Msg::Resize(size.window()));
+        true
     }
 
     pub fn modes(&self) -> PaneModes {

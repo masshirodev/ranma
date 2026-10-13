@@ -158,6 +158,11 @@ function ranma.unbind_all() end
 ---| "client_focus"     # { focused }: the driving terminal's window gained or lost focus
 ---| "module_shown"     # { name }: a bar module came on screen
 ---| "module_hidden"    # { name }: a bar module went off screen
+---| "layout_change"    # { workspace, layout, previous }: workspace_layout gave it a layout
+---| "pane_resize"      # { pane, cols, rows }: its terminal's size changed, settled
+---| "float_change"     # { pane, floating }: it floated, or was tiled again
+---| "workspace_rename" # { workspace, name, previous }: named, renamed, or cleared (nil)
+---| "before_close"     # { pane, workspace, title, program }: return false to keep the pane
 ---| `user:${string}`   # a plugin's own event: what ranma.emit passed
 
 ---Run `fn` on an event. A plugin's own events are named "user:<name>".
