@@ -288,6 +288,32 @@ turns it off.
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 
+### Placement policies in Lua (decided 2026-10-13, not built yet)
+
+`ranma.placement(name, fn)` declares a layout policy beside dwindle,
+master-stack and the strip, chosen like them (`layout`,
+`workspace_layout`). Decided:
+
+- **It returns a tree of splits**, the same tree ranma keeps for every
+  tiled workspace, not a rectangle per pane: directional focus, resize,
+  equalize, saved layouts and snapshots then work unchanged. Helpers keep
+  it readable: `h(0.6, a, v(b, c))` is "a on the left 60%, b over c on the
+  right"; `ranma layout-preview NAME 80x24` draws the result as boxes with
+  pane numbers, without opening a workspace.
+- **It runs on structural change only**: a pane opening or closing, a move,
+  the host resizing, the layout chosen. Never per frame, so Lua stays off
+  the render path; under the 200 ms watchdog.
+- **It gets** the panes in order, the focused one, the area in cells, and
+  the workspace's own state table (kept between calls, for a master count or
+  a ratio).
+- **Resize and move keys are passed to it** as a message (`grow left`,
+  `swap down`), as xmonad's sendMessage, and it returns a new tree; a
+  policy that ignores a message does not resize.
+- **Checked before use**: every pane exactly once, ratios 0.05-0.95. A bad
+  tree or an error falls back to dwindle with a toast naming the node
+  ("the second child of the split at depth 1 has no pane"), never a blank
+  workspace.
+
 ### Layouts: tmux's presets, and saved ones
 
 (2026-10-07.) The `layout` setting is a *policy*: it decides where each new
@@ -1904,6 +1930,37 @@ cost nothing when no rule uses them. Decided with them:
   run again on the panes they matched.
 - Grouping a matched pane with another (tabbing it) is left out for now:
   which group it joins needs deciding first.
+
+**A rule's `group` is a named group** (decided 2026-10-13, not built yet):
+`ranma.rule { program = "ssh", group = "servers" }` tabs a matched pane into
+the group of that name in its own workspace, and the first pane to match
+starts it. A name, rather than "the focused pane" or "the rule's last
+match", because it does not depend on where focus happened to be, and two
+rules can share one group. Groups stay per workspace: a pane matched in
+workspace 3 never pulls one from workspace 1. A floating pane is tiled
+before it joins.
+
+### Looks a single pane may override (decided 2026-10-13, not built yet)
+
+A theme is global; a pane can now be told apart (a production shell in red).
+Decided:
+
+- **Everything pane-shaped**: the border (its colours, gradients and style),
+  the title (`title_format`, its styles), the ground (`active_bg` /
+  `inactive_bg`, behind text a program leaves on the default background) and
+  the `[palette]` its programs draw with. Not gaps, which are the layout's,
+  and not the bar, which is the screen's.
+- **Set by rules and by Lua**: the same theme keys as fields of a rule
+  (`border_active = "#f38ba8"`), and `pane:style { ... }`. Later wins: a
+  rule applies once as the pane matches, a `pane:style` call after it
+  replaces the keys it names.
+- **Strict names**: the theme's own keys and parsing, so a typo in a rule is
+  an error naming it, as in a theme file.
+- **Lasts until the pane closes**, and over a config reload, as a rule's
+  badge does; an upgrade in place carries it in the handover. A snapshot
+  does not: a restored pane is matched by the rules again.
+- Under `theme_colors = "outer"`, a pane's own colours still win over the
+  outer's: they were asked for about that pane.
 
 ### Small things a terminal is expected to do
 
