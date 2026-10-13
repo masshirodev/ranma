@@ -2364,6 +2364,15 @@ marks itself engaged (`⧉ ranma+`), and an outer ranma passes the outer leader 
 to an engaged one instead of stopping. Marks travel through pane output, so a key
 pressed in the same instant as the one before can arrive ahead of the mark.
 
+**The pointer follows the keys** (2026-10-13): in the text of a pane that
+holds a ranma, the outer's Ctrl/Alt `click` hook, `hover` hook and `@pane`
+mouse binds stand aside, and the press goes down as the program's mouse
+input. They act on the text under the pointer, which is the inner ranma's
+to read: an openpath on the outer resolved the inner machine's path on the
+wrong machine, found nothing, and swallowed the click, so the menu never
+opened. Borders and the outer's own chrome stay the outer's, as the outer
+leader does.
+
 The mark also says **where**: `⧉ ranma@vps · nvim`, so the tab of the terminal
 on the desk names the machine you are on. Only the innermost host is carried,
 never a chain (`@a@b@c` would be noise, and would grow with every level): a
