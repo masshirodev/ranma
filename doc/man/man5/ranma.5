@@ -2465,7 +2465,9 @@ ranma.bind("r", "mode resize")
 .PP
 A bind naming a mode that no \fBranma.mode\fR declares is an error at load. The
 \fBmode_change\fR hook hears the mode's name. The which\-key hint lists its keys,
-after the mode's own \fBhint\fR: \fBfalse\fR never shows it in this mode, seconds
+titled with the mode's label (it may be entered by any key, not the leader)
+and under the label as their heading unless a bind names a \fBgroup\fR. It
+shows after the mode's own \fBhint\fR: \fBfalse\fR never shows it in this mode, seconds
 (0 to 10) are its pause, and \fBtrue\fR or leaving it out follows
 \fBwm_mode.hint\fR. So a mode you know by heart can stay quiet while WM mode
 keeps its hint. A ranma inside another one sends its mode's label out with

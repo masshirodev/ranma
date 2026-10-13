@@ -1207,12 +1207,15 @@ fn draw_which_key(f: &mut Frame, app: &App) {
     let screen = f.area();
     let order = &app.config.group_order;
     let table = app.wm_table();
+    // A user mode reads as a folder of its own: its keys under its name, and
+    // its label for a title, since it may be entered by any key, not the leader.
+    let mode = app.user_mode_label().map(str::to_lowercase);
     let groups = match app.folder_name() {
         Some(name) if table.is_empty() => whichkey::empty_folder(name),
         folder => whichkey::groups(
             table.iter().map(|(c, b)| whichkey::Entry::of(*c, b)),
             order,
-            folder,
+            folder.or(mode.as_deref()),
             app.in_strip(),
         ),
     };
@@ -1227,10 +1230,12 @@ fn draw_which_key(f: &mut Frame, app: &App) {
             )
         })
         .map(|(c, _)| whichkey::short(c));
-    let crumbs: Vec<String> = std::iter::once(app.wm_chord())
-        .chain(app.open_folder().iter().copied())
-        .map(|c| whichkey::short(&c))
-        .collect();
+    let crumbs: Vec<String> = std::iter::once(
+        app.user_mode_label()
+            .map_or_else(|| whichkey::short(&app.wm_chord()), str::to_string),
+    )
+    .chain(app.open_folder().iter().map(whichkey::short))
+    .collect();
     let Some(p) = whichkey::layout(
         &groups,
         screen.width,

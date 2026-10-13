@@ -1869,7 +1869,9 @@ ranma.bind("r", "mode resize")
 
 A bind naming a mode that no `ranma.mode` declares is an error at load. The
 `mode_change` hook hears the mode's name. The which-key hint lists its keys,
-after the mode's own `hint`: `false` never shows it in this mode, seconds
+titled with the mode's label (it may be entered by any key, not the leader)
+and under the label as their heading unless a bind names a `group`. It
+shows after the mode's own `hint`: `false` never shows it in this mode, seconds
 (0 to 10) are its pause, and `true` or leaving it out follows
 `wm_mode.hint`. So a mode you know by heart can stay quiet while WM mode
 keeps its hint. A ranma inside another one sends its mode's label out with
