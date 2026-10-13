@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.mode(name, { hint = ... })`: a user mode's own which-key pause;
+  `false` keeps the hint out of that mode while WM mode keeps it.
+
 - Renamed names keep working: an old setting, theme key, action, event or
   option is read as its new name, with a warning naming the file and line,
   and `--check-config` still passes (CONFIG.md, "Updating").
@@ -49,6 +52,12 @@ commit log has the detail.
 
 - `leader U` updates in the background behind a toast with a spinner, which
   survives the server's own upgrade, instead of opening a floating pane.
+
+### Fixed
+
+- A ranma inside another one shows its user mode's label in the outer bar
+  (` ⧉ NORMAL `), not ` ⧉ WM `. Both sides need this build; an older outer
+  still says WM.
 
 ## [0.2.4] - 2026-10-12
 

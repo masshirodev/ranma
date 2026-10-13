@@ -70,6 +70,10 @@ pub struct Report {
     /// own, the outer's bar says it.
     #[serde(default)]
     pub mode: String,
+    /// The label of the user mode it is in (`ranma.mode`), which `mode`
+    /// reports as `wm`. An outer that does not know the field says ` WM `.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode_label: Option<String>,
     /// A message it would have put in its bar.
     #[serde(default)]
     pub status: Option<String>,
@@ -180,6 +184,18 @@ pub struct Ws {
 
 impl Report {
     /// Parse a report's JSON; `None` for anything this build does not speak.
+    /// What the outer's bar says for its mode, or `None` in normal mode.
+    pub fn mode_chip(&self) -> Option<String> {
+        if self.mode.is_empty() || self.mode == "normal" {
+            return None;
+        }
+        Some(
+            self.mode_label
+                .clone()
+                .unwrap_or_else(|| self.mode.to_uppercase()),
+        )
+    }
+
     pub fn parse(json: &str) -> Option<Report> {
         let r: Report = serde_json::from_str(json).ok()?;
         speaks(r.v).then_some(r)
@@ -675,8 +691,8 @@ pub fn label(r: &Report, host: &str, step: usize, pane: PaneId) -> Segment {
     let focus = Click::Pane(pane);
     let go = |n: u8| Click::InPane { pane, n };
     let mut out: Segment = Vec::new();
-    if !r.mode.is_empty() && r.mode != "normal" {
-        out.push(Piece::new(format!(" {} ", r.mode.to_uppercase()), Style::Mode).on_click(focus));
+    if let Some(m) = r.mode_chip() {
+        out.push(Piece::new(format!(" {m} "), Style::Mode).on_click(focus));
         out.push(Piece::new(" ", Style::Normal));
     }
     let any_urgent = r.any_urgent();
@@ -856,6 +872,7 @@ mod tests {
             scratch_key: None,
             scratch_nest: None,
             mode: "normal".into(),
+            mode_label: None,
             status: None,
             outer_leader: Some("ctrl+alt+b".into()),
             sticky: true,

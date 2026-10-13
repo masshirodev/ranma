@@ -116,6 +116,7 @@ function ranma.bind(keys, action, opts) end
 ---@field binds table<string, string|fun()|{ [1]: string|fun(), desc?: string, exit?: boolean }> Its keys: an action, a function, or either with options.
 ---@field label? string What the bar's mode module says while it is on; the name in capitals by default.
 ---@field sticky? boolean Stay in it after a bind fires (default true); Esc and Enter leave.
+---@field hint? boolean|number Its which-key pause in seconds (0 to 10); false never shows the hint in it; true or nil follows wm_mode.hint.
 ---@field on_enter? fun()
 ---@field on_exit? fun()
 

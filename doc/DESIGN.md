@@ -795,7 +795,7 @@ asked for it as its first user:
 | Draw | `ranma.picker{items, on_select, preview}`, `ranma.panel{...}` (a float of lines with roles), `ranma.tooltip(anchor, text)`, `pane:badge(text, role)` in the border title | every UI plugin |
 | Time | `ranma.defer(ms, fn)`, `ranma.every(ms, fn)`, `ranma.spawn(argv, {on_exit, on_line})` off ranma's thread | anything that shells out |
 | State | `pane.vars` (a table that lives as long as the pane), `ranma.store(name)` (persisted across restart and upgrade, under the state directory) | agents, history |
-| Keys | which-key folders and groups (`ranma.bind("g", { folder = "git" })`, `"g s"` inside it, nested; `{ group = "plugins" }`), user modes (`ranma.mode(name, { binds, label, on_enter, on_exit })`), user commands in the `:` palette (`ranma.command(name, fn, { desc, complete })`) | which-key folders, plugin keymaps |
+| Keys | which-key folders and groups (`ranma.bind("g", { folder = "git" })`, `"g s"` inside it, nested; `{ group = "plugins" }`), user modes (`ranma.mode(name, { binds, label, hint, on_enter, on_exit })`), user commands in the `:` palette (`ranma.command(name, fn, { desc, complete })`) | which-key folders, plugin keymaps |
 | Develop | `ranma --dump-types` (LuaLS annotations for every function, event and option), `ranma lua 'expr'` (evaluate in the running server, print the result), `ranma health` (each plugin: loaded, failed and why, timings) | writing plugins in nvim |
 
 **Pane handles** (2026-10-08) are a snapshot plus a `Weak` to the pane's
@@ -1616,6 +1616,16 @@ and out, including a click or a hook that changes mode, because they hang
 off `set_mode`, not off keys. A bind naming a mode no `ranma.mode` declares
 is refused at load, as an unknown action is; the check waits for the end of
 the file, since a bind may come before its mode.
+
+**A user mode may set its own which-key pause** (`hint`, 2026-10-13),
+because the hint is for keys not yet learned, and a small mode is learned
+long before WM mode's whole table is: turning it off for one should not
+take it from the other. Left out it follows `wm_mode.hint`, so a mode
+says nothing new unless asked. **A nested ranma reports a user mode's
+label** beside `mode = "wm"` (`mode_label`, an optional field rather than
+a new protocol version): an outer that knows it shows the label, and an
+older one shows WM, as before, since the mode is still WM mode with
+another table.
 
 **A user command is a palette entry with a Lua function behind it.** It is
 listed with the actions and its `desc`, a typed line naming it is run

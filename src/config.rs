@@ -418,6 +418,9 @@ pub struct UserMode {
     /// Stay in it after a bind fires (unless the bind says `exit`); Esc and
     /// Enter leave.
     pub sticky: bool,
+    /// Its own which-key pause: `None` follows `wm_mode.hint`, `Some(None)`
+    /// never shows the hint in this mode.
+    pub hint: Option<Option<std::time::Duration>>,
     pub on_enter: Option<Rc<RegistryKey>>,
     pub on_exit: Option<Rc<RegistryKey>>,
 }
@@ -1764,6 +1767,7 @@ fn install_api(
                 label: name.to_uppercase(),
                 binds: HashMap::new(),
                 sticky: true,
+                hint: None,
                 on_enter: None,
                 on_exit: None,
             };
@@ -1772,6 +1776,22 @@ fn install_api(
                 match (k.as_str(), v) {
                     ("label", Value::String(s)) => mode.label = s.to_str()?.to_string(),
                     ("sticky", Value::Boolean(b)) => mode.sticky = b,
+                    // As `wm_mode.hint`, but true follows that setting rather
+                    // than restoring the default pause.
+                    ("hint", Value::Boolean(b)) => mode.hint = (!b).then_some(None),
+                    ("hint", v @ (Value::Integer(_) | Value::Number(_))) => {
+                        let secs = match v {
+                            Value::Integer(i) => i as f64,
+                            Value::Number(n) => n,
+                            _ => unreachable!(),
+                        };
+                        if !(0.0..=10.0).contains(&secs) {
+                            return Err(rt_err(format!(
+                                "{who}: hint must be true, false or seconds from 0 to 10, not {secs}"
+                            )));
+                        }
+                        mode.hint = Some(Some(std::time::Duration::from_secs_f64(secs)));
+                    }
                     ("on_enter", Value::Function(f)) => {
                         mode.on_enter = Some(Rc::new(lua.create_registry_value(f)?))
                     }
@@ -1796,7 +1816,7 @@ fn install_api(
                             mode.binds.insert(path[0], bind);
                         }
                     }
-                    (k @ ("label" | "sticky" | "on_enter" | "on_exit" | "binds"), other) => {
+                    (k @ ("label" | "sticky" | "hint" | "on_enter" | "on_exit" | "binds"), other) => {
                         return Err(rt_err(format!(
                             "{who}: `{k}` cannot be {}",
                             other.type_name()
@@ -1804,7 +1824,7 @@ fn install_api(
                     }
                     (k, _) => {
                         return Err(rt_err(format!(
-                            "{who}: unknown key `{k}` (expected binds, label, sticky, on_enter, on_exit)"
+                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, on_enter, on_exit)"
                         )));
                     }
                 }

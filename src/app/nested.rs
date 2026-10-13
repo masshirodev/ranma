@@ -177,6 +177,10 @@ impl App {
                 (Mode::Normal, false) => "normal",
             }
             .into(),
+            mode_label: match self.mode {
+                Mode::Wm => self.user_mode_label().map(str::to_string),
+                _ => None,
+            },
             status: self.status.clone(),
             outer_leader: Some(self.config.settings.outer_leader.to_string()),
             sticky: self.config.settings.wm_mode_sticky,
