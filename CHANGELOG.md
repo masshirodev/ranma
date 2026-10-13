@@ -24,7 +24,9 @@ commit log has the detail.
   it (vi.lua's NORMAL, hjkl as arrows) is not moving it blind. Plain WM
   mode still hides it.
 - In a user mode the outer leader opens WM mode, as the leader does. It was
-  sent to the program instead, and the mode dropped.
+  sent to the program instead, and the mode dropped, so clicking this
+  ranma's workspace in an outer ranma's bar typed the workspace's digit
+  into the program.
 
 ## [0.3.0] - 2026-10-13
 

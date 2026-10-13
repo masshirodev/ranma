@@ -6762,6 +6762,23 @@ mod tests {
         assert_eq!(a.wm_chord(), a.config.settings.outer_leader);
     }
 
+    /// What an outer ranma types to reach a workspace of this one (its bar's
+    /// nested workspaces, `reach_nested`): the outer leader, then the key.
+    /// In a user mode that once typed the digit into the program instead.
+    #[test]
+    fn an_outers_typed_workspace_key_switches_from_a_user_mode() {
+        use crossterm::event::{KeyCode as C, KeyModifiers as K};
+        let mut a = app(Some(
+            r#"ranma.set { outer_leader = "ctrl+alt+b" }
+               ranma.mode("vi", { label = "NORMAL", binds = { h = "send left" } })"#,
+        ));
+        with_pane(&mut a, 1);
+        a.enter_user_mode("vi");
+        a.handle_key(KeyEvent::new(C::Char('b'), K::CONTROL | K::ALT));
+        a.handle_key(KeyEvent::new(C::Char('2'), K::NONE));
+        assert_eq!(a.current, 2, "the digit switched, it was not typed");
+    }
+
     #[test]
     fn a_user_mode_keeps_the_mouse_of_normal_mode() {
         use crossterm::event::{
