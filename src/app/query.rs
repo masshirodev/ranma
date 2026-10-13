@@ -265,6 +265,19 @@ impl App {
                 Ok(())
             }
             PaneRequest::Watch(wid, pattern, f) => self.add_watch(wid, id, &pattern, f.0),
+            PaneRequest::Style(table) => {
+                if !self.panes.contains_key(&id) {
+                    return Err(no_pane(id));
+                }
+                match table {
+                    Some(t) => self.style_pane(id, t),
+                    None => {
+                        self.pane_looks.remove(&id);
+                    }
+                }
+                self.dirty = true;
+                Ok(())
+            }
             PaneRequest::Badge(owner, badge) => {
                 if !self.panes.contains_key(&id) {
                     return Err(no_pane(id));

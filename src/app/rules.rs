@@ -97,7 +97,34 @@ impl App {
         }
     }
 
+    /// Lay `table` over the pane's own looks, key by key: the later wins.
+    pub(super) fn style_pane(&mut self, id: PaneId, table: toml::Table) {
+        let mut merged = self
+            .pane_looks
+            .remove(&id)
+            .map(|(t, _)| t)
+            .unwrap_or_default();
+        crate::theme::merge_into(&mut merged, table);
+        // Checked as each part was given; a merge of good parts is good.
+        if let Ok(looks) = crate::theme::PaneLooks::from_table(&merged) {
+            self.pane_looks.insert(id, (merged, looks));
+        }
+        self.dirty = true;
+    }
+
+    /// The theme a pane is drawn with: the theme (with the session's
+    /// accent), and its own looks over it when it has any.
+    pub fn pane_theme(&self, id: PaneId) -> Option<crate::theme::Theme> {
+        let (_, looks) = self.pane_looks.get(&id)?;
+        let mut base = self.config.theme.clone();
+        base.colors = self.colors().into_owned();
+        Some(looks.over(&base))
+    }
+
     fn apply_rule(&mut self, id: PaneId, rule: &Rule) {
+        if let Some(t) = &rule.style {
+            self.style_pane(id, t.clone());
+        }
         if let Some(name) = &rule.name {
             self.rename_pane(id, name);
         }

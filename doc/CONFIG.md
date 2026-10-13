@@ -479,6 +479,7 @@ ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
 | `size` | `{ width%, height% }` of the workspace, each 10-100; implies `float`. |
 | `workspace` | Move the pane to this workspace, following it unless `silent = true`. |
 | `name` | Name the pane, as `rename_pane`. |
+| `style` | The pane's own looks over the theme, as [`pane:style`](#pane-handles) takes them: `style = { border_active = "#f38ba8", title_format = " PROD {title} " }`. |
 | `group` | A name: tab the pane into the group of that name in its workspace (`group = "servers"` gathers every ssh pane into one set of tabs), started by the first pane to match. A floating pane is tiled first, so not with `float` or `size`. |
 | `badge` | `{ glyph, word, role }` on the pane's border, as [`pane:badge`](#pane-handles) does (glyph 1-2 characters, word 12 at most, role `normal`, `dim`, `accent` or `urgent`; the last two optional). |
 
@@ -1225,6 +1226,7 @@ the order written, actions and pane methods together:
 | `:keys(chord, ...)` | Press keys, spelled as in binds: `p:keys("ctrl+c")`. |
 | `:scroll_to(line)` | Scroll so the line is on screen: a scrollback line lands mid-view. |
 | `:badge(owner, glyph, word, role)` | Your plugin's mark on the pane's border, after its title: `p:badge("agents", "?", "waiting", "urgent")`. `owner` is your plugin's name; one badge per owner per pane, replaced by the next call, taken off with no glyph (`p:badge("agents")`). The glyph (one or two characters) carries the meaning without colour; the word (12 at most) goes first on a narrow pane; then the title is cut, calm badges go (dim, normal, accent), the title goes, and urgent badges last. Badges keep the order their owners first set one, and are cleared on a reload. |
+| `:style(looks)` | The pane's own looks over the theme, kept until it closes (over a reload and an upgrade, not a restored snapshot): `p:style { border_active = "#f38ba8", active_bg = "#200000" }`. Keys, all optional and strict: `border_active`, `border_inactive`, `border_floating` and their `_gradient` lists, `gradient_angle`, `border_style` and `floating_style` (not `none`: whether panes have borders is the layout's), `border_chars`, `title`, `title_align`, `title_format`, `indicator`, `title_style` and `title_active_style` (attribute lists), `active_bg`, `inactive_bg`, `dim_unfocused`, and `palette = { color1 = "#…", … }`. A later call replaces the keys it names and keeps the rest (a rule's `style` included); `p:style()` clears them all. |
 | `:copy_mode(line, col)` | Focus it and enter copy mode with the cursor there, scrolled into view. |
 
 A handle kept past the call (in a variable of your plugin) keeps its fields as

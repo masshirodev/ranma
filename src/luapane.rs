@@ -11,7 +11,7 @@ use std::sync::{Arc, Weak};
 
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::Term;
-use mlua::{Lua, MetaMethod, Table, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{Lua, LuaSerdeExt, MetaMethod, Table, UserData, UserDataFields, UserDataMethods, Value};
 
 use crate::config::{Op, Runtime};
 use crate::ipc::SendInput;
@@ -79,6 +79,9 @@ pub enum PaneRequest {
     },
     /// Set (or, with `None`, take off) this owner's badge on its border.
     Badge(String, Option<crate::screen::Badge>),
+    /// Lay these looks over the pane's (or, with `None`, clear them): its
+    /// border, title, ground and palette.
+    Style(Option<toml::Table>),
     /// Watch the screen for a regex: (watch id, pattern, function).
     Watch(u64, String, Callback),
 }
@@ -308,6 +311,20 @@ impl UserData for Handle {
                 h.request(lua, PaneRequest::Badge(owner, badge))
             },
         );
+        m.add_method("style", |lua, h, looks: Option<Table>| {
+            let table = match looks {
+                None => None,
+                Some(t) => {
+                    let table: toml::Table = lua
+                        .from_value(Value::Table(t))
+                        .map_err(|e| err(format!("pane:style: {e}")))?;
+                    crate::theme::PaneLooks::from_table(&table)
+                        .map_err(|e| err(format!("pane:style: {e}")))?;
+                    Some(table)
+                }
+            };
+            h.request(lua, PaneRequest::Style(table))
+        });
         m.add_method("watch", |lua, h, (pattern, f): (String, mlua::Function)| {
             alacritty_terminal::term::search::RegexSearch::new(&pattern)
                 .map_err(|e| err(format!("pane:watch: bad pattern `{pattern}`: {e}")))?;
@@ -599,6 +616,27 @@ mod tests {
         assert!(e("ranma.pane():badge('a', 'abc')").contains("one or two characters"));
         assert!(e("ranma.pane():badge('a', '?', 'x', 'loud')").contains("no role `loud`"));
         assert!(e("ranma.pane():badge('a', '?', 'a very long word')").contains("12 characters"));
+    }
+
+    #[test]
+    fn a_style_is_queued_and_checked() {
+        let cfg = load_from(None, None, None).unwrap();
+        let a = pane(1, "x");
+        let (out, ops) = call(
+            &cfg,
+            &[(1, &a)],
+            r##"local p = ranma.pane() p:style { border_active = "#ff0000", palette = { color1 = "#00ff00" } } p:style()"##,
+        );
+        out.unwrap();
+        let Op::Pane(1, PaneRequest::Style(Some(t))) = &ops[0] else {
+            panic!("{ops:?}");
+        };
+        assert_eq!(t["border_active"].as_str(), Some("#ff0000"));
+        assert_eq!(ops[1], Op::Pane(1, PaneRequest::Style(None)));
+        let e = |src: &str| call(&cfg, &[(1, &a)], src).0.unwrap_err().to_string();
+        assert!(e("ranma.pane():style { border_actve = 'red' }").contains("border_actve"));
+        assert!(e("ranma.pane():style { border_style = 'none' }").contains("cannot be none"));
+        assert!(e("ranma.pane():style { title_format = ' {nope} ' }").contains("nope"));
     }
 
     #[test]

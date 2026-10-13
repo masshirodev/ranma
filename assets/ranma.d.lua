@@ -419,6 +419,34 @@ function Pane:marks() end
 ---@param role? ranma.Role
 function Pane:badge(owner, glyph, word, role) end
 
+---The pane's own looks over the theme: its border, title, ground and palette
+---(not gaps or the bar). Kept until it closes; a later call replaces the keys
+---it names; no argument clears them all.
+---@param looks? ranma.PaneLooks
+function Pane:style(looks) end
+
+---@class ranma.PaneLooks
+---@field border_active? string
+---@field border_inactive? string
+---@field border_floating? string
+---@field border_active_gradient? string[]
+---@field border_inactive_gradient? string[]
+---@field border_floating_gradient? string[]
+---@field gradient_angle? integer 0-359
+---@field border_style? "rounded"|"plain"|"thick"|"double"|"ascii"|"custom"
+---@field floating_style? "rounded"|"plain"|"thick"|"double"|"ascii"|"custom"
+---@field border_chars? string Six one-cell characters.
+---@field title? "top"|"bottom"|"off"
+---@field title_align? "left"|"center"|"right"
+---@field title_format? string {title}, {index}, {program}, {cwd}
+---@field indicator? "none"|"arrows"
+---@field title_style? string[] Attributes: bold, dim, italic, underline, reverse, strikethrough.
+---@field title_active_style? string[]
+---@field active_bg? string
+---@field inactive_bg? string
+---@field dim_unfocused? number 0-1
+---@field palette? table<string, string> color0-color15, foreground, background: "#rrggbb".
+
 ---Focus it and enter copy mode with the cursor there.
 ---@param line? integer
 ---@param col? integer

@@ -696,6 +696,137 @@ pub struct Theme {
     pub art: Option<std::sync::Arc<crate::art::Art>>,
 }
 
+/// What one pane looks like over the theme (DESIGN.md, "Looks a single pane
+/// may override"): from a rule's `style` or `pane:style`. Every key is
+/// optional and strict, named as in a theme but flat: the pane's border,
+/// title, ground and palette. Not gaps or the bar.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaneLooks {
+    pub border_active: Option<Color>,
+    pub border_inactive: Option<Color>,
+    pub border_floating: Option<Color>,
+    pub border_active_gradient: Option<Vec<Color>>,
+    pub border_inactive_gradient: Option<Vec<Color>>,
+    pub border_floating_gradient: Option<Vec<Color>>,
+    pub gradient_angle: Option<u16>,
+    pub border_style: Option<BorderStyle>,
+    pub floating_style: Option<BorderStyle>,
+    pub border_chars: Option<String>,
+    pub title: Option<TitlePosition>,
+    pub title_align: Option<Align>,
+    pub title_format: Option<Format>,
+    pub indicator: Option<Indicator>,
+    pub title_style: Option<Attrs>,
+    pub title_active_style: Option<Attrs>,
+    pub active_bg: Option<Color>,
+    pub inactive_bg: Option<Color>,
+    pub dim_unfocused: Option<f32>,
+    pub palette: Option<Palette>,
+}
+
+impl PaneLooks {
+    /// Parsed from a table, strictly, and checked as a theme would be.
+    pub fn from_table(t: &toml::Table) -> Result<PaneLooks, String> {
+        let l: PaneLooks = toml::Value::Table(t.clone())
+            .try_into()
+            .map_err(|e: toml::de::Error| e.message().to_string())?;
+        l.check()?;
+        Ok(l)
+    }
+
+    fn check(&self) -> Result<(), String> {
+        // Whether panes have borders is the layout's: every pane's inner
+        // area is one cell in from its edge, or none is.
+        if self.border_style == Some(BorderStyle::None)
+            || self.floating_style == Some(BorderStyle::None)
+        {
+            return Err("a pane's border style cannot be none: whether panes have borders is the layout's, set it in the theme".into());
+        }
+        if let Some(f) = &self.title_format {
+            f.check("title_format", &TITLE_VARS)?;
+        }
+        if self.gradient_angle.is_some_and(|a| a >= 360) {
+            return Err("gradient_angle must be 0-359".into());
+        }
+        for g in [
+            &self.border_active_gradient,
+            &self.border_inactive_gradient,
+            &self.border_floating_gradient,
+        ] {
+            if g.as_ref().is_some_and(|g| g.len() < 2) {
+                return Err("a gradient needs two colours or more".into());
+            }
+        }
+        if self
+            .dim_unfocused
+            .is_some_and(|d| !(0.0..=1.0).contains(&d))
+        {
+            return Err("dim_unfocused must be 0-1".into());
+        }
+        if let Some(c) = &self.border_chars {
+            use unicode_width::UnicodeWidthChar;
+            if c.chars().count() != 6 || c.chars().any(|ch| ch.width() != Some(1)) {
+                return Err(format!(
+                    "border_chars must be six one-cell characters, not `{c}`"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// `base` with this pane's keys over it; the palette key by key.
+    pub fn over(&self, base: &Theme) -> Theme {
+        let mut t = base.clone();
+        macro_rules! set {
+            ($($src:ident => $($dst:ident).+),* $(,)?) => {
+                $(if let Some(v) = &self.$src { t.$($dst).+ = v.clone().into(); })*
+            };
+        }
+        set! {
+            border_active => colors.border_active,
+            border_inactive => colors.border_inactive,
+            border_floating => colors.border_floating,
+            gradient_angle => border.gradient_angle,
+            border_style => border.style,
+            title => border.title,
+            title_align => border.title_align,
+            title_format => border.title_format,
+            indicator => border.indicator,
+            title_style => styles.title,
+            title_active_style => styles.title_active,
+            dim_unfocused => panes.dim_unfocused,
+        }
+        macro_rules! opt {
+            ($($src:ident => $($dst:ident).+),* $(,)?) => {
+                $(if let Some(v) = &self.$src { t.$($dst).+ = Some(v.clone()); })*
+            };
+        }
+        opt! {
+            border_active_gradient => colors.border_active_gradient,
+            border_inactive_gradient => colors.border_inactive_gradient,
+            border_floating_gradient => colors.border_floating_gradient,
+            floating_style => border.floating_style,
+            border_chars => border.chars,
+            active_bg => panes.active_bg,
+            inactive_bg => panes.inactive_bg,
+        }
+        if self.border_chars.is_some() && self.border_style.is_none() {
+            t.border.style = BorderStyle::Custom;
+        }
+        if let Some(p) = &self.palette {
+            t.palette = p.over(&t.palette);
+        }
+        t
+    }
+
+    /// Whether its title format names `{program}` or `{cwd}`, which ranma
+    /// then reads for the pane.
+    pub fn uses(&self, var: &str) -> bool {
+        self.title_format.as_ref().is_some_and(|f| f.uses(var))
+    }
+}
+
 /// A style a theme names for bar modules: a colour, a ground, attributes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -797,6 +928,19 @@ impl Palette {
             self.color14,
             self.color15,
         ]
+    }
+
+    /// These colours over `base`, key by key.
+    pub fn over(&self, base: &Palette) -> Palette {
+        let mut out = base.clone();
+        macro_rules! take {
+            ($($k:ident),*) => { $(if self.$k.is_some() { out.$k = self.$k; })* };
+        }
+        take!(
+            color0, color1, color2, color3, color4, color5, color6, color7, color8, color9,
+            color10, color11, color12, color13, color14, color15, foreground, background
+        );
+        out
     }
 
     /// Nothing set: panes draw exactly as without a palette.
@@ -1266,6 +1410,42 @@ mod tests {
         assert!(err.contains("two colours"), "{err}");
         let err = format!("{:#}", load("angle", &[dir]).unwrap_err());
         assert!(err.contains("0-359"), "{err}");
+    }
+
+    #[test]
+    fn a_panes_looks_go_over_the_theme_and_nothing_else() {
+        let t: toml::Table = toml::from_str(
+            r##"
+            border_active = "#ff0000"
+            title_format = " PROD {title} "
+            active_bg = "#200000"
+            palette = { color1 = "#ff5555" }
+            "##,
+        )
+        .unwrap();
+        let looks = PaneLooks::from_table(&t).unwrap();
+        let mut base = load("default", &[]).unwrap();
+        base.palette.color2 = Some(Hex(0, 255, 0));
+        let own = looks.over(&base);
+        assert_eq!(own.colors.border_active, Color::Rgb(255, 0, 0));
+        assert_eq!(
+            own.colors.border_inactive, base.colors.border_inactive,
+            "untouched"
+        );
+        assert_eq!(own.panes.active_bg, Some(Color::Rgb(0x20, 0, 0)));
+        assert_eq!(own.palette.color1, Some(Hex(0xff, 0x55, 0x55)));
+        assert_eq!(
+            own.palette.color2,
+            Some(Hex(0, 255, 0)),
+            "the theme's palette, key by key"
+        );
+        assert!(own.border.title_format.uses("title"));
+        assert_eq!(own.gaps, base.gaps, "never the layout's");
+        let bad = |src: &str| PaneLooks::from_table(&toml::from_str(src).unwrap()).unwrap_err();
+        assert!(bad("border_style = \"none\"").contains("cannot be none"));
+        assert!(bad("gradient_angle = 400").contains("0-359"));
+        assert!(bad("gaps = 2").contains("gaps"));
+        assert!(bad("border_chars = \"ab\"").contains("six"));
     }
 
     #[test]

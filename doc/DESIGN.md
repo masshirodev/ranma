@@ -1940,7 +1940,7 @@ rules can share one group. Groups stay per workspace: a pane matched in
 workspace 3 never pulls one from workspace 1. A floating pane is tiled
 before it joins.
 
-### Looks a single pane may override (decided 2026-10-13, not built yet)
+### Looks a single pane may override (2026-10-13)
 
 A theme is global; a pane can now be told apart (a production shell in red).
 Decided:
@@ -1950,10 +1950,19 @@ Decided:
   `inactive_bg`, behind text a program leaves on the default background) and
   the `[palette]` its programs draw with. Not gaps, which are the layout's,
   and not the bar, which is the screen's.
-- **Set by rules and by Lua**: the same theme keys as fields of a rule
-  (`border_active = "#f38ba8"`), and `pane:style { ... }`. Later wins: a
-  rule applies once as the pane matches, a `pane:style` call after it
-  replaces the keys it names.
+- **Set by rules and by Lua**: a rule's `style = { ... }` and
+  `pane:style { ... }` take the same table. Built that way rather than as
+  loose keys beside a rule's matchers (as first written here), so one table
+  means the same in both places and a rule's own fields stay its matchers
+  and effects. Later wins, key by key (the theme's own table merge): a rule
+  applies once as the pane matches, a `pane:style` call after it replaces
+  the keys it names. The keys are flat (`border_active`, `title_format`,
+  `active_bg`) with `palette` a table.
+- **Applied over a copy of the theme as the pane is drawn**, not cached, so
+  a theme change (a reload, the theme picker) shows through every key the
+  pane does not set.
+- **`border_style` is never `none`**: whether panes have borders decides
+  their inner area, which is the layout's, so it stays the theme's.
 - **Strict names**: the theme's own keys and parsing, so a typo in a rule is
   an error naming it, as in a theme file.
 - **Lasts until the pane closes**, and over a config reload, as a rule's
