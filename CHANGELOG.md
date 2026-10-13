@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- Renamed names keep working: an old setting, theme key, action, event or
+  option is read as its new name, with a warning naming the file and line,
+  and `--check-config` still passes (CONFIG.md, "Updating").
 - `ranma.has(name)`: a plugin asks whether this build has a capability
   instead of comparing `ranma.version` (CONFIG.md, "Globals", lists them).
 - Mouse binds: `ranma.mouse` on a pane's text, its border or the background,
