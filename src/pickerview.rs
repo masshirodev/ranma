@@ -323,6 +323,9 @@ pub struct Spec {
     pub message: String,
     /// A prompt's or a question's text width.
     pub text_w: usize,
+    /// As narrow as its rows (a menu at the pointer), not the 44 a
+    /// launcher takes.
+    pub compact: bool,
 }
 
 impl Default for Spec {
@@ -345,6 +348,7 @@ impl Default for Spec {
             footer: Vec::new(),
             message: String::new(),
             text_w: 40,
+            compact: false,
         }
     }
 }
@@ -468,7 +472,8 @@ pub fn place(spec: &Spec, w: u16, avail: u16) -> Placed {
             Cols::Key => lead + ws.label as i32 + 3 + ws.key as i32 + 1,
             Cols::Help => lead + (ws.leader + ws.chord + 2 + ws.action) as i32 + opt(ws.detail) + 1,
         };
-        let bw = MIN_W.max(content + 2).max(extra).min(MAX_W).min(fit);
+        let min = if spec.compact { 0 } else { MIN_W };
+        let bw = min.max(content + 2).max(extra).min(MAX_W).min(fit);
         let rows = (spec.rows_open as i32)
             .min(MAX_ROWS)
             .min(3.max(a * 2 / 3 - 4))

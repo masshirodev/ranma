@@ -263,6 +263,7 @@ impl App {
                 Kind::Sessions | Kind::MoveWorkspace | Kind::Workspaces
             );
             spec.rows_open = all.len() + usize::from(grows);
+            spec.compact = p.kind == Kind::Menu;
             match mode {
                 Some((m, rest)) => {
                     let prefix = p.query.chars().next().unwrap_or('?');

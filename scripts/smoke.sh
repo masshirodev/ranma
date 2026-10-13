@@ -538,7 +538,8 @@ T send-keys -t d "clear; $ENV $BIN attach 3" Enter
 for _ in $(seq 1 40); do dscreen | grep -q '╭' && break; sleep 0.25; done
 dscreen | grep -q 'daemon-marker' && fail "server 3 started with server 2's screen"
 T send-keys -t d C-b S; sleep 0.8
-dscreen | grep -q 'servers  (Enter' || fail "leader S did not open the server switcher ($(dscreen | tail -3))"
+dscreen | grep -q '─ servers ─' && dscreen | grep -q 'move here' ||
+  fail "leader S did not open the server switcher ($(dscreen | tail -3))"
 T send-keys -t d 2; sleep 0.3; T send-keys -t d Enter; sleep 1.5
 dscreen | grep -q 'daemon-marker' || fail "picking server 2 did not bring its screen"
 T send-keys -t d 'echo switched-marker' Enter; sleep 0.4
@@ -698,7 +699,7 @@ rm -r "$FAKE"
 
 # Help lists the binds and filters them.
 T send-keys -t s C-b '?'; sleep 0.3
-wait_for 'keys  (type to filter' || fail "help did not open"
+wait_for '? keys   : commands' || fail "help did not open"
 T send-keys -t s 'copy_m'; sleep 0.3
 screen | grep -q 'ctrl+b \[ *copy_mode' || fail "help did not filter to copy_mode"
 T send-keys -t s Escape; sleep 0.3
@@ -733,10 +734,10 @@ bar | grep -Eq '^ 1[: ]' || fail "not back on main after the session ended"
 # The pane menu: a right click in a shell opens it at the pointer; picking
 # Float floats the pane, and Tile from the same menu puts it back.
 T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
-screen | grep -q '│ *Float' || fail "a right click did not open the pane menu"
+screen | grep -q '│▌\? *Float' || fail "a right click did not open the pane menu"
 T send-keys -t s Enter; sleep 0.5
 T send-keys -t s -l $'\e[<2;30;10M'; sleep 0.1; T send-keys -t s -l $'\e[<2;30;10m'; sleep 0.4
-screen | grep -q '│ *Tile' || fail "the menu of a floated pane does not offer Tile"
+screen | grep -q '│▌\? *Tile' || fail "the menu of a floated pane does not offer Tile"
 T send-keys -t s Enter; sleep 0.5
 
 # URL hints: a link printed in the pane gets a label; typing it copies the link.
