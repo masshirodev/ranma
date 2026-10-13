@@ -35,6 +35,7 @@ mod layouts;
 mod nested;
 pub use nested::NestLabel;
 mod paste;
+mod pickerspec;
 mod query;
 mod rules;
 mod run;

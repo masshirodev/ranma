@@ -1166,6 +1166,61 @@ character), so they had nothing to do there. On a plugin screen the four are
 ranma's, like `↑↓`, and a plugin binding one is an error; none could fire
 before, since screens did not name them.
 
+### The picker, redrawn (2026-10-12)
+
+Designed from `doc/briefs/done/PICKER.md`; the handoff is
+`doc/handoffs/PICKER_MOCK.txt`, laid out by `doc/handoffs/PICKER_mock.py`,
+and `src/pickerview_tests.rs` holds the drawing to it cell for cell, roles
+included. The picker looked like a list with a loud bar on it: the selected
+row was a full-width slab of `picker_selected_bg`, the border was the
+WM-mode colour, the query a bare `>`, and a right-aligned path pulled the
+eye from the name beside it. Now:
+
+- **The selection is a tint and a bar**: `▌` in `picker_accent`, the row on
+  `picker_cursor_bg` (the selection colour 22% into the ground), the label
+  bold. Where you are is a `●` in its own column.
+- **The query row reads as an input**: a prompt glyph (`›`, or the
+  palette's `?` / `:`), a placeholder, `matches/all` on the right, and a rule
+  under it with the border's joints. The palette's title is its two modes,
+  the active one in the accent.
+- **Columns are a table**: the detail starts after the widest label, cut
+  first (from the middle for paths), the label last. Help puts the key
+  right-aligned against the action, as the which-key hint does; the command
+  palette puts the bound key right, as menus put shortcuts.
+- **The box is sized at open** from every item (44-88 wide, at most 16 rows
+  and two thirds of the screen), a third of the way down the area above the
+  bar, and typing never resizes it. A thumb on the right border says where
+  a long list is.
+- **The keys you could not guess are on the bottom border** (`^R rename`,
+  `^X kill`, `tab completes`), and the hints that used to be in titles and
+  messages in parentheses moved there.
+- **Seven colour roles and four styles, all optional**, each following an
+  older role, so every theme written before draws it unedited.
+
+The drawing is `pickerview`, pure: a `Spec` of rows in, a canvas of roles
+out. `app::pickerspec` builds the spec from the picker, taking apart what
+the items carry for matching (a help row's label is its key and action in
+one string), so neither matching nor the keys changed.
+
+Where it departs from the handoff, and why:
+
+- The move-workspace picker has no `^R rename` in its footer: Ctrl+R renames
+  only in the session switcher, in the code as it is.
+- The count is real items only. The mock counted the `run` row in one state
+  (`7/118`) and not the `+ new session` row in another (`1/5`); a typed line
+  is not a match.
+- A user command (`ranma.command`) has no bound key but has a description:
+  it goes after the argument hint, dim, where the key column would be empty.
+- Menus (the right-click pane and workspace menus) are the `key` variation
+  and still open at the pointer: the mock does not draw them.
+- The questions keep their wording; only the answers moved to the footer.
+  The restore question's are `↵ restore · r restore and run · esc not now`.
+
+Not done yet, as the handoff itself marks them later steps: matched letters
+in a `picker_match` role (it needs `fuzzy_score` to return positions), and a
+preview beside the pane and layout switchers on wide screens. The touch
+sheet is unchanged on purpose: big faces and the full slab suit a thumb.
+
 ### Copy mode is alacritty's vi mode
 
 alacritty_terminal already has a vi cursor independent of the program's, the

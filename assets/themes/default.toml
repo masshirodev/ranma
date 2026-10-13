@@ -23,7 +23,9 @@ ws_active_bg = "#89b4fa"
 ws_occupied = "#cdd6f4"
 ws_empty = "#6c7086"
 ws_urgent = "#f38ba8"
-# The session switcher, pane switcher and help: the selected row.
+# The selection colour. Pickers (help, the palette, the switchers) mark
+# their selected row and their accents with picker_selected_bg, in small
+# doses; the touch sheet and the settings panel fill the row with both.
 picker_selected_fg = "#1e1e2e"
 picker_selected_bg = "#89b4fa"
 # Search matches in copy mode: every visible match, and the current one.
@@ -56,6 +58,17 @@ tab_inactive_bg = "#313244"
 # A workspace that printed while not shown (monitor_activity). Unset here on
 # purpose: bar_accent.
 # ws_activity = ...
+
+# Pickers: help, the command palette, the switchers, plugin pickers, prompts.
+# Unset here on purpose: each follows the role after it, so a theme that sets
+# only the older roles styles pickers too.
+# picker_fg = toast_fg                  labels, the query, a question
+# picker_bg = toast_bg                  the box's ground, border included
+# picker_border = bar_dim               the border, the rule under the query
+# picker_dim = bar_dim                  details, the count, the footer's words
+# picker_accent = picker_selected_bg    the prompt, ▌, ●, +, run, the thumb
+# picker_cursor_bg = picker_selected_bg mixed 22% into picker_bg
+# picker_error = bar_urgent             the palette's error row
 
 # Copy mode's selection, and a bar module's ground (see [bar]). Unset here on
 # purpose: the selection is drawn reversed, and modules sit on bar_bg.
@@ -178,5 +191,11 @@ tab_inactive = []
 # A pane's title on its border, and the focused pane's.
 title = []
 title_active = []
-picker_selected = []
+# A picker's selected label; its title, its typed query, the mark of where
+# you are, and the palette's error row.
+picker_selected = ["bold"]
+picker_title = ["bold"]
+picker_query = ["bold"]
+picker_current = []
+picker_error = ["bold"]
 toast = []

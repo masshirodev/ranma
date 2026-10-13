@@ -32,6 +32,7 @@ pub mod pane;
 pub mod panetext;
 pub mod paste;
 pub mod picker;
+pub mod pickerview;
 pub mod pipe;
 pub mod proto;
 pub mod pty;

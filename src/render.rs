@@ -1450,100 +1450,91 @@ fn draw_sheet(f: &mut Frame, app: &App, p: &Picker, l: &crate::app::SheetLayout)
     }
 }
 
-fn draw_picker(f: &mut Frame, app: &App, p: &Picker) {
-    let Some(l) = app.picker_layout() else {
+fn draw_picker(f: &mut Frame, app: &App, _p: &Picker) {
+    use crate::pickerview::{Attr, Canvas, Fg, Glyphs, Ground};
+    let Some((spec, placed)) = app.picker_placed() else {
         return;
     };
-    let c = &app.config.theme.colors;
-    f.render_widget(Clear, rrect(l.outer));
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_set(frame_set(&app.config.theme.border))
-        .border_style(Style::default().fg(color(c.mode_bg)))
-        .title(Line::from(format!(" {} ", p.heading())));
-    f.render_widget(block, rrect(l.outer));
-
-    let buf = f.buffer_mut();
-    let q = l.query;
-    // A question shows its message and takes one key: no input line, no cursor.
-    if let Some(msg) = &p.message {
-        buf.set_stringn(
-            q.x + 1,
-            q.y,
-            msg,
-            q.w.saturating_sub(1) as usize,
-            Style::default().fg(color(c.bar_fg)),
-        );
-        return;
-    }
-    let prompt = format!("> {}", p.query);
-    buf.set_stringn(
-        q.x,
-        q.y,
-        &prompt,
-        q.w as usize,
-        Style::default().fg(color(c.bar_fg)),
+    let theme = &app.config.theme;
+    let c = &theme.colors;
+    let screen = f.area();
+    let mut canvas = Canvas::new(screen.width, screen.height);
+    let drawn = crate::pickerview::draw_at(
+        &mut canvas,
+        &spec,
+        &Glyphs::of(theme.border.style, theme.border.chars.as_deref()),
+        placed,
     );
-    let cx = q.x + (prompt.width() as u16).min(q.w.saturating_sub(1));
-
-    let items = p.visible();
-    let marks = items.iter().any(|it| it.current);
-    if items.is_empty() && !p.is_prompt() {
-        buf.set_stringn(
-            l.list.x,
-            l.list.y,
-            "  nothing matches",
-            l.list.w as usize,
-            Style::default().fg(color(c.bar_dim)),
-        );
-    }
-    for (row, (i, item)) in items
-        .iter()
-        .enumerate()
-        .skip(l.offset)
-        .take(l.list.h as usize)
-        .enumerate()
-    {
-        let y = l.list.y + row as u16;
-        let w = l.list.w as usize;
-        let selected = i == p.selected;
-        let (fg, bg) = if selected {
-            (color(c.picker_selected_fg), color(c.picker_selected_bg))
-        } else {
-            (color(c.bar_fg), Color::Reset)
-        };
-        let mut base = Style::default().fg(fg).bg(bg);
-        if selected {
-            base = base.add_modifier(modifier(app.config.theme.styles.picker_selected));
-        }
-        buf.set_style(RRect::new(l.list.x, y, l.list.w, 1), base);
-        // Where you are is marked, not only described in the dim detail: the
-        // selection can sit elsewhere, and then nothing else says it.
-        let label = match (marks, item.current) {
-            (true, true) => format!(" ● {}", item.label),
-            (true, false) => format!("   {}", item.label),
-            (false, _) => format!(" {}", item.label),
-        };
-        let style = if item.current {
-            base.add_modifier(Modifier::BOLD)
-        } else {
-            base
-        };
-        buf.set_stringn(l.list.x, y, &label, w, style);
-        if !item.detail.is_empty() {
-            let d = format!("{} ", item.detail);
-            let dw = d.width();
-            if label.width() + dw + 2 <= w {
-                let dim = if selected {
-                    base
-                } else {
-                    base.fg(color(c.bar_dim))
-                };
-                buf.set_stringn(l.list.x + (w - dw) as u16, y, &d, dw, dim);
+    let cursor_bg = picker_cursor_bg(c, &app.host_colors);
+    let attrs = |a: Attr| match a {
+        Attr::Plain => Modifier::empty(),
+        Attr::Bold => Modifier::BOLD,
+        Attr::Title => modifier(theme.styles.picker_title),
+        Attr::Query => modifier(theme.styles.picker_query),
+        Attr::Selected => modifier(theme.styles.picker_selected),
+        Attr::Current => modifier(theme.styles.picker_current),
+        Attr::Error => modifier(theme.styles.picker_error),
+    };
+    let buf = f.buffer_mut();
+    for y in 0..canvas.h {
+        for x in 0..canvas.w {
+            let Some(cell) = canvas.get(x, y) else {
+                continue;
+            };
+            let out = &mut buf[(screen.x + x, screen.y + y)];
+            // The second half of a wide character: the diff skips it after
+            // the first, as it does for a pane's.
+            if cell.ch == '\0' {
+                out.reset();
+                continue;
             }
+            let fg = match cell.fg {
+                Fg::Blank | Fg::Text => c.picker_fg(),
+                Fg::Border => c.picker_border(),
+                Fg::Dim => c.picker_dim(),
+                Fg::Accent => c.picker_accent(),
+                Fg::Error => c.picker_error(),
+            };
+            let bg = match cell.ground {
+                Ground::Box => color(c.picker_bg()),
+                Ground::Cursor => cursor_bg,
+            };
+            let mut tmp = [0u8; 4];
+            out.set_symbol(cell.ch.encode_utf8(&mut tmp)).set_style(
+                Style::default()
+                    .fg(color(fg))
+                    .bg(bg)
+                    .add_modifier(attrs(cell.attr)),
+            );
         }
     }
-    f.set_cursor_position(Position::new(cx, q.y));
+    if let Some((cx, cy)) = drawn.cursor
+        && cx >= 0
+        && cy >= 0
+    {
+        f.set_cursor_position(Position::new(cx as u16, cy as u16));
+    }
+}
+
+/// The selected row's ground: `picker_cursor_bg`, else the selection colour
+/// mixed 22% into the box's ground in real RGB (as `dim_unfocused` mixes),
+/// else, when either colour cannot be known, `border_inactive`.
+fn picker_cursor_bg(c: &Colors, host: &crate::hostcolors::HostColors) -> Color {
+    if let Some(set) = c.picker_cursor_bg {
+        return color(set);
+    }
+    let rgb = |col: theme::Color, fallback| match col {
+        theme::Color::Rgb(r, g, b) => Some(crate::hostcolors::Rgb { r, g, b }),
+        theme::Color::Indexed(i) => host.get(i as usize),
+        theme::Color::Default => fallback,
+    };
+    match (rgb(c.picker_selected_bg, None), rgb(c.picker_bg(), host.bg)) {
+        (Some(a), Some(z)) => {
+            let mix = |a: u8, z: u8| (z as f32 + (a as f32 - z as f32) * 0.22).round() as u8;
+            Color::Rgb(mix(a.r, z.r), mix(a.g, z.g), mix(a.b, z.b))
+        }
+        _ => color(c.border_inactive),
+    }
 }
 
 fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {

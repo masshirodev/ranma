@@ -211,6 +211,11 @@ impl Picker {
 
     /// Start on the item marked current, so Enter stays put and the arrows move
     /// from where you are.
+    /// Every item, as the picker was opened with them.
+    pub fn items(&self) -> &[Item] {
+        &self.items
+    }
+
     pub fn select_current(&mut self) -> &mut Self {
         self.selected = self.visible().iter().position(|it| it.current).unwrap_or(0);
         self

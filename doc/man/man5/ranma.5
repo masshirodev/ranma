@@ -2566,7 +2566,22 @@ a workspace that printed while not shown (\fBmonitor_activity\fR); unset, \fBbar
 tab bars of groups
 .TP
 \fBcolors.picker_selected_fg\fR, \fBpicker_selected_bg\fR
-the selected row in switchers and help
+the selection colour: the touch sheet's and the settings panel's selected row; pickers take their accent and their selected row's tint from \fBpicker_selected_bg\fR
+.TP
+\fBcolors.picker_fg\fR, \fBpicker_bg\fR
+a picker's text (labels, the query, a question) and its ground, border included; unset, \fBtoast_fg\fR / \fBtoast_bg\fR
+.TP
+\fBcolors.picker_border\fR, \fBpicker_dim\fR
+a picker's border and the rule under its query, and its quiet text (details, the count, the placeholder, the footer's words); unset, \fBbar_dim\fR
+.TP
+\fBcolors.picker_accent\fR
+the prompt glyph, the selection's \fB▌\fR, the \fB●\fR of where you are, \fB+\fR and \fBrun\fR, the active palette mode, the scroll thumb; unset, \fBpicker_selected_bg\fR
+.TP
+\fBcolors.picker_cursor_bg\fR
+the selected row's ground; unset, \fBpicker_selected_bg\fR mixed 22% into \fBpicker_bg\fR (or \fBborder_inactive\fR when the colours cannot be known)
+.TP
+\fBcolors.picker_error\fR
+the palette's error row; unset, \fBbar_urgent\fR
 .TP
 \fBcolors.toolbar_bg\fR
 a toolbar's row and the gaps between its buttons; unset, \fBbar_bg\fR
@@ -2585,10 +2600,12 @@ a latched or locked modifier; unset, \fBmode_fg\fR / \fBmode_bg\fR
 .TP
 \fBcolors.button_disabled_fg\fR
 a button that cannot run now, on \fBbutton_bg\fR; unset, \fBbar_dim\fR
-.PP
-The toolbar keys are optional: each follows the role it names when unset, so
-a theme that only sets the older roles (one rendered from the wallpaper's
-palette, say) styles toolbars too.
+.TP
+\fBcolors.search_fg\fR, \fBsearch_bg\fR, \fBsearch_current_fg\fR, \fBsearch_current_bg\fR
+search matches in copy mode
+.TP
+\fBcolors.selection_fg\fR, \fBselection_bg\fR
+copy mode's selection; unset, the cells are reversed
 .TP
 \fBcolors.toast_fg\fR, \fBtoast_bg\fR
 toasts (their border is \fBbar_accent\fR, or \fBbar_urgent\fR when urgent)
@@ -2663,7 +2680,11 @@ the art's colours where it sets none: its text (unset, \fBbar_dim\fR) and the gr
 \fB#rrggbb\fR: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and \fBls\fR alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256\-colour cube (16\-255) and truecolor text are left as the program sent them. \fBbackground\fR is the pane's ground where the program leaves the default, and \fBpanes.active_bg\fR / \fBinactive_bg\fR win over it. Needs a truecolor host terminal.
 .TP
 \fBstyles.<role>\fR
-text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR, \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
+text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR (a picker's selected label; bold by default), \fBpicker_title\fR, \fBpicker_query\fR, \fBpicker_current\fR, \fBpicker_error\fR (a picker's title, typed query, mark of where you are, and the palette's error row; all but \fBpicker_current\fR bold by default), \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
+.PP
+The toolbar and picker keys are optional: each follows the role it names when
+unset, so a theme that only sets the older roles (one rendered from the
+wallpaper's palette, say) styles toolbars and pickers too.
 .PP
 A cell is about twice as tall as it is wide, so outer gaps look even at
 \fBouter_horizontal = 2 * outer_vertical\fR.

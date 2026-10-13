@@ -169,6 +169,23 @@ pub struct Colors {
     // A workspace that printed while not shown; unset, `bar_accent`.
     #[serde(default)]
     pub ws_activity: Option<Color>,
+    // The picker (DESIGN.md, "The picker, redrawn"). Each follows an
+    // existing role when unset, so every theme draws the picker unedited.
+    #[serde(default)]
+    pub picker_fg: Option<Color>,
+    #[serde(default)]
+    pub picker_bg: Option<Color>,
+    #[serde(default)]
+    pub picker_border: Option<Color>,
+    #[serde(default)]
+    pub picker_dim: Option<Color>,
+    #[serde(default)]
+    pub picker_accent: Option<Color>,
+    /// Unset, `picker_selected_bg` mixed 22% into `picker_bg` (see `render`).
+    #[serde(default)]
+    pub picker_cursor_bg: Option<Color>,
+    #[serde(default)]
+    pub picker_error: Option<Color>,
 }
 
 impl Colors {
@@ -197,6 +214,33 @@ impl Colors {
         serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or_else(|_| self.clone())
     }
 
+    /// Labels, the query and a question's message: `toast_fg`.
+    pub fn picker_fg(&self) -> Color {
+        self.picker_fg.unwrap_or(self.toast_fg)
+    }
+    /// The box's ground, border included: `toast_bg`.
+    pub fn picker_bg(&self) -> Color {
+        self.picker_bg.unwrap_or(self.toast_bg)
+    }
+    /// The border and the rule under the query: `bar_dim`. Not
+    /// `border_inactive`, which dark themes set a step off the ground, too
+    /// faint for the rule.
+    pub fn picker_border(&self) -> Color {
+        self.picker_border.unwrap_or(self.bar_dim)
+    }
+    /// Details, the count, the placeholder, the footer's words: `bar_dim`.
+    pub fn picker_dim(&self) -> Color {
+        self.picker_dim.unwrap_or(self.bar_dim)
+    }
+    /// The prompt glyph, the selection bar, marks, the thumb:
+    /// `picker_selected_bg`, so a theme's selection colour still marks it.
+    pub fn picker_accent(&self) -> Color {
+        self.picker_accent.unwrap_or(self.picker_selected_bg)
+    }
+    /// The palette's error row: `bar_urgent`.
+    pub fn picker_error(&self) -> Color {
+        self.picker_error.unwrap_or(self.bar_urgent)
+    }
     /// Background art where it sets no colour: `bar_dim`.
     pub fn background_fg(&self) -> Color {
         self.background_fg.unwrap_or(self.bar_dim)
@@ -342,6 +386,15 @@ pub struct Attrs {
     pub strikethrough: bool,
 }
 
+impl Attrs {
+    pub fn bold() -> Attrs {
+        Attrs {
+            bold: true,
+            ..Attrs::default()
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Attrs {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let names = Vec::<String>::deserialize(d)?;
@@ -391,6 +444,16 @@ pub struct Styles {
     pub title_active: Attrs,
     pub picker_selected: Attrs,
     pub toast: Attrs,
+    /// The picker's title, its typed query, the mark of where you are, and
+    /// the palette's error row. Unset: bold, bold, none, bold.
+    #[serde(default = "Attrs::bold")]
+    pub picker_title: Attrs,
+    #[serde(default = "Attrs::bold")]
+    pub picker_query: Attrs,
+    #[serde(default)]
+    pub picker_current: Attrs,
+    #[serde(default = "Attrs::bold")]
+    pub picker_error: Attrs,
 }
 
 /// A format with `{placeholders}` and optional `[groups]`: a group shows only
