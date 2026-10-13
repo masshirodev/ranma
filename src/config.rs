@@ -3794,6 +3794,19 @@ mod tests {
         let t = cfg.toolbar("touch").unwrap();
         assert_eq!(t.buttons.len(), 8);
         assert_eq!(t.size, crate::toolbar::Size::Large);
+        // Termux's extra-keys row has Esc: the slot opens the keyboard instead.
+        let actions: Vec<_> = t.buttons.iter().filter_map(|b| b.builtin()).collect();
+        assert!(actions.contains(&&crate::action::Action::Keyboard));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, crate::action::Action::Send(_)))
+        );
+        let kbd = t.buttons.iter().find(|b| b.label.label == "⌨").unwrap();
+        assert_eq!(
+            unicode_width::UnicodeWidthStr::width(kbd.label.label.as_str()),
+            1
+        );
         cfg.use_profile(Some("mobile")).unwrap();
         assert_eq!(cfg.settings.layout, Layout::Monocle);
         assert_eq!(cfg.toolbars_shown, vec!["touch".to_string()]);

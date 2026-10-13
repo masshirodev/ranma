@@ -338,6 +338,9 @@ pub struct App {
     /// pressed (see `touch`).
     latches: touch::Latches,
     pressed: Option<touch::Pressed>,
+    /// Mouse reporting is off until then, so a tap opens the phone's keyboard
+    /// (the `keyboard` action, see `touch`).
+    keyboard_due: Option<Instant>,
     /// The toolbar face whose picker (sheet) is open: tapped again, it closes.
     sheet_from: Option<(String, crate::toolbar::Slot)>,
     /// The program in the foreground of each workspace's focused pane, for the
@@ -525,6 +528,7 @@ impl App {
             client_mobile: false,
             latches: Default::default(),
             pressed: None,
+            keyboard_due: None,
             sheet_from: None,
             programs: HashMap::new(),
             pane_facts: HashMap::new(),
@@ -2518,15 +2522,18 @@ impl App {
     /// Whether the host terminal should report the mouse: always, unless the
     /// config gives it to the host, in which case only in WM mode.
     pub fn wants_mouse(&self) -> bool {
-        self.mode != Mode::Normal
-            || self.picker.is_some()
-            || self.config.settings.mouse != config::MouseMode::Off
+        self.keyboard_due.is_none()
+            && (self.mode != Mode::Normal
+                || self.picker.is_some()
+                || self.config.settings.mouse != config::MouseMode::Off)
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
         }
+        // Typing means the keyboard is open: the mouse can come back.
+        self.keyboard_due = None;
         let key = self.latched_key(key);
         let chord = input::chord_of(&key);
         let leader = self.config.settings.leader;
@@ -3243,6 +3250,7 @@ impl App {
                 self.hide_pane_numbers();
                 self.enter_wm(self.config.settings.leader);
             }
+            Action::Keyboard => self.open_keyboard(),
             Action::SendLeader => {
                 let leader = self.config.settings.leader;
                 if let Some(p) = self.focused_pane()
@@ -3466,6 +3474,7 @@ impl App {
         // What the last terminal held or pressed was its own.
         self.latches.release(true);
         self.pressed = None;
+        self.keyboard_due = None;
         self.client_mobile = mobile;
         self.client_remote = remote;
         let facts = self.client_facts();
@@ -4134,6 +4143,7 @@ impl App {
             .chain(self.status_seen.as_ref().map(|(_, at)| *at + STATUS_FOR))
             .chain(self.hint_due)
             .chain(self.press_due())
+            .chain(self.keyboard_due)
             .chain(self.config.jobs.next_due())
             .chain(self.idle_due)
             .chain(self.silence_due)
@@ -4365,6 +4375,7 @@ impl App {
 
     fn run_timers(&mut self, now: Instant) {
         self.expire_press(now);
+        self.expire_keyboard(now);
         self.run_lua_timers(now);
         self.screen_timers(now);
         self.look(now);
@@ -6422,6 +6433,38 @@ mod tests {
         assert_eq!(a.mode, Mode::Normal);
         // Scripts reach it too: `ranma action leader`.
         assert_eq!("leader".parse::<Action>().unwrap(), Action::Leader);
+    }
+
+    /// Termux opens its keyboard for a tap only while nothing tracks the
+    /// mouse: the keyboard button lets go of it for a moment, until a key or
+    /// the time is up, and a terminal taking the screen has it back at once.
+    #[test]
+    fn a_keyboard_button_lets_go_of_the_mouse_for_a_moment() {
+        let mut a = app(Some(
+            r#"ranma.toolbar("t", { show = true, buttons = { { "⌨", "keyboard", text = "keys" } } })"#,
+        ));
+        with_pane(&mut a, 1);
+        assert!(a.wants_mouse());
+        a.run_button("t", 0);
+        assert!(!a.wants_mouse());
+        let due = a.keyboard_due.unwrap();
+        assert!(
+            a.next_deadline().is_some_and(|d| d <= due),
+            "the loop wakes for it"
+        );
+        a.run_timers(due - Duration::from_millis(1));
+        assert!(!a.wants_mouse());
+        a.run_timers(due);
+        assert!(a.wants_mouse());
+
+        a.run_button("t", 0);
+        key(&mut a, crossterm::event::KeyCode::Char('x'));
+        assert!(a.wants_mouse(), "typing: the keyboard is open");
+
+        a.run_button("t", 0);
+        a.driven_by(false, false);
+        assert!(a.wants_mouse());
+        assert_eq!("keyboard".parse::<Action>().unwrap(), Action::Keyboard);
     }
 
     /// A sheet open on the phone closes when the desk takes the screen (its

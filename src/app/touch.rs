@@ -21,6 +21,14 @@ use crate::toolbar::{self, Face, Slot};
 /// state never drawn is no feedback at all. A held frame, not an animation.
 const PRESS_HOLD: Duration = Duration::from_millis(90);
 
+/// How long `keyboard` keeps mouse reporting off. Termux opens its keyboard
+/// for a tap only when no mouse tracking is on, and decides that when the tap
+/// is confirmed as single, 300 ms after the touch began; the tap itself reached
+/// ranma at the finger's lift. Turning reporting off as that tap arrives
+/// usually lands in time, and when the round trip is slower, the next tap
+/// within this opens it.
+const KEYBOARD_FOR: Duration = Duration::from_millis(1500);
+
 /// Tapped again within this, a latch locks instead of letting go.
 const DOUBLE_TAP: Duration = Duration::from_millis(400);
 
@@ -430,6 +438,17 @@ impl App {
 
     pub(super) fn press_due(&self) -> Option<Instant> {
         self.pressed.as_ref().and_then(|p| p.until)
+    }
+
+    /// `keyboard`: mouse reporting off for `KEYBOARD_FOR`, or until a key.
+    pub(super) fn open_keyboard(&mut self) {
+        self.keyboard_due = Some(Instant::now() + KEYBOARD_FOR);
+    }
+
+    pub(super) fn expire_keyboard(&mut self, now: Instant) {
+        if self.keyboard_due.is_some_and(|t| t <= now) {
+            self.keyboard_due = None;
+        }
     }
 
     pub(super) fn expire_press(&mut self, now: Instant) {

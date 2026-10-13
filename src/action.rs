@@ -242,6 +242,10 @@ pub enum Action {
     Leader,
     /// Send the leader chord itself to the focused program.
     SendLeader,
+    /// Let the next tap open the phone's on-screen keyboard: mouse reporting
+    /// goes off for a moment, since Termux opens it only for a tap no program
+    /// is tracking (DESIGN.md, "A mobile view").
+    Keyboard,
     /// Type the paths of the clipboard's copied files, else of its image, into
     /// the focused pane, uploaded first when the pane runs ssh (DESIGN.md,
     /// "Pasting files").
@@ -429,6 +433,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("exit_mode", ""),
     ("leader", ""),
     ("send_leader", ""),
+    ("keyboard", ""),
     ("paste_image", ""),
     ("reload_config", ""),
     ("update", ""),
@@ -955,6 +960,7 @@ impl FromStr for Action {
             "exit_mode" => no_arg(Action::ExitMode),
             "leader" => no_arg(Action::Leader),
             "send_leader" => no_arg(Action::SendLeader),
+            "keyboard" => no_arg(Action::Keyboard),
             "paste_image" => no_arg(Action::PasteImage),
             "reload_config" => no_arg(Action::ReloadConfig),
             "quit" => match rest {
@@ -1132,6 +1138,7 @@ impl fmt::Display for Action {
             Action::ExitMode => f.write_str("exit_mode"),
             Action::Leader => f.write_str("leader"),
             Action::SendLeader => f.write_str("send_leader"),
+            Action::Keyboard => f.write_str("keyboard"),
             Action::PasteImage => f.write_str("paste_image"),
             Action::ReloadConfig => f.write_str("reload_config"),
             Action::Quit { now: false } => f.write_str("quit"),
