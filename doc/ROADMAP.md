@@ -290,7 +290,7 @@ contract between two builds.
   1.0, renames, the handover's version, plugin capability checks)
 - [ ] CI: the previous release against this build (its config, a handover
   both ways, its client and server)
-- [ ] Renamed names: an old config name read as its new one, with a warning
+- [x] Renamed names: an old config name read as its new one, with a warning
 - [x] `ranma.has(name)`: plugins ask for a capability, not a version
 - [x] `CHANGELOG.md`, with breaking changes first in the release notes
 
