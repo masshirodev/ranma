@@ -889,23 +889,35 @@ impl Screen {
     }
 
     fn move_sel(&mut self, down: bool) {
+        self.move_by(if down { 1 } else { -1 });
+    }
+
+    /// Moves the selection by `by` selectable rows, clamped to the list;
+    /// `isize::MIN` and `MAX` are the first and the last. With nothing to
+    /// select, the list scrolls instead.
+    fn move_by(&mut self, by: isize) {
         let ids: Vec<String> = self.rows().iter().map(|r| r.id.clone()).collect();
         if ids.is_empty() {
-            let sc = self.scroll.get();
+            let sc = self.scroll.get() as isize;
+            // The draw clamps it to the list, reading it as an i32.
             self.scroll
-                .set(if down { sc + 1 } else { sc.saturating_sub(1) });
+                .set(sc.saturating_add(by).clamp(0, i32::MAX as isize) as usize);
             return;
         }
         let cur = self
             .selected()
             .and_then(|r| ids.iter().position(|i| *i == r.id))
-            .unwrap_or(0);
-        let next = if down {
-            (cur + 1).min(ids.len() - 1)
-        } else {
-            cur.saturating_sub(1)
-        };
-        self.sel = Some(ids[next].clone());
+            .unwrap_or(0) as isize;
+        let next = cur.saturating_add(by).clamp(0, ids.len() as isize - 1);
+        self.sel = Some(ids[next as usize].clone());
+    }
+
+    /// A page: the selectable rows drawn last time, less one kept in view.
+    fn page(&self) -> usize {
+        match self.rows_at.borrow().len() {
+            0 => 10,
+            n => n.saturating_sub(1).max(1),
+        }
     }
 
     fn next_group(&mut self, back: bool) {
@@ -965,6 +977,10 @@ impl Screen {
                 KeyCode::Enter => self.filtering = false,
                 KeyCode::Up => self.move_sel(false),
                 KeyCode::Down => self.move_sel(true),
+                KeyCode::PageUp => self.move_by(-(self.page() as isize)),
+                KeyCode::PageDown => self.move_by(self.page() as isize),
+                KeyCode::Home => self.move_by(isize::MIN),
+                KeyCode::End => self.move_by(isize::MAX),
                 KeyCode::Backspace => {
                     self.query.pop();
                     return self.query_changed();
@@ -990,6 +1006,10 @@ impl Screen {
         match name.as_str() {
             "up" | "k" => self.move_sel(false),
             "down" | "j" => self.move_sel(true),
+            "pageup" => self.move_by(-(self.page() as isize)),
+            "pagedown" => self.move_by(self.page() as isize),
+            "home" => self.move_by(isize::MIN),
+            "end" => self.move_by(isize::MAX),
             "tab" => self.next_group(false),
             "backtab" => self.next_group(true),
             "?" => self.help = true,
@@ -1690,6 +1710,10 @@ pub fn key_name(k: &KeyEvent) -> String {
         KeyCode::BackTab => "backtab".into(),
         KeyCode::Backspace => "backspace".into(),
         KeyCode::Delete => "delete".into(),
+        KeyCode::PageUp => "pageup".into(),
+        KeyCode::PageDown => "pagedown".into(),
+        KeyCode::Home => "home".into(),
+        KeyCode::End => "end".into(),
         KeyCode::Char(' ') => "space".into(),
         KeyCode::Char(c) => c.to_string(),
         KeyCode::F(n) => format!("f{n}"),
@@ -1706,7 +1730,9 @@ pub fn key_name(k: &KeyEvent) -> String {
 
 /// Keys ranma keeps on a plugin screen; a plugin may not bind them.
 /// On a row with an editable value it also keeps ←→ `h` `l` and `enter`.
-pub const RESERVED: [&str; 9] = ["up", "down", "j", "k", "tab", "backtab", "/", "esc", "?"];
+pub const RESERVED: [&str; 13] = [
+    "up", "down", "j", "k", "pageup", "pagedown", "home", "end", "tab", "backtab", "/", "esc", "?",
+];
 
 // ---- badges on a pane's title edge ---------------------------------------------------
 
@@ -2816,9 +2842,41 @@ mod tests {
             "esc" => KeyCode::Esc,
             "tab" => KeyCode::Tab,
             "space" => KeyCode::Char(' '),
+            "pageup" => KeyCode::PageUp,
+            "pagedown" => KeyCode::PageDown,
+            "home" => KeyCode::Home,
+            "end" => KeyCode::End,
             c => KeyCode::Char(c.chars().next().unwrap()),
         };
         scr.key(&KeyEvent::new(code, KeyModifiers::NONE))
+    }
+
+    #[test]
+    fn page_keys_home_and_end_move_by_pages_and_to_the_ends() {
+        let mut a = agents();
+        let ids: Vec<String> = a.rows().iter().map(|r| r.id.clone()).collect();
+        assert!(ids.len() > 3, "the mock needs a few rows");
+        press(&mut a, "end");
+        assert_eq!(a.selected().unwrap().id, *ids.last().unwrap());
+        press(&mut a, "home");
+        assert_eq!(a.selected().unwrap().id, ids[0]);
+        // Nothing drawn yet: a page is 10 rows, clamped to the list.
+        press(&mut a, "pagedown");
+        assert_eq!(a.selected().unwrap().id, ids[10.min(ids.len() - 1)]);
+        // Once drawn, a page is the rows on screen less one.
+        *a.rows_at.borrow_mut() = (0..3).map(|i| (i, ids[i as usize].clone())).collect();
+        press(&mut a, "home");
+        press(&mut a, "pagedown");
+        assert_eq!(a.selected().unwrap().id, ids[2]);
+        press(&mut a, "pageup");
+        assert_eq!(a.selected().unwrap().id, ids[0]);
+        // The same while filtering.
+        press(&mut a, "/");
+        press(&mut a, "end");
+        assert_eq!(
+            a.selected().unwrap().id,
+            *a.rows().last().map(|r| &r.id).unwrap()
+        );
     }
 
     #[test]

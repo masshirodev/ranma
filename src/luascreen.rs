@@ -258,7 +258,7 @@ struct KeyDef {
 fn reserved(name: &str, who: &str) -> mlua::Result<()> {
     if RESERVED.contains(&name) {
         return Err(err(format!(
-            "{who}: `{name}` is ranma's on a screen (↑↓ j k tab / esc ? move, filter, close and explain)"
+            "{who}: `{name}` is ranma's on a screen (↑↓ j k pageup pagedown home end tab / esc ? move, filter, close and explain)"
         )));
     }
     Ok(())

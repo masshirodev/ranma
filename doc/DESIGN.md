@@ -1131,6 +1131,15 @@ shown session so the arrows move from it, and the pane switcher marks the focuse
 pane but still starts at the top, since the pane you want is another one.
 Moving a workspace starts on the first session that is not the current one.
 
+**Page Up/Down and Home/End move the list** (2026-10-12), in pickers, plugin
+screens and the settings panel alike. A page is the rows the list showed
+last, less one, so the row you were on stays in view, as `less` does. Home
+and End go to the first and last item rather than along the query: the query
+line has no cursor to move (typing appends, Backspace takes the last
+character), so they had nothing to do there. On a plugin screen the four are
+ranma's, like `↑↓`, and a plugin binding one is an error; none could fire
+before, since screens did not name them.
+
 ### Copy mode is alacritty's vi mode
 
 alacritty_terminal already has a vi cursor independent of the program's, the
