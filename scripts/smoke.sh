@@ -18,6 +18,15 @@ wait_for() { # pattern, tries
   for _ in $(seq 1 "${2:-40}"); do screen | grep -q -- "$1" && return 0; sleep 0.25; done
   return 1
 }
+# Until the pattern is on screen at least COUNT times; a fixed sleep fails on a
+# box busy enough that a shell takes longer than it to answer.
+wait_count() { # pattern, count
+  for _ in $(seq 1 40); do
+    [ "$(screen | grep -o -- "$1" | wc -l)" -ge "$2" ] && return 0
+    sleep 0.25
+  done
+  return 1
+}
 
 # An empty config dir: the smoke test checks the defaults, not the user's config.
 CFG=$(mktemp -d)
@@ -152,11 +161,14 @@ wait_for 'ab      Z' || fail "tab rendering or input passthrough"
 # unmarked, the next line reaches the focused pane only.
 T send-keys -t s C-b x a Left x a Escape; sleep 0.3
 bar | grep -q '⇉ sync 2' || fail "marking two panes did not show in the bar ($(bar))"
-T send-keys -t s 'echo sync''ed-both' Enter; sleep 0.5
-[ "$(screen | grep -o '│synced-both' | wc -l)" -eq 2 ] || fail "synchronized input did not reach both panes"
+T send-keys -t s 'echo sync''ed-both' Enter
+wait_count '│synced-both' 2 || fail "synchronized input did not reach both panes"
 T send-keys -t s C-b x A Escape; sleep 0.3
 bar | grep -q 'sync' && fail "sync_clear left panes marked"
-T send-keys -t s 'echo only''-one' Enter; sleep 0.5
+T send-keys -t s 'echo only''-one' Enter
+wait_count '│only-one' 1 || fail "unmarked, typing reached no pane"
+# Then long enough for a second copy to have arrived, were there one.
+sleep 0.5
 [ "$(screen | grep -o '│only-one' | wc -l)" -eq 1 ] || fail "unmarked, typing still reached both panes"
 T send-keys -t s C-b Right Escape; sleep 0.3
 
