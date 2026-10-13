@@ -135,7 +135,50 @@ impl App {
         {
             self.move_pane_to(id, target, !rule.silent);
         }
+        if let Some(name) = &rule.group {
+            self.join_named_group(id, name);
+        }
         self.relayout();
+    }
+
+    /// Tab `id` into the group called `name` in its workspace (a pane a rule
+    /// put there that is still in a group), or start that group with it.
+    /// A floating pane is tiled first: a group is part of the tiling.
+    fn join_named_group(&mut self, id: PaneId, name: &str) {
+        let Some(n) = self.locate(id).filter(|n| *n != SCRATCHPAD) else {
+            return;
+        };
+        let member = self
+            .pane_groups
+            .iter()
+            .filter(|(p, g)| **p != id && g.as_str() == name)
+            .map(|(p, _)| *p)
+            .find(|p| {
+                self.locate(*p) == Some(n)
+                    && self
+                        .workspaces
+                        .get(&n)
+                        .is_some_and(|w| w.tree.is_grouped(*p))
+            });
+        let ws = self.ws_mut(n);
+        let floated = ws.floating.iter().any(|(p, _)| *p == id);
+        ws.floating.retain(|(p, _)| *p != id);
+        match member {
+            Some(m) => {
+                ws.tree.remove(id);
+                if !ws.tree.join_group(id, m) {
+                    ws.tree.insert(id, Some(m), None, Placement::Dwindle);
+                }
+            }
+            None => {
+                if floated {
+                    let f = ws.focused.filter(|f| *f != id);
+                    ws.tree.insert(id, f, None, Placement::Dwindle);
+                }
+                ws.tree.group_alone(id);
+            }
+        }
+        self.pane_groups.insert(id, name.to_string());
     }
 
     /// Toggle floating on a pane, remembering where it floated: a pane floated

@@ -1931,7 +1931,7 @@ cost nothing when no rule uses them. Decided with them:
 - Grouping a matched pane with another (tabbing it) is left out for now:
   which group it joins needs deciding first.
 
-**A rule's `group` is a named group** (decided 2026-10-13, not built yet):
+**A rule's `group` is a named group** (2026-10-13):
 `ranma.rule { program = "ssh", group = "servers" }` tabs a matched pane into
 the group of that name in its own workspace, and the first pane to match
 starts it. A name, rather than "the focused pane" or "the rule's last

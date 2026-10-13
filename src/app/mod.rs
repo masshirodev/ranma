@@ -281,6 +281,8 @@ pub struct App {
     host_out: Vec<Vec<u8>>,
     /// (pane, rule index) pairs already applied, so title rules fire once.
     rules_applied: HashSet<(PaneId, usize)>,
+    /// The named group a rule put each pane in (`group = "servers"`).
+    pane_groups: HashMap<PaneId, String>,
     /// The last pane that had focus anywhere. A new session or an empty
     /// scratchpad has no focused pane of its own, and still starts where you were.
     last_focused: Option<PaneId>,
@@ -483,6 +485,7 @@ impl App {
             copy: None,
             host_out: Vec::new(),
             rules_applied: HashSet::new(),
+            pane_groups: HashMap::new(),
             last_focused: None,
             last_workspace: None,
             host_colors: Default::default(),
@@ -1251,6 +1254,7 @@ impl App {
         }
         self.panes.remove(&id);
         self.rules_applied.retain(|(p, _)| *p != id);
+        self.pane_groups.remove(&id);
         self.pane_ended(id);
         // A popup gives focus back to the pane it was opened from, if that is
         // still in the workspace shown, rather than to whichever neighbour.
@@ -4874,6 +4878,42 @@ mod tests {
         ws.tree
             .insert(id, None, None, crate::layout::Placement::Dwindle);
         ws.focused = Some(id);
+    }
+
+    #[test]
+    fn a_rules_named_group_gathers_the_panes_it_matches() {
+        let mut a = app(Some(
+            r#"ranma.rule { command = "ssh*", group = "servers" }"#,
+        ));
+        for id in [1, 2, 3, 4] {
+            with_pane(&mut a, id);
+        }
+        a.apply_command_rules(2, "ssh vps");
+        a.apply_command_rules(4, "ssh prod");
+        let l = a.workspaces[&1]
+            .tree
+            .layout_full(Rect::new(0, 0, 80, 24), 0);
+        assert_eq!(l.tab_bars.len(), 1, "one group: {:?}", l.tab_bars);
+        assert_eq!(
+            l.tab_bars[0].tabs,
+            vec![2, 4],
+            "both ssh panes, nothing else"
+        );
+        assert_eq!(l.visible.len(), 3, "1 and 3 stay tiled beside the group");
+        assert_eq!(a.pane_groups.get(&4).map(String::as_str), Some("servers"));
+        for (src, needle) in [
+            (
+                "ranma.rule { command = 'x', group = 'g', float = true }",
+                "not both",
+            ),
+            ("ranma.rule { command = 'x', group = ' ' }", "is a name"),
+        ] {
+            let err = format!(
+                "{:#}",
+                crate::config::load_from(None, None, Some(src)).unwrap_err()
+            );
+            assert!(err.contains(needle), "{src}: {err}");
+        }
     }
 
     #[test]

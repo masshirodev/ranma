@@ -576,6 +576,7 @@ ranma.profile("mobile", {
 --   ranma.rule { title = "*NVIM*", workspace = 2 }
 --   ranma.rule { program = "ssh", host = "prod*", name = "PROD", badge = { "!", "prod", "urgent" } }
 --   ranma.rule { cwd = "~/work/*", badge = { "w", "work", "dim" } }
+--   ranma.rule { program = "ssh", group = "servers" }    -- every ssh pane, tabbed together
 --
 -- Modules:
 --
