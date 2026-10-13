@@ -834,6 +834,59 @@ A colour (\fB#rrggbb\fR, \fB0\fR\-\fB255\fR, an ANSI name) for the session with 
 So two projects look different at a glance. \fBsession_accent\fR sets one for the
 current session at run time, and \fBranma open \-\-accent\fR for the session it
 opens in; either wins over the config until \fBsession_accent none\fR.
+.SH "PLACEMENTS IN LUA — \fBranma.placement(name, fn)\fR"
+.PP
+A placement is a layout policy of your own, beside \fBdwindle\fR, \fBmaster\fR and
+the rest: chosen the same way (\fBranma.set { layout = "centred" }\fR,
+\fBworkspace_layout centred\fR, the \fBy w\fR picker), and declared before it is
+named. Its function gets the workspace and returns a tree of splits:
+.PP
+.RS 4
+.nf
+ranma.placement("centred", function(ws)
+  local p = ws.panes
+  if #p == 1 then return p[1] end
+  if #p == 2 then return ranma.h(0.6, p[1], p[2]) end
+  local left, right = {}, {}
+  for i = 2, #p do
+    if i % 2 == 0 then left[#left + 1] = p[i] else right[#right + 1] = p[i] end
+  end
+  local function col(t) return #t == 1 and t[1] or ranma.v(table.unpack(t)) end
+  return ranma.h(0.25, col(left), ranma.h(0.67, p[1], col(right)))
+end)
+.fi
+.RE
+.PP
+\fBranma.h(a, b, ...)\fR puts its children side by side and \fBranma.v(...)\fR stacks
+them, equally; with a number first and two children, \fBranma.h(0.6, a, b)\fR
+gives \fBa\fR 60%. A child is a pane id or another split. They build plain tables
+(\fB{ split = "h", ratio = 0.6, a, b }\fR), which you may write by hand.
+.PP
+\fBws\fR is \fB{ panes, focused, width, height, workspace, state, message }\fR:
+the tiled panes' ids in their current order (floats are not laid out), the
+focused one, the area in cells, a \fBstate\fR table kept between calls for this
+workspace (until a reload), and \fBmessage\fR, below.
+.PP
+The function runs when the workspace's shape changes (a pane opens, closes
+or moves in or out, the area resizes, the layout is chosen), never per frame,
+and under the same 200 ms budget as a bind. What it returns is checked: every
+pane exactly once, splits of two children or more, \fBratio\fR 0.05\-0.95. A tree
+that is not, or an error, leaves the workspace laid out as dwindle and says
+why in a toast that names the node (\fBplacement \e\fRcentred`: the second
+child of the tree: …\fB). Returning\fRnil` keeps the tree as it is.
+.PP
+On a workspace a placement lays out, the tiled \fBmove\fR, \fBresize\fR, \fBequalize\fR,
+\fBswap_master\fR and \fBtoggle_split\fR keys are its \fBmessages\fR: the function is
+called with \fBws.message\fR set to the action as written (\fB"resize right 4"\fR,
+\fB"move left"\fR, \fB"equalize"\fR) and returns the new tree, or \fBnil\fR to ignore
+it. Keep what a message changes in \fBws.state\fR.
+.PP
+\fBranma layout\-preview NAME [WIDTHxHEIGHT] [\-\-panes N]\fR runs a placement
+from your config without a server and draws it as numbered boxes, to see a
+tree while writing it.
+.PP
+The settings panel's \fBlayout\fR choice lists the built\-ins only; a placement
+is chosen in \fBinit.lua\fR, with \fBworkspace_layout\fR, or from the \fBy w\fR picker.
 .SH "LAYOUTS — \fBranma.layout(name, def)\fR"
 .PP
 A layout is a workspace's tree with what runs in each pane, brought back with

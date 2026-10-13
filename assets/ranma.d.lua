@@ -234,6 +234,34 @@ function ranma.toolbar(name, def) end
 ---@param def ranma.LayoutNode
 function ranma.layout(name, def) end
 
+---What a placement's function gets.
+---@class ranma.PlacementWorkspace
+---@field panes integer[] The tiled panes' ids, in their current order.
+---@field focused integer? The focused pane.
+---@field width integer The area, in cells.
+---@field height integer
+---@field workspace integer
+---@field state table Kept between calls for this workspace, until a reload.
+---@field message string? A resize or move key as its action text ("resize right 4"), or nil.
+
+---A tree of splits: a pane id, or { split = "h"|"v", ratio = 0.05-0.95 (two children only), child, child, ... }.
+---@alias ranma.PlacementTree integer|table
+
+---A layout policy of your own, chosen as the built-ins are (layout, workspace_layout):
+---the function returns the tree for a workspace, or nil to keep it. Runs on
+---structural change only; a bad tree falls back to dwindle with a toast.
+---@param name string Not a built-in layout's name.
+---@param fn fun(ws: ranma.PlacementWorkspace): ranma.PlacementTree?
+function ranma.placement(name, fn) end
+
+---Side by side: ranma.h(a, b, ...) equally, ranma.h(0.6, a, b) with a taking 60%.
+---@return table
+function ranma.h(...) end
+
+---Stacked, as ranma.h.
+---@return table
+function ranma.v(...) end
+
 -- ---------------------------------------------------------------------------
 -- At run time: inside binds, hooks, modules, timers and spawn callbacks.
 -- ---------------------------------------------------------------------------

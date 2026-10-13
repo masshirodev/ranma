@@ -509,6 +509,58 @@ So two projects look different at a glance. `session_accent` sets one for the
 current session at run time, and `ranma open --accent` for the session it
 opens in; either wins over the config until `session_accent none`.
 
+## Placements in Lua — `ranma.placement(name, fn)`
+
+A placement is a layout policy of your own, beside `dwindle`, `master` and
+the rest: chosen the same way (`ranma.set { layout = "centred" }`,
+`workspace_layout centred`, the `y w` picker), and declared before it is
+named. Its function gets the workspace and returns a tree of splits:
+
+```lua
+ranma.placement("centred", function(ws)
+  local p = ws.panes
+  if #p == 1 then return p[1] end
+  if #p == 2 then return ranma.h(0.6, p[1], p[2]) end
+  local left, right = {}, {}
+  for i = 2, #p do
+    if i % 2 == 0 then left[#left + 1] = p[i] else right[#right + 1] = p[i] end
+  end
+  local function col(t) return #t == 1 and t[1] or ranma.v(table.unpack(t)) end
+  return ranma.h(0.25, col(left), ranma.h(0.67, p[1], col(right)))
+end)
+```
+
+`ranma.h(a, b, ...)` puts its children side by side and `ranma.v(...)` stacks
+them, equally; with a number first and two children, `ranma.h(0.6, a, b)`
+gives `a` 60%. A child is a pane id or another split. They build plain tables
+(`{ split = "h", ratio = 0.6, a, b }`), which you may write by hand.
+
+`ws` is `{ panes, focused, width, height, workspace, state, message }`:
+the tiled panes' ids in their current order (floats are not laid out), the
+focused one, the area in cells, a `state` table kept between calls for this
+workspace (until a reload), and `message`, below.
+
+The function runs when the workspace's shape changes (a pane opens, closes
+or moves in or out, the area resizes, the layout is chosen), never per frame,
+and under the same 200 ms budget as a bind. What it returns is checked: every
+pane exactly once, splits of two children or more, `ratio` 0.05-0.95. A tree
+that is not, or an error, leaves the workspace laid out as dwindle and says
+why in a toast that names the node (`placement \`centred\`: the second
+child of the tree: …`). Returning `nil` keeps the tree as it is.
+
+On a workspace a placement lays out, the tiled `move`, `resize`, `equalize`,
+`swap_master` and `toggle_split` keys are its **messages**: the function is
+called with `ws.message` set to the action as written (`"resize right 4"`,
+`"move left"`, `"equalize"`) and returns the new tree, or `nil` to ignore
+it. Keep what a message changes in `ws.state`.
+
+`ranma layout-preview NAME [WIDTHxHEIGHT] [--panes N]` runs a placement
+from your config without a server and draws it as numbered boxes, to see a
+tree while writing it.
+
+The settings panel's `layout` choice lists the built-ins only; a placement
+is chosen in `init.lua`, with `workspace_layout`, or from the `y w` picker.
+
 ## Layouts — `ranma.layout(name, def)`
 
 A layout is a workspace's tree with what runs in each pane, brought back with

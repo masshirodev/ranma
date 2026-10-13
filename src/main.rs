@@ -193,6 +193,18 @@ enum Command {
     /// Say what loaded and what runs: the config, each plugin and whether it
     /// failed, the hooks, timers and jobs.
     Health,
+    /// Draw what a `ranma.placement` from your config lays out, as numbered
+    /// boxes, without a server: `ranma layout-preview centred 120x40 --panes 4`.
+    LayoutPreview {
+        /// The placement's name.
+        name: String,
+        /// The area, WIDTHxHEIGHT in cells.
+        #[arg(default_value = "80x24")]
+        size: String,
+        /// How many panes to lay out.
+        #[arg(long, default_value_t = 3)]
+        panes: usize,
+    },
     /// Print a pane's text: its screen, and with --history that many lines of
     /// scrollback above it.
     Capture {
@@ -444,6 +456,20 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             ipc::send(&format!("lua\n{code}"))?
         }
         Command::Health => ipc::send("health\n")?,
+        Command::LayoutPreview { name, size, panes } => {
+            let (w, h) = size
+                .split_once('x')
+                .and_then(|(w, h)| Some((w.parse::<u16>().ok()?, h.parse::<u16>().ok()?)))
+                .filter(|(w, h)| *w >= 4 && *h >= 3)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("the size is WIDTHxHEIGHT, like 80x24, not `{size}`")
+                })?;
+            if panes == 0 {
+                anyhow::bail!("--panes is 1 or more");
+            }
+            let cfg = config::load(config::config_dir().as_deref())?;
+            ranma::placement::preview(&cfg, &name, w, h, panes).map_err(anyhow::Error::msg)? + "\n"
+        }
         Command::Capture { pane, history } => {
             let pane = ipc::pane_or_own(pane)?;
             ipc::send(&format!("capture\n{pane}\n{history}\n"))?

@@ -288,7 +288,7 @@ turns it off.
 Directional focus and movement work on **on-screen geometry, not tree order**. It is
 the detail that makes it feel like a WM instead of a list of splits.
 
-### Placement policies in Lua (decided 2026-10-13, not built yet)
+### Placement policies in Lua (2026-10-13)
 
 `ranma.placement(name, fn)` declares a layout policy beside dwindle,
 master-stack and the strip, chosen like them (`layout`,
@@ -311,8 +311,22 @@ master-stack and the strip, chosen like them (`layout`,
   policy that ignores a message does not resize.
 - **Checked before use**: every pane exactly once, ratios 0.05-0.95. A bad
   tree or an error falls back to dwindle with a toast naming the node
-  ("the second child of the split at depth 1 has no pane"), never a blank
-  workspace.
+  ("the second child of the tree: a split has two children or more"),
+  never a blank workspace. New panes are placed as dwindle places them
+  before the policy runs, so falling back is leaving the tree as it is.
+- **A name is accepted once any `ranma.placement` in the process declared
+  it**, so `workspace_layout centred` in a bind parses and a typo still does
+  not. The configuration that sets `layout` to one must declare it (a load
+  error otherwise); a workspace left on a name a reload removed falls back
+  to dwindle with a toast. `Layout::Lua` holds a small interned id, so a
+  layout stays a plain value, and is written by name in snapshots and the
+  handover, the built-ins exactly as before.
+- **The messages are the keys' action text**: the tiled `move`, `resize`,
+  `equalize`, `swap_master` and `toggle_split`. A policy that returns `nil`
+  ignores one.
+- The settings panel's `layout` choice keeps to the built-ins for now; a
+  placement is chosen in `init.lua`, with `workspace_layout`, or from the
+  `y w` picker, which lists them.
 
 ### Layouts: tmux's presets, and saved ones
 

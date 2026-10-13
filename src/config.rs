@@ -22,8 +22,7 @@ use crate::theme::{self, Theme};
 
 pub const DEFAULT_INIT_LUA: &str = include_str!("../assets/init.lua");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
     Dwindle,
     Manual,
@@ -36,6 +35,27 @@ pub enum Layout {
     /// niri's: a strip of columns wider than the screen, the view scrolling
     /// to the focused one (`crate::strip`).
     Scrolling,
+    /// A policy written in Lua (`ranma.placement`, see `crate::placement`).
+    Lua(crate::placement::PolicyId),
+}
+
+// By name, as the setting spells it: the built-ins as they always were, so
+// snapshots and handovers written before policies existed still read.
+impl Serialize for Layout {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.name())
+    }
+}
+
+impl<'de> Deserialize<'de> for Layout {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        Layout::from_name(&s).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unknown layout `{s}` (dwindle, manual, master, monocle, scrolling, or a ranma.placement declared before it is named)"
+            ))
+        })
+    }
 }
 
 impl Layout {
@@ -56,11 +76,16 @@ impl Layout {
             Layout::Master => "master",
             Layout::Monocle => "monocle",
             Layout::Scrolling => "scrolling",
+            Layout::Lua(id) => crate::placement::name(id),
         }
     }
 
+    /// A built-in, or a policy some `ranma.placement` declared.
     pub fn from_name(s: &str) -> Option<Layout> {
-        Layout::ALL.into_iter().find(|l| l.name() == s)
+        Layout::ALL
+            .into_iter()
+            .find(|l| l.name() == s)
+            .or_else(|| crate::placement::find(s).map(Layout::Lua))
     }
 }
 
@@ -1021,6 +1046,7 @@ struct Builder {
     workspaces_nested: NestedWorkspaces,
     title_nested: bool,
     rules: Vec<Rule>,
+    placements: Vec<(crate::placement::PolicyId, std::rc::Rc<mlua::RegistryKey>)>,
     session_accents: HashMap<String, theme::Color>,
     profiles: HashMap<String, Profile>,
     toolbars: Vec<(String, ToolbarDef)>,
@@ -1075,6 +1101,8 @@ pub struct Config {
     pub title_nested: bool,
     /// In the order written; every matching rule applies, later ones last.
     pub rules: Vec<Rule>,
+    /// `ranma.placement`s, in the order declared: a policy and its function.
+    pub placements: Vec<(crate::placement::PolicyId, std::rc::Rc<mlua::RegistryKey>)>,
     /// `ranma.session(name, { accent = ... })`: a session's colour, by name.
     pub session_accents: HashMap<String, theme::Color>,
     /// `ranma.layout` definitions, by name (DESIGN.md, "Layouts").
@@ -2148,6 +2176,20 @@ fn install_api(
     )?;
 
     ranma.set(
+        "placement",
+        lua.create_function(|lua, (name, f): (String, mlua::Function)| {
+            crate::placement::valid_name(&name)
+                .map_err(|e| rt_err(format!("ranma.placement: {e}")))?;
+            let key = std::rc::Rc::new(lua.create_registry_value(f)?);
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            let id = crate::placement::declare(&name);
+            b.placements.retain(|(i, _)| *i != id);
+            b.placements.push((id, key));
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "rule",
         lua.create_function(|lua, value: Value| {
             let spec: RuleSpec = lua
@@ -2559,6 +2601,10 @@ fn install_api(
             None => false,
         }
     })?;
+    lua.globals().set("ranma", ranma.clone())?;
+    lua.load(crate::placement::HELPERS)
+        .set_name("ranma.h and ranma.v")
+        .exec()?;
     lua.globals().set("ranma", ranma)
 }
 
@@ -2864,6 +2910,15 @@ pub fn load_full(
     jobs.adopt(std::mem::take(&mut builder.timers));
     *user_events.hooks.borrow_mut() = std::mem::take(&mut builder.user_hooks);
 
+    // A layout naming a policy only an earlier configuration declared.
+    if let Layout::Lua(id) = builder.settings.layout
+        && !builder.placements.iter().any(|(i, _)| *i == id)
+    {
+        anyhow::bail!(
+            "layout `{}`: no ranma.placement by that name in this configuration",
+            crate::placement::name(id)
+        );
+    }
     Ok(Config {
         modes: std::mem::take(&mut builder.modes),
         commands: std::mem::take(&mut builder.commands),
@@ -2889,6 +2944,7 @@ pub fn load_full(
         workspaces_nested: builder.workspaces_nested,
         title_nested: builder.title_nested,
         rules: builder.rules,
+        placements: builder.placements,
         session_accents: builder.session_accents,
         layouts: builder.layouts,
         theme,
