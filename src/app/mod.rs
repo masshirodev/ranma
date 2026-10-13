@@ -3205,9 +3205,13 @@ impl App {
                 if self.watcher.is_some() {
                     self.watcher = watch_config(self.tx.clone(), &self.config.packages);
                 }
-                // The plugins that set them start over too.
-                self.badges.clear();
-                self.badge_owners.clear();
+                // The plugins that set them start over too; a rule's stay, as
+                // rules are not run again on panes they matched.
+                for list in self.badges.values_mut() {
+                    list.retain(|(o, _)| o == rules::RULES_OWNER);
+                }
+                self.badges.retain(|_, l| !l.is_empty());
+                self.badge_owners.retain(|o| o == rules::RULES_OWNER);
                 self.watches.clear();
                 self.watch_pending.clear();
                 self.refresh_settings_panel();
@@ -3977,7 +3981,10 @@ impl App {
     /// `ssh vps` arrives before ssh does. Only events call this, never the timer
     /// it sets, so it cannot keep itself awake.
     fn note_programs(&mut self, now: Instant, follow_up: bool) {
-        if self.config.workspaces_numbers_only || self.programs_due.is_some() {
+        // Numbers only needs no program names, unless a rule matches on
+        // what runs in a pane.
+        let rules = self.config.rules.iter().any(crate::config::Rule::is_late);
+        if (self.config.workspaces_numbers_only && !rules) || self.programs_due.is_some() {
             return;
         }
         match self.programs_read {
@@ -4042,6 +4049,7 @@ impl App {
             self.pane_facts = facts;
             self.dirty = true;
         }
+        self.apply_late_rules();
     }
 
     /// A pane's title as its border shows it: `border.title_format`, with

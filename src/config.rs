@@ -773,6 +773,16 @@ pub struct Rule {
     pub workspace: Option<u8>,
     /// With `workspace`: send it there without following.
     pub silent: bool,
+    /// Globs matched later, when ranma reads what runs in a pane: its
+    /// foreground program, its directory (`~/` for home), the host it is
+    /// connected to.
+    pub program: Option<String>,
+    pub cwd: Option<String>,
+    pub host: Option<String>,
+    /// Name the pane, as `rename_pane`.
+    pub name: Option<String>,
+    /// A badge on the pane's border, as `pane:badge` with the owner `rules`.
+    pub badge: Option<crate::screen::Badge>,
 }
 
 impl Rule {
@@ -780,7 +790,29 @@ impl Rule {
         self.command.as_deref().is_some_and(|g| glob(g, cmd))
     }
     pub fn matches_title(&self, title: &str) -> bool {
-        self.title.as_deref().is_some_and(|g| glob(g, title))
+        !self.is_late() && self.title.as_deref().is_some_and(|g| glob(g, title))
+    }
+    /// Matched when what runs in the pane is read, not when it opens.
+    pub fn is_late(&self) -> bool {
+        self.program.is_some() || self.cwd.is_some() || self.host.is_some()
+    }
+    /// Every matcher the rule gives, against what was read of the pane.
+    pub fn matches_late(
+        &self,
+        title: &str,
+        program: Option<&str>,
+        cwd: Option<&str>,
+        host: Option<&str>,
+    ) -> bool {
+        let m = |g: &Option<String>, v: Option<&str>| match g {
+            None => true,
+            Some(g) => v.is_some_and(|v| glob(g, v)),
+        };
+        self.is_late()
+            && m(&self.title, Some(title))
+            && m(&self.program, program)
+            && m(&self.cwd, cwd)
+            && m(&self.host, host)
     }
 }
 
@@ -823,6 +855,11 @@ struct RuleSpec {
     size: Option<Vec<u16>>,
     workspace: Option<u8>,
     silent: Option<bool>,
+    program: Option<String>,
+    cwd: Option<String>,
+    host: Option<String>,
+    name: Option<String>,
+    badge: Option<Vec<String>>,
 }
 
 /// What `ranma.state()` answers with, filled in by the window manager before it
@@ -2062,9 +2099,47 @@ fn install_api(
             let spec: RuleSpec = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.rule: {e}")))?;
-            if spec.command.is_none() && spec.title.is_none() {
-                return Err(rt_err("ranma.rule: give command or title to match on"));
+            let late = spec.program.is_some() || spec.cwd.is_some() || spec.host.is_some();
+            if spec.command.is_none() && spec.title.is_none() && !late {
+                return Err(rt_err(
+                    "ranma.rule: give command, title, program, cwd or host to match on",
+                ));
             }
+            if spec.command.is_some() && late {
+                return Err(rt_err(
+                    "ranma.rule: command is matched as a pane opens, program, cwd and host once it runs: give one or the other",
+                ));
+            }
+            let badge = match spec.badge.as_deref() {
+                None => None,
+                Some([glyph, rest @ ..]) if rest.len() <= 2 => {
+                    let word = rest.first().cloned().unwrap_or_default();
+                    let role = match rest.get(1) {
+                        None => crate::screen::Role::Normal,
+                        Some(r) => crate::screen::Role::parse(r).ok_or_else(|| {
+                            rt_err(format!(
+                                "ranma.rule: badge role `{r}` (expected normal, dim, accent, urgent)"
+                            ))
+                        })?,
+                    };
+                    let n = glyph.chars().count();
+                    if !(1..=2).contains(&n) || word.chars().count() > 12 {
+                        return Err(rt_err(
+                            "ranma.rule: a badge is { glyph (1-2 characters), word (12 at most), role }",
+                        ));
+                    }
+                    Some(crate::screen::Badge {
+                        glyph: glyph.clone(),
+                        word,
+                        role,
+                    })
+                }
+                Some(_) => {
+                    return Err(rt_err(
+                        "ranma.rule: a badge is { glyph, word, role }, the last two optional",
+                    ));
+                }
+            };
             let size = match spec.size.as_deref() {
                 None => None,
                 Some([w, h]) if (10..=100).contains(w) && (10..=100).contains(h) => Some((*w, *h)),
@@ -2078,9 +2153,14 @@ fn install_api(
                 return Err(rt_err("ranma.rule: workspaces are numbered from 1"));
             }
             let float = spec.float.unwrap_or(size.is_some());
-            if !float && size.is_none() && spec.workspace.is_none() {
+            if !float
+                && size.is_none()
+                && spec.workspace.is_none()
+                && spec.name.is_none()
+                && badge.is_none()
+            {
                 return Err(rt_err(
-                    "ranma.rule: the rule does nothing (give float, size or workspace)",
+                    "ranma.rule: the rule does nothing (give float, size, workspace, name or badge)",
                 ));
             }
             if spec.silent.is_some() && spec.workspace.is_none() {
@@ -2096,6 +2176,11 @@ fn install_api(
                     size,
                     workspace: spec.workspace,
                     silent: spec.silent.unwrap_or(false),
+                    program: spec.program,
+                    cwd: spec.cwd,
+                    host: spec.host,
+                    name: spec.name,
+                    badge,
                 });
             Ok(())
         })?,
@@ -4114,7 +4199,7 @@ mod tests {
         // A size implies floating.
         assert!(cfg.rules[2].float);
         for (src, needle) in [
-            ("ranma.rule { float = true }", "command or title"),
+            ("ranma.rule { float = true }", "command, title, program"),
             ("ranma.rule { command = 'x' }", "does nothing"),
             ("ranma.rule { command = 'x', size = { 5, 50 } }", "10-100"),
             ("ranma.rule { command = 'x', workspace = 0 }", "from 1"),
@@ -4123,6 +4208,53 @@ mod tests {
                 "silent",
             ),
             ("ranma.rule { command = 'x', floating = true }", "floating"),
+        ] {
+            let err = format!("{:#}", with_user(src).unwrap_err());
+            assert!(err.contains(needle), "{src}: {err}");
+        }
+    }
+
+    #[test]
+    fn rules_on_what_runs_in_a_pane() {
+        let cfg = with_user(
+            r#"
+            ranma.rule { program = "ssh", host = "prod*", name = "PROD", badge = { "!", "prod", "urgent" } }
+            ranma.rule { cwd = "~/projects/*", title = "*nvim*", badge = { "✎" } }
+            "#,
+        )
+        .unwrap();
+        let (prod, edit) = (&cfg.rules[0], &cfg.rules[1]);
+        assert!(prod.is_late() && edit.is_late());
+        assert_eq!(prod.name.as_deref(), Some("PROD"));
+        let b = prod.badge.as_ref().unwrap();
+        assert_eq!(
+            (b.glyph.as_str(), b.word.as_str(), b.role),
+            ("!", "prod", crate::screen::Role::Urgent)
+        );
+        // Every matcher it gives must match; one not read yet does not.
+        assert!(prod.matches_late("x", Some("ssh"), None, Some("prod-db")));
+        assert!(!prod.matches_late("x", Some("ssh"), None, Some("staging")));
+        assert!(!prod.matches_late("x", Some("ssh"), None, None));
+        assert!(edit.matches_late("nvim main.rs", None, Some("~/projects/ranma"), None));
+        assert!(!edit.matches_late("zsh", None, Some("~/projects/ranma"), None));
+        // A late rule never fires on its title alone, as a title rule would.
+        assert!(!edit.matches_title("nvim main.rs"));
+        for (src, needle) in [
+            (
+                "ranma.rule { command = 'x', program = 'y', float = true }",
+                "one or the other",
+            ),
+            ("ranma.rule { program = 'x', badge = { } }", "glyph"),
+            (
+                "ranma.rule { program = 'x', badge = { 'abc' } }",
+                "1-2 characters",
+            ),
+            (
+                "ranma.rule { program = 'x', badge = { '!', 'w', 'loud' } }",
+                "loud",
+            ),
+            ("ranma.rule { program = 'x' }", "name or badge"),
+            ("ranma.rule { program = 'x', nmae = 'y' }", "nmae"),
         ] {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");

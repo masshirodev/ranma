@@ -569,6 +569,8 @@ ranma.profile("mobile", {
 --
 --   ranma.rule { command = "htop*", float = true, size = { 70, 60 } }
 --   ranma.rule { title = "*NVIM*", workspace = 2 }
+--   ranma.rule { program = "ssh", host = "prod*", name = "PROD", badge = { "!", "prod", "urgent" } }
+--   ranma.rule { cwd = "~/work/*", badge = { "w", "work", "dim" } }
 --
 -- Modules:
 --
