@@ -2612,6 +2612,13 @@ impl App {
                 self.leave_user_mode();
                 return;
             }
+            // A key the mode leaves unbound is still the global bind's, and the
+            // mode stays: a user mode adds keys over typing, it does not take
+            // the always-on ones away. Plain WM mode still swallows them.
+            if self.config.global_binds.contains_key(&chord) {
+                self.run_bind(chord, true);
+                return;
+            }
         }
         // The outer leader again, unbound: one level down, to the ranma inside.
         if chord == outer && !self.wm_binds().contains_key(&chord) {
@@ -6621,6 +6628,26 @@ mod tests {
         let mut off = app(Some("ranma.set { wm_mode = { hint = false } }"));
         off.enter_wm(leader);
         assert!(off.hint_due.is_none());
+    }
+
+    #[test]
+    fn a_user_mode_lets_global_binds_through_and_wm_mode_does_not() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(Some(
+            r#"ranma.mode("vi", { binds = { h = "send left" } })
+               ranma.bind("alt+z", function() ranma.notify("global") end, { global = true })"#,
+        ));
+        let alt_z = KeyEvent::new(KeyCode::Char('z'), KeyModifiers::ALT);
+        a.enter_user_mode("vi");
+        a.handle_key(alt_z);
+        assert_eq!(a.status.as_deref(), Some("global"));
+        assert_eq!(a.mode, Mode::Wm, "the mode stays");
+        assert!(a.user_mode_label().is_some());
+        // Plain WM mode keeps swallowing it.
+        a.status = None;
+        a.enter_wm(a.config.settings.leader);
+        a.handle_key(alt_z);
+        assert_eq!(a.status.as_deref(), Some("alt+z is not bound"));
     }
 
     #[test]
