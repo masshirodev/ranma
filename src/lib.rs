@@ -28,6 +28,7 @@ pub mod man;
 pub mod mouse;
 pub mod nestbar;
 pub mod options;
+pub mod os;
 pub mod osc;
 pub mod pane;
 pub mod panetext;

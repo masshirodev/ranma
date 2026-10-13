@@ -1,8 +1,6 @@
-//! CPU and memory for the built-in `cpu` and `mem` bar modules, read from
-//! `/proc` on the module's own tick. Parsing is pure so it is tested without a
-//! machine to read.
-
-use std::path::Path;
+//! CPU and memory for the built-in `cpu` and `mem` bar modules, read by
+//! [`crate::os`] on the module's own tick. Parsing is pure so it is tested
+//! without a machine to read.
 
 /// Jiffies from the aggregate `cpu` line of `/proc/stat`. Usage is the change
 /// between two samples, so one sample alone says nothing.
@@ -21,14 +19,6 @@ pub struct Mem {
 
 /// At or above this percentage the module turns urgent.
 pub const URGENT_PERCENT: u8 = 90;
-
-pub fn read_cpu() -> Option<CpuSample> {
-    parse_cpu(&std::fs::read_to_string(Path::new("/proc/stat")).ok()?)
-}
-
-pub fn read_mem() -> Option<Mem> {
-    parse_mem(&std::fs::read_to_string(Path::new("/proc/meminfo")).ok()?)
-}
 
 /// The first line: `cpu  user nice system idle iowait irq softirq steal guest
 /// guest_nice`. Guest time is already counted in user and nice, so only the

@@ -729,29 +729,21 @@ impl Pane {
     /// it): what a saved layout types back in.
     pub fn foreground_command(&self, shell: &str) -> Option<Vec<String>> {
         let fg = foreground_pid(self.pid);
-        let comm = std::fs::read_to_string(format!("/proc/{fg}/comm")).ok()?;
+        let comm = crate::os::program_name(fg)?;
         let shell = std::path::Path::new(shell)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(shell);
-        if comm.trim() == shell {
+        if comm == shell {
             return None;
         }
-        let raw = std::fs::read(format!("/proc/{fg}/cmdline")).ok()?;
-        let argv: Vec<String> = raw
-            .split(|b| *b == 0)
-            .filter(|a| !a.is_empty())
-            .map(|a| String::from_utf8_lossy(a).into_owned())
-            .collect();
-        (!argv.is_empty()).then_some(argv)
+        crate::os::command_line(fg).filter(|argv| !argv.is_empty())
     }
 
     /// The directory the pane's child is in now: where `cd` last took the shell.
-    /// Read from /proc, so it follows the shell without any shell integration.
+    /// Asked of the OS, so it follows the shell without any shell integration.
     pub fn cwd(&self) -> Option<std::path::PathBuf> {
-        std::fs::read_link(format!("/proc/{}/cwd", self.pid))
-            .ok()
-            .filter(|p| p.is_dir())
+        crate::os::cwd(self.pid).filter(|p| p.is_dir())
     }
 
     pub fn write(&self, bytes: impl Into<Vec<u8>>) {
@@ -974,27 +966,17 @@ pub fn over_ssh() -> bool {
 }
 
 /// The leader of the foreground process group of the terminal whose session
-/// leader is `pid` (field 8 of its /proc `stat`), or `pid` itself.
+/// leader is `pid`, or `pid` itself.
 fn foreground_pid(pid: u32) -> u32 {
-    let tpgid = std::fs::read_to_string(format!("/proc/{pid}/stat"))
-        .ok()
-        .and_then(|stat| {
-            // The command name is in parentheses and may hold spaces or
-            // parentheses of its own: the fields start after the last `)`.
-            let after = &stat[stat.rfind(')')? + 1..];
-            after.split_whitespace().nth(5)?.parse::<i32>().ok()
-        });
-    match tpgid {
-        Some(t) if t > 0 && std::path::Path::new(&format!("/proc/{t}")).exists() => t as u32,
-        _ => pid,
-    }
+    crate::os::foreground_group(pid)
+        .filter(|t| crate::os::pid_alive(*t))
+        .unwrap_or(pid)
 }
 
 /// The program in the foreground of a terminal whose session leader is `pid`:
 /// `nvim` while the shell runs it, the shell itself at its prompt.
 pub fn foreground_program(pid: u32) -> Option<String> {
-    let comm = std::fs::read_to_string(format!("/proc/{}/comm", foreground_pid(pid))).ok()?;
-    Some(comm.trim().to_string()).filter(|c| !c.is_empty())
+    crate::os::program_name(foreground_pid(pid))
 }
 
 /// A workspace's automatic name: the program in its focused pane, except that
@@ -1041,20 +1023,10 @@ pub fn kitty_flags(mode: TermMode) -> u8 {
 
 pub fn foreground_ssh_argv(pid: u32) -> Option<Vec<String>> {
     let fg = foreground_pid(pid);
-    if std::fs::read_to_string(format!("/proc/{fg}/comm"))
-        .ok()?
-        .trim()
-        != "ssh"
-    {
+    if crate::os::program_name(fg)? != "ssh" {
         return None;
     }
-    let raw = std::fs::read(format!("/proc/{fg}/cmdline")).ok()?;
-    Some(
-        raw.split(|b| *b == 0)
-            .filter(|a| !a.is_empty())
-            .map(|a| String::from_utf8_lossy(a).into_owned())
-            .collect(),
-    )
+    crate::os::command_line(fg)
 }
 
 /// The host an ssh command line connects to: its first argument that is not

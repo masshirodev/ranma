@@ -250,9 +250,7 @@ impl UserData for Handle {
             },
         );
         m.add_method("cwd", |_, h, ()| {
-            Ok(std::fs::read_link(format!("/proc/{}/cwd", h.0.pid))
-                .ok()
-                .map(|p| p.display().to_string()))
+            Ok(crate::os::cwd(h.0.pid).map(|p| p.display().to_string()))
         });
         m.add_method("program", |_, h, ()| {
             Ok(crate::pane::foreground_program(h.0.pid))

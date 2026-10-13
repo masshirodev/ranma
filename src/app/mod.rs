@@ -349,7 +349,7 @@ pub struct App {
     pane_facts: HashMap<PaneId, (Option<String>, Option<String>)>,
     programs_read: Option<Instant>,
     programs_due: Option<Instant>,
-    /// The cpu module's previous /proc/stat sample: usage is the change since.
+    /// The cpu module's previous sample: usage is the change since.
     cpu_prev: Option<crate::sysstat::CpuSample>,
     /// `ranma wait` requests, answered when their pane ends (see `query`).
     waiters: HashMap<PaneId, Vec<query::Reply>>,
@@ -4381,7 +4381,7 @@ impl App {
             }
             ModuleKind::Cpu { format } => {
                 use crate::sysstat;
-                let now = sysstat::read_cpu();
+                let now = crate::os::read_cpu();
                 let pct = self
                     .cpu_prev
                     .zip(now)
@@ -4399,7 +4399,7 @@ impl App {
             }
             ModuleKind::Mem { format } => {
                 use crate::sysstat;
-                let seg = sysstat::read_mem().map_or_else(Vec::new, |m| {
+                let seg = crate::os::read_mem().map_or_else(Vec::new, |m| {
                     let text = bar::format_output(
                         Some(format.as_deref().unwrap_or("mem %s")),
                         &sysstat::gib(m.used_kib()),
