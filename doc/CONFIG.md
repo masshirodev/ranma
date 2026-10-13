@@ -2019,6 +2019,37 @@ end)
 was read from. The Lua standard library is fully available — the config is your own
 code, not a sandbox.
 
+`ranma.has(name)` is true when this build has a capability. A plugin asks it
+rather than comparing `ranma.version`, which says nothing useful about a
+`ranma-git` build between releases. `ranma.has` itself is new in 0.3.0, so a
+plugin that may meet an older ranma checks that it exists first:
+
+```lua
+local nested = ranma.has and ranma.has("module.nested")
+ranma.module("branch", { lua = branch, nested = nested and "hide" or nil })
+```
+
+A name is never removed before 1.0. An unknown name is simply false, so check
+the spelling against this table:
+
+| Capability | What it means |
+|---|---|
+| `border.gradient` | `colors.border_*_gradient` and `border.gradient_angle` |
+| `hook.before_close` | the `before_close` event, whose handler can keep a pane |
+| `hook.float_change` | the `float_change` event |
+| `hook.layout_change` | the `layout_change` event |
+| `hook.pane_resize` | the `pane_resize` event |
+| `hook.workspace_rename` | the `workspace_rename` event |
+| `module.nested` | `ranma.module`'s `nested` option (`follow`, `own`, `hide`) |
+| `mouse` | `ranma.mouse` binds |
+| `pane.style` | `pane:style` and a rule's `style` |
+| `placement` | `ranma.placement` policies |
+| `rule.group` | a window rule's `group` |
+| `rule.match` | window rules matching `program`, `cwd` and `host` |
+| `rule.style` | a window rule's `style` |
+| `theme.palette` | a theme's `[palette]` |
+| `theme.roles` | a theme's `[roles.<name>]` |
+
 ## Themes
 
 A theme is `~/.config/ranma/themes/<name>.toml`, selected with

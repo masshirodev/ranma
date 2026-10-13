@@ -291,7 +291,7 @@ contract between two builds.
 - [ ] CI: the previous release against this build (its config, a handover
   both ways, its client and server)
 - [ ] Renamed names: an old config name read as its new one, with a warning
-- [ ] `ranma.has(name)`: plugins ask for a capability, not a version
+- [x] `ranma.has(name)`: plugins ask for a capability, not a version
 - [ ] `CHANGELOG.md`, with breaking changes first in the release notes
 
 Bar widgets in Lua, once listed here as "later, maybe", came in pieces:

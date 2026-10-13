@@ -12,6 +12,13 @@ ranma = {}
 ---@type string
 ranma.version = ""
 
+---Whether this build has a capability (CONFIG.md, "Globals", lists them):
+---what a plugin asks instead of comparing `ranma.version`. Absent before
+---0.3.0, so guard it: `if ranma.has and ranma.has("module.nested") then`.
+---@param name string
+---@return boolean
+function ranma.has(name) end
+
 ---The config directory: `$RANMA_CONFIG_DIR`, else `~/.config/ranma`.
 ---@type string?
 ranma.config_dir = nil
