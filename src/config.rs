@@ -819,6 +819,9 @@ pub struct Rule {
     pub name: Option<String>,
     /// A badge on the pane's border, as `pane:badge` with the owner `rules`.
     pub badge: Option<crate::screen::Badge>,
+    /// Tab the pane into the group of this name in its workspace, starting
+    /// it when there is none.
+    pub group: Option<String>,
 }
 
 impl Rule {
@@ -896,6 +899,7 @@ struct RuleSpec {
     host: Option<String>,
     name: Option<String>,
     badge: Option<Vec<String>>,
+    group: Option<String>,
 }
 
 /// What `ranma.state()` answers with, filled in by the window manager before it
@@ -2204,10 +2208,19 @@ fn install_api(
                 && spec.workspace.is_none()
                 && spec.name.is_none()
                 && badge.is_none()
+                && spec.group.is_none()
             {
                 return Err(rt_err(
-                    "ranma.rule: the rule does nothing (give float, size, workspace, name or badge)",
+                    "ranma.rule: the rule does nothing (give float, size, workspace, name, badge or group)",
                 ));
+            }
+            if spec.group.is_some() && float {
+                return Err(rt_err(
+                    "ranma.rule: a group is tiled; give group or float (or size), not both",
+                ));
+            }
+            if spec.group.as_deref().is_some_and(|g| g.trim().is_empty()) {
+                return Err(rt_err("ranma.rule: group is a name"));
             }
             if spec.silent.is_some() && spec.workspace.is_none() {
                 return Err(rt_err("ranma.rule: silent only applies with workspace"));
@@ -2227,6 +2240,7 @@ fn install_api(
                     host: spec.host,
                     name: spec.name,
                     badge,
+                    group: spec.group,
                 });
             Ok(())
         })?,
@@ -4299,7 +4313,7 @@ mod tests {
                 "ranma.rule { program = 'x', badge = { '!', 'w', 'loud' } }",
                 "loud",
             ),
-            ("ranma.rule { program = 'x' }", "name or badge"),
+            ("ranma.rule { program = 'x' }", "badge or group"),
             ("ranma.rule { program = 'x', nmae = 'y' }", "nmae"),
         ] {
             let err = format!("{:#}", with_user(src).unwrap_err());

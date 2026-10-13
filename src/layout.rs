@@ -606,6 +606,46 @@ impl Tree {
         }
     }
 
+    /// Wrap `id` alone in a group of its own, where it is: its neighbours
+    /// stay as they are (`toggle_group` would tab them too). What a rule's
+    /// `group` starts a named group with.
+    pub fn group_alone(&mut self, id: PaneId) -> bool {
+        let Some(root) = self.root.as_mut() else {
+            return false;
+        };
+        let Some(path) = find_path(root, id) else {
+            return false;
+        };
+        let node = node_at_mut(root, &path);
+        let only = std::mem::replace(node, Node::Pane(id));
+        *node = Node::Container {
+            split: Split::Horizontal,
+            tabbed: Some(0),
+            children: vec![(only, 1.0)],
+        };
+        true
+    }
+
+    /// Put `new` (not in the tree) in the group `member` is a tab of, after
+    /// it, as the shown tab. False when `member` is in no group.
+    pub fn join_group(&mut self, new: PaneId, member: PaneId) -> bool {
+        match self.parent_mut(member) {
+            Some((
+                Node::Container {
+                    tabbed: Some(active),
+                    children,
+                    ..
+                },
+                idx,
+            )) => {
+                children.insert(idx + 1, (Node::Pane(new), 1.0));
+                *active = idx + 1;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Whether `id` sits in a tabbed container (a group).
     pub fn is_grouped(&self, id: PaneId) -> bool {
         let Some(root) = self.root.as_ref() else {
@@ -1885,6 +1925,25 @@ mod tests {
         assert_eq!(l.tab_bars[0].active, 1);
         assert_eq!(l.visible.len(), 1);
         assert_eq!(l.visible[0].0, 2);
+    }
+
+    #[test]
+    fn a_pane_grouped_alone_leaves_its_neighbours_and_others_join_it() {
+        let mut t = dwindle(3);
+        assert!(t.group_alone(2));
+        let l = t.layout_full(AREA, 0);
+        assert_eq!(l.tab_bars.len(), 1);
+        assert_eq!(l.tab_bars[0].tabs, vec![2], "only 2 is in the group");
+        assert_eq!(l.visible.len(), 3, "1 and 3 still tiled beside it");
+        // 3 leaves its place and joins 2's group, as the shown tab.
+        assert!(t.remove(3));
+        assert!(t.join_group(3, 2));
+        let l = t.layout_full(AREA, 0);
+        assert_eq!(l.tab_bars[0].tabs, vec![2, 3]);
+        assert_eq!(l.tab_bars[0].active, 1);
+        // A pane in no group has none to join.
+        assert!(!t.join_group(4, 1));
+        assert!(!t.group_alone(9));
     }
 
     #[test]

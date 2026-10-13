@@ -479,6 +479,7 @@ ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
 | `size` | `{ width%, height% }` of the workspace, each 10-100; implies `float`. |
 | `workspace` | Move the pane to this workspace, following it unless `silent = true`. |
 | `name` | Name the pane, as `rename_pane`. |
+| `group` | A name: tab the pane into the group of that name in its workspace (`group = "servers"` gathers every ssh pane into one set of tabs), started by the first pane to match. A floating pane is tiled first, so not with `float` or `size`. |
 | `badge` | `{ glyph, word, role }` on the pane's border, as [`pane:badge`](#pane-handles) does (glyph 1-2 characters, word 12 at most, role `normal`, `dim`, `accent` or `urgent`; the last two optional). |
 
 Give something to match on and at least one effect. `program`, `cwd` and
