@@ -475,10 +475,22 @@ pub enum Event {
     ModuleShown,
     /// A bar module went off screen.
     ModuleHidden,
+    /// A workspace was given a layout of its own, or the setting back
+    /// (`workspace_layout`).
+    LayoutChange,
+    /// A pane's terminal changed size, once the size settled.
+    PaneResize,
+    /// A pane floated or was tiled again.
+    FloatChange,
+    /// A workspace was named, renamed or had its name cleared.
+    WorkspaceRename,
+    /// The close key, the pane menu or a toolbar is about to close a pane: a
+    /// hook returning false keeps it.
+    BeforeClose,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 21] = [
+pub const EVENTS: [(&str, Event); 26] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -498,6 +510,11 @@ pub const EVENTS: [(&str, Event); 21] = [
     ("click", Event::Click),
     ("copy", Event::Copy),
     ("client_focus", Event::ClientFocus),
+    ("layout_change", Event::LayoutChange),
+    ("pane_resize", Event::PaneResize),
+    ("float_change", Event::FloatChange),
+    ("workspace_rename", Event::WorkspaceRename),
+    ("before_close", Event::BeforeClose),
     ("module_shown", Event::ModuleShown),
     ("module_hidden", Event::ModuleHidden),
 ];

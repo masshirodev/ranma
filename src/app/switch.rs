@@ -266,10 +266,20 @@ impl App {
 
     pub(super) fn rename_workspace(&mut self, n: u8, name: &str) {
         let name = name.trim();
-        if let Some(ws) = self.workspaces.get_mut(&n) {
-            ws.name = (!name.is_empty()).then(|| name.to_string());
-        }
+        let Some(ws) = self.workspaces.get_mut(&n) else {
+            return;
+        };
+        let previous = ws.name.clone();
+        ws.name = (!name.is_empty()).then(|| name.to_string());
+        let now = ws.name.clone();
         self.dirty = true;
+        if now != previous {
+            self.emit(crate::config::Event::WorkspaceRename, |t| {
+                t.set("workspace", n)?;
+                t.set("name", now)?;
+                t.set("previous", previous)
+            });
+        }
     }
 
     pub(super) fn rename_pane(&mut self, id: crate::layout::PaneId, name: &str) {
