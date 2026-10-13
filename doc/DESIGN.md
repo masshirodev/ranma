@@ -2708,6 +2708,53 @@ across ssh can print an OSC, so that channel must only accept messages from
 a pane that answered the hello, and it needs an allowlist of event names on
 the receiving side. It gets its own decision when it is wanted.
 
+**A plugin message channel, upward only first** (2026-10-13, proposed, c325).
+Modules now cross levels; nothing else a plugin makes does. A badge on an
+inner pane (notify, agents, kizuna, watch) never reaches the outer, which
+sees one `ssh vps` pane, and `ranma.emit` stays inside one server.
+Proposed:
+
+- **What can actually forge a message.** While an inner ranma runs in a
+  pane, nothing else can write to that pane's output: the inner is a
+  terminal emulator, and programs in *its* panes reach the outer only as
+  cells it draws, never as raw OSCs. The exposure is the time when no inner
+  runs there (before it starts, after it detaches or exits): then any
+  program across ssh can print the OSC, a fake `51377;?` included. So
+  "answered the hello" alone proves nothing. The outer must also know an
+  inner is attached now. The rule: a pane is a **live inner** from its first
+  report after a hello answer until the inner says goodbye (`51377;bye`,
+  sent by its client on detach and exit), the pane's foreground program
+  changes, or no report arrives for a minute (reports carry a heartbeat for
+  that). A message from any pane that is not a live inner is dropped,
+  silently and whole.
+- **The receiver opts in by name.** `ranma.accept("agent_done")` in the
+  outer's config, and only accepted names are delivered, as
+  `user:agent_done` with `e.from` set to the holder pane and the inner's
+  host. A name nobody accepted is dropped. So a remote box can fire nothing
+  local that the local config did not ask for, and the remote side is
+  exactly as trusted as a command typed into that pane would be. The data is
+  JSON, at most 4 KiB a message and 20 messages a second a pane. Handlers
+  treat it as data: CONFIG.md says so beside `ranma.accept`.
+- **Sending:** `ranma.send_outer(name, data)` on the inner. It writes
+  `51377;emit;<json>` out of its client only when the client's hello found
+  an outer ranma, so a plain terminal never sees it. A chain forwards
+  upward only if each level accepts the name and re-sends it, so no message
+  skips a level's decision.
+- **Badges ride the report**, not the channel. The report gains `badges`:
+  the inner's pane badges, deduplicated by text with a count, under 1 KiB
+  (dropped before the modules are, the workspaces staying last). The outer
+  draws them on the holder pane's border label after its own. That is
+  display only, with nothing to accept, and it inherits the report's
+  protocol rules.
+- **`send_inner` is left out.** Downward means the outer writing an OSC
+  into the inner client's input, which the client reads through crossterm,
+  and an unasked OSC there is typed into the focused pane as Alt+`]` and
+  keys. That is the same wall `theme_colors` hit. It needs the client to
+  split OSCs out of its input ahead of crossterm, which is a reader of its
+  own and its own decision. What a plugin on the inner most wants from the
+  outer (clipboard, desktop focus, whether its pane is visible) already
+  comes down as focus events, OSC 52, and the hello's fields.
+
 ### Pasting files into a pane that runs ssh
 
 **Decided 2026-10-05; widened from images to any file 2026-10-06.** A program on the far side of an `ssh` (an AI
