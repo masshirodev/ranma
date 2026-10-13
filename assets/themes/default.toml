@@ -142,6 +142,24 @@ scrollbar = "scrolled"
 # bottom_right, or tile: repeated across the whole area.
 align = "center"
 
+[palette]
+# The colours programs in panes draw with: the sixteen ANSI colours (color0
+# black ... color7 white, color8-color15 their bright forms), the default
+# text colour and the default ground. Laid under what a program sets itself
+# and over your terminal's own, so one theme colours nvim, btop and ls the
+# same in any terminal ranma runs in. #rrggbb only, and a truecolor
+# terminal to show them. Unset here on purpose: your terminal's colours.
+# color0 = "#45475a"    color8 = "#585b70"
+# color1 = "#f38ba8"    color9 = "#f38ba8"
+# color2 = "#a6e3a1"    color10 = "#a6e3a1"
+# color3 = "#f9e2af"    color11 = "#f9e2af"
+# color4 = "#89b4fa"    color12 = "#89b4fa"
+# color5 = "#f5c2e7"    color13 = "#f5c2e7"
+# color6 = "#94e2d5"    color14 = "#94e2d5"
+# color7 = "#bac2de"    color15 = "#a6adc8"
+# foreground = "#cdd6f4"
+# background = "#1e1e2e"    (panes.active_bg / inactive_bg win over it)
+
 [styles]
 # Text attributes per role: bold, dim, italic, underline, reverse,
 # strikethrough. Colours are in [colors].

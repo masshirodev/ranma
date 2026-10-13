@@ -609,9 +609,106 @@ pub struct Theme {
     pub styles: Styles,
     #[serde(default)]
     pub background: Background,
+    /// The colours programs in panes draw with, under their own changes.
+    #[serde(default)]
+    pub palette: Palette,
     /// `background.art`, read and parsed as the theme loads.
     #[serde(skip)]
     pub art: Option<std::sync::Arc<crate::art::Art>>,
+}
+
+/// A colour that must be exact: `#rrggbb` and nothing else. The palette is
+/// what an index or a name is resolved *to*, so it cannot be one itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hex(pub u8, pub u8, pub u8);
+
+impl<'de> Deserialize<'de> for Hex {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        match s.parse::<Color>() {
+            Ok(Color::Rgb(r, g, b)) => Ok(Hex(r, g, b)),
+            Ok(_) => Err(serde::de::Error::custom(format!(
+                "`{s}`: a palette colour is #rrggbb (an index or a name is what the palette defines)"
+            ))),
+            Err(e) => Err(serde::de::Error::custom(e)),
+        }
+    }
+}
+
+/// The colours programs in panes draw with (`[palette]`), laid under what a
+/// program sets itself (OSC 4, 10, 11) and over the host terminal's, so one
+/// theme colours nvim and `ls` the same in any terminal ranma runs in. Every
+/// key is optional; unset, the host's colour shows, as before.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Palette {
+    #[serde(default)]
+    pub color0: Option<Hex>,
+    #[serde(default)]
+    pub color1: Option<Hex>,
+    #[serde(default)]
+    pub color2: Option<Hex>,
+    #[serde(default)]
+    pub color3: Option<Hex>,
+    #[serde(default)]
+    pub color4: Option<Hex>,
+    #[serde(default)]
+    pub color5: Option<Hex>,
+    #[serde(default)]
+    pub color6: Option<Hex>,
+    #[serde(default)]
+    pub color7: Option<Hex>,
+    #[serde(default)]
+    pub color8: Option<Hex>,
+    #[serde(default)]
+    pub color9: Option<Hex>,
+    #[serde(default)]
+    pub color10: Option<Hex>,
+    #[serde(default)]
+    pub color11: Option<Hex>,
+    #[serde(default)]
+    pub color12: Option<Hex>,
+    #[serde(default)]
+    pub color13: Option<Hex>,
+    #[serde(default)]
+    pub color14: Option<Hex>,
+    #[serde(default)]
+    pub color15: Option<Hex>,
+    /// The default text colour.
+    #[serde(default)]
+    pub foreground: Option<Hex>,
+    /// The default ground; `panes.active_bg` and `inactive_bg` win over it.
+    #[serde(default)]
+    pub background: Option<Hex>,
+}
+
+impl Palette {
+    /// The sixteen ANSI colours, by index.
+    pub fn ansi(&self) -> [Option<Hex>; 16] {
+        [
+            self.color0,
+            self.color1,
+            self.color2,
+            self.color3,
+            self.color4,
+            self.color5,
+            self.color6,
+            self.color7,
+            self.color8,
+            self.color9,
+            self.color10,
+            self.color11,
+            self.color12,
+            self.color13,
+            self.color14,
+            self.color15,
+        ]
+    }
+
+    /// Nothing set: panes draw exactly as without a palette.
+    pub fn is_empty(&self) -> bool {
+        *self == Palette::default()
+    }
 }
 
 /// Text art behind the panes: where no pane covers the workspace (the gaps,
@@ -951,6 +1048,39 @@ mod tests {
         assert_eq!(t.gaps.outer(), [3, 2, 1, 0]);
         let d = load("default", &[]).unwrap();
         assert_eq!(d.gaps.outer(), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_palette_takes_hex_colours_and_nothing_else() {
+        let dir = tmp_dir("palette");
+        std::fs::write(
+            dir.join("pal.toml"),
+            "[palette]\ncolor1 = \"#ff0000\"\nforeground = \"#eeeeee\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("child.toml"),
+            "inherits = \"pal\"\n[palette]\ncolor2 = \"#00ff00\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("named.toml"), "[palette]\ncolor1 = \"red\"\n").unwrap();
+        std::fs::write(dir.join("typo.toml"), "[palette]\ncolour1 = \"#ff0000\"\n").unwrap();
+        let t = load("child", std::slice::from_ref(&dir)).unwrap();
+        assert_eq!(t.palette.color1, Some(Hex(255, 0, 0)), "inherited");
+        assert_eq!(t.palette.color2, Some(Hex(0, 255, 0)));
+        assert_eq!(t.palette.foreground, Some(Hex(0xee, 0xee, 0xee)));
+        assert_eq!(t.palette.color3, None);
+        assert!(
+            load("default", &[]).unwrap().palette.is_empty(),
+            "off by default"
+        );
+        let err = format!(
+            "{:#}",
+            load("named", std::slice::from_ref(&dir)).unwrap_err()
+        );
+        assert!(err.contains("#rrggbb"), "{err}");
+        let err = format!("{:#}", load("typo", &[dir]).unwrap_err());
+        assert!(err.contains("colour1"), "{err}");
     }
 
     #[test]

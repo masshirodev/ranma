@@ -1019,6 +1019,32 @@ would draw a ring of the module's ground around the chip, which says nothing. Th
 thumb's width over all three rows, and a one-row cap would sit beside a
 three-row chip.
 
+**The theme colours what runs in the panes too** (`[palette]`, 2026-10-12).
+A theme used to colour ranma's chrome only, and every program drew with the
+host terminal's sixteen colours: a matugen theme matched the borders and the
+bar but not nvim, and the same ranma looked different in kitty, Windows
+Terminal and Termux. ranma already resolves every cell's colour itself (that
+is how `dim_unfocused` mixes real RGB), so the palette is one more layer in
+that lookup: **a program's own change first** (OSC 4, 10, 11: a program that
+sets its colours knows what it wants), **then the theme's palette, then the
+host's**. Decided with it:
+
+- **`#rrggbb` only.** The palette is what an index or a name resolves *to*,
+  so `color1 = "red"` would define red as itself; it is an error.
+- **The sixteen, the foreground and the background, not the 256.** The cube
+  and the grey ramp (16-255) are fixed by xterm and nobody themes them, and
+  truecolor text is exactly what the program asked for.
+- **The background is a ground, not a table entry**: it goes where
+  `panes.active_bg` and `inactive_bg` go, with them winning, so a theme can
+  set a palette and still tell the focused pane apart.
+- **Off unless set.** An empty palette takes the old path untouched: no
+  table is built, so a theme without one costs nothing per cell.
+- The cursor is left out: the host draws it, from its own settings or a
+  program's OSC 12.
+- `theme_colors = "outer"` carries `[colors]` only, as before. Whether an
+  inner ranma should take the outer's palette too is a question for when
+  someone wants it; the inner's own theme applies meanwhile.
+
 **A border title naming `{program}` or `{cwd}` costs a frame nothing.** Both
 come from /proc, so they are read where the workspaces module's program
 names are, after a key or a pane's output and at most every 500 ms, for the
