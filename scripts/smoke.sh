@@ -807,7 +807,7 @@ wait_for 'after-kept-across' 10 || fail "the shell did not survive the upgrade"
 # A full-screen program that redraws only when its size changes, as ssh only
 # passes a resize on when the size differs: after an upgrade it must still be
 # made to draw again (a bare SIGWINCH left a ranma across ssh blank).
-LAZY=$(mktemp --suffix .py)
+LAZY=$(mktemp)  # python runs it without a .py; BSD mktemp has no --suffix
 cat > "$LAZY" <<'PY'
 import os, signal, sys, time
 def draw():
