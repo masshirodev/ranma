@@ -1626,6 +1626,13 @@ keep their meaning, and plain WM mode still swallows what it does not bind,
 since it gives some of those chords meanings of its own (alt+digit moves the
 pane there).
 
+**The hint may stand elsewhere** (`wm_mode.hint_at`, 2026-10-13): on the
+bar by the mode chip is still the default, since that is where the eye goes
+on pressing the leader, but a corner or the centre of the panes' space suits
+a mode used for long stretches, where a panel over the bar's left end hides
+the workspaces being moved between. A user mode may set its own, falling
+back to the setting, the way its `hint` does.
+
 **A user mode may set its own which-key pause** (`hint`, 2026-10-13),
 because the hint is for keys not yet learned, and a small mode is learned
 long before WM mode's whole table is: turning it off for one should not

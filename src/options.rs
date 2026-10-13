@@ -510,6 +510,14 @@ pub fn builtin() -> Vec<Opt> {
             "The pause in WM mode before the which-key hint shows. All the way left is off.",
         ),
         opt(
+            "wm_mode.hint_at",
+            "wm",
+            "Hint position",
+            choices(&crate::config::HintAt::NAMES),
+            Init,
+            "Where the which-key hint stands: on the bar beside the mode, or a corner or the centre of the panes' space.",
+        ),
+        opt(
             "border.style",
             "looks",
             "Border style",

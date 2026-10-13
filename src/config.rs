@@ -135,6 +135,43 @@ pub enum NestedWorkspaces {
     Off,
 }
 
+/// Where the which-key hint stands (`wm_mode.hint_at`): on the bar beside
+/// the mode chip, or in a corner or the centre of the space the panes use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HintAt {
+    #[default]
+    Bar,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Center,
+}
+
+impl HintAt {
+    pub const NAMES: [&str; 6] = [
+        "bar",
+        "top_left",
+        "top_right",
+        "bottom_left",
+        "bottom_right",
+        "center",
+    ];
+
+    pub fn parse(name: &str) -> Option<HintAt> {
+        let all = [
+            HintAt::Bar,
+            HintAt::TopLeft,
+            HintAt::TopRight,
+            HintAt::BottomLeft,
+            HintAt::BottomRight,
+            HintAt::Center,
+        ];
+        Self::NAMES.iter().position(|n| *n == name).map(|i| all[i])
+    }
+}
+
 /// Whose colours this ranma draws with when it runs inside another ranma
 /// (DESIGN.md, "An inner ranma in the outer's colours").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -225,6 +262,7 @@ pub struct Settings {
     pub wm_mode_sticky: bool,
     /// How long WM mode waits before showing the which-key hint; `None` is off.
     pub wm_mode_hint: Option<std::time::Duration>,
+    pub wm_mode_hint_at: HintAt,
     pub mouse: MouseMode,
     pub updates: UpdateMode,
     pub update_check_hours: f64,
@@ -272,6 +310,7 @@ impl Default for Settings {
             scrollback_lines: 10_000,
             wm_mode_sticky: true,
             wm_mode_hint: Some(std::time::Duration::from_millis(500)),
+            wm_mode_hint_at: HintAt::Bar,
             mouse: MouseMode::Click,
             updates: UpdateMode::Remind,
             update_check_hours: 24.0,
@@ -338,6 +377,7 @@ struct WmModePatch {
     sticky: Option<bool>,
     /// Seconds before the hint shows, or false for none.
     hint: Option<HintSetting>,
+    hint_at: Option<HintAt>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -421,6 +461,8 @@ pub struct UserMode {
     /// Its own which-key pause: `None` follows `wm_mode.hint`, `Some(None)`
     /// never shows the hint in this mode.
     pub hint: Option<Option<std::time::Duration>>,
+    /// Where its which-key hint stands; `None` follows `wm_mode.hint_at`.
+    pub hint_at: Option<HintAt>,
     pub on_enter: Option<Rc<RegistryKey>>,
     pub on_exit: Option<Rc<RegistryKey>>,
 }
@@ -1553,6 +1595,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
         if let Some(sticky) = w.sticky {
             s.wm_mode_sticky = sticky;
         }
+        if let Some(at) = w.hint_at {
+            s.wm_mode_hint_at = at;
+        }
         match w.hint {
             None => {}
             Some(HintSetting::On(false)) => s.wm_mode_hint = None,
@@ -1768,6 +1813,7 @@ fn install_api(
                 binds: HashMap::new(),
                 sticky: true,
                 hint: None,
+                hint_at: None,
                 on_enter: None,
                 on_exit: None,
             };
@@ -1779,6 +1825,15 @@ fn install_api(
                     // As `wm_mode.hint`, but true follows that setting rather
                     // than restoring the default pause.
                     ("hint", Value::Boolean(b)) => mode.hint = (!b).then_some(None),
+                    ("hint_at", Value::String(v)) => {
+                        let v = v.to_str()?.to_string();
+                        mode.hint_at = Some(HintAt::parse(&v).ok_or_else(|| {
+                            rt_err(format!(
+                                "{who}: hint_at must be one of {}, not `{v}`",
+                                HintAt::NAMES.join(", ")
+                            ))
+                        })?);
+                    }
                     ("hint", v @ (Value::Integer(_) | Value::Number(_))) => {
                         let secs = match v {
                             Value::Integer(i) => i as f64,
@@ -1816,7 +1871,7 @@ fn install_api(
                             mode.binds.insert(path[0], bind);
                         }
                     }
-                    (k @ ("label" | "sticky" | "hint" | "on_enter" | "on_exit" | "binds"), other) => {
+                    (k @ ("label" | "sticky" | "hint" | "hint_at" | "on_enter" | "on_exit" | "binds"), other) => {
                         return Err(rt_err(format!(
                             "{who}: `{k}` cannot be {}",
                             other.type_name()
@@ -1824,7 +1879,7 @@ fn install_api(
                     }
                     (k, _) => {
                         return Err(rt_err(format!(
-                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, on_enter, on_exit)"
+                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, hint_at, on_enter, on_exit)"
                         )));
                     }
                 }

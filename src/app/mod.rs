@@ -2879,6 +2879,16 @@ impl App {
             .unwrap_or(self.config.settings.wm_mode_hint)
     }
 
+    /// Where the which-key hint stands: the user mode's own `hint_at` while
+    /// one is on, else `wm_mode.hint_at`.
+    pub fn hint_at(&self) -> config::HintAt {
+        self.user_mode
+            .as_ref()
+            .and_then(|m| self.config.modes.get(m))
+            .and_then(|m| m.hint_at)
+            .unwrap_or(self.config.settings.wm_mode_hint_at)
+    }
+
     /// The label the bar's mode module shows for a user mode that is on.
     pub fn user_mode_label(&self) -> Option<&str> {
         let m = self.config.modes.get(self.user_mode.as_ref()?)?;
@@ -6648,6 +6658,49 @@ mod tests {
         a.enter_wm(a.config.settings.leader);
         a.handle_key(alt_z);
         assert_eq!(a.status.as_deref(), Some("alt+z is not bound"));
+    }
+
+    #[test]
+    fn the_hint_stands_where_hint_at_says_and_a_mode_may_say_otherwise() {
+        let mut a = app(Some(
+            r#"ranma.set { wm_mode = { hint_at = "top_right" } }
+               ranma.mode("low", { hint_at = "bottom_left", binds = { h = "send left" } })
+               ranma.mode("same", { binds = { h = "send left" } })"#,
+        ));
+        let w = a.screen.w as usize;
+        // (row, column) of the panel's top-left corner, and of its bottom edge.
+        let corner = |a: &App| {
+            let rows = screen(a);
+            let top = rows.iter().position(|r| r.contains('╭')).expect("a panel");
+            let bot = rows.iter().position(|r| r.contains('╰')).unwrap();
+            let col = rows[top].chars().position(|c| c == '╭').unwrap();
+            (top, col, rows[top].chars().count(), bot, rows.len())
+        };
+        a.enter_wm(a.config.settings.leader);
+        a.run_timers(a.hint_due.unwrap());
+        let (top, col, end, _, _) = corner(&a);
+        assert_eq!(top, 0, "top: the bar is at the bottom");
+        assert!(col > 0 && end == w, "right edge: {col}..{end} of {w}");
+        a.enter_user_mode("low");
+        a.run_timers(a.hint_due.unwrap());
+        let (_, col, _, bot, rows) = corner(&a);
+        assert_eq!((col, bot), (0, rows - 2), "bottom left, above the bar");
+        a.enter_user_mode("same");
+        a.run_timers(a.hint_due.unwrap());
+        assert_eq!(corner(&a).0, 0, "no hint_at of its own: the setting's");
+        assert!(
+            crate::config::load_from(None, None, Some(r#"ranma.mode("m", { hint_at = "up" })"#))
+                .err()
+                .is_some_and(|e| e.to_string().contains("hint_at must be one of"))
+        );
+        assert!(
+            crate::config::load_from(
+                None,
+                None,
+                Some(r#"ranma.set { wm_mode = { hint_at = "up" } }"#)
+            )
+            .is_err()
+        );
     }
 
     #[test]

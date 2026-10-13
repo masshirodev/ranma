@@ -1246,12 +1246,36 @@ fn draw_which_key(f: &mut Frame, app: &App) {
     ) else {
         return;
     };
-    let y = match app.bar_rect() {
-        Some(bar) if bar.y == screen.y => bar.bottom(),
-        Some(bar) => bar.y.saturating_sub(p.h),
-        None => screen.bottom().saturating_sub(p.h),
+    let (w, h) = (p.w.min(screen.width), p.h.min(screen.height));
+    // The rows the panes use: the screen less the bar.
+    let (top, bottom) = match app.bar_rect() {
+        Some(bar) if bar.y == screen.y => (bar.bottom(), screen.bottom()),
+        Some(bar) => (screen.y, bar.y),
+        None => (screen.y, screen.bottom()),
     };
-    let area = RRect::new(screen.x, y, p.w.min(screen.width), p.h.min(screen.height));
+    let right = screen.right().saturating_sub(w);
+    let low = bottom.saturating_sub(h).max(top);
+    use crate::config::HintAt;
+    let (x, y) = match app.hint_at() {
+        // Standing on the bar from its left end, where the mode chip is.
+        HintAt::Bar => (
+            screen.x,
+            match app.bar_rect() {
+                Some(bar) if bar.y == screen.y => bar.bottom(),
+                Some(bar) => bar.y.saturating_sub(p.h),
+                None => screen.bottom().saturating_sub(p.h),
+            },
+        ),
+        HintAt::TopLeft => (screen.x, top),
+        HintAt::TopRight => (right, top),
+        HintAt::BottomLeft => (screen.x, low),
+        HintAt::BottomRight => (right, low),
+        HintAt::Center => (
+            screen.x + (screen.width - w) / 2,
+            (top + (bottom.saturating_sub(top).saturating_sub(h)) / 2).max(top),
+        ),
+    };
+    let area = RRect::new(x, y, w, h);
     let c = &app.colors();
     let surface = Style::default().fg(color(c.toast_fg)).bg(color(c.toast_bg));
     f.render_widget(Clear, area);
