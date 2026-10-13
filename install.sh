@@ -138,6 +138,15 @@ case ":$PATH:" in
   *":$bin_dir:"*) ;;
   *) say "note: $bin_dir is not in PATH; add it, or new shells will not find ranma" ;;
 esac
+# Another ranma earlier in PATH (a release tarball in ~/.local/bin, say) is the
+# one shells start, and a server re-execs the binary it was started from: an
+# upgrade then moves it onto that one, and this build never runs.
+first="$(command -v ranma 2>/dev/null || true)"
+if [ -n "$first" ] && [ "$(readlink -f "$first")" != "$(readlink -f "$bin")" ]; then
+  say "warning: $first ($("$first" --version 2>/dev/null || echo "unknown version")) comes before $bin in PATH"
+  printf '    servers started from it keep running it, upgrades included; remove it, or link it here:\n'
+  printf '    ln -sf %s %s\n' "$bin" "$first"
+fi
 
 # ---- move running servers onto it (DESIGN.md, "Upgrading a server in place") --
 # Each server exec's the new build into its own process: shells, panes and
