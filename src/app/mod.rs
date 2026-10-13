@@ -6624,6 +6624,27 @@ mod tests {
     }
 
     #[test]
+    fn a_user_modes_hint_is_titled_and_grouped_by_the_mode() {
+        let mut a = app(Some(
+            r#"ranma.mode("vi", { label = "NORMAL", binds = {
+                 h = "send left", i = { function() end, desc = "insert" } } })"#,
+        ));
+        a.enter_user_mode("vi");
+        a.run_timers(a.hint_due.expect("due"));
+        assert!(a.which_key_shown());
+        // The hint's top border carries its title.
+        let title = |a: &App| screen(a).into_iter().find(|r| r.contains('╭')).unwrap();
+        assert!(title(&a).starts_with("╭ NORMAL "), "titled by the mode");
+        let s = screen(&a).join("\n");
+        assert!(s.contains("│ normal "), "its keys under its name:\n{s}");
+        assert!(!s.contains("yours"), "{s}");
+        // Plain WM mode keeps the leader for a title.
+        a.enter_wm(a.config.settings.leader);
+        a.run_timers(a.hint_due.expect("due"));
+        assert!(title(&a).starts_with("╭ ctrl+b "), "{}", title(&a));
+    }
+
+    #[test]
     fn a_user_mode_has_its_own_hint_and_its_label_reaches_the_outer_bar() {
         let mut a = app(Some(
             r#"ranma.mode("quiet", { label = "NORMAL", hint = false, binds = { h = "send left" } })

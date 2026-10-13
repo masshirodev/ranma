@@ -55,6 +55,8 @@ commit log has the detail.
 
 ### Fixed
 
+- In a user mode the which-key hint is titled with the mode's label, not
+  the leader, and its keys are under the label rather than `yours`.
 - A ranma inside another one shows its user mode's label in the outer bar
   (` ⧉ NORMAL `), not ` ⧉ WM `. Both sides need this build; an older outer
   still says WM.
