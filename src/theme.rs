@@ -675,10 +675,29 @@ pub struct Theme {
     /// The colours programs in panes draw with, under their own changes.
     #[serde(default)]
     pub palette: Palette,
+    /// Styles of the theme's own a bar module can ask for by name, beside
+    /// `normal`, `dim`, `accent` and `urgent` (`[roles.git]`).
+    #[serde(default)]
+    pub roles: std::collections::BTreeMap<String, RoleDef>,
     /// `background.art`, read and parsed as the theme loads.
     #[serde(skip)]
     pub art: Option<std::sync::Arc<crate::art::Art>>,
 }
+
+/// A style a theme names for bar modules: a colour, a ground, attributes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoleDef {
+    pub fg: Color,
+    /// Unset: the module's own ground.
+    #[serde(default)]
+    pub bg: Option<Color>,
+    #[serde(default)]
+    pub styles: Attrs,
+}
+
+/// The styles every theme has, which `[roles]` may not name.
+pub const BUILTIN_STYLES: [&str; 4] = ["normal", "dim", "accent", "urgent"];
 
 /// A colour that must be exact: `#rrggbb` and nothing else. The palette is
 /// what an index or a name is resolved *to*, so it cannot be one itself.
@@ -1015,6 +1034,22 @@ pub fn load_over_unset(
 /// What serde cannot see: placeholders by key, and `chars` where `custom`
 /// needs them.
 fn check(t: &Theme) -> Result<(), String> {
+    for name in t.roles.keys() {
+        if BUILTIN_STYLES.contains(&name.as_str()) {
+            return Err(format!(
+                "roles.{name}: `{name}` is a built-in style; set it in [colors] and [styles]"
+            ));
+        }
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(format!(
+                "roles.{name}: a role's name is letters, digits, _ and -"
+            ));
+        }
+    }
     t.border
         .title_format
         .check("border.title_format", &TITLE_VARS)?;
@@ -1136,6 +1171,42 @@ mod tests {
         assert_eq!(t.gaps.outer(), [3, 2, 1, 0]);
         let d = load("default", &[]).unwrap();
         assert_eq!(d.gaps.outer(), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn roles_are_the_themes_own_styles_and_never_a_builtin() {
+        let dir = tmp_dir("roles");
+        std::fs::write(
+            dir.join("r.toml"),
+            "[roles.git]\nfg = \"#ff8800\"\nstyles = [\"bold\"]\n[roles.warn]\nfg = \"red\"\nbg = \"#222222\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("child.toml"), "inherits = \"r\"\n").unwrap();
+        std::fs::write(dir.join("clash.toml"), "[roles.urgent]\nfg = \"red\"\n").unwrap();
+        std::fs::write(
+            dir.join("typo.toml"),
+            "[roles.git]\nfg = \"red\"\ncolour = \"red\"\n",
+        )
+        .unwrap();
+        let t = load("child", std::slice::from_ref(&dir)).unwrap();
+        assert_eq!(
+            t.roles["git"],
+            RoleDef {
+                fg: Color::Rgb(255, 136, 0),
+                bg: None,
+                styles: Attrs::bold()
+            },
+            "inherited"
+        );
+        assert_eq!(t.roles["warn"].bg, Some(Color::Rgb(0x22, 0x22, 0x22)));
+        assert!(load("default", &[]).unwrap().roles.is_empty());
+        let err = format!(
+            "{:#}",
+            load("clash", std::slice::from_ref(&dir)).unwrap_err()
+        );
+        assert!(err.contains("built-in style"), "{err}");
+        let err = format!("{:#}", load("typo", &[dir]).unwrap_err());
+        assert!(err.contains("colour"), "{err}");
     }
 
     #[test]

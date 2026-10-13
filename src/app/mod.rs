@@ -4232,7 +4232,7 @@ impl App {
                     return;
                 };
                 let seg = match self.call_lua(|_| f.call::<Value>(())) {
-                    Some(v) => lua_segment(&v),
+                    Some(v) => lua_segment(&v, &self.config.theme.roles),
                     None => vec![Piece::new(format!("{name}: error"), Style::Urgent)],
                 };
                 self.set_module_value(name.to_string(), seg);
@@ -4661,7 +4661,10 @@ fn sys_style(percent: u8) -> Style {
 }
 
 /// What a Lua module returned, as bar pieces.
-fn lua_segment(v: &Value) -> Segment {
+fn lua_segment(
+    v: &Value,
+    roles: &std::collections::BTreeMap<String, crate::theme::RoleDef>,
+) -> Segment {
     match v {
         Value::Nil => Vec::new(),
         Value::String(s) => vec![Piece::new(s.to_string_lossy(), Style::Normal)],
@@ -4670,7 +4673,7 @@ fn lua_segment(v: &Value) -> Segment {
         Value::Table(t) => {
             let text: String = t.get("text").unwrap_or_default();
             let style: Option<String> = t.get("style").ok().flatten();
-            match style.as_deref().map(|s| (s, Style::from_name(s))) {
+            match style.as_deref().map(|s| (s, Style::from_name(s, roles))) {
                 None => vec![Piece::new(text, Style::Normal)],
                 Some((_, Some(st))) => vec![Piece::new(text, st)],
                 Some((bad, None)) => {
@@ -5964,6 +5967,34 @@ mod tests {
         assert_eq!(a.colors().bar_accent, Color::Rgb(0xff, 0, 0));
         // A session with no accent anywhere draws with the theme.
         assert_eq!(app(None).colors().border_active, base.border_active);
+    }
+
+    #[test]
+    fn a_module_asks_for_the_themes_own_roles_by_name() {
+        let lua = mlua::Lua::new();
+        let mut roles = std::collections::BTreeMap::new();
+        let git = crate::theme::RoleDef {
+            fg: crate::theme::Color::Rgb(1, 2, 3),
+            bg: None,
+            styles: crate::theme::Attrs::bold(),
+        };
+        roles.insert("git".to_string(), git);
+        let seg = |code: &str| {
+            let v: Value = lua.load(code).eval().unwrap();
+            lua_segment(&v, &roles)
+        };
+        let s = seg(r#"return { text = "main", style = "git" }"#);
+        assert_eq!((s[0].text.as_str(), s[0].style), ("main", Style::Role(git)));
+        assert_eq!(
+            seg(r#"return { text = "x", style = "dim" }"#)[0].style,
+            Style::Dim
+        );
+        // A name the theme does not have says so where the module would be.
+        let s = seg(r#"return { text = "x", style = "gti" }"#);
+        assert_eq!(
+            (s[0].text.as_str(), s[0].style),
+            ("unknown style `gti`", Style::Urgent)
+        );
     }
 
     #[test]

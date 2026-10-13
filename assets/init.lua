@@ -576,4 +576,5 @@ ranma.profile("mobile", {
 --   ranma.module("where", { render = function() return "ws " .. ranma.state().workspace end })
 --
 -- A render function may return { text = "...", style = "urgent" }; styles are
--- normal, dim, accent and urgent, coloured by the theme.
+-- normal, dim, accent and urgent, coloured by the theme, and any role the
+-- theme declares itself ([roles.git] fg = "#f9e2af": style = "git").

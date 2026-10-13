@@ -912,12 +912,17 @@ the two kept in sync by hand. So:
   `ranma.bar { left = {...}, center = {...}, right = {...} }` and
   `ranma.module(name, { render | exec, interval, format })`. A module is a
   function or a command; there is no module type system to learn.
-- **Looks are theme roles**, not a stylesheet. A module picks one of four named
-  styles (`normal`, `dim`, `accent`, `urgent`); the workspaces module and the mode
-  indicator have their own keys. That limits what a bar can look like, on
-  purpose: every theme styles every module, and nothing needs a selector. Roles
-  carry colours and text attributes, and modules can sit on a background between
-  two caps (see "Looks: what tmux lets you style").
+- **Looks are theme roles**, not a stylesheet. A module picks a named style:
+  one of the four every theme has (`normal`, `dim`, `accent`, `urgent`), or
+  one the theme declares (`[roles.git]`, 2026-10-12); the workspaces module
+  and the mode indicator have their own keys. Still roles, not selectors: a
+  role is a name a module asks for and a theme answers, so nothing matches
+  modules by position or class. The four stay the floor every theme styles; a
+  theme's own roles are for its own modules, and a module asking for one the
+  theme lacks shows `unknown style` where it would be, as a typo always did,
+  rather than falling back quietly. Roles carry colours and text attributes,
+  and modules can sit on a background between two caps (see "Looks: what
+  tmux lets you style").
 - **Built-ins are configured, not replaced.** `ranma.module("workspaces", {...})`
   takes the built-in's few options; anything else is an error naming what it does
   take.
