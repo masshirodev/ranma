@@ -722,9 +722,13 @@ $ENV $BIN kill 4; sleep 0.5
 rm -rf "$MCFG"
 
 # A plain ssh in the focused pane (no ranma on the other side) names where it
-# went. A symlink called ssh to python: its comm is ssh, its argv a real ssh's.
-FAKE=$(mktemp -d); ln -s "$(command -v python3)" "$FAKE/ssh"
-T send-keys -t s "$FAKE/ssh -c 'import time; time.sleep(60)' me@fakehost" Enter
+# went. A program built here and called ssh, which sleeps: its name is ssh and
+# its argv a real ssh's. Not a link to python, which macOS's python3 re-execs
+# as a binary called Python.
+FAKE=$(mktemp -d)
+printf '#include <unistd.h>\nint main(void) { sleep(60); return 0; }\n' > "$FAKE/ssh.c"
+cc -o "$FAKE/ssh" "$FAKE/ssh.c" || fail "no C compiler for the fake ssh"
+T send-keys -t s "$FAKE/ssh -c aes128-ctr me@fakehost" Enter
 for _ in $(seq 1 20); do T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' && break; sleep 0.25; done
 T display -p -t s '#{pane_title}' | grep -q '^⧉ ranma@fakehost' ||
   fail "a running ssh does not name its host ($(T display -p -t s '#{pane_title}'))"
