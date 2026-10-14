@@ -200,7 +200,63 @@ impl App {
                     (n.clone(), nestbar::to_wire(&seg, &self.config.theme.roles))
                 })
                 .collect(),
+            clicks: self
+                .click_modules()
+                .into_iter()
+                .filter(|n| self.config.bar.all().any(|b| b == n))
+                .collect(),
+            palette_key: self.bound_key(|a| *a == Action::CommandPalette),
         }
+    }
+
+    /// A click on a bar module, or `module_click`: the ranma whose value it
+    /// shows acts on it. While the value comes from the ranma in the focused
+    /// pane, and that ranma says it takes the click, it is typed through to
+    /// it (its outer leader, its palette, `module_click <name>`, Enter), and
+    /// it does the same for a ranma inside it in turn. Otherwise this one's
+    /// `on_click` runs: an older ranma inside, or a module it does not click.
+    pub(super) fn click_module(&mut self, name: &str) {
+        if let Some(bytes) = self.module_click_bytes(name)
+            && let Some(p) = self.focused().and_then(|f| self.panes.get(&f))
+        {
+            p.write(bytes);
+            return;
+        }
+        let hook = self
+            .config
+            .modules
+            .get(name)
+            .and_then(|m| m.on_click.clone());
+        if let Some(k) = hook
+            && let Ok(f) = self.config.lua.registry_value::<mlua::Function>(&k)
+        {
+            self.call_lua(|_| f.call::<()>(()));
+        }
+    }
+
+    /// What to type into the focused pane so the ranma there clicks `name`,
+    /// or `None` when this ranma clicks it itself.
+    pub(super) fn module_click_bytes(&self, name: &str) -> Option<Vec<u8>> {
+        if self.config.modules.get(name)?.nested == ModuleNested::Own {
+            return None;
+        }
+        let pane = self.focused()?;
+        let r = self.report_of(pane)?;
+        if !r.modules.contains_key(name) || !r.clicks.iter().any(|c| c == name) {
+            return None;
+        }
+        let outer: crate::keys::Chord = r.outer_leader.as_deref()?.parse().ok()?;
+        let palette: crate::keys::Chord = r.palette_key.as_deref()?.parse().ok()?;
+        let modes = self.panes.get(&pane)?.modes();
+        let mut bytes = chord_bytes(outer, modes)?;
+        bytes.extend(chord_bytes(palette, modes)?);
+        for c in format!("module_click {name}").chars() {
+            let key = KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE);
+            bytes.extend(crate::input::encode_key(&key, modes)?);
+        }
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        bytes.extend(crate::input::encode_key(&enter, modes)?);
+        Some(bytes)
     }
 
     /// A module's value as this ranma draws it: from the innermost ranma on

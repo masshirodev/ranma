@@ -2744,7 +2744,7 @@ Decided:
   for the same reason `theme_colors` is, two builds with two themes.
 - **Clicks stay local.** A followed module runs the outer's `on_click`.
   Forwarding clicks would carry actions across the wire, which belongs to
-  a message channel, not to the report.
+  a message channel, not to the report. *Superseded on 2026-10-14, below.*
 - **Never at the cost of the workspaces.** The outer's OSC reader drops a
   sequence past 16 KiB whole, so a report that would exceed it goes without
   its modules. A report is re-sent only when it differs, so a module's
@@ -3196,6 +3196,33 @@ Rust, for predictable latency without a GC, and for the emulator:
   the file does not say. What a fraction was usually wanted for is a side on its
   own: `outer_top` and its three siblings override one side of their axis, and
   unset follow it, so themes with only the two axes look as before.
+
+**A followed module's click is the inner's** (2026-10-14). Clicks staying
+local made the followed modules lie on a click: with the VPS's ranma
+focused, the bar said `◆ 6` and `▸ 2 ports` (the VPS's), and a click opened
+the desk's docker and the desk's ports, both empty. A plugin cannot fix it
+from the outer side: the ports a pane serves exist only in the ranma whose
+pane printed them. Decided:
+
+- **The outer types the click, as it types a workspace click.** No new
+  channel and nothing on the wire but what a keyboard could send: the
+  inner's outer leader (WM mode there), its `command_palette` key, the
+  line `module_click <name>`, Enter. The inner runs `module_click` like any
+  action: its own `on_click`, or, if its own value follows a ranma further
+  in, typed on again, so a chain needs nothing from the outer but the first
+  level.
+- **The inner says what it clicks.** The report gains `clicks` (its placed
+  modules with an `on_click`) and `palette_key`. The outer types only for a
+  module the ranma in the focused pane reports *and* lists in `clicks`;
+  otherwise its own `on_click` runs, as before: an `"own"` module, a module
+  with no click on the far side, an older inner. No protocol bump: both
+  fields are skipped by an outer that does not know them.
+- **Only the click's target crosses**, never data a handler reads: the
+  inner's `on_click` gets nothing from the outer, so nothing the outer
+  holds reaches the far machine but the module's name, which the outer's
+  own bar already drew.
+- **Still not a plugin channel.** `module_click` is a click, from a bind, a
+  script or the outer alike; the channel above stays its own decision.
 
 ## Non-goals
 

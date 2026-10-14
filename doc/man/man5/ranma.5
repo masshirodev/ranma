@@ -598,6 +598,9 @@ Watch the focused pane for silence (tmux's \fBmonitor\-silence\fR): once it has 
 \fBexec <command line>\fR
 Open a pane running the command (through \fBsh \-c\fR), in the focused pane's directory.
 .TP
+\fBmodule_click <module>\fR
+Click a bar module by name, as a click on it does: its \fBon_click\fR, or, while it shows the value of a ranma inside the focused pane, that ranma's (see ranma inside ranma\fR). A name no \fBranma.module\fR declared says so in the bar.
+.TP
 \fBexit_mode\fR
 Leave WM mode (or a user mode). From a key, or from Lua (\fBranma.action("exit_mode")\fR), where it wins over the bind's own \fBexit = false\fR.
 .TP
@@ -1050,7 +1053,13 @@ says the far machine's \fB/\fR, \fBgit\fR the branch of the pane focused there. 
 replaces this bar's module of the same name rather than adding a second one,
 and a module the ranma inside does not have keeps this one's value. Style
 roles go by name and are drawn with this theme; one it does not declare is
-drawn plain. A click on a module still runs this ranma's \fBon_click\fR. Each
+drawn plain. \fBA click acts where the value came from\fR: on a module showing
+the inner ranma's value, ranma types the inner's outer leader, its
+\fBcommand_palette\fR key and \fBmodule_click <name>\fR into the pane, so the
+docker screen a click opens is the far machine's, and a ranma deeper still
+passes it on the same way. This one's \fBon_click\fR runs instead for a module
+it keeps (\fB"own"\fR), one the ranma inside does not click (no \fBon_click\fR
+there), and a ranma inside too old to say which it clicks. Each
 module's \fBnested\fR option (\fB"follow"\fR, \fB"own"\fR, \fB"hide"\fR, see your own
 modules\fR) changes this; the default
 \fBdatetime\fR and \fBclock\fR are \fB"own"\fR. The ranma inside must be a build that

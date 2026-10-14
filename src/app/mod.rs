@@ -2202,15 +2202,8 @@ impl App {
                 }) => self.click_nested(holder, &path[..depth as usize]),
                 Some(Click::InPane { pane, n }) => self.click_in_pane(pane, Some(n)),
                 Some(Click::Module(i)) => {
-                    let hook = self
-                        .click_modules()
-                        .get(i as usize)
-                        .and_then(|n| self.config.modules.get(n))
-                        .and_then(|m| m.on_click.clone());
-                    if let Some(k) = hook
-                        && let Ok(f) = self.config.lua.registry_value::<mlua::Function>(&k)
-                    {
-                        self.call_lua(|_| f.call::<()>(()));
+                    if let Some(name) = self.click_modules().get(i as usize).cloned() {
+                        self.click_module(&name);
                     }
                 }
                 None => {}
@@ -2990,6 +2983,13 @@ impl App {
             Action::Exec(cmd) => {
                 if let Err(e) = self.open_pane(Some(&cmd)) {
                     self.status = Some(format!("exec failed: {e:#}"));
+                }
+            }
+            Action::ModuleClick(name) => {
+                if self.config.modules.contains_key(&name) {
+                    self.click_module(&name);
+                } else {
+                    self.status = Some(format!("module_click: no module {name}"));
                 }
             }
             Action::ClosePane => {
@@ -4703,7 +4703,7 @@ impl App {
 
     /// Plugins' modules that take a click, by name: `Click::Module` is a
     /// place in this list, which stays put until the config reloads.
-    fn click_modules(&self) -> Vec<String> {
+    pub(super) fn click_modules(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .config
             .modules
@@ -8041,6 +8041,69 @@ mod tests {
         a.reports.clear();
         assert_eq!(text(&a.segment("disk")), "/ 10%");
         assert_eq!(text(&a.segment("branch")), "main");
+    }
+
+    /// A followed module's click is the inner's: the outer types its outer
+    /// leader, palette key and `module_click <name>`; a module the inner does
+    /// not click, an older inner, or `nested = "own"` keeps the outer's.
+    #[test]
+    fn a_followed_modules_click_is_typed_to_the_ranma_inside() {
+        let (mut a, id) = with_ranma_inside(
+            r#"ranma.module("docker", { render = function() return "d" end,
+                                     on_click = function() local_clicks = (local_clicks or 0) + 1 end })
+            ranma.module("clock", { nested = "own", render = function() return "c" end,
+                                    on_click = function() end })
+            ranma.bar { right = { "docker", "clock" } }"#,
+        );
+        let report = |clicks: &str| {
+            crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{},"outer_leader":"ctrl+alt+b","palette_key":":",
+                    "modules":{{"docker":[{{"text":"◆ 4"}}],"clock":[{{"text":"03:00"}}]}},
+                    "clicks":[{clicks}]}}"#,
+                crate::nestbar::PROTOCOL
+            ))
+            .unwrap()
+        };
+        a.reports.insert(id, report(r#""docker","clock""#));
+        let bytes = a.module_click_bytes("docker").expect("typed through");
+        let typed = String::from_utf8_lossy(&bytes);
+        assert!(typed.ends_with(":module_click docker\r"), "{typed:?}");
+        assert!(
+            a.module_click_bytes("clock").is_none(),
+            "own: the desk's click"
+        );
+
+        // An inner that does not click it, or does not say: this one's.
+        a.reports.insert(id, report(""));
+        assert!(a.module_click_bytes("docker").is_none());
+        a.run_action("module_click docker".parse().unwrap());
+        let g = a.config.lua.globals();
+        assert_eq!(g.get::<Option<i64>>("local_clicks").unwrap(), Some(1));
+    }
+
+    /// The inner's side: what the outer types runs the module's `on_click`.
+    #[test]
+    fn module_click_typed_through_the_palette_clicks_the_module() {
+        use crossterm::event::{KeyCode as C, KeyModifiers as K};
+        let mut a = app(Some(
+            r#"ranma.set { outer_leader = "ctrl+alt+b" }
+               ranma.module("docker", { render = function() return "d" end,
+                                        on_click = function() clicked = true end })
+               ranma.bar { right = { "docker" } }"#,
+        ));
+        with_pane(&mut a, 1);
+        let own = a.own_report();
+        assert_eq!(own.clicks, vec!["docker".to_string()]);
+        assert_eq!(own.palette_key.as_deref(), Some(":"));
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            C::Char('b'),
+            K::CONTROL | K::ALT,
+        ))));
+        typed(&mut a, ":module_click docker");
+        key(&mut a, C::Enter);
+        let g = a.config.lua.globals();
+        assert_eq!(g.get::<Option<bool>>("clicked").unwrap(), Some(true));
+        assert_eq!(a.mode, Mode::Normal);
     }
 
     #[test]

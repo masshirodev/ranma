@@ -96,6 +96,15 @@ pub struct Report {
     /// know the field ignores it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub modules: BTreeMap<String, Vec<WirePiece>>,
+    /// The modules among those it runs a click for (`module_click`): a click
+    /// on one in the outer's bar is typed through to it, so it acts where the
+    /// value came from. An outer that does not know the field clicks its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clicks: Vec<String>,
+    /// The key that opens its command palette in WM mode, as a bind spells
+    /// it: what a forwarded click types `module_click` into.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette_key: Option<String>,
 }
 
 /// A piece of a module's output on the wire: its text, and its style by
@@ -879,6 +888,8 @@ mod tests {
             ws,
             panes: Vec::new(),
             modules: BTreeMap::new(),
+            clicks: Vec::new(),
+            palette_key: None,
         }
     }
 

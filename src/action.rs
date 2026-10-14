@@ -236,6 +236,10 @@ pub enum Action {
     RenamePane(Option<String>),
     /// Open a new pane running this command line.
     Exec(String),
+    /// Click a bar module by name, as a click on it does: its `on_click`, or,
+    /// while it shows the value of a ranma inside the focused pane, that
+    /// ranma's (DESIGN.md, "A followed module's click is the inner's").
+    ModuleClick(String),
     ExitMode,
     /// Enter WM mode as the leader does, or leave it when in it: the leader
     /// for a toolbar button, a mouse or a script.
@@ -269,6 +273,7 @@ impl Action {
                 | Action::NewPaneAt(_)
                 | Action::ScratchpadToggle
                 | Action::Exec(_)
+                | Action::ModuleClick(_)
                 | Action::ExitMode
                 | Action::SendLeader
                 | Action::PasteImage
@@ -430,6 +435,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("show_workspace", "[n]"),
     ("rename_pane", "[name]"),
     ("exec", "<command line>"),
+    ("module_click", "<module>"),
     ("exit_mode", ""),
     ("leader", ""),
     ("send_leader", ""),
@@ -957,6 +963,18 @@ impl FromStr for Action {
                         expected: "a command line",
                     })
             }
+            "module_click" => match (first, second) {
+                (Some(m), None) => Ok(Action::ModuleClick(m.to_string())),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "a bar module's name",
+                }),
+                (Some(_), Some(_)) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one module name",
+                }),
+            },
             "exit_mode" => no_arg(Action::ExitMode),
             "leader" => no_arg(Action::Leader),
             "send_leader" => no_arg(Action::SendLeader),
@@ -1135,6 +1153,7 @@ impl fmt::Display for Action {
             Action::MoveWorkspaceToSession(None) => f.write_str("move_workspace_to_session"),
             Action::MoveWorkspaceToSession(Some(t)) => write!(f, "move_workspace_to_session {t}"),
             Action::Exec(cmd) => write!(f, "exec {cmd}"),
+            Action::ModuleClick(m) => write!(f, "module_click {m}"),
             Action::ExitMode => f.write_str("exit_mode"),
             Action::Leader => f.write_str("leader"),
             Action::SendLeader => f.write_str("send_leader"),
@@ -1172,6 +1191,13 @@ mod tests {
             a("exec nvim  -c 'set nu'"),
             Action::Exec("nvim  -c 'set nu'".into())
         );
+        assert_eq!(
+            a("module_click docker"),
+            Action::ModuleClick("docker".into())
+        );
+        assert_eq!(a("module_click docker").to_string(), "module_click docker");
+        assert!("module_click".parse::<Action>().is_err());
+        assert!("module_click a b".parse::<Action>().is_err());
     }
 
     #[test]
