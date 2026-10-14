@@ -96,15 +96,54 @@ pub struct Report {
     /// know the field ignores it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub modules: BTreeMap<String, Vec<WirePiece>>,
-    /// The modules among those it runs a click for (`module_click`): a click
-    /// on one in the outer's bar is typed through to it, so it acts where the
-    /// value came from. An outer that does not know the field clicks its own.
+    /// The modules among those it runs a click for: a click on one in the
+    /// outer's bar is sent through to it (`click_paste`), so it acts where
+    /// the value came from. An outer that does not know the field clicks its
+    /// own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clicks: Vec<String>,
-    /// The key that opens its command palette in WM mode, as a bind spells
-    /// it: what a forwarded click types `module_click` into.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub palette_key: Option<String>,
+    /// The secret a forwarded click carries. It goes out only in this
+    /// report, which only the ranma around it reads.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub click_token: String,
+}
+
+const CLICK_WORD: &str = "ranma-click";
+
+/// A fresh click token: random enough that nothing in a pane guesses it.
+pub fn new_click_token() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut out = String::new();
+    for i in 0..2u8 {
+        // Each RandomState is seeded from the OS, differently every time.
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u8(i);
+        h.write_u128(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos()),
+        );
+        out.push_str(&format!("{:016x}", h.finish()));
+    }
+    out
+}
+
+/// What an outer ranma writes into the pane holding an inner one to click
+/// `name` there: one bracketed paste, which the inner's client reads as a
+/// single event and the inner takes before any modal or mode sees it, so
+/// nothing is typed and nothing shows. Not keys: keys land in whatever has
+/// the keyboard there.
+pub fn click_paste(token: &str, name: &str) -> Vec<u8> {
+    format!("\x1b[200~{CLICK_WORD} {token} {name}\x1b[201~").into_bytes()
+}
+
+/// The module a paste clicks, when it is an outer's click carrying this
+/// ranma's token; `None` for any other paste, which is pasted as usual.
+pub fn click_in_paste<'a>(text: &'a str, token: &str) -> Option<&'a str> {
+    let mut words = text.split(' ');
+    (words.next()? == CLICK_WORD && !token.is_empty() && words.next()? == token).then_some(())?;
+    let name = words.next()?;
+    (words.next().is_none() && !name.is_empty()).then_some(name)
 }
 
 /// A piece of a module's output on the wire: its text, and its style by
@@ -889,7 +928,7 @@ mod tests {
             panes: Vec::new(),
             modules: BTreeMap::new(),
             clicks: Vec::new(),
-            palette_key: None,
+            click_token: String::new(),
         }
     }
 
@@ -1194,6 +1233,17 @@ mod tests {
             p.iter().find(|p| p.text == "[").unwrap().click,
             Some(Click::Workspace(2))
         );
+    }
+
+    #[test]
+    fn a_click_paste_needs_the_token_and_one_name() {
+        let t = "abc";
+        assert_eq!(click_in_paste("ranma-click abc docker", t), Some("docker"));
+        assert_eq!(click_in_paste("ranma-click abd docker", t), None);
+        assert_eq!(click_in_paste("ranma-click abc docker x", t), None);
+        assert_eq!(click_in_paste("ranma-click abc", t), None);
+        assert_eq!(click_in_paste("ranma-click  docker", ""), None);
+        assert_eq!(click_in_paste("hello", t), None);
     }
 
     #[test]

@@ -697,12 +697,13 @@ Over SSH, three levels deep, each machine starting ranma: with
   and a module the ranma inside does not have keeps this one's value. Style
   roles go by name and are drawn with this theme; one it does not declare is
   drawn plain. **A click acts where the value came from**: on a module showing
-  the inner ranma's value, ranma types the inner's outer leader, its
-  `command_palette` key and `module_click <name>` into the pane, so the
-  docker screen a click opens is the far machine's, and a ranma deeper still
-  passes it on the same way. This one's `on_click` runs instead for a module
-  it keeps (`"own"`), one the ranma inside does not click (no `on_click`
-  there), and a ranma inside too old to say which it clicks. Each
+  the inner ranma's value, the click is sent to the inner ranma (one
+  bracketed paste carrying a secret from its report, which it takes before
+  anything open there sees it, so nothing is typed and a modal open inside
+  stays as it was), and the docker screen it opens is the far machine's. A
+  ranma deeper still passes it on the same way. This one's `on_click` runs
+  instead for a module it keeps (`"own"`), one the ranma inside does not
+  click (no `on_click` there), and a ranma inside too old to take it. Each
   module's `nested` option (`"follow"`, `"own"`, `"hide"`, see [your own
   modules](#your-own-modules--ranmamodulename-opts)) changes this; the default
   `datetime` and `clock` are `"own"`. The ranma inside must be a build that

@@ -3202,27 +3202,38 @@ local made the followed modules lie on a click: with the VPS's ranma
 focused, the bar said `◆ 6` and `▸ 2 ports` (the VPS's), and a click opened
 the desk's docker and the desk's ports, both empty. A plugin cannot fix it
 from the outer side: the ports a pane serves exist only in the ranma whose
-pane printed them. Decided:
+pane printed them. Decided (2026-10-14, revised the same day):
 
-- **The outer types the click, as it types a workspace click.** No new
-  channel and nothing on the wire but what a keyboard could send: the
-  inner's outer leader (WM mode there), its `command_palette` key, the
-  line `module_click <name>`, Enter. The inner runs `module_click` like any
-  action: its own `on_click`, or, if its own value follows a ranma further
-  in, typed on again, so a chain needs nothing from the outer but the first
-  level.
+- **The click is one bracketed paste, not keys.** The first cut typed the
+  inner's outer leader, its palette key, `module_click <name>` and Enter,
+  as a workspace click does. Keys land in whatever has the keyboard there:
+  over an open modal the line was typed into it, visibly. The inner's
+  client reads its terminal through crossterm, which turns a bracketed
+  paste into one event, so the outer writes `ESC[200~ranma-click <token>
+  <name>ESC[201~` and the inner takes it at the top of its input, before
+  the settings panel, a plugin's screen, a picker or a mode. Nothing is
+  drawn and nothing open there changes. A chain needs nothing from the
+  outer but the first level: the inner runs the click like `module_click`,
+  passing it on if its own value follows a ranma further in.
+- **The token is what makes a paste a click.** Each server makes a random
+  token at start and sends it only in its report, which goes out of its
+  client to the ranma around it; programs in its panes reach that ranma
+  only as cells it draws, so none can read it. A paste whose words are not
+  exactly `ranma-click`, this token and one name is pasted as text, so a
+  user pasting the words, or a guess, does nothing.
 - **The inner says what it clicks.** The report gains `clicks` (its placed
-  modules with an `on_click`) and `palette_key`. The outer types only for a
+  modules with an `on_click`) and `click_token`. The outer sends only for a
   module the ranma in the focused pane reports *and* lists in `clicks`;
   otherwise its own `on_click` runs, as before: an `"own"` module, a module
   with no click on the far side, an older inner. No protocol bump: both
   fields are skipped by an outer that does not know them.
 - **Only the click's target crosses**, never data a handler reads: the
-  inner's `on_click` gets nothing from the outer, so nothing the outer
-  holds reaches the far machine but the module's name, which the outer's
-  own bar already drew.
+  inner's `on_click` gets nothing from the outer but the module's name,
+  which the outer's own bar already drew.
 - **Still not a plugin channel.** `module_click` is a click, from a bind, a
-  script or the outer alike; the channel above stays its own decision.
+  script or the outer alike; the channel above stays its own decision. Its
+  paste could carry more than a click, which is exactly why it carries one
+  fixed word and a name, and nothing else.
 
 ## Non-goals
 

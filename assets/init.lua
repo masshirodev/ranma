@@ -462,9 +462,9 @@ ranma.module("title", { nested = "hide" })
 -- While the focus is in a ranma inside this one (over ssh), a module that ranma
 -- also has shows its value instead (nested = "follow", the default); "own" keeps
 -- this one's, as the clocks do, and "hide" blanks one the ranma inside lacks.
--- A click on a followed module is that ranma's (it is typed `module_click
--- <name>` through its palette); `ranma.action("module_click docker")` clicks
--- one from a bind.
+-- A click on a followed module is that ranma's (sent to it unseen, over any
+-- modal open there); `ranma.action("module_click docker")` clicks one from a
+-- bind.
 ranma.module("clock", {
   interval = 60,
   nested = "own",

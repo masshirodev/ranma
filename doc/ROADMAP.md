@@ -137,8 +137,9 @@ an outer shows it.
   place of the outer's modules of the same name (`nested = "follow"`,
   `"own"`, `"hide"`); the clocks stay the desk's
 - [x] A click on a followed module acts in the ranma it came from:
-  `module_click`, typed through its palette (the report's `clicks` and
-  `palette_key`)
+  `module_click`, sent as one bracketed paste carrying the inner's token
+  (the report's `clicks` and `click_token`), so nothing is typed over a
+  modal
 
 ## 7. Upgrading without closing anything
 
