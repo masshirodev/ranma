@@ -725,11 +725,12 @@ impl Tree {
         true
     }
 
-    /// Grow (`Right`, `Down`) or shrink (`Left`, `Up`) `id` by `cells`, the way
-    /// Hyprland's `resizeactive` does.
+    /// Move a border of `id` by `cells` in `dir`, the way tmux's `resize-pane`
+    /// does: whether the pane grows or shrinks depends on which side of it the
+    /// border is, so the arrow always points where the border goes.
     ///
-    /// The edge that moves is the one shared with a neighbour: the right/bottom one
-    /// when there is a sibling there, else the left/top one. The container adjusted
+    /// The border is the one shared with a neighbour: the right/bottom one when
+    /// there is a sibling there, else the left/top one. The container adjusted
     /// is the nearest ancestor split along that axis with such a sibling. Returns
     /// false when nothing could move (no neighbour on that axis, or the neighbour
     /// or the pane is already at its minimum).
@@ -741,7 +742,7 @@ impl Tree {
             return false;
         };
         let want = Split::of(dir);
-        let grow = matches!(dir, Dir::Right | Dir::Down);
+        let forward = matches!(dir, Dir::Right | Dir::Down);
         // Walk up from the pane to find the container to adjust, tracking the rect
         // of each container so the change can be converted from cells to weight.
         let rects = path_rects(root, &path, area, inner_gap);
@@ -759,11 +760,8 @@ impl Tree {
             if *split != want || children.len() < 2 {
                 continue;
             }
-            let nb = if idx + 1 < children.len() {
-                idx + 1
-            } else {
-                idx - 1
-            };
+            let after = idx + 1 < children.len();
+            let nb = if after { idx + 1 } else { idx - 1 };
             let crect = rects[depth];
             let span = match want {
                 Split::Horizontal => crect.w,
@@ -778,6 +776,9 @@ impl Tree {
             // floor to one once float error and rounding are applied, so the floor
             // is set half a cell above it.
             let min = 2.5 * total / span;
+            // The border after the pane moving forward grows it; the one before
+            // it moving forward shrinks it.
+            let grow = forward == after;
             let (from, to) = if grow { (nb, idx) } else { (idx, nb) };
             let give = delta.min(children[from].1 - min).max(0.0);
             if give <= 0.0 {
@@ -1276,7 +1277,7 @@ impl Tree {
         true
     }
 
-    /// Grow or shrink `id`'s height within its column by `cells`, the way
+    /// Move a horizontal border of `id` within its column by `cells`, the way
     /// `resize` does in a tree; `column` is the column's rect.
     pub fn resize_in_column(
         &mut self,
@@ -1747,19 +1748,36 @@ mod tests {
     }
 
     #[test]
-    fn resize_grows_right_and_shrinks_left_like_hyprland() {
+    fn resize_moves_the_border_the_way_the_arrow_points() {
         let mut t = dwindle(2);
         assert!(t.resize(1, Dir::Right, 10, AREA, 0));
         assert_eq!(rect_of(&t, 1).w, 110);
         assert!(t.resize(1, Dir::Left, 30, AREA, 0));
         assert_eq!(rect_of(&t, 1).w, 80);
-        // The right-most pane has no right neighbour: its left edge moves instead.
+        // The right-most pane has no right neighbour: its left border moves, so
+        // right shrinks it and left grows it.
         assert!(t.resize(2, Dir::Right, 20, AREA, 0));
-        assert_eq!(rect_of(&t, 2).w, 140);
+        assert_eq!(rect_of(&t, 2).x, 100);
+        assert_eq!(rect_of(&t, 2).w, 100);
+        assert!(t.resize(2, Dir::Left, 40, AREA, 0));
         assert_eq!(rect_of(&t, 2).x, 60);
+        assert_eq!(rect_of(&t, 2).w, 140);
         // Side by side, there is nothing to resize vertically.
         assert!(!t.resize(1, Dir::Up, 5, AREA, 0));
         assert!(!dwindle(1).resize(1, Dir::Right, 5, AREA, 0));
+    }
+
+    #[test]
+    fn resize_moves_the_bottom_panes_top_border_up_and_down() {
+        // [1 / 2]: 2 has nothing below it, so its top border is the one to move.
+        let mut t = Tree::default();
+        t.insert(1, None, None, Placement::Manual(Split::Vertical));
+        t.insert(2, Some(1), None, Placement::Manual(Split::Vertical));
+        let (y, h) = (rect_of(&t, 2).y, rect_of(&t, 2).h);
+        assert!(t.resize(2, Dir::Up, 5, AREA, 0));
+        assert_eq!((rect_of(&t, 2).y, rect_of(&t, 2).h), (y - 5, h + 5));
+        assert!(t.resize(2, Dir::Down, 10, AREA, 0));
+        assert_eq!((rect_of(&t, 2).y, rect_of(&t, 2).h), (y + 5, h - 5));
     }
 
     #[test]

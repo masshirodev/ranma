@@ -288,7 +288,7 @@ sent them, which it is not asked to.
 | `focus next` / `focus prev` | Focus the next or previous pane of the workspace: its tiles in tree order, then its floats, wrapping. |
 | `focus last` | Focus the pane focused before this one, in this workspace (or in the scratchpad, while it is shown): tmux's `last-pane`, so pressing it again comes back. Focus moved any way counts, a click or a hook as much as a key (`leader ;`, tmux's key). |
 | `move <dir>` | Tiled: swap with the neighbour that way. Floating: shift the pane. |
-| `resize <dir> [n]` | Like Hyprland's `resizeactive`: `right`/`down` grow the pane by `n` cells (default 2), `left`/`up` shrink it. |
+| `resize <dir> [n]` | Move a border of the pane `n` cells (default 2) the way `dir` points, like tmux's `resize-pane`: the border it shares with the pane after it (right, below), else the one before it. So on a left pane `right` grows it, and on the right-most pane `left` does. A floating pane moves its right or bottom edge. |
 | `toggle_split` | Flip the focused container between horizontal and vertical (tuios's rotate; `leader j`). The direction stays: dwindle only chooses one for a new split. |
 | `sync_toggle` | Mark or unmark the focused pane for synchronized input (`leader x a`, in the pane folder). Typing into a marked pane types into every marked pane of the workspace, keys and pastes both, each encoded for its own program's modes; typing into an unmarked one reaches only it. Marked panes show `⇉` on their border, and the `mode` module shows ` ⇉ sync N ` in the urgent style while any are marked, so it is never on by accident. |
 | `sync_clear` | Unmark every pane (`leader x A`). |

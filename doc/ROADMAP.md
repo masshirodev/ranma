@@ -44,7 +44,8 @@ Pulled forward from milestone 2 because the tree made them cheap: `resize`,
 
 Also in this milestone, asked for along the way: global binds (`alt+arrows` focus
 without the leader), `Enter` leaves WM mode, `resize` with Hyprland's
-grow/shrink semantics, and the mouse outside WM mode — click (or hover) to focus,
+grow/shrink semantics (since 2026-10-14 the arrow moves the border instead,
+DESIGN.md "Resize keys point where the border goes"), and the mouse outside WM mode — click (or hover) to focus,
 clicks and wheel passed to programs that use the mouse, the wheel through
 scrollback otherwise. That last part was milestone 3's.
 

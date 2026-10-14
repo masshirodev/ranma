@@ -434,7 +434,7 @@ Focus the pane focused before this one, in this workspace (or in the scratchpad,
 Tiled: swap with the neighbour that way. Floating: shift the pane.
 .TP
 \fBresize <dir> [n]\fR
-Like Hyprland's \fBresizeactive\fR: \fBright\fR/\fBdown\fR grow the pane by \fBn\fR cells (default 2), \fBleft\fR/\fBup\fR shrink it.
+Move a border of the pane \fBn\fR cells (default 2) the way \fBdir\fR points, like tmux's \fBresize\-pane\fR: the border it shares with the pane after it (right, below), else the one before it. So on a left pane \fBright\fR grows it, and on the right\-most pane \fBleft\fR does. A floating pane moves its right or bottom edge.
 .TP
 \fBtoggle_split\fR
 Flip the focused container between horizontal and vertical (tuios's rotate; \fBleader j\fR). The direction stays: dwindle only chooses one for a new split.

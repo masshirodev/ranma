@@ -97,7 +97,7 @@ pub enum Action {
     FocusLast,
     /// Swap the focused pane with its neighbour in that direction.
     Move(Dir),
-    /// Grow the focused pane's edge in that direction by this many cells.
+    /// Move a border of the focused pane this many cells in that direction.
     Resize(Dir, u16),
     ToggleSplit,
     /// In a strip (`layout = "scrolling"`): alone in its column, the focused
