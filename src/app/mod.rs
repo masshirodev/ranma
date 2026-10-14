@@ -415,6 +415,9 @@ pub struct App {
     host_focused: bool,
     /// The report last sent outward, so only a change is sent.
     last_report: Option<crate::nestbar::Report>,
+    /// The secret an outer ranma's click carries (`nestbar::click_paste`):
+    /// only the ranma this one reports to has it, so a paste cannot fake one.
+    click_token: String,
     /// The colours the ranma around the attached client sent (see `nested`).
     outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
     /// The theme's own colours while the outer's are drawn instead.
@@ -563,6 +566,7 @@ impl App {
             outer_v: 0,
             host_focused: true,
             last_report: None,
+            click_token: crate::nestbar::new_click_token(),
             outer_colors: None,
             own_colors: None,
             frameless_was: None,
@@ -1956,6 +1960,15 @@ impl App {
     }
 
     fn handle_input(&mut self, ev: Event) {
+        // An outer ranma's click on a module that shows this one's value:
+        // before any modal, picker or mode, since none of them typed it.
+        if let Event::Paste(text) = &ev
+            && let Some(name) = crate::nestbar::click_in_paste(text, &self.click_token)
+        {
+            let name = name.to_string();
+            self.click_module(&name);
+            return;
+        }
         // A tooltip goes on any key; the key still does what it does. It
         // takes no keys: hovering over a shell must never swallow one.
         if matches!(ev, Event::Key(_)) && self.tooltip.take().is_some() {
@@ -8043,11 +8056,11 @@ mod tests {
         assert_eq!(text(&a.segment("branch")), "main");
     }
 
-    /// A followed module's click is the inner's: the outer types its outer
-    /// leader, palette key and `module_click <name>`; a module the inner does
+    /// A followed module's click is the inner's: the outer writes one
+    /// bracketed paste carrying the inner's token; a module the inner does
     /// not click, an older inner, or `nested = "own"` keeps the outer's.
     #[test]
-    fn a_followed_modules_click_is_typed_to_the_ranma_inside() {
+    fn a_followed_modules_click_is_sent_to_the_ranma_inside() {
         let (mut a, id) = with_ranma_inside(
             r#"ranma.module("docker", { render = function() return "d" end,
                                      on_click = function() local_clicks = (local_clicks or 0) + 1 end })
@@ -8055,55 +8068,65 @@ mod tests {
                                     on_click = function() end })
             ranma.bar { right = { "docker", "clock" } }"#,
         );
-        let report = |clicks: &str| {
+        let report = |clicks: &str, token: &str| {
             crate::nestbar::Report::parse(&format!(
-                r#"{{"v":{},"outer_leader":"ctrl+alt+b","palette_key":":",
+                r#"{{"v":{},"click_token":"{token}",
                     "modules":{{"docker":[{{"text":"◆ 4"}}],"clock":[{{"text":"03:00"}}]}},
                     "clicks":[{clicks}]}}"#,
                 crate::nestbar::PROTOCOL
             ))
             .unwrap()
         };
-        a.reports.insert(id, report(r#""docker","clock""#));
-        let bytes = a.module_click_bytes("docker").expect("typed through");
-        let typed = String::from_utf8_lossy(&bytes);
-        assert!(typed.ends_with(":module_click docker\r"), "{typed:?}");
+        a.reports.insert(id, report(r#""docker","clock""#, "t0k"));
+        assert_eq!(
+            a.module_click_bytes("docker").expect("sent through"),
+            b"\x1b[200~ranma-click t0k docker\x1b[201~"
+        );
         assert!(
             a.module_click_bytes("clock").is_none(),
             "own: the desk's click"
         );
 
-        // An inner that does not click it, or does not say: this one's.
-        a.reports.insert(id, report(""));
+        // An inner that does not click it, or carries no token: this one's.
+        a.reports.insert(id, report("", "t0k"));
+        assert!(a.module_click_bytes("docker").is_none());
+        a.reports.insert(id, report(r#""docker""#, ""));
         assert!(a.module_click_bytes("docker").is_none());
         a.run_action("module_click docker".parse().unwrap());
         let g = a.config.lua.globals();
         assert_eq!(g.get::<Option<i64>>("local_clicks").unwrap(), Some(1));
     }
 
-    /// The inner's side: what the outer types runs the module's `on_click`.
+    /// The inner's side: the outer's paste clicks the module over whatever
+    /// is open, and types nothing; a paste without the token is a paste.
     #[test]
-    fn module_click_typed_through_the_palette_clicks_the_module() {
-        use crossterm::event::{KeyCode as C, KeyModifiers as K};
+    fn an_outers_click_paste_clicks_the_module_over_a_picker() {
         let mut a = app(Some(
-            r#"ranma.set { outer_leader = "ctrl+alt+b" }
-               ranma.module("docker", { render = function() return "d" end,
-                                        on_click = function() clicked = true end })
+            r#"ranma.module("docker", { render = function() return "d" end,
+                                        on_click = function() clicks = (clicks or 0) + 1 end })
                ranma.bar { right = { "docker" } }"#,
         ));
         with_pane(&mut a, 1);
         let own = a.own_report();
         assert_eq!(own.clicks, vec!["docker".to_string()]);
-        assert_eq!(own.palette_key.as_deref(), Some(":"));
-        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
-            C::Char('b'),
-            K::CONTROL | K::ALT,
-        ))));
-        typed(&mut a, ":module_click docker");
-        key(&mut a, C::Enter);
+        assert!(own.click_token.len() >= 16);
+        assert_ne!(own.click_token, crate::nestbar::new_click_token());
+
+        a.run_action(Action::CommandPalette);
+        let before = a.picker.as_ref().unwrap().query.clone();
+        let paste = |a: &mut App, text: String| a.handle(AppEvent::Input(Event::Paste(text)));
+        paste(&mut a, format!("ranma-click {} docker", own.click_token));
         let g = a.config.lua.globals();
-        assert_eq!(g.get::<Option<bool>>("clicked").unwrap(), Some(true));
-        assert_eq!(a.mode, Mode::Normal);
+        assert_eq!(g.get::<Option<i64>>("clicks").unwrap(), Some(1));
+        assert!(a.picker.is_some(), "the palette stays as it was");
+        assert_eq!(a.picker.as_ref().unwrap().query, before, "nothing typed");
+
+        paste(&mut a, "ranma-click guessed docker".into());
+        assert_eq!(g.get::<Option<i64>>("clicks").unwrap(), Some(1));
+        assert!(
+            a.picker.as_ref().unwrap().query.contains("ranma-click"),
+            "an ordinary paste"
+        );
     }
 
     #[test]
