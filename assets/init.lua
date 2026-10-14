@@ -267,8 +267,10 @@ ranma.bind("ctrl+h", "group_prev")
 ranma.bind("ctrl+l", "group_next")
 
 -- Focus, resize, move ----------------------------------------------------------
--- resize works like Hyprland's resizeactive: right and down grow the pane, left
--- and up shrink it. On a floating pane, move shifts it instead of swapping.
+-- resize moves a border of the pane the way the arrow points, as tmux's
+-- resize-pane does: the one after it if it has one, else the one before it, so
+-- on the right-most pane left grows it. On a floating pane, move shifts it
+-- instead of swapping.
 -- With the mouse, in any mode: drag a border between panes to resize, drag a
 -- pane by its top border to move it (drop it on a side of another pane).
 for _, dir in ipairs { "left", "right", "up", "down" } do

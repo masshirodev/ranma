@@ -2209,6 +2209,24 @@ always includes both the pressed cell and the one under the pointer, whichever
 way it goes; sides fixed for a forward drag made a backward one drop the cell it
 ended on, and with it a pane's first column.
 
+### Resize keys point where the border goes (2026-10-14)
+
+`resize <dir>` was Hyprland's `resizeactive`: right and down grew the pane,
+left and up shrank it, whichever border that moved. On a pane with a
+neighbour after it that reads right, but the right-most and bottom panes
+have only a border before them, and there it ran backwards: `→` pulled the
+border left, `←` pushed it right. Half the panes on any screen resized
+against the arrow. Hyprland gets away with it because Super+arrow is read
+as grow and shrink there; in a terminal, next to arrows that focus and move
+by direction, it was read as a direction and felt broken.
+
+Now the arrow is the direction the border moves, as tmux's `resize-pane -L/-R`
+does and as dragging a border with the mouse already did. The border is
+picked as before (the one shared with the next sibling, else the previous),
+so a left or top pane behaves exactly as it did; only panes with nothing
+after them change. A floating pane and a strip's column keep moving their
+right or bottom edge, which already went the way the arrow pointed.
+
 ### Toasts, and a socket per ranma
 
 A notification that sits in the bar until the next key is easy to miss and easy
