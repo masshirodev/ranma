@@ -343,6 +343,7 @@ sent them, which it is not asked to.
 | `respawn_pane` | In a pane that stayed after its program ended (`remain_on_exit`), run the same command again where it first started. A pane still running is left alone (`leader x r`). |
 | `monitor_silence [seconds\|off]` | Watch the focused pane for silence (tmux's `monitor-silence`): once it has printed and then stays quiet for the `monitor_silence` setting's seconds (or the number given), a toast says `quiet: <title>`, and its workspace is marked urgent if it is not shown. Once per burst of output; it keeps watching until toggled off. Bare toggles (`leader x s`); `off` stops. A build or a log you want to hear the end of. |
 | `exec <command line>` | Open a pane running the command (through `sh -c`), in the focused pane's directory. |
+| `module_click <module>` | Click a bar module by name, as a click on it does: its `on_click`, or, while it shows the value of a ranma inside the focused pane, that ranma's (see [ranma inside ranma](#ranma-inside-ranma)). A name no `ranma.module` declared says so in the bar. |
 | `exit_mode` | Leave WM mode (or a user mode). From a key, or from Lua (`ranma.action("exit_mode")`), where it wins over the bind's own `exit = false`. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
@@ -695,7 +696,13 @@ Over SSH, three levels deep, each machine starting ranma: with
   replaces this bar's module of the same name rather than adding a second one,
   and a module the ranma inside does not have keeps this one's value. Style
   roles go by name and are drawn with this theme; one it does not declare is
-  drawn plain. A click on a module still runs this ranma's `on_click`. Each
+  drawn plain. **A click acts where the value came from**: on a module showing
+  the inner ranma's value, ranma types the inner's outer leader, its
+  `command_palette` key and `module_click <name>` into the pane, so the
+  docker screen a click opens is the far machine's, and a ranma deeper still
+  passes it on the same way. This one's `on_click` runs instead for a module
+  it keeps (`"own"`), one the ranma inside does not click (no `on_click`
+  there), and a ranma inside too old to say which it clicks. Each
   module's `nested` option (`"follow"`, `"own"`, `"hide"`, see [your own
   modules](#your-own-modules--ranmamodulename-opts)) changes this; the default
   `datetime` and `clock` are `"own"`. The ranma inside must be a build that
