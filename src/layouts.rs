@@ -261,6 +261,70 @@ impl Spec {
         }
     }
 
+    /// The `ranma.layout(name, ...)` call that declares it, for pasting into
+    /// `init.lua` (`ranma dump-layout`). A pane is one line; a container
+    /// opens a block, its own keys first, then its children.
+    pub fn to_lua(&self, name: &str) -> String {
+        let mut out = format!("ranma.layout({}, ", lua_str(name));
+        self.write_lua(&mut out, 0);
+        out.push_str(")\n");
+        out
+    }
+
+    fn lua_fields(&self) -> Vec<String> {
+        let mut f = Vec::new();
+        if let Some(s) = self.split {
+            let s = match s {
+                SplitName::Horizontal => "horizontal",
+                SplitName::Vertical => "vertical",
+            };
+            f.push(format!("split = {}", lua_str(s)));
+        }
+        if self.group {
+            f.push("group = true".into());
+        }
+        if self.scroll {
+            f.push("scroll = true".into());
+        }
+        if let Some(s) = self.size {
+            f.push(format!("size = {s}"));
+        }
+        if let Some(w) = &self.width {
+            f.push(format!("width = {}", lua_str(w)));
+        }
+        if let Some(c) = &self.cwd {
+            f.push(format!("cwd = {}", lua_str(c)));
+        }
+        if let Some(c) = &self.command {
+            f.push(format!("command = {}", lua_str(c)));
+        }
+        f
+    }
+
+    fn write_lua(&self, out: &mut String, depth: usize) {
+        let fields = self.lua_fields();
+        if self.is_pane() {
+            if fields.is_empty() {
+                out.push_str("{}");
+            } else {
+                out.push_str(&format!("{{ {} }}", fields.join(", ")));
+            }
+            return;
+        }
+        let pad = "  ".repeat(depth + 1);
+        out.push_str("{\n");
+        for f in fields {
+            out.push_str(&format!("{pad}{f},\n"));
+        }
+        for c in &self.children {
+            out.push_str(&pad);
+            c.write_lua(out, depth + 1);
+            out.push_str(",\n");
+        }
+        out.push_str(&"  ".repeat(depth));
+        out.push('}');
+    }
+
     /// From `ranma.layout`'s table: children in the array part, the rest by name.
     pub fn from_lua(t: &mlua::Table, at: &str) -> Result<Spec, String> {
         let mut s = Spec::default();
@@ -400,6 +464,28 @@ pub fn saved(dir: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// A Lua string literal: double-quoted, with what Lua cannot take raw escaped
+/// (a control byte as `\ddd`, which three digits keep from running into a
+/// digit after it).
+fn lua_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() && (c as u32) < 0x80 => {
+                out.push_str(&format!("\\{:03}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// A command line from its words, quoted only where the shell needs it.
@@ -597,6 +683,81 @@ mod tests {
         for bad in ["", ".hidden", "a/b", "two words"] {
             assert!(!valid_name(bad), "{bad}");
         }
+    }
+
+    /// Run what `to_lua` printed, as init.lua would, and read the layout back.
+    fn through_lua(spec: &Spec, name: &str) -> Spec {
+        let src = spec.to_lua(name);
+        let lua = mlua::Lua::new();
+        let got = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let sink = got.clone();
+        let ranma = lua.create_table().unwrap();
+        let layout = lua
+            .create_function(move |_, (n, t): (String, mlua::Table)| {
+                *sink.borrow_mut() = Some((n, Spec::from_lua(&t, "def")));
+                Ok(())
+            })
+            .unwrap();
+        ranma.set("layout", layout).unwrap();
+        lua.globals().set("ranma", ranma).unwrap();
+        lua.load(&src)
+            .exec()
+            .unwrap_or_else(|e| panic!("{e}\n{src}"));
+        let (n, spec) = got.borrow_mut().take().expect("ranma.layout was called");
+        assert_eq!(n, name);
+        spec.unwrap_or_else(|e| panic!("{e}\n{src}"))
+    }
+
+    #[test]
+    fn a_layout_dumps_as_the_lua_that_declares_it() {
+        let text = sample().to_lua("dev");
+        assert_eq!(
+            text,
+            r#"ranma.layout("dev", {
+  split = "horizontal",
+  { size = 1.5, cwd = "~/projects/kumiko", command = "nvim" },
+  {
+    split = "vertical",
+    { cwd = "~/projects/kumiko", command = "yarn run dev" },
+    { cwd = "~" },
+  },
+})
+"#
+        );
+        assert_eq!(through_lua(&sample(), "dev"), sample());
+    }
+
+    #[test]
+    fn every_kind_of_layout_survives_the_dump() {
+        let group = Spec {
+            group: true,
+            size: Some(0.25),
+            children: vec![Spec::default(), pane("~", Some("htop"))],
+            ..Spec::default()
+        };
+        let strip = Spec {
+            split: Some(SplitName::Horizontal),
+            scroll: true,
+            children: vec![
+                Spec {
+                    width: Some("1/2".into()),
+                    ..pane("~", None)
+                },
+                Spec {
+                    width: Some("63".into()),
+                    ..group.clone()
+                },
+            ],
+            ..Spec::default()
+        };
+        let odd = pane(
+            "~/dir \"quoted\" \\ back",
+            Some("printf 'a\\tb\\n'; echo \u{1}1 ünï"),
+        );
+        for (name, spec) in [("group", &group), ("strip", &strip), ("we\"ird", &odd)] {
+            assert_eq!(&through_lua(spec, name), spec, "{name}");
+        }
+        assert_eq!(Spec::default().to_lua("x"), "ranma.layout(\"x\", {})\n");
     }
 
     #[test]

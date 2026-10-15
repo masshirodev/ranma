@@ -620,6 +620,38 @@ A layout declared in `init.lua` wins over a saved file of the same name, and
 `save_layout` refuses that name rather than write a file that would never
 load.
 
+### From a workspace to `init.lua`
+
+`ranma dump-layout` prints the workspace it runs in as the `ranma.layout`
+call that declares it, ready to paste and edit; `ranma dump-layout NAME`
+prints a layout `load_layout` takes (declared or saved) the same way. The
+workspace's is named after the workspace, or `workspace-N`; change the name
+in the first line. Arrange the panes by hand, then:
+
+```sh
+ranma dump-layout >> ~/.config/ranma/lua/layouts.lua   # and require("layouts") in init.lua
+```
+
+```lua
+ranma.layout("3pane", {
+  split = "horizontal",
+  { size = 0.859, cwd = "~/apk", command = "ai" },
+  {
+    split = "vertical",
+    size = 0.679,
+    { cwd = "~/projects/kamiwaza", command = "ai" },
+    { cwd = "~/projects/kamiwaza" },
+  },
+})
+```
+
+Sizes are the weights the panes had (dragging leaves `0.859`; `2` beside a
+`1` reads better). A strip prints `scroll = true` and each column's `width`.
+With `ranma --dump-types` on the language server's path, `ranma.layout`'s
+keys complete as you edit. It prints and writes nothing: once the layout is
+in `init.lua`, delete the saved file of that name, which the declared one
+now shadows.
+
 ### After a reboot
 
 A server keeps a snapshot of itself in
@@ -1224,6 +1256,7 @@ keep itself alive by catching it.
 ranma --dump-types > ~/.config/ranma/lua/ranma.d.lua   # completion and checks
 ranma lua 'ranma.pane():search("error")'                # try it on the live server
 ranma health                                            # what loaded, what runs
+ranma dump-layout                                       # this workspace as ranma.layout(...)
 ```
 
 - `ranma --dump-types` prints every `ranma.*` function, field, option and event

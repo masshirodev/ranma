@@ -193,6 +193,13 @@ enum Command {
     /// Say what loaded and what runs: the config, each plugin and whether it
     /// failed, the hooks, timers and jobs.
     Health,
+    /// Print a layout as the `ranma.layout(...)` call that declares it, to
+    /// paste into init.lua: the workspace this runs in, or NAME (declared or
+    /// saved): `ranma dump-layout >> ~/.config/ranma/lua/layouts.lua`.
+    DumpLayout {
+        /// A layout `load_layout` takes; the shown workspace when left out.
+        name: Option<String>,
+    },
     /// Draw what a `ranma.placement` from your config lays out, as numbered
     /// boxes, without a server: `ranma layout-preview centred 120x40 --panes 4`.
     LayoutPreview {
@@ -456,6 +463,9 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             ipc::send(&format!("lua\n{code}"))?
         }
         Command::Health => ipc::send("health\n")?,
+        Command::DumpLayout { name } => {
+            ipc::send(&format!("dump-layout\n{}\n", name.unwrap_or_default()))?
+        }
         Command::LayoutPreview { name, size, panes } => {
             let (w, h) = size
                 .split_once('x')

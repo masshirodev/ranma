@@ -972,6 +972,41 @@ shell is in the foreground (\fBnvim\fR, \fByarn run dev\fR), quoted for the shel
 A layout declared in \fBinit.lua\fR wins over a saved file of the same name, and
 \fBsave_layout\fR refuses that name rather than write a file that would never
 load.
+.SS "From a workspace to \fBinit.lua\fR"
+.PP
+\fBranma dump\-layout\fR prints the workspace it runs in as the \fBranma.layout\fR
+call that declares it, ready to paste and edit; \fBranma dump\-layout NAME\fR
+prints a layout \fBload_layout\fR takes (declared or saved) the same way. The
+workspace's is named after the workspace, or \fBworkspace\-N\fR; change the name
+in the first line. Arrange the panes by hand, then:
+.PP
+.RS 4
+.nf
+ranma dump\-layout >> ~/.config/ranma/lua/layouts.lua   # and require("layouts") in init.lua
+.fi
+.RE
+.PP
+.RS 4
+.nf
+ranma.layout("3pane", {
+  split = "horizontal",
+  { size = 0.859, cwd = "~/apk", command = "ai" },
+  {
+    split = "vertical",
+    size = 0.679,
+    { cwd = "~/projects/kamiwaza", command = "ai" },
+    { cwd = "~/projects/kamiwaza" },
+  },
+})
+.fi
+.RE
+.PP
+Sizes are the weights the panes had (dragging leaves \fB0.859\fR; \fB2\fR beside a
+\fB1\fR reads better). A strip prints \fBscroll = true\fR and each column's \fBwidth\fR.
+With \fBranma \-\-dump\-types\fR on the language server's path, \fBranma.layout\fR's
+keys complete as you edit. It prints and writes nothing: once the layout is
+in \fBinit.lua\fR, delete the saved file of that name, which the declared one
+now shadows.
 .SS "After a reboot"
 .PP
 A server keeps a snapshot of itself in
@@ -1676,6 +1711,7 @@ keep itself alive by catching it.
 ranma \-\-dump\-types > ~/.config/ranma/lua/ranma.d.lua   # completion and checks
 ranma lua 'ranma.pane():search("error")'                # try it on the live server
 ranma health                                            # what loaded, what runs
+ranma dump\-layout                                       # this workspace as ranma.layout(...)
 .fi
 .RE
 .IP \(bu 2

@@ -390,6 +390,9 @@ pub enum Query {
     Lua(String),
     /// What loaded and what runs: plugins, hooks, timers, jobs (`ranma health`).
     Health,
+    /// A layout by name, or the shown workspace's, as the `ranma.layout`
+    /// call that declares it (`ranma dump-layout`).
+    DumpLayout(Option<String>),
 }
 
 /// What `Query::Pane` does. What the tmux shim needs that no action does,
@@ -491,6 +494,13 @@ pub fn parse_request(text: &str) -> Result<Request> {
         }
         "panes" => Query::Panes,
         "health" => Query::Health,
+        "dump-layout" => Query::DumpLayout(
+            lines
+                .nth(1)
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_string),
+        ),
         // The chunk is the rest verbatim, newlines and all.
         "lua" => Query::Lua(
             text.split_once('\n')
@@ -941,6 +951,11 @@ mod tests {
             [SendInput::Text("ls".into())]
         );
         assert_eq!(q("health\n"), Query::Health);
+        assert_eq!(q("dump-layout\n"), Query::DumpLayout(None));
+        assert_eq!(
+            q("dump-layout\nkumiko\n"),
+            Query::DumpLayout(Some("kumiko".into()))
+        );
         assert_eq!(
             q("lua\nlocal x = 1\nreturn x + 1\n"),
             Query::Lua("local x = 1\nreturn x + 1\n".into())
