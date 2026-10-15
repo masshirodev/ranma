@@ -472,6 +472,16 @@ schema:
   a file ranma writes does not belong in the directory the user edits and the
   config watcher reloads. A name `init.lua` declares is refused, so a saved
   file never shadows a declared one.
+- `ranma dump-layout [NAME]` (2026-10-15) goes the other way: it prints the
+  shown workspace, or a layout either source holds, as the `ranma.layout`
+  call that declares it. A layout worth keeping is edited in Lua, where
+  `--dump-types` gives completion and the strict checks name a typo, so the
+  way from a workspace arranged by hand to `init.lua` should not be retyping
+  a TOML file. It prints and never writes: where the call goes (`init.lua`,
+  a module under `lua/`) is the user's file, and a dumped name that a file
+  also saves is the same shadowing `save_layout` refuses, left for the user
+  to resolve by deleting one. It asks the running server, since the
+  workspace's tree and its panes' directories are only there.
 
 `load_layout NAME` applies one to the current workspace. On an empty
 workspace every pane is spawned: the shell in the saved directory (the home

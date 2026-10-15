@@ -1,0 +1,18 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-DUMP-LAYOUT 1 "" "ranma 0.3.0" "ranma manual"
+.SH NAME
+ranma\-dump\-layout \- Print a layout as the \fBranma.layout(...)\fR call that declares it, to paste into init.lua: the workspace this runs in, or NAME (declared or saved): \fBranma dump\-layout >> ~/.config/ranma/lua/layouts.lua\fR
+.SH SYNOPSIS
+\fBranma dump\-layout\fR [\fB\-h\fR|\fB\-\-help\fR] [\fINAME\fR] 
+.SH DESCRIPTION
+Print a layout as the \fBranma.layout(...)\fR call that declares it, to paste into init.lua: the workspace this runs in, or NAME (declared or saved): \fBranma dump\-layout >> ~/.config/ranma/lua/layouts.lua\fR
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fINAME\fR]
+A layout \fBload_layout\fR takes; the shown workspace when left out
+.SH "SEE ALSO"
+\fBranma\fR(1)

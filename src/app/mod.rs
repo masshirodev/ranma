@@ -5111,7 +5111,10 @@ mod tests {
     fn app(user: Option<&str>) -> App {
         let config = crate::config::load_from(None, None, user).unwrap();
         let (tx, _rx) = std::sync::mpsc::channel();
-        App::new(config, tx, 80, 24)
+        let mut a = App::new(config, tx, 80, 24);
+        // Never the user's saved layouts: a test would count them, or write there.
+        a.layouts_dir = None;
+        a
     }
 
     fn with_pane(app: &mut App, id: PaneId) {

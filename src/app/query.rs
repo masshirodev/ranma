@@ -31,6 +31,7 @@ impl App {
             Query::Pane { pane, op } => self.pane_op(pane, op).map(|_| String::new()),
             Query::Lua(src) => self.eval_lua(&src),
             Query::Health => Ok(self.health()),
+            Query::DumpLayout(name) => self.dump_layout(name.as_deref()),
             Query::Wait { pane } => {
                 if self.panes.contains_key(&pane) && !self.dead.contains_key(&pane) {
                     self.waiters.entry(pane).or_default().push(reply);

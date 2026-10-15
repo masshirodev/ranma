@@ -80,6 +80,9 @@ Evaluate Lua in the running ranma\*(Aqs configuration and print what it returns:
 ranma\-health(1)
 Say what loaded and what runs: the config, each plugin and whether it failed, the hooks, timers and jobs
 .TP
+ranma\-dump\-layout(1)
+Print a layout as the \fBranma.layout(...)\fR call that declares it, to paste into init.lua: the workspace this runs in, or NAME (declared or saved): \fBranma dump\-layout >> ~/.config/ranma/lua/layouts.lua\fR
+.TP
 ranma\-layout\-preview(1)
 Draw what a \fBranma.placement\fR from your config lays out, as numbered boxes, without a server: \fBranma layout\-preview centred 120x40 \-\-panes 4\fR
 .TP
@@ -129,4 +132,4 @@ Set, the server never checks for updates.
 \fBRANMA\fR, \fBRANMA_PANE\fR, \fBRANMA_SOCKET\fR
 Set by ranma in every pane: the server's process id, the pane's id and the socket that commands like \fBranma notify\fR talk to.
 .SH "SEE ALSO"
-\fBranma\fR(5), \fBranma\-keys\fR(7), \fBranma\-ls\fR(1), \fBranma\-attach\fR(1), \fBranma\-kill\fR(1), \fBranma\-upgrade\fR(1), \fBranma\-notify\fR(1), \fBranma\-update\fR(1), \fBranma\-action\fR(1), \fBranma\-popup\fR(1), \fBranma\-tmux\-shim\fR(1), \fBranma\-tmux\fR(1), \fBranma\-panes\fR(1), \fBranma\-send\fR(1), \fBranma\-lua\fR(1), \fBranma\-health\fR(1), \fBranma\-layout\-preview\fR(1), \fBranma\-capture\fR(1), \fBranma\-wait\fR(1), \fBranma\-open\fR(1)
+\fBranma\fR(5), \fBranma\-keys\fR(7), \fBranma\-ls\fR(1), \fBranma\-attach\fR(1), \fBranma\-kill\fR(1), \fBranma\-upgrade\fR(1), \fBranma\-notify\fR(1), \fBranma\-update\fR(1), \fBranma\-action\fR(1), \fBranma\-popup\fR(1), \fBranma\-tmux\-shim\fR(1), \fBranma\-tmux\fR(1), \fBranma\-panes\fR(1), \fBranma\-send\fR(1), \fBranma\-lua\fR(1), \fBranma\-health\fR(1), \fBranma\-dump\-layout\fR(1), \fBranma\-layout\-preview\fR(1), \fBranma\-capture\fR(1), \fBranma\-wait\fR(1), \fBranma\-open\fR(1)

@@ -188,24 +188,18 @@ impl App {
             ));
             return;
         }
-        if self.scratch_shown {
-            self.status = Some("scratchpad panes always float: nothing to save".into());
-            return;
-        }
-        let Some(root) = self.active().tree.root.clone() else {
-            self.status = Some("no tiled panes here to save".into());
-            return;
+        let spec = match self.workspace_spec() {
+            Ok(spec) => spec,
+            Err(e) => {
+                self.status = Some(e);
+                return;
+            }
         };
         let Some(dir) = self.layouts_dir.clone() else {
             self.status = Some("no directory for saved layouts".into());
             return;
         };
         let home = dirs::home_dir();
-        let spec = if self.in_strip() {
-            Spec::from_strip(&root, &self.pane_about())
-        } else {
-            Spec::from_node(&root, &self.pane_about())
-        };
         let n = spec.panes().len();
         self.status = Some(match layouts::save(&dir, name, &spec) {
             Ok(path) => format!(
@@ -215,6 +209,40 @@ impl App {
             ),
             Err(e) => format!("save_layout: {e:#}"),
         });
+    }
+
+    /// The shown workspace's tiles as a layout, as `save_layout` writes them.
+    fn workspace_spec(&self) -> Result<Spec, String> {
+        if self.scratch_shown {
+            return Err("scratchpad panes always float: nothing to save".into());
+        }
+        let Some(root) = self.active().tree.root.as_ref() else {
+            return Err("no tiled panes here to save".into());
+        };
+        Ok(if self.in_strip() {
+            Spec::from_strip(root, &self.pane_about())
+        } else {
+            Spec::from_node(root, &self.pane_about())
+        })
+    }
+
+    /// `ranma dump-layout`: the layout `name` (declared or saved), or the
+    /// shown workspace's tiles, as the `ranma.layout` call for `init.lua`.
+    /// The workspace's is named after it, `workspace-N` when it has no name.
+    pub(super) fn dump_layout(&self, name: Option<&str>) -> Result<String, String> {
+        match name {
+            Some(name) => Ok(self.find_layout(name)?.0.to_lua(name)),
+            None => {
+                let spec = self.workspace_spec()?;
+                let name = self
+                    .active()
+                    .name
+                    .clone()
+                    .filter(|n| layouts::valid_name(n))
+                    .unwrap_or_else(|| format!("workspace-{}", self.current));
+                Ok(spec.to_lua(&name))
+            }
+        }
     }
 
     /// Apply the layout `name` to the current workspace: its panes fill the
@@ -495,6 +523,34 @@ mod tests {
         a.active_mut().tree.apply_preset(Preset::EvenVertical, 0.5);
         a.load_layout("mine");
         assert_eq!(a.active().tree.root, before);
+    }
+
+    #[test]
+    fn a_workspace_or_a_layout_dumps_as_lua() {
+        let mut a = app(Some(DEV), "dump");
+        assert_eq!(
+            a.dump_layout(None).unwrap_err(),
+            "no tiled panes here to save"
+        );
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        let text = a.dump_layout(None).unwrap();
+        assert!(
+            text.starts_with("ranma.layout(\"workspace-1\", {\n  split = "),
+            "{text}"
+        );
+        a.active_mut().name = Some("kumiko".into());
+        assert!(
+            a.dump_layout(None)
+                .unwrap()
+                .starts_with("ranma.layout(\"kumiko\"")
+        );
+        let dev = a.dump_layout(Some("dev")).unwrap();
+        assert!(dev.contains("{ size = 3 },"), "{dev}");
+        assert_eq!(
+            a.dump_layout(Some("nope")).unwrap_err(),
+            "no layout named nope"
+        );
     }
 
     #[test]

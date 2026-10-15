@@ -216,6 +216,7 @@ ranma.bind("y w", "workspace_layout")
 --       { cwd = "~/projects/kumiko", command = "yarn run dev" },
 --       { cwd = "~/projects/kumiko" } },
 --   })
+-- `ranma dump-layout` prints the workspace it runs in that way, to paste here.
 -- A layout policy of your own goes beside dwindle and master: its function
 -- returns a tree of splits (ranma.h side by side, ranma.v stacked), and
 -- `ranma layout-preview NAME 120x40 --panes 4` draws it. CONFIG.md has more.

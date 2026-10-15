@@ -245,12 +245,16 @@ function ranma.profile(name, def) end
 ---@param def ranma.Toolbar
 function ranma.toolbar(name, def) end
 
+---A pane (cwd, command) or a container (split or group, and children in the
+---list part). `ranma dump-layout` prints a workspace as one.
 ---@class ranma.LayoutNode
----@field split? "horizontal"|"vertical"
----@field group? boolean
----@field size? number
----@field cwd? string
----@field command? string
+---@field split? "horizontal"|"vertical" A container: side by side or stacked.
+---@field group? boolean A container: one child shown at a time, under tabs.
+---@field size? number Its share among its siblings, as a weight; 1 when left out.
+---@field scroll? boolean The root of a strip (layout "scrolling"): its children are columns.
+---@field width? string|integer A strip column's width: "1/2", or cells.
+---@field cwd? string A pane: where its shell starts; "~" is home.
+---@field command? string A pane: typed into its shell once it starts.
 ---@field [integer] ranma.LayoutNode
 
 ---A layout for `load_layout NAME`.
