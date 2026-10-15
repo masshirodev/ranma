@@ -200,6 +200,7 @@ lets you style".
 - [x] `select_layout` and `next_layout`: tmux's five presets
 - [x] Saved layouts: `ranma.layout`, `save_layout`, `load_layout` and its picker
 - [x] `ranma dump-layout`: a workspace or a layout as the Lua that declares it
+- [x] Hover selects: the pointer over a menu or picker row makes it the selection
 - [x] `[styles]`: text attributes per role
 - [x] Border titles (`title`, `title_align`, `title_format`), `indicator`,
   `ascii` and `custom` line sets, `floating_style`

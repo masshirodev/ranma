@@ -6614,6 +6614,36 @@ mod tests {
     }
 
     #[test]
+    fn the_pointer_over_a_menu_row_selects_it() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.open_pane_menu(1, 10, 5);
+        let l = a.picker_layout().unwrap();
+        let at = |kind, row| {
+            AppEvent::Input(Event::Mouse(MouseEvent {
+                kind,
+                column: l.list.x + 1,
+                row,
+                modifiers: crossterm::event::KeyModifiers::NONE,
+            }))
+        };
+        assert_eq!(a.picker.as_ref().unwrap().selected, 0);
+        a.handle(at(MouseEventKind::Moved, l.list.y + 2));
+        assert_eq!(a.picker.as_ref().unwrap().selected, 2, "hovered");
+        // Past the last row, or outside the list, nothing changes.
+        a.handle(at(MouseEventKind::Moved, l.outer.bottom() + 1));
+        assert_eq!(a.picker.as_ref().unwrap().selected, 2);
+        // The keys still move from where the pointer left it.
+        let down = KeyEvent::new(
+            crossterm::event::KeyCode::Down,
+            crossterm::event::KeyModifiers::NONE,
+        );
+        a.handle(AppEvent::Input(Event::Key(down)));
+        assert_eq!(a.picker.as_ref().unwrap().selected, 3);
+        assert!(a.picker.is_some(), "hovering never picks");
+    }
+
+    #[test]
     fn a_right_click_on_a_workspace_opens_its_menu() {
         let mut a = app(None);
         with_pane(&mut a, 1);

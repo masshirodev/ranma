@@ -637,6 +637,17 @@ pane, so its entries (new pane, rename, equalize, send to another session, all
 workspaces) are the ordinary actions on the current workspace and none needs a
 workspace argument. The scratchpad chip has no menu; any click toggles it.
 
+**Hover selects** (2026-10-15). The pointer moving over a picker's row makes
+it the selection, as GTK's and every desktop's menus do, rather than drawing a
+second, hover-only highlight beside it: two marked rows in a list of ten is
+one too many to read at a glance, and Enter then acts on what is under the
+pointer, as a click would. It is every picker, not only the menus, since they
+are one widget and a palette that ignores the pointer while its menus follow
+it would feel broken. Motion alone moves it: a terminal reports the pointer
+only when it changes cell, so a row chosen with the arrows stays chosen while
+the mouse rests, and the theme picker previews what the pointer passes over,
+as it does for the wheel.
+
 Text selection stays one modifier away, since every common terminal lets Shift
 override a program's mouse capture. `mouse = "off"` restores the milestone 1
 behaviour for anyone who prefers the host's own selection: the mouse is captured

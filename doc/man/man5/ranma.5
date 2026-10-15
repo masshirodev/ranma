@@ -524,7 +524,7 @@ Every pane in every session, filterable; picking one goes there.
 The shown session's workspaces, filterable, the current one marked \fB●\fR, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers \fBnew workspace: NAME\fR, which opens an empty one by that name.
 .TP
 \fBchoose_theme\fR
-Every theme (the built\-in and \fB~/.config/ranma/themes/*.toml\fR), the one in use marked \fB●\fR. Each is shown as the selection reaches it (arrows, the wheel, typing); \fBEnter\fR keeps it, writing \fBtheme\fR to \fBsettings.toml\fR, and \fBEsc\fR (or closing the picker any other way) puts the old one back. A theme that would not load says why on its row and is not shown. \fBleader y t\fR.
+Every theme (the built\-in and \fB~/.config/ranma/themes/*.toml\fR), the one in use marked \fB●\fR. Each is shown as the selection reaches it (arrows, the wheel, the pointer, typing); \fBEnter\fR keeps it, writing \fBtheme\fR to \fBsettings.toml\fR, and \fBEsc\fR (or closing the picker any other way) puts the old one back. A theme that would not load says why on its row and is not shown. \fBleader y t\fR.
 .TP
 \fBpane_menu\fR
 The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (\fBleader x m\fR). Centred, or a sheet on a touch screen.
@@ -1174,7 +1174,11 @@ The menu opens at the pointer and lists what can be done to that pane, float
 or tile, fullscreen, group, swap with the master, synced input, links, copy
 mode, rename, move and close, each with the key that does it. Click an entry
 or pick it with the arrows and \fBEnter\fR; typing filters it; \fBEsc\fR or a click
-outside closes it. A program that asked for the mouse keeps its right clicks;
+outside closes it. The pointer moving over an entry selects it, as a desktop
+menu's hover does, in this menu and in every other picker (the palette, the
+switchers, \fBchoose_theme\fR, which shows each theme it passes over); a pointer
+at rest moves nothing, so the arrows keep what they chose until the mouse
+moves. A program that asked for the mouse keeps its right clicks;
 its border still opens the menu.
 .PP
 \fBA right click on a workspace in the bar opens its menu\fR, in any mode. It goes
