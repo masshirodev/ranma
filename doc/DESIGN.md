@@ -3121,6 +3121,37 @@ says so rather than appearing to fail. `ranma.state().own_layout` is false
 while outranked, since `layout` beside it is then not the workspace's own. A
 profile that names no layout outranks nothing.
 
+**The mobile view becomes a plugin ranma carries** (2026-10-15, decided; not
+built yet). "No mobile mode" above meant no mode in Rust, and that holds. But in
+use there is a mobile mode: `--mobile`, `RANMA_MOBILE` and the man page all say
+"the mobile profile applies", and it did not apply until the user pasted a
+`driver_change` hook into their own `init.lua`. The defaults defined the view
+and left it unused, so every phone needed the same five lines copied in, and a
+copied block goes stale when the defaults change. So the touch toolbar, the
+`mobile` profile and the hook that follows the driver move out of
+`assets/init.lua` into a **built-in plugin**:
+
+- **Embedded in the binary, not cloned.** hako is cloned because it updates
+  apart from ranma. A phone's view that needs the network first would be wrong
+  the one time it matters, and it should change when `./install.sh` changes
+  the binary. It is sourced the way a plugin file is: after the built-in
+  defaults, before `plugin/*.lua`, dropped whole on an error, listed in `ranma
+  health`, with its own watchdog second. `init.lua` keeps the last word.
+- **Lua for what it chooses, Rust for what it draws.** The buttons, the profile's
+  overrides and when to switch are the plugin's. Laying out faces, hit-testing
+  taps, what gives way as the screen shortens (`toolbar`, `chrome::plan`,
+  `app::touch`) and the touch actions stay in the core, because Lua never runs
+  on the render path.
+- **Its way out is its own options**, namespaced like any plugin's
+  (`mobile.*`), not `plugin_manager`, which is hako's and stays hako's.
+  `mobile.follow` (default on) is read inside the hook each time it fires, so
+  the settings panel turns the switching off live; the toolbar and profile stay
+  defined either way, for a bind that switches by hand.
+
+Left for the change itself: whether the plugin can be switched off whole or
+only its switching, and how `--dump-config` still shows the reference it used
+to print from `assets/init.lua`.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:
