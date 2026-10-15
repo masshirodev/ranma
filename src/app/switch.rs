@@ -615,7 +615,8 @@ impl App {
         }
     }
 
-    /// Clicks pick an item; a click outside closes the picker; the wheel moves.
+    /// Clicks pick an item; a click outside closes the picker; the wheel moves;
+    /// the pointer over a row selects it, as a desktop menu's hover does.
     pub(super) fn picker_mouse(&mut self, m: MouseEvent) {
         if let Some(l) = self.sheet_layout() {
             return self.sheet_mouse(m, &l);
@@ -641,6 +642,19 @@ impl App {
                     let outcome = p.key(&enter);
                     self.dirty = true;
                     self.picker_outcome(outcome);
+                }
+            }
+            // Only motion reaches here, never a pointer at rest, so a row
+            // chosen with the keys stays chosen until the mouse moves.
+            MouseEventKind::Moved if l.list.contains(x, y) => {
+                let i = l.offset + (y - l.list.y) as usize;
+                let Some(p) = self.picker.as_mut() else {
+                    return;
+                };
+                if i < p.visible().len() && p.selected != i {
+                    p.selected = i;
+                    self.dirty = true;
+                    self.preview_theme();
                 }
             }
             MouseEventKind::Down(_) if !l.outer.contains(x, y) => {
