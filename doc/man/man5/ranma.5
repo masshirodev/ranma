@@ -53,7 +53,7 @@ Attach to server NAME, sharing it with any terminal that already shows it (or st
 The same, but every other terminal showing it is sent away (and told).
 .TP
 \fBranma attach \-\-mobile NAME\fR
-Say this terminal is a phone or a tablet, as \fBRANMA_MOBILE=1\fR does for plain \fBranma\fR and \fBattach\fR. \fBinit.lua\fR reads it in \fBranma.client()\fR and \fBdriver_change\fR, to switch to a touch layout; ranma itself changes nothing for it.
+Say this terminal is a phone or a tablet, as \fBRANMA_MOBILE=1\fR does for plain \fBranma\fR and \fBattach\fR. \fBranma.client()\fR and \fBdriver_change\fR carry it, and mobile.ranma\fR, which the default setup installs, switches to its touch layout on it; the core itself changes nothing for it.
 .TP
 \fBranma kill NAME\fR
 Quit server NAME and everything in it, without asking.
@@ -2469,21 +2469,43 @@ bottom border counts what is below (\fB▾ 5 more\fR).
 .SH "A MOBILE VIEW"
 .PP
 Nothing about the pieces above is mobile; put together in a
-profile\fR, they are the mobile view:
+profile\fR, they are the mobile view. ranma
+brings them along as a plugin,
+mobile.ranma\fR <https://github.com/masshirodev/mobile.ranma>, which its
+default hako setup declares with \fBinstall = true\fR, so a first start installs
+it. It amounts to:
 .PP
 .RS 4
 .nf
 ranma.toolbar("touch", { size = "large", buttons = { \-\-[[ as above ]] } })
 ranma.profile("mobile", {
   set = { layout = "monocle" },
-  bar = { size = "large", center = {}, right = {} },
+  bar = { size = "large", center = {}, right = { "update" } },
   toolbars = { "touch" },
 })
 ranma.on("driver_change", function(c)
-  ranma.use_profile(c.mobile and "mobile" or nil)
+  if not ranma.get("mobile.follow") then return end
+  local profile = ranma.state().profile
+  if c.mobile then
+    if profile ~= "mobile" then ranma.use_profile("mobile") end
+  elseif profile == "mobile" then
+    ranma.use_profile(nil)
+  end
 end)
 .fi
 .RE
+.PP
+\fBmobile.follow\fR (on by default) stops the switching when off; the toolbar and
+the profile stay, for \fBprofile mobile\fR by hand. Leaving the mobile profile
+only when it is still the one in use means a profile picked meanwhile (zen's)
+is not taken away. An \fBinit.lua\fR that calls \fBrequire("hako").setup\fR itself
+declares its own plugins, so it adds \fB{ "masshirodev/mobile.ranma", install =
+true }\fR to them; \fB{ "masshirodev/mobile.ranma", enabled = false }\fR in
+\fBlua/plugins/mobile.lua\fR turns it off whole. A \fBranma.toolbar("touch", ...)\fR or
+\fBranma.profile("mobile", ...)\fR in \fBinit.lua\fR replaces the plugin's, since
+\fBinit.lua\fR loads after it. Before 2026\-10\-15 the toolbar and profile were in
+the built\-in defaults and the hook was yours to add; a config that still has
+that hook does the same switch twice, harmlessly, and can drop it.
 .PP
 A terminal says it is a phone or a tablet with \fBRANMA_MOBILE=1\fR, or
 \fBranma attach \-\-mobile NAME\fR. Over SSH from Termux, set it in Termux's
@@ -2501,9 +2523,9 @@ sshd): \fBAcceptEnv RANMA_*\fR. Without that line sshd drops the variable
 silently, and the phone gets the desk's layout.
 .PP
 A tap on a pane does not open the phone's keyboard: Termux opens it only
-when nothing tracks the mouse, and ranma does. The default touch toolbar's
-\fB⌨\fR button (the \fBkeyboard\fR action) opens it. Esc and Ctrl are on Termux's
-extra\-keys row, so the default toolbar has no buttons for them; a terminal
+when nothing tracks the mouse, and ranma does. mobile.ranma's \fB⌨\fR button
+(the \fBkeyboard\fR action) opens it. Esc and Ctrl are on Termux's
+extra\-keys row, so the touch toolbar has no buttons for them; a terminal
 without that row adds \fB{ "⎋", "send esc" }\fR and \fB{ "⌃", "latch ctrl" }\fR.
 .PP
 When the phone and the desk both show a server, the screen follows the one
@@ -2597,6 +2619,9 @@ ranma.on("driver_change", function(c)
 end)
 .fi
 .RE
+.PP
+That pair is what mobile.ranma\fR does already, so a profile of
+your own for the phone takes another name, or replaces that one.
 .IP \(bu 2
 \fBset\fR takes what \fBranma.set\fR takes, except \fBtheme\fR (the theme's name, read
 once, at load). \fBtheme\fR takes theme keys, used over the theme while the
@@ -2798,6 +2823,9 @@ ranma.module("branch", { lua = branch, nested = nested and "hide" or nil })
 .PP
 A name is never removed before 1.0. An unknown name is simply false, so check
 the spelling against this table:
+.TP
+\fBaction.keyboard\fR
+the \fBkeyboard\fR action, which opens a phone's keyboard
 .TP
 \fBborder.gradient\fR
 \fBcolors.border_*_gradient\fR and \fBborder.gradient_angle\fR

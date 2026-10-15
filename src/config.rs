@@ -1708,6 +1708,7 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
 /// promises not to break"). A new feature a plugin could depend on adds its
 /// name here, and to CONFIG.md's table, in the same change.
 pub const CAPABILITIES: &[&str] = &[
+    "action.keyboard",
     "border.gradient",
     "hook.before_close",
     "hook.float_change",
@@ -3805,33 +3806,31 @@ mod tests {
         assert_eq!(cfg.settings, settings, "a failed switch changes nothing");
     }
 
-    /// The defaults ship the mobile view defined and unused (assets/init.lua).
+    /// The mobile view is mobile.ranma's, which the default hako setup
+    /// installs (DESIGN.md, "The mobile view becomes a plugin ranma carries"):
+    /// the built-in defaults define no toolbar and no profile of their own,
+    /// so the plugin's are the only ones and `enabled = false` leaves none.
     #[test]
-    fn the_defaults_define_the_mobile_view_without_using_it() {
+    fn the_defaults_leave_the_mobile_view_to_its_plugin() {
         let mut cfg = with_user("").unwrap();
+        assert!(cfg.toolbars.is_empty());
         assert!(cfg.toolbars_shown.is_empty());
         assert_eq!(cfg.profile, None);
         assert_eq!(cfg.bar.size, crate::toolbar::Size::Normal);
-        let t = cfg.toolbar("touch").unwrap();
-        assert_eq!(t.buttons.len(), 8);
-        assert_eq!(t.size, crate::toolbar::Size::Large);
-        // Termux's extra-keys row has Esc: the slot opens the keyboard instead.
-        let actions: Vec<_> = t.buttons.iter().filter_map(|b| b.builtin()).collect();
-        assert!(actions.contains(&&crate::action::Action::Keyboard));
-        assert!(
-            !actions
-                .iter()
-                .any(|a| matches!(a, crate::action::Action::Send(_)))
-        );
-        let kbd = t.buttons.iter().find(|b| b.label.label == "⌨").unwrap();
-        assert_eq!(
-            unicode_width::UnicodeWidthStr::width(kbd.label.label.as_str()),
-            1
-        );
-        cfg.use_profile(Some("mobile")).unwrap();
-        assert_eq!(cfg.settings.layout, Layout::Monocle);
-        assert_eq!(cfg.toolbars_shown, vec!["touch".to_string()]);
-        assert_eq!(cfg.bar.size, crate::toolbar::Size::Large);
+        let e = cfg.use_profile(Some("mobile")).unwrap_err();
+        assert!(e.contains("no profile `mobile`"), "{e}");
+    }
+
+    /// The plugin falls back to `send esc` without the keyboard action, so
+    /// the capability must say this build has it.
+    #[test]
+    fn the_keyboard_action_is_a_capability() {
+        let cfg = with_user(
+            r#"assert(ranma.has("action.keyboard"))
+               ranma.toolbar("t", { buttons = { { "⌨", "keyboard" } } })"#,
+        )
+        .unwrap();
+        assert!(cfg.toolbar("t").is_some());
     }
 
     #[test]

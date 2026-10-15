@@ -588,7 +588,7 @@ Saved layouts (\fIlayouts/\fR), server snapshots (\fIservers/\fR), plugin stores
 The configuration directory, instead of \fI$XDG_CONFIG_HOME/ranma\fR.
 .TP
 \fBRANMA_MOBILE\fR
-Set (and not 0), this terminal is a phone or a tablet: the mobile profile applies.
+Set (and not 0), this terminal is a phone or a tablet: mobile.ranma, which the default setup installs, uses its mobile profile while it drives the screen.
 .TP
 \fBRANMA_SOURCE_DIR\fR
 The checkout \fBranma update\fR pulls and installs, instead of the one ranma was built from.

@@ -13,6 +13,24 @@ commit log has the detail.
 
 ## [Unreleased]
 
+### Breaking
+
+- The touch toolbar and the `mobile` profile left the built-in defaults for
+  a plugin, [mobile.ranma](https://github.com/masshirodev/mobile.ranma),
+  which also switches to the profile while a phone drives, so the
+  `driver_change` hook you pasted for it can go. The default hako setup
+  installs it. If your `init.lua` calls `require("hako").setup` itself, add
+  `{ "masshirodev/mobile.ranma", install = true }` to its specs (or a file in
+  `lua/plugins/`); with `plugin_manager = "none"`, clone it into
+  `pack/plugins/start/`. Without one of those, a hook that switches to
+  `"mobile"` finds no such profile. `{ "masshirodev/mobile.ranma", enabled =
+  false }` turns it off.
+
+### Added
+
+- `ranma.has("action.keyboard")`: the `keyboard` action, for a plugin that
+  must also load into a ranma without it.
+
 ### Fixed
 
 - `install.sh` warns when another `ranma` comes before the one it installed

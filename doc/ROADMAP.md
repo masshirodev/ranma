@@ -160,7 +160,7 @@ client (DESIGN.md, "Upgrading a server in place").
 ## 8. A mobile view, from scriptable pieces
 
 A phone or tablet in Termux attaches over SSH and gets a touch-sized screen,
-built in `init.lua` from pieces that work on the desktop too (DESIGN.md, "A
+built in Lua (mobile.ranma) from pieces that work on the desktop too (DESIGN.md, "A
 mobile view").
 
 - [x] Design: `doc/briefs/done/MOBILE_VIEW.md`, handoff in `doc/handoffs/done/`
@@ -178,6 +178,9 @@ mobile view").
   (Termux's extra-keys row has Ctrl already)
 - [x] A `keyboard` action, and the touch toolbar's keyboard button in place of
   Esc (Termux's extra-keys row has Esc too)
+- [x] The touch toolbar, the `mobile` profile and the hook that follows the
+  driver as a plugin the default setup installs (mobile.ranma; hako's
+  `install = true`), so a phone switches without pasted Lua
 
 ## 9. Files into a pane that runs ssh
 

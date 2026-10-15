@@ -12,10 +12,13 @@ use crate::jobs::{Exit, SpawnSpec};
 pub const REPO: &str = "masshirodev/hako.ranma";
 
 /// The specs the core hands `require("hako").setup` when `init.lua` did not
-/// call it: hako keeps itself up to date, and reads one spec file per
-/// plugin from `lua/plugins/` in the config directory.
-pub const DEFAULT_SETUP: &str =
-    "require(\"hako\").setup({ \"masshirodev/hako.ranma\", { import = \"plugins\" } })";
+/// call it: hako keeps itself up to date, brings mobile.ranma (the phone's
+/// view, installed without asking, since nobody presses a key for it on the
+/// desk; DESIGN.md, "The mobile view becomes a plugin ranma carries"), and
+/// reads one spec file per plugin from `lua/plugins/` in the config
+/// directory, where `enabled = false` for mobile.ranma merges over this.
+pub const DEFAULT_SETUP: &str = "require(\"hako\").setup({ \"masshirodev/hako.ranma\", \
+     { \"masshirodev/mobile.ranma\", install = true }, { import = \"plugins\" } })";
 
 /// Where hako is cloned: `$XDG_DATA_HOME/ranma/hako/hako.ranma`, the same
 /// root hako keeps the other plugins under. `None` with no home to put it in.
@@ -215,6 +218,17 @@ mod tests {
         assert!(mine.exists(), "this process is alive");
         assert!(other.exists(), "not hako's");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The phone's view is installed by itself, and declared before the
+    /// user's spec files, whose `enabled = false` must merge over it.
+    #[test]
+    fn the_default_setup_brings_the_mobile_view_before_the_users_specs() {
+        let mobile = DEFAULT_SETUP
+            .find("{ \"masshirodev/mobile.ranma\", install = true }")
+            .expect("mobile.ranma, installed without asking");
+        let import = DEFAULT_SETUP.find("{ import = \"plugins\" }").unwrap();
+        assert!(mobile < import, "{DEFAULT_SETUP}");
     }
 
     #[test]
