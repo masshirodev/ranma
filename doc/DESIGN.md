@@ -3144,6 +3144,11 @@ into [mobile.ranma](https://github.com/masshirodev/mobile.ranma):
   without being asked, so it gained `install = true` for this: the one plugin
   nobody presses a key for at the desk. The network is needed once, as for
   hako itself, and the phone attaches to a server that has long since started.
+  It installs **once**: when the clone has landed, hako's store (per machine,
+  in the state directory, not beside the binary, which `install.sh` and a
+  package manager replace) marks it, and from then on `x` on its row deletes
+  it for good and `i` puts it back. Saying no needs no config edit, and a
+  half-made clone never counts as installed (hako fe5de70).
 - **Lua for what it chooses, Rust for what it draws.** The buttons, the
   profile's overrides and when to switch are the plugin's. Laying out faces,
   hit-testing taps, what gives way as the screen shortens (`toolbar`,

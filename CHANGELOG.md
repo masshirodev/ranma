@@ -23,8 +23,9 @@ commit log has the detail.
   `{ "masshirodev/mobile.ranma", install = true }` to its specs (or a file in
   `lua/plugins/`); with `plugin_manager = "none"`, clone it into
   `pack/plugins/start/`. Without one of those, a hook that switches to
-  `"mobile"` finds no such profile. `{ "masshirodev/mobile.ranma", enabled =
-  false }` turns it off.
+  `"mobile"` finds no such profile. To not have it, `x` on its row in hako's
+  screen (installed once, it does not come back), or `{
+  "masshirodev/mobile.ranma", enabled = false }` in a spec file.
 
 ### Added
 

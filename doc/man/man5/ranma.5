@@ -2500,8 +2500,10 @@ the profile stay, for \fBprofile mobile\fR by hand. Leaving the mobile profile
 only when it is still the one in use means a profile picked meanwhile (zen's)
 is not taken away. An \fBinit.lua\fR that calls \fBrequire("hako").setup\fR itself
 declares its own plugins, so it adds \fB{ "masshirodev/mobile.ranma", install =
-true }\fR to them; \fB{ "masshirodev/mobile.ranma", enabled = false }\fR in
-\fBlua/plugins/mobile.lua\fR turns it off whole. A \fBranma.toolbar("touch", ...)\fR or
+true }\fR to them. \fBinstall = true\fR installs it once: \fBx\fR on its row in hako's
+screen deletes it, and it is not installed again on that machine (\fBi\fR puts it
+back). \fB{ "masshirodev/mobile.ranma", enabled = false }\fR in
+\fBlua/plugins/mobile.lua\fR turns it off on every machine that config reaches. A \fBranma.toolbar("touch", ...)\fR or
 \fBranma.profile("mobile", ...)\fR in \fBinit.lua\fR replaces the plugin's, since
 \fBinit.lua\fR loads after it. Before 2026\-10\-15 the toolbar and profile were in
 the built\-in defaults and the hook was yours to add; a config that still has
