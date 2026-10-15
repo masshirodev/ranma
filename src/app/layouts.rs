@@ -113,7 +113,14 @@ impl App {
                 current: own == Some(l),
             }
         }));
-        let mut picker = Picker::new(Kind::WorkspaceLayout, "lay this workspace out as", items);
+        // A profile's layout wins while it is in use; the pick waits for it to go.
+        let title = match &self.config.profile {
+            Some(p) if self.config.profile_sets_layout() => {
+                format!("lay this workspace out, once profile `{p}` is off, as")
+            }
+            _ => "lay this workspace out as".to_string(),
+        };
+        let mut picker = Picker::new(Kind::WorkspaceLayout, &title, items);
         picker.select_current();
         self.picker = Some(picker);
         self.dirty = true;
@@ -131,18 +138,28 @@ impl App {
                 LayoutPick::Named(l) => Some(l),
             };
             let n = self.current;
-            let previous = self.active().layout.unwrap_or(self.config.settings.layout);
+            let previous = self.layout_here();
             self.active_mut().layout = own;
             self.active_mut().fullscreen = false;
-            self.status = Some(match own {
-                Some(l) => format!("workspace {n}: layout {}", l.name()),
-                None => format!(
+            self.status = Some(match (own, &self.config.profile) {
+                // Kept for when the profile goes; saying only "layout master"
+                // while monocle stays on screen would read as a refusal.
+                (_, Some(p)) if self.config.profile_sets_layout() => format!(
+                    "workspace {n}: {} once profile `{p}` is off; {} until then",
+                    own.map_or("the setting's layout".to_string(), |l| format!(
+                        "layout {}",
+                        l.name()
+                    )),
+                    self.layout_here().name()
+                ),
+                (Some(l), _) => format!("workspace {n}: layout {}", l.name()),
+                (None, _) => format!(
                     "workspace {n}: layout {} (the setting)",
                     self.config.settings.layout.name()
                 ),
             });
             self.relayout();
-            let now = own.unwrap_or(self.config.settings.layout);
+            let now = self.layout_here();
             self.emit(crate::config::Event::LayoutChange, |t| {
                 t.set("workspace", n)?;
                 t.set("layout", now.name())?;
