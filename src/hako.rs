@@ -17,6 +17,7 @@ pub const REPO: &str = "masshirodev/hako.ranma";
 /// desk; DESIGN.md, "The mobile view becomes a plugin ranma carries"), and
 /// reads one spec file per plugin from `lua/plugins/` in the config
 /// directory, where `enabled = false` for mobile.ranma merges over this.
+/// `install = true` is once: `x` in hako's screen removes it for good.
 pub const DEFAULT_SETUP: &str = "require(\"hako\").setup({ \"masshirodev/hako.ranma\", \
      { \"masshirodev/mobile.ranma\", install = true }, { import = \"plugins\" } })";
 

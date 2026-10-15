@@ -1895,8 +1895,10 @@ the profile stay, for `profile mobile` by hand. Leaving the mobile profile
 only when it is still the one in use means a profile picked meanwhile (zen's)
 is not taken away. An `init.lua` that calls `require("hako").setup` itself
 declares its own plugins, so it adds `{ "masshirodev/mobile.ranma", install =
-true }` to them; `{ "masshirodev/mobile.ranma", enabled = false }` in
-`lua/plugins/mobile.lua` turns it off whole. A `ranma.toolbar("touch", ...)` or
+true }` to them. `install = true` installs it once: `x` on its row in hako's
+screen deletes it, and it is not installed again on that machine (`i` puts it
+back). `{ "masshirodev/mobile.ranma", enabled = false }` in
+`lua/plugins/mobile.lua` turns it off on every machine that config reaches. A `ranma.toolbar("touch", ...)` or
 `ranma.profile("mobile", ...)` in `init.lua` replaces the plugin's, since
 `init.lua` loads after it. Before 2026-10-15 the toolbar and profile were in
 the built-in defaults and the hook was yours to add; a config that still has

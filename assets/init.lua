@@ -500,9 +500,10 @@ ranma.module("datetime", {
 -- Touch -------------------------------------------------------------------------
 -- A phone or tablet in Termux, over SSH (doc/CONFIG.md, "A mobile view"), is
 -- mobile.ranma's: the "touch" toolbar, the "mobile" profile, and switching to
--- it while the phone drives the screen. The default hako setup installs it;
+-- it while the phone drives the screen. The default hako setup installs it
+-- once: x on its row in hako's screen removes it for good on this machine,
 -- `{ "masshirodev/mobile.ranma", enabled = false }` in lua/plugins/mobile.lua
--- turns it off, and mobile.follow = false keeps it but stops the switching.
+-- on every machine, and mobile.follow = false keeps it but stops switching.
 -- The phone says what it is with RANMA_MOBILE=1 (SetEnv in Termux's
 -- ~/.ssh/config, AcceptEnv RANMA_* in the far sshd).
 
