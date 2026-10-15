@@ -709,11 +709,16 @@ $ENV $BIN kill 6; sleep 0.5
 
 # The mobile view follows the terminal driving the screen: a phone
 # (RANMA_MOBILE=1) joining changes nothing, typing on it brings the touch
-# toolbar, typing at the desk takes it away. The hook is the one
-# assets/init.lua suggests; the click that takes the screen is unit-tested
-# (tmux cannot send a tap).
+# toolbar, typing at the desk takes it away. The toolbar, profile and hook
+# are mobile.ranma's shape, declared here because the smoke loads no plugins;
+# the click that takes the screen is unit-tested (tmux cannot send a tap).
 MCFG=$(mktemp -d)
-echo 'ranma.on("driver_change", function(c) ranma.use_profile(c.mobile and "mobile" or nil) end)' > "$MCFG/init.lua"
+cat > "$MCFG/init.lua" <<'LUA'
+ranma.toolbar("touch", { size = "large", buttons = {
+  { "≡", "pane_menu" }, { "+", "new_pane" }, { "✕", "close_pane" } } })
+ranma.profile("mobile", { set = { layout = "monocle" }, toolbars = { "touch" } })
+ranma.on("driver_change", function(c) ranma.use_profile(c.mobile and "mobile" or nil) end)
+LUA
 MENV="${ENV/RANMA_CONFIG_DIR=$CFG/RANMA_CONFIG_DIR=$MCFG}"
 T new-session -d -s m1 -x 100 -y 20 "bash --norc"
 T new-session -d -s m2 -x 52 -y 34 "bash --norc"

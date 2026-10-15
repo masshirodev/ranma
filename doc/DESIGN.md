@@ -3121,36 +3121,51 @@ says so rather than appearing to fail. `ranma.state().own_layout` is false
 while outranked, since `layout` beside it is then not the workspace's own. A
 profile that names no layout outranks nothing.
 
-**The mobile view becomes a plugin ranma carries** (2026-10-15, decided; not
-built yet). "No mobile mode" above meant no mode in Rust, and that holds. But in
-use there is a mobile mode: `--mobile`, `RANMA_MOBILE` and the man page all say
-"the mobile profile applies", and it did not apply until the user pasted a
-`driver_change` hook into their own `init.lua`. The defaults defined the view
-and left it unused, so every phone needed the same five lines copied in, and a
-copied block goes stale when the defaults change. So the touch toolbar, the
-`mobile` profile and the hook that follows the driver move out of
-`assets/init.lua` into a **built-in plugin**:
+**The mobile view becomes a plugin ranma carries** (2026-10-15). "No mobile
+mode" above meant no mode in Rust, and that holds. But in use there is a
+mobile mode: `--mobile`, `RANMA_MOBILE` and the man page all said "the mobile
+profile applies", and it did not apply until the user pasted a `driver_change`
+hook into their own `init.lua`. The defaults defined the view and left it
+unused, so every phone needed the same five lines copied in, and a copied
+block goes stale when the defaults change. So the touch toolbar, the `mobile`
+profile and the hook that follows the driver moved out of `assets/init.lua`
+into [mobile.ranma](https://github.com/masshirodev/mobile.ranma):
 
-- **Embedded in the binary, not cloned.** hako is cloned because it updates
-  apart from ranma. A phone's view that needs the network first would be wrong
-  the one time it matters, and it should change when `./install.sh` changes
-  the binary. It is sourced the way a plugin file is: after the built-in
-  defaults, before `plugin/*.lua`, dropped whole on an error, listed in `ranma
-  health`, with its own watchdog second. `init.lua` keeps the last word.
-- **Lua for what it chooses, Rust for what it draws.** The buttons, the profile's
-  overrides and when to switch are the plugin's. Laying out faces, hit-testing
-  taps, what gives way as the screen shortens (`toolbar`, `chrome::plan`,
-  `app::touch`) and the touch actions stay in the core, because Lua never runs
-  on the render path.
-- **Its way out is its own options**, namespaced like any plugin's
-  (`mobile.*`), not `plugin_manager`, which is hako's and stays hako's.
-  `mobile.follow` (default on) is read inside the hook each time it fires, so
-  the settings panel turns the switching off live; the toolbar and profile stay
-  defined either way, for a bind that switches by hand.
-
-Left for the change itself: whether the plugin can be switched off whole or
-only its switching, and how `--dump-config` still shows the reference it used
-to print from `assets/init.lua`.
+- **Cloned by hako, declared by the default setup** (`hako::DEFAULT_SETUP`,
+  `{ "masshirodev/mobile.ranma", install = true }`), not embedded in the
+  binary. The first note of this decision said embedded, for working offline
+  and updating with `./install.sh`; it was changed the same day, because an
+  embedded copy is a second copy to keep in step and cannot be removed the way
+  every other plugin is. As a declared spec, `{ "masshirodev/mobile.ranma",
+  enabled = false }` in `lua/plugins/mobile.lua` merges over the default and
+  `clean` deletes it. A clone made by the core, as hako's is, would sit under
+  hako's *Not in spec* for anybody whose own `setup` does not name it, and
+  come back on the next start after a `clean`. hako installs nothing declared
+  without being asked, so it gained `install = true` for this: the one plugin
+  nobody presses a key for at the desk. The network is needed once, as for
+  hako itself, and the phone attaches to a server that has long since started.
+- **Lua for what it chooses, Rust for what it draws.** The buttons, the
+  profile's overrides and when to switch are the plugin's. Laying out faces,
+  hit-testing taps, what gives way as the screen shortens (`toolbar`,
+  `chrome::plan`, `app::touch`) and the touch actions stay in the core, because
+  Lua never runs on the render path.
+- **Its switch is its own option**, `mobile.follow` (on by default), read
+  inside the hook each time it fires; not `plugin_manager`, which is hako's
+  and would take every other plugin with it. The toolbar and profile stay
+  defined with it off, for `profile mobile` by hand.
+- **It leaves the profile only if it is still `mobile`.** The pasted hook
+  went to `nil` whenever the desk drove, which took away a profile picked in
+  the meantime (zen's). A phone taking the drive still replaces whatever is in
+  use, as before: profiles do not stack.
+- **The keyboard button is behind `ranma.has("action.keyboard")`**, a
+  capability added for it, since the plugin is loaded into the latest release
+  by its CI and the `keyboard` action came after 0.3.0. Without it, the slot
+  sends Esc.
+- **`--dump-config` no longer prints the touch toolbar.** The reference for it
+  is the plugin's header comment and README, as for any plugin;
+  `assets/init.lua` keeps a paragraph saying where the view went and how to
+  turn it off. A config that calls `require("hako").setup` itself declares its
+  own plugins and adds the spec by hand (CONFIG.md, "A mobile view").
 
 ### Stack
 

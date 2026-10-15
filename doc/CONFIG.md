@@ -42,7 +42,7 @@ shells as you left them.
 | `ranma ls` | List the servers: attached (`attached×2` when two terminals show it) or detached, panes, sessions, when last used. |
 | `ranma attach NAME` | Attach to server NAME, sharing it with any terminal that already shows it (or start one by that name). |
 | `ranma attach --steal NAME` | The same, but every other terminal showing it is sent away (and told). |
-| `ranma attach --mobile NAME` | Say this terminal is a phone or a tablet, as `RANMA_MOBILE=1` does for plain `ranma` and `attach`. `init.lua` reads it in `ranma.client()` and `driver_change`, to switch to a touch layout; ranma itself changes nothing for it. |
+| `ranma attach --mobile NAME` | Say this terminal is a phone or a tablet, as `RANMA_MOBILE=1` does for plain `ranma` and `attach`. `ranma.client()` and `driver_change` carry it, and [mobile.ranma](#a-mobile-view), which the default setup installs, switches to its touch layout on it; the core itself changes nothing for it. |
 | `ranma kill NAME` | Quit server NAME and everything in it, without asking. |
 | `ranma upgrade [NAME]` / `--all` | Move a server (the one this runs in, when no name is given) or all of them to the installed build **without closing anything**: shells, panes, scrollback and the terminal attached all stay. `install.sh` does `--all` after every good install. |
 | `ranma update` / `--check` | Pull ranma's source and install it (`--check` only says how far behind it is). `leader U` does the same in the background, with a toast. See [Updating](#updating). |
@@ -1866,19 +1866,41 @@ bottom border counts what is below (`▾ 5 more`).
 ## A mobile view
 
 Nothing about the pieces above is mobile; put together in a
-[profile](#profiles--ranmaprofilename-def), they are the mobile view:
+[profile](#profiles--ranmaprofilename-def), they are the mobile view. ranma
+brings them along as a plugin,
+[mobile.ranma](https://github.com/masshirodev/mobile.ranma), which its
+default hako setup declares with `install = true`, so a first start installs
+it. It amounts to:
 
 ```lua
 ranma.toolbar("touch", { size = "large", buttons = { --[[ as above ]] } })
 ranma.profile("mobile", {
   set = { layout = "monocle" },
-  bar = { size = "large", center = {}, right = {} },
+  bar = { size = "large", center = {}, right = { "update" } },
   toolbars = { "touch" },
 })
 ranma.on("driver_change", function(c)
-  ranma.use_profile(c.mobile and "mobile" or nil)
+  if not ranma.get("mobile.follow") then return end
+  local profile = ranma.state().profile
+  if c.mobile then
+    if profile ~= "mobile" then ranma.use_profile("mobile") end
+  elseif profile == "mobile" then
+    ranma.use_profile(nil)
+  end
 end)
 ```
+
+`mobile.follow` (on by default) stops the switching when off; the toolbar and
+the profile stay, for `profile mobile` by hand. Leaving the mobile profile
+only when it is still the one in use means a profile picked meanwhile (zen's)
+is not taken away. An `init.lua` that calls `require("hako").setup` itself
+declares its own plugins, so it adds `{ "masshirodev/mobile.ranma", install =
+true }` to them; `{ "masshirodev/mobile.ranma", enabled = false }` in
+`lua/plugins/mobile.lua` turns it off whole. A `ranma.toolbar("touch", ...)` or
+`ranma.profile("mobile", ...)` in `init.lua` replaces the plugin's, since
+`init.lua` loads after it. Before 2026-10-15 the toolbar and profile were in
+the built-in defaults and the hook was yours to add; a config that still has
+that hook does the same switch twice, harmlessly, and can drop it.
 
 A terminal says it is a phone or a tablet with `RANMA_MOBILE=1`, or
 `ranma attach --mobile NAME`. Over SSH from Termux, set it in Termux's
@@ -1894,9 +1916,9 @@ sshd): `AcceptEnv RANMA_*`. Without that line sshd drops the variable
 silently, and the phone gets the desk's layout.
 
 A tap on a pane does not open the phone's keyboard: Termux opens it only
-when nothing tracks the mouse, and ranma does. The default touch toolbar's
-`⌨` button (the `keyboard` action) opens it. Esc and Ctrl are on Termux's
-extra-keys row, so the default toolbar has no buttons for them; a terminal
+when nothing tracks the mouse, and ranma does. mobile.ranma's `⌨` button
+(the `keyboard` action) opens it. Esc and Ctrl are on Termux's
+extra-keys row, so the touch toolbar has no buttons for them; a terminal
 without that row adds `{ "⎋", "send esc" }` and `{ "⌃", "latch ctrl" }`.
 
 When the phone and the desk both show a server, the screen follows the one
@@ -1987,6 +2009,9 @@ ranma.on("driver_change", function(c)
   ranma.use_profile(c.mobile and "mobile" or nil)
 end)
 ```
+
+That pair is what [mobile.ranma](#a-mobile-view) does already, so a profile of
+your own for the phone takes another name, or replaces that one.
 
 - `set` takes what `ranma.set` takes, except `theme` (the theme's name, read
   once, at load). `theme` takes theme keys, used over the theme while the
@@ -2131,6 +2156,7 @@ the spelling against this table:
 
 | Capability | What it means |
 |---|---|
+| `action.keyboard` | the `keyboard` action, which opens a phone's keyboard |
 | `border.gradient` | `colors.border_*_gradient` and `border.gradient_angle` |
 | `hook.before_close` | the `before_close` event, whose handler can keep a pane |
 | `hook.float_change` | the `float_change` event |
