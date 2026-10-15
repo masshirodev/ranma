@@ -3107,6 +3107,20 @@ the session switcher does for sessions. And a sheet open on the phone closes
 when the desk takes the screen, since it changes profile; a second phone
 driving keeps it.
 
+**A profile's layout wins over a workspace's own** (2026-10-15). The phone
+showed three tiled panes on 39 columns with `profile = "mobile"` in use:
+workspace 1 had been pinned to `master` with `workspace_layout`, and the pin
+was only ever weighed against the `layout` setting, which is all a profile's
+`set` changed. Nobody had decided between the two. The profile wins, because
+it describes the screen and the pin describes a workspace at the desk: a
+layout chosen for 200 columns is not a preference that should survive 39. The
+pin is not cleared, only outranked (`Config::layout_for`: the profile's, else
+the workspace's, else the setting), so the desk gets it back on its next key,
+and a `workspace_layout` run under the profile records a pin for later and
+says so rather than appearing to fail. `ranma.state().own_layout` is false
+while outranked, since `layout` beside it is then not the workspace's own. A
+profile that names no layout outranks nothing.
+
 ### Stack
 
 Rust, for predictable latency without a GC, and for the emulator:

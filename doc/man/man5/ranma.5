@@ -467,7 +467,7 @@ Bring back the snapshot this server set aside when it started (see After a reboo
 Apply a layout\fR to the workspace. Without a name, pick one from every layout, declared and saved (\fBleader y l\fR).
 .TP
 \fBworkspace_layout [layout]\fR
-Lay this workspace out in a layout of its own, over the \fBlayout\fR setting: \fBdwindle\fR, \fBmanual\fR, \fBmaster\fR, \fBmonocle\fR or \fBscrolling\fR, so one workspace can be a strip while the rest dwindle; \fBdefault\fR follows the setting again. The tree is put in the new shape at once (a strip's columns, master's stack) and taken out of it the way a change of the setting would, and the choice is kept across upgrades and in the restore snapshot. Without an argument, pick from a list, the setting first and this workspace's choice marked (\fBleader y w\fR). Refused on the scratchpad, where everything floats.
+Lay this workspace out in a layout of its own, over the \fBlayout\fR setting (but under a profile in use that names a layout, see Profiles\fR): \fBdwindle\fR, \fBmanual\fR, \fBmaster\fR, \fBmonocle\fR or \fBscrolling\fR, so one workspace can be a strip while the rest dwindle; \fBdefault\fR follows the setting again. The tree is put in the new shape at once (a strip's columns, master's stack) and taken out of it the way a change of the setting would, and the choice is kept across upgrades and in the restore snapshot. Without an argument, pick from a list, the setting first and this workspace's choice marked (\fBleader y w\fR). Refused on the scratchpad, where everything floats.
 .TP
 \fBtoggle_floating\fR
 Float or tile the focused pane. A float tiles back next to the pane it was over. New floats cascade from the topmost one.
@@ -1771,7 +1771,7 @@ Whether that module is on screen now (placed in the bar, with a bar showing). \f
 Show a toast (see Toasts\fR).
 .TP
 \fBranma.state()\fR
-\fB{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), its hidden workspaces (\fBhidden\fR, see \fBhide_workspace\fR), the bar modules on screen (\fBmodules\fR), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
+\fB{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), its hidden workspaces (\fBhidden\fR, see \fBhide_workspace\fR), the bar modules on screen (\fBmodules\fR), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting or a profile's, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
 .TP
 \fBranma.layouts()\fR
 Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBinit.lua\fR's (\fBsaved = false\fR) first, then the saved ones they do not shadow. Read when asked.
@@ -2612,6 +2612,13 @@ Anything the profile does not name is the base's. Switching rebuilds the
 settings and bar from the base each time, so \fBranma.use_profile(nil)\fR (or the
 \fBprofile none\fR action) gives back exactly what \fBinit.lua\fR set, and switching
 from one profile to another leaves nothing of the first.
+.IP \(bu 2
+A \fBlayout\fR in \fBset\fR wins over every workspace's own (\fBworkspace_layout\fR)
+as well as over the setting, while the profile is in use: a profile is the
+screen's, and a workspace pinned to \fBmaster\fR at the desk would otherwise
+stay three columns on a phone. The pin is kept, and is back when the
+profile goes; one made meanwhile waits for it too, and says so. A profile
+that names no layout leaves the pins alone.
 .IP \(bu 2
 \fBranma.use_profile(name)\fR works in binds and hooks. From a key or a script,
 use the action: \fBranma.bind("p", "profile mobile")\fR, \fBranma action "profile none"\fR.

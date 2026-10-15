@@ -21,12 +21,11 @@ impl App {
     /// Give every workspace laid out by a policy whose shape changed the
     /// tree its policy returns. Called from `relayout`.
     pub(super) fn arrange_placements(&mut self) {
-        let setting = self.config.settings.layout;
         let area = self.workspace_area();
         let due: Vec<(u8, PolicyId)> = self
             .workspaces
             .iter()
-            .filter_map(|(n, ws)| match ws.layout.unwrap_or(setting) {
+            .filter_map(|(n, ws)| match self.config.layout_for(ws.layout) {
                 Layout::Lua(id) => {
                     let mut panes = ws.tree.panes();
                     panes.sort_unstable();

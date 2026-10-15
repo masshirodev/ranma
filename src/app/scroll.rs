@@ -47,10 +47,10 @@ impl App {
     /// one with its widths as weights.
     pub(super) fn arrange_strips(&mut self) {
         let s = &self.config.settings;
-        let (setting, width, min) = (s.layout, s.scroll_width.weight(), s.scroll_min);
+        let (width, min) = (s.scroll_width.weight(), s.scroll_min);
         let screen = self.workspace_area().w;
         for ws in self.workspaces.values_mut() {
-            if ws.layout.unwrap_or(setting) == Layout::Scrolling {
+            if self.config.layout_for(ws.layout) == Layout::Scrolling {
                 ws.tree.arrange_strip(width);
             } else {
                 ws.tree.leave_strip(screen, min);

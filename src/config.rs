@@ -1178,6 +1178,9 @@ pub struct Config {
     pub profiles: HashMap<String, Profile>,
     /// The profile in use, applied over `base`.
     pub profile: Option<String>,
+    /// The layout the profile in use names in its `set`, if it does: it wins
+    /// over a workspace's own (`workspace_layout`) as well as the setting.
+    profile_layout: Option<Layout>,
     /// The settings, bar and shown toolbars as `init.lua` left them, before
     /// any profile.
     base: (Settings, BarLayout, Vec<String>),
@@ -1275,6 +1278,7 @@ impl Config {
     pub fn use_profile(&mut self, name: Option<&str>) -> Result<(), String> {
         let (mut settings, mut bar, mut toolbars) = self.base.clone();
         let mut theme = self.base_theme.clone();
+        let mut profile_layout = None;
         if let Some(name) = name {
             let Some(p) = self.profiles.get(name) else {
                 let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
@@ -1288,6 +1292,7 @@ impl Config {
                     }
                 ));
             };
+            profile_layout = p.set.layout;
             apply_settings(&mut settings, p.set.clone(), &format!("profile `{name}`"))?;
             apply_bar(&mut bar, p.bar.clone());
             if let Some(t) = &p.toolbars {
@@ -1302,7 +1307,22 @@ impl Config {
         self.bar = bar;
         self.toolbars_shown = toolbars;
         self.profile = name.map(str::to_string);
+        self.profile_layout = profile_layout;
         Ok(())
+    }
+
+    /// The layout a workspace whose own layout is `own` is laid out in: the
+    /// profile's when it names one, else its own, else the setting. A profile
+    /// is the screen's (a phone's monocle), so one workspace pinned to master
+    /// at the desk must not keep three columns on 39 cells; the pin is kept
+    /// and is back when the profile goes.
+    pub fn layout_for(&self, own: Option<Layout>) -> Layout {
+        self.profile_layout.or(own).unwrap_or(self.settings.layout)
+    }
+
+    /// The profile in use names a layout, so no workspace's own applies.
+    pub fn profile_sets_layout(&self) -> bool {
+        self.profile_layout.is_some()
     }
 }
 
@@ -3099,6 +3119,7 @@ pub fn load_full(
         toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,
         profile: None,
+        profile_layout: None,
         settings: builder.settings,
         binds: builder.binds,
         group_order: builder.group_order,

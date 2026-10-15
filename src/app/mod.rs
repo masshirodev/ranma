@@ -663,10 +663,10 @@ impl App {
 
     // ---- where things are ------------------------------------------------------
 
-    /// The layout a workspace is laid out in: its own (`workspace_layout`),
-    /// else the `layout` setting.
+    /// The layout a workspace is laid out in: a profile's that names one,
+    /// else its own (`workspace_layout`), else the `layout` setting.
     pub fn layout_of(&self, ws: &Workspace) -> Layout {
-        ws.layout.unwrap_or(self.config.settings.layout)
+        self.config.layout_for(ws.layout)
     }
 
     /// The layout of the workspace shown. The scratchpad floats everything,
@@ -1004,12 +1004,9 @@ impl App {
         self.note_snapshot(Instant::now());
         // The master layout is a shape kept by policy: whatever changed the tree
         // (a pane opened, closed or moved in) is put back into it here.
-        let (setting, ratio) = (
-            self.config.settings.layout,
-            self.config.settings.master_ratio,
-        );
+        let ratio = self.config.settings.master_ratio;
         for ws in self.workspaces.values_mut() {
-            if ws.layout.unwrap_or(setting) == Layout::Master {
+            if self.config.layout_for(ws.layout) == Layout::Master {
                 ws.tree.arrange_master(ratio);
             }
         }
@@ -3456,7 +3453,7 @@ impl App {
             profile: self.config.profile.clone(),
             fullscreen: self.active().fullscreen,
             layout: self.layout_here().name(),
-            own_layout: self.active().layout.is_some(),
+            own_layout: self.active().layout.is_some() && !self.config.profile_sets_layout(),
             focused: self.focused(),
             title: self.focused_title().unwrap_or("").to_string(),
             mode: match self.mode {
@@ -5818,6 +5815,42 @@ mod tests {
                 .unwrap_or("")
                 .contains("no profile `nope`")
         );
+    }
+
+    #[test]
+    fn a_profiles_layout_wins_over_a_workspaces_own_until_it_goes() {
+        let mut a = app(Some(
+            r#"
+            ranma.profile("mobile", { set = { layout = "monocle" } })
+            ranma.profile("quiet", { bar = { center = {} } })
+            ranma.on("driver_change", function(c)
+              ranma.use_profile(c.mobile and "mobile" or nil)
+            end)
+            "#,
+        ));
+        for id in [1, 2, 3] {
+            with_pane(&mut a, id);
+        }
+        a.run_action("workspace_layout master".parse().unwrap());
+        assert_eq!(a.layout_here(), Layout::Master);
+        assert!(a.snapshot().own_layout);
+        // The phone takes the screen: monocle, though the workspace is pinned.
+        a.driven_by(true, false);
+        assert_eq!(a.layout_here(), Layout::Monocle);
+        assert!(!a.snapshot().own_layout);
+        assert_eq!(a.frame().views.len(), 1);
+        // A pin made meanwhile is kept for later, and says so.
+        a.run_action("workspace_layout scrolling".parse().unwrap());
+        assert_eq!(a.layout_here(), Layout::Monocle);
+        let status = a.status.clone().unwrap_or_default();
+        assert!(status.contains("once profile `mobile` is off"), "{status}");
+        // The desk again: the pin is back.
+        a.driven_by(false, false);
+        assert_eq!(a.layout_here(), Layout::Scrolling);
+        // A profile that names no layout leaves the pin alone.
+        a.run_action("profile quiet".parse().unwrap());
+        assert_eq!(a.layout_here(), Layout::Scrolling);
+        assert!(a.snapshot().own_layout);
     }
 
     #[test]
