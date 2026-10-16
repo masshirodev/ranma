@@ -13,6 +13,8 @@ commit log has the detail.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
 ### Breaking
 
 - The touch toolbar and the `mobile` profile left the built-in defaults for
@@ -29,8 +31,41 @@ commit log has the detail.
 
 ### Added
 
+- `ranma dump-layout [NAME]`: prints the workspace it runs in, or a declared
+  or saved layout, as the `ranma.layout(...)` call that declares it, to paste
+  into `init.lua` instead of retyping a saved layout (CONFIG.md, "From a
+  workspace to `init.lua`"). `ranma.LayoutNode` in `--dump-types` gains
+  `scroll` and `width`.
+- The `keyboard` action opens the phone's on-screen keyboard: Termux opens it
+  for a tap only while nothing tracks the mouse, so it turns mouse reporting
+  off for 1.5 s or until a key arrives. The touch toolbar's `⌨` button runs
+  it, in the slot that was `send esc` (Termux's extra-keys row has Esc).
 - `ranma.has("action.keyboard")`: the `keyboard` action, for a plugin that
   must also load into a ranma without it.
+- `module_click <module>`: clicks a bar module by name, from a bind or a
+  script, as a click on it does.
+- The pointer moving over a menu or picker row selects it, as a desktop
+  menu's hover does, in every picker; `choose_theme` previews the theme
+  under the pointer. A pointer at rest moves nothing, so a row chosen with
+  the arrows stays chosen.
+
+### Changed
+
+- `resize <dir>` moves the border the way the arrow points, as tmux's
+  `resize-pane` and dragging with the mouse do. On the right-most and bottom
+  panes it ran backwards (`right` pulled the border left); panes with a
+  neighbour after them, floating panes and strip columns behave as before.
+- A profile in use that sets `layout` wins over a workspace's own
+  (`workspace_layout`), so a workspace pinned to `master` at the desk is not
+  three columns on a phone. The pin is kept and returns when the profile
+  goes; `ranma.state().own_layout` is false while it is outranked.
+- A click on a bar module that shows the value of a ranma inside the focused
+  pane (followed, `nested = "follow"`) runs that ranma's `on_click`, so the
+  docker and ports screens it opens are the far machine's. It is sent as
+  one bracketed paste carrying a token from the inner's report, taken
+  before anything open there, so nothing is typed into a modal. An `"own"`
+  module, one the inner does not click, and an inner older than 0.4.0 keep
+  this ranma's `on_click`. Update the inner ranma too.
 
 ### Fixed
 
@@ -203,7 +238,8 @@ manager; TOML themes; upgrading a running server in place; ranma inside ranma
 over SSH; copy mode, hints, images, and the tmux shim. README.md is the tour
 and doc/CONFIG.md the reference.
 
-[Unreleased]: https://github.com/masshirodev/ranma/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/masshirodev/ranma/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/masshirodev/ranma/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/masshirodev/ranma/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/masshirodev/ranma/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/masshirodev/ranma/compare/v0.2.2...v0.2.3
