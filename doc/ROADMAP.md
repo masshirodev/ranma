@@ -327,3 +327,17 @@ smoke on macos-15 and macos-15-intel in ci.yml); the second waits for a Mac.
 - [x] Defaults: `open` for links, an image paste command
 - [x] CI and release: macOS builds (arm64 and x86_64), the smoke test there,
   macOS tarballs in the release and the tap
+
+## 16. Android, in Termux
+
+A phone or tablet mostly reaches ranma over SSH (milestone 8), but one that is
+offline, or away from the workstation, runs it itself. Android is Linux with
+its own `target_os`, so it takes `src/os/`'s Linux half; DESIGN.md's "Linux and
+macOS, not native Windows" records what differs.
+
+- [x] `src/os/` compiles its Linux half for `target_os = "android"`
+- [x] Child exit without `pidfd_open` (kernels before 5.3, which Android
+  tablets still ship): a thread in `waitid(WNOWAIT)` closes a pipe
+- [x] Built and run on a 4.14 tablet in Termux
+- [ ] Release binaries for Termux (`aarch64-linux-android`), or a Termux
+  package

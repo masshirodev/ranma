@@ -3,10 +3,11 @@
 //! terminal, CPU and memory, the running binary, and a descriptor that turns
 //! readable when a child exits. Nothing outside this module reads `/proc` or
 //! opens a pidfd, so a second OS is a second file here (ROADMAP, "macOS").
+//! Android (Termux) is Linux with its own `target_os`, and takes the Linux half.
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod linux;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub use linux::*;
 #[cfg(target_os = "macos")]
 mod macos;
@@ -16,8 +17,8 @@ pub use macos::*;
 use std::path::PathBuf;
 
 /// The longest path a Unix socket can be bound to, without its NUL:
-/// `sun_path` is 108 bytes on Linux and 104 on macOS.
-#[cfg(target_os = "linux")]
+/// `sun_path` is 108 bytes on Linux (Android included) and 104 on macOS.
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub const SOCKET_PATH_MAX: usize = 107;
 #[cfg(target_os = "macos")]
 pub const SOCKET_PATH_MAX: usize = 103;
@@ -55,13 +56,13 @@ pub fn state_home() -> Option<PathBuf> {
 
 /// `sh -c` that opens `$1` (a link) with the desktop's handler, detached,
 /// and returns at once.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub const OPEN_URL_SH: &str = "setsid xdg-open \"$1\" >/dev/null 2>&1 </dev/null &";
 #[cfg(target_os = "macos")]
 pub const OPEN_URL_SH: &str = "open \"$1\" >/dev/null 2>&1 </dev/null";
 
 /// The name of [`OPEN_URL_SH`]'s program, for saying it failed.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub const OPEN_URL_PROGRAM: &str = "xdg-open";
 #[cfg(target_os = "macos")]
 pub const OPEN_URL_PROGRAM: &str = "open";

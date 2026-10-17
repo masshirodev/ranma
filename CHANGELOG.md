@@ -13,6 +13,13 @@ commit log has the detail.
 
 ## [Unreleased]
 
+### Added
+
+- Android, in Termux: ranma builds from source there and runs natively, on
+  the kernels Android tablets ship (4.14 included, which has no
+  `pidfd_open`). The cpu module stays empty, since Android keeps
+  `/proc/stat` from apps. The README's install section has the details.
+
 ## [0.4.0] - 2026-10-16
 
 ### Breaking
