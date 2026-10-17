@@ -148,11 +148,19 @@ From source:
 ./install.sh --uninstall
 ```
 
-**Linux and macOS** (macOS from 0.3.0, arm64 and Intel). WSL2 works. The BSDs
-and native Windows do not: what ranma asks the OS about a pane (its program,
-its directory) is answered by `/proc` on Linux and libproc on macOS, and
-nothing else is written yet (doc/DESIGN.md, "Linux and macOS, not native
-Windows").
+**Linux and macOS** (macOS from 0.3.0, arm64 and Intel). WSL2 works, and so
+does Android in [Termux](https://termux.dev), built from source there (`pkg
+install rust` and the `./install.sh` above; no release binary, since Termux
+is not glibc). The BSDs and native Windows do not: what ranma asks the OS
+about a pane (its program, its directory) is answered by `/proc` on Linux and
+libproc on macOS, and nothing else is written yet (doc/DESIGN.md, "Linux and
+macOS, not native Windows").
+
+On Android, the cpu module stays empty (the system keeps `/proc/stat` from
+apps), and Android 12 and later may kill a server left running in the
+background; turn off the phantom process killer (`adb shell
+"settings put global settings_enable_monitor_phantom_procs false"`) if a
+detached ranma does not survive.
 
 Needs Rust 1.88 or newer (`cargo`) and a C compiler (ranma builds its Lua from
 source). Optional, at run time:
