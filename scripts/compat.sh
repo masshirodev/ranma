@@ -31,11 +31,14 @@ else
 fi
 
 # ranma's processes, by exact name. Termux's pgrep matches nothing with -x
-# (not even its own shell), so the name is checked here instead.
+# (not even its own shell), so the name is checked here instead: from /proc
+# where there is one (older procps in Termux prints comm as a cut-off path),
+# else from ps (macOS, which prints the full path).
 ranma_pids() {
-  local p
+  local p c
   for p in $(pgrep ranma); do
-    [ "$(basename -- "$(ps -o comm= -p "$p" 2>/dev/null)")" = ranma ] && echo "$p"
+    if [ -r "/proc/$p/comm" ]; then c=$(<"/proc/$p/comm"); else c=$(basename -- "$(ps -o comm= -p "$p" 2>/dev/null)"); fi
+    [ "$c" = ranma ] && echo "$p"
   done
 }
 WORK=$(mktemp -d)
