@@ -64,9 +64,17 @@ proc_cmd() {
 proc_env() {
   if [ -r "/proc/$1/environ" ]; then tr '\0' '\n' < "/proc/$1/environ"; else ps -wwE -p "$1" -o command= 2>/dev/null | tr ' ' '\n'; fi
 }
+# ranma's processes, by exact name. Termux's pgrep matches nothing with -x
+# (not even its own shell), so the name is checked here instead.
+ranma_pids() {
+  local p
+  for p in $(pgrep ranma); do
+    [ "$(basename -- "$(ps -o comm= -p "$p" 2>/dev/null)")" = ranma ] && echo "$p"
+  done
+}
 # The server process of this test (the client is a separate, thinner process).
 server_pid() {
-  for p in $(pgrep -x ranma); do
+  for p in $(ranma_pids); do
     if proc_cmd "$p" | grep -q ' server ' &&
       proc_env "$p" | grep -qx "XDG_RUNTIME_DIR=$RT"; then
       echo "$p"
@@ -76,7 +84,7 @@ server_pid() {
 cleanup() {
   T kill-server 2>/dev/null || true
   # Servers outlive their terminals by design; the test's must not outlive it.
-  for p in $(pgrep -x ranma); do
+  for p in $(ranma_pids); do
     proc_env "$p" | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
   done
   # /tmp is often a tmpfs, so what a run leaves there is memory until reboot.
@@ -272,11 +280,12 @@ echo "flood: $(screen | grep -o 'real.*s' | head -1)"
 T send-keys -t s "printf '\\033]11;?\\033\\\\'; IFS= read -rs -t 1 -d '\\' r; printf '%q\\n' \"\$r\"" Enter
 wait_for 'rgb:1e1e/1e1e/2e2e' 8 || fail "OSC 11 was not answered with the host background"
 
-# A new pane starts in the focused pane's directory.
-T send-keys -t s 'cd /usr/share' Enter; sleep 0.2
+# A new pane starts in the focused pane's directory. /dev is a directory on
+# every system the smoke runs on; Android (Termux) has no /usr/share.
+T send-keys -t s 'cd /dev' Enter; sleep 0.2
 T send-keys -t s C-b t; sleep 0.8
 T send-keys -t s 'pwd' Enter
-wait_for '│/usr/share *│' || fail "new pane did not start in the focused pane's directory"
+wait_for '│/dev *│' || fail "new pane did not start in the focused pane's directory"
 T send-keys -t s 'exit' Enter; sleep 0.5
 
 # A saved layout: loaded on an empty workspace, its panes start in their
@@ -285,7 +294,7 @@ mkdir -p "$STATE/ranma/layouts"
 cat > "$STATE/ranma/layouts/smoke.toml" <<'TOML'
 split = "horizontal"
 [[children]]
-cwd = "/usr/share"
+cwd = "/dev"
 command = "echo layout-$((40 + 2))-ok"
 [[children]]
 cwd = "/nonexistent-dir"
@@ -293,7 +302,7 @@ TOML
 T send-keys -t s "$BIN action 'workspace 4' && $BIN action 'load_layout smoke'" Enter
 wait_for 'layout-42-ok' || fail "load_layout did not type the saved command"
 wait_for 'layout smoke: 2 panes opened' || fail "load_layout did not say what it opened"
-T send-keys -t s "$BIN action 'save_layout smoke-back'; sleep 0.5; grep -c '^cwd = \"/usr/share\"' $STATE/ranma/layouts/smoke-back.toml" Enter
+T send-keys -t s "$BIN action 'save_layout smoke-back'; sleep 0.5; grep -c '^cwd = \"/dev\"' $STATE/ranma/layouts/smoke-back.toml" Enter
 wait_for '│1 *│' || fail "save_layout did not write the pane's directory"
 T send-keys -t s 'exit' Enter; sleep 0.4
 T send-keys -t s 'exit' Enter; sleep 0.6
@@ -625,7 +634,7 @@ n = 1
 split = "horizontal"
 
 [[sessions.workspaces.layout.children]]
-cwd = "/usr/share"
+cwd = "/dev"
 
 [[sessions.workspaces.layout.children]]
 cwd = "/tmp"
