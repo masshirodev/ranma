@@ -436,7 +436,9 @@ impl Tree {
             self.root = None;
             return true;
         }
-        let removed = remove_in(root, id);
+        // A strip's top row is column widths: closing a column must not
+        // widen its neighbour.
+        let removed = remove_in(root, id, self.strip);
         if removed {
             // A strip down to one column keeps that column's width.
             if let Node::Container {
@@ -1268,7 +1270,7 @@ impl Tree {
             }
         } else {
             let (col, _) = &mut row[i];
-            remove_in(col, id);
+            remove_in(col, id, false);
             normalize(col);
             let at = if right { i + 1 } else { i };
             row.insert(at, (Node::Pane(id), width));
@@ -1455,7 +1457,15 @@ fn insert_at(root: &mut Node, focused: PaneId, new: PaneId, split: Split, before
     *leaf = Node::split(split, pair);
 }
 
-fn remove_in(n: &mut Node, id: PaneId) -> bool {
+/// Remove `id` from the tree under `n`. A pane leaving a split hands its share
+/// to the neighbour nearest its size, the one before it on a tie: a pane
+/// opened next to another halved that one's share (`insert_at`), so its twin
+/// has the share it has, and opening a pane and closing it, or floating it,
+/// gives the row back as it was. Spreading the share over the whole row
+/// instead leaves it lopsided: 1 : 1 opened to 1 : ½ : ½ would close to 1 : ½.
+/// With `keep_widths` the top container's shares stay as they are (a strip's
+/// column widths).
+fn remove_in(n: &mut Node, id: PaneId, keep_widths: bool) -> bool {
     let Node::Container {
         children, tabbed, ..
     } = n
@@ -1463,7 +1473,19 @@ fn remove_in(n: &mut Node, id: PaneId) -> bool {
         return false;
     };
     if let Some(i) = children.iter().position(|(c, _)| *c == Node::Pane(id)) {
-        children.remove(i);
+        let (_, share) = children.remove(i);
+        if tabbed.is_none() && !keep_widths {
+            let near = |j: usize| children.get(j).map(|(_, w)| (w - share).abs());
+            let before = i.checked_sub(1).and_then(|j| near(j).map(|d| (j, d)));
+            let after = near(i).map(|d| (i, d));
+            let heir = match (before, after) {
+                (Some((b, db)), Some((a, da))) => Some(if da < db { a } else { b }),
+                (b, a) => b.or(a).map(|(j, _)| j),
+            };
+            if let Some(j) = heir {
+                children[j].1 += share;
+            }
+        }
         if let Some(active) = tabbed {
             // The tab to the left takes over, as in a browser; the first tab's
             // right-hand neighbour when the first one closes.
@@ -1474,7 +1496,7 @@ fn remove_in(n: &mut Node, id: PaneId) -> bool {
         }
         return true;
     }
-    children.iter_mut().any(|(c, _)| remove_in(c, id))
+    children.iter_mut().any(|(c, _)| remove_in(c, id, false))
 }
 
 /// Remove empty containers and collapse split containers with one child. A tabbed
@@ -1698,6 +1720,57 @@ mod tests {
         // Pane 1 keeps its half; 2 and 3 share the other.
         assert_eq!(rect_of(&t, 1).w, 100);
         assert_eq!(rect_of(&t, 2).w, 50);
+    }
+
+    fn shares(t: &Tree) -> Vec<f32> {
+        match &t.root {
+            Some(Node::Container { children, .. }) => children.iter().map(|(_, w)| *w).collect(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_pane_opened_and_closed_gives_the_row_back() {
+        let mut t = Tree::default();
+        let h = Placement::Manual(Split::Horizontal);
+        t.insert(1, None, None, h);
+        t.insert(2, Some(1), None, h);
+        let before = (rect_of(&t, 1), rect_of(&t, 2));
+        // 3 splits 2's share, as a pane opened (or floated back) next to it.
+        t.insert(3, Some(2), None, h);
+        assert!(t.remove(3));
+        assert_eq!(shares(&t), vec![1.0, 1.0]);
+        assert_eq!((rect_of(&t, 1), rect_of(&t, 2)), before);
+        // Split off the front, the share goes to the pane after it.
+        t.insert(4, Some(1), None, h);
+        assert!(t.insert_beside(5, 1, Dir::Left));
+        assert!(t.remove(5));
+        assert!(t.remove(4));
+        assert_eq!(shares(&t), vec![1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_pane_closed_in_the_middle_gives_its_share_to_its_twin() {
+        let mut t = Tree::default();
+        let h = Placement::Manual(Split::Horizontal);
+        for (id, focus) in [(1, None), (2, Some(1)), (3, Some(2))] {
+            t.insert(id, focus, None, h);
+        }
+        assert_eq!(shares(&t), vec![1.0, 0.5, 0.5]);
+        assert!(t.remove(2));
+        // 3 was split off 2: it takes the share back, and 1 is not touched.
+        assert_eq!(shares(&t), vec![1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_strip_column_closing_leaves_the_others_their_widths() {
+        let mut t = Tree::default();
+        t.mark_strip(true);
+        t.strip_open(1, None, false, 0.5);
+        t.strip_open(2, Some(1), false, 0.4);
+        t.strip_open(3, Some(2), false, 0.3);
+        assert!(t.remove(2));
+        assert_eq!(shares(&t), vec![0.5, 0.3]);
     }
 
     #[test]
