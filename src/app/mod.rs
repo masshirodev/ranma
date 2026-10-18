@@ -418,6 +418,9 @@ pub struct App {
     /// The secret an outer ranma's click carries (`nestbar::click_paste`):
     /// only the ranma this one reports to has it, so a paste cannot fake one.
     click_token: String,
+    /// `toolbar_target here`: toolbar buttons act on this ranma even while
+    /// the focused pane holds another. Off, they follow the focus into it.
+    toolbar_here: bool,
     /// The colours the ranma around the attached client sent (see `nested`).
     outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
     /// The theme's own colours while the outer's are drawn instead.
@@ -567,6 +570,7 @@ impl App {
             host_focused: true,
             last_report: None,
             click_token: crate::nestbar::new_click_token(),
+            toolbar_here: false,
             outer_colors: None,
             own_colors: None,
             frameless_was: None,
@@ -1966,6 +1970,19 @@ impl App {
             self.click_module(&name);
             return;
         }
+        // An outer ranma's toolbar button, for this one: run only what a
+        // toolbar may send in, and pass it on if the focus here holds a
+        // ranma too. Anything else in such a paste is dropped, not typed.
+        if let Event::Paste(text) = &ev
+            && let Some(action) = crate::nestbar::action_in_paste(text, &self.click_token)
+        {
+            if let Ok(a) = action.parse::<Action>()
+                && a.forwarded()
+            {
+                self.run_toolbar_action(a);
+            }
+            return;
+        }
         // A tooltip goes on any key; the key still does what it does. It
         // takes no keys: hovering over a shell must never swallow one.
         if matches!(ev, Event::Key(_)) && self.tooltip.take().is_some() {
@@ -3261,6 +3278,17 @@ impl App {
                 self.enter_wm(self.config.settings.leader);
             }
             Action::Keyboard => self.open_keyboard(),
+            Action::ToolbarTarget(here) => {
+                self.toolbar_here = here.unwrap_or(!self.toolbar_here);
+                self.status = Some(
+                    if self.toolbar_here {
+                        "toolbar: acts here"
+                    } else {
+                        "toolbar: follows the focus"
+                    }
+                    .into(),
+                );
+            }
             Action::SendLeader => {
                 let leader = self.config.settings.leader;
                 if let Some(p) = self.focused_pane()
@@ -8193,6 +8221,97 @@ mod tests {
             a.picker.as_ref().unwrap().query.contains("ranma-click"),
             "an ordinary paste"
         );
+    }
+
+    /// A toolbar follows the focus into the ranma there: a button whose
+    /// action that ranma lists is sent in as a paste with its token, and its
+    /// face takes the inner's state; `toolbar_target here` keeps them here.
+    #[test]
+    fn toolbar_buttons_follow_the_focus_into_a_ranma_inside() {
+        let (mut a, id) = with_ranma_inside(
+            r#"ranma.toolbar("t", { buttons = {
+                 { "⇅", "toolbar_target" },
+                 { "▶", "focus next" },
+                 { "⌨", "keyboard" },
+                 { "!", "exec true" },
+               } })"#,
+        );
+        a.run_action("toolbar t on".parse().unwrap());
+        use crate::toolbar::Slot::Button;
+        let next: Action = "focus next".parse().unwrap();
+        let text = |a: &App| a.shown_toolbars()[0].faces[0].label.clone();
+        // An inner that takes no actions (older): the buttons are this one's.
+        let report = |actions: &str| {
+            crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{},"click_token":"t0k","actions":[{actions}]}}"#,
+                crate::nestbar::PROTOCOL
+            ))
+            .unwrap()
+        };
+        a.reports.insert(id, report(""));
+        assert!(a.toolbar_action_bytes(&next).is_none());
+        assert_eq!(
+            a.button_state("t", Button(1)),
+            ButtonState::Disabled,
+            "one pane here"
+        );
+
+        a.reports.insert(id, report(r#""focus","keyboard","exec""#));
+        assert_eq!(
+            a.toolbar_action_bytes(&next).expect("sent in"),
+            b"\x1b[200~ranma-action t0k focus next\x1b[201~"
+        );
+        assert!(
+            a.toolbar_action_bytes(&Action::Keyboard).is_none(),
+            "the phone's keyboard is this terminal's"
+        );
+        assert!(
+            a.toolbar_action_bytes(&"exec true".parse().unwrap())
+                .is_none(),
+            "never a command, whatever the inner lists"
+        );
+        assert_eq!(
+            a.button_state("t", Button(1)),
+            ButtonState::Normal,
+            "the inner's panes"
+        );
+        assert_eq!(a.button_state("t", Button(0)), ButtonState::Active);
+        assert!(text(&a).contains("inner"), "{}", text(&a));
+
+        a.run_action("toolbar_target".parse().unwrap());
+        assert!(a.toolbar_action_bytes(&next).is_none(), "pinned here");
+        assert_eq!(a.button_state("t", Button(0)), ButtonState::Locked);
+        assert!(text(&a).contains("here"), "{}", text(&a));
+        a.run_action("toolbar_target follow".parse().unwrap());
+        assert!(a.toolbar_action_bytes(&next).is_some());
+    }
+
+    /// The inner's side: an outer's toolbar paste runs a forwarded action,
+    /// and nothing else, whatever the paste says.
+    #[test]
+    fn an_outers_toolbar_paste_runs_only_what_a_toolbar_sends() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        let own = a.own_report();
+        assert!(own.actions.iter().any(|x| x == "focus"));
+        assert!(!own.actions.iter().any(|x| x == "exec"));
+        let paste = |a: &mut App, text: String| a.handle(AppEvent::Input(Event::Paste(text)));
+        let before = a.focused();
+        paste(
+            &mut a,
+            format!("ranma-action {} focus next", own.click_token),
+        );
+        assert_ne!(a.focused(), before, "focus moved");
+
+        let after = a.focused();
+        paste(
+            &mut a,
+            format!("ranma-action {} toolbar_target here", own.click_token),
+        );
+        assert!(!a.toolbar_here, "not a toolbar's to send in");
+        paste(&mut a, "ranma-action guessed focus next".into());
+        assert_eq!(a.focused(), after, "no token, no action");
     }
 
     #[test]

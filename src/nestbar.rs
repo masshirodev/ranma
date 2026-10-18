@@ -106,6 +106,12 @@ pub struct Report {
     /// report, which only the ranma around it reads.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub click_token: String,
+    /// The actions it runs for a toolbar button tapped in the outer
+    /// (`action::FORWARDED`), sent like a click, with the same token
+    /// (`action_paste`). An outer that does not know the field runs its
+    /// buttons itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
 }
 
 const CLICK_WORD: &str = "ranma-click";
@@ -144,6 +150,24 @@ pub fn click_in_paste<'a>(text: &'a str, token: &str) -> Option<&'a str> {
     (words.next()? == CLICK_WORD && !token.is_empty() && words.next()? == token).then_some(())?;
     let name = words.next()?;
     (words.next().is_none() && !name.is_empty()).then_some(name)
+}
+
+const ACTION_WORD: &str = "ranma-action";
+
+/// What an outer ranma writes into the pane holding an inner one to run a
+/// toolbar button's `action` there: a paste, as `click_paste` is.
+pub fn action_paste(token: &str, action: &str) -> Vec<u8> {
+    format!("\x1b[200~{ACTION_WORD} {token} {action}\x1b[201~").into_bytes()
+}
+
+/// The action a paste runs, when it is an outer's toolbar tap carrying this
+/// ranma's token; `None` for any other paste. The action is still only text:
+/// the caller parses it and runs it only if it is one it forwards.
+pub fn action_in_paste<'a>(text: &'a str, token: &str) -> Option<&'a str> {
+    let rest = text.strip_prefix(ACTION_WORD)?.strip_prefix(' ')?;
+    let (t, action) = rest.split_once(' ')?;
+    (!token.is_empty() && t == token && !action.is_empty() && !action.contains('\n'))
+        .then_some(action)
 }
 
 /// A piece of a module's output on the wire: its text, and its style by
@@ -929,6 +953,7 @@ mod tests {
             modules: BTreeMap::new(),
             clicks: Vec::new(),
             click_token: String::new(),
+            actions: Vec::new(),
         }
     }
 
@@ -1243,6 +1268,27 @@ mod tests {
         assert_eq!(click_in_paste("ranma-click abc docker x", t), None);
         assert_eq!(click_in_paste("ranma-click abc", t), None);
         assert_eq!(click_in_paste("ranma-click  docker", ""), None);
+    }
+
+    #[test]
+    fn an_action_paste_needs_the_token_and_one_line() {
+        let t = "abc";
+        let p = String::from_utf8(action_paste(t, "focus next")).unwrap();
+        let inner = p
+            .strip_prefix("\x1b[200~")
+            .unwrap()
+            .strip_suffix("\x1b[201~")
+            .unwrap();
+        assert_eq!(action_in_paste(inner, t), Some("focus next"));
+        assert_eq!(action_in_paste("ranma-action abd focus next", t), None);
+        assert_eq!(action_in_paste("ranma-action abc ", t), None);
+        assert_eq!(
+            action_in_paste("ranma-action abc new_pane\nexec x", t),
+            None
+        );
+        assert_eq!(action_in_paste("ranma-actionabc new_pane", t), None);
+        assert_eq!(action_in_paste("ranma-action  new_pane", ""), None);
+        assert_eq!(action_in_paste("ranma-click abc docker", t), None);
         assert_eq!(click_in_paste("hello", t), None);
     }
 

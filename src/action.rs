@@ -250,6 +250,10 @@ pub enum Action {
     /// goes off for a moment, since Termux opens it only for a tap no program
     /// is tracking (DESIGN.md, "A mobile view").
     Keyboard,
+    /// Where a toolbar's buttons act while the focused pane holds another
+    /// ranma: `Some(false)` follows the focus into it, `Some(true)` keeps them
+    /// here, `None` toggles (DESIGN.md, "A toolbar acts where the focus is").
+    ToolbarTarget(Option<bool>),
     /// Type the paths of the clipboard's copied files, else of its image, into
     /// the focused pane, uploaded first when the pane runs ssh (DESIGN.md,
     /// "Pasting files").
@@ -440,6 +444,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("leader", ""),
     ("send_leader", ""),
     ("keyboard", ""),
+    ("toolbar_target", "[follow|here|toggle]"),
     ("paste_image", ""),
     ("reload_config", ""),
     ("update", ""),
@@ -455,6 +460,51 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("latch", "<ctrl|alt|shift>"),
     ("quit", "[now]"),
 ];
+
+/// The actions a toolbar button sends into the ranma in the focused pane
+/// (`toolbar_target`), by name: what a thumb does to panes and workspaces,
+/// and nothing that runs a command, changes configuration or ends anything
+/// but a pane. A ranma reports this list, and runs a forwarded action only
+/// when its name is here, so an outer cannot make it `exec`.
+pub const FORWARDED: &[&str] = &[
+    "new_pane",
+    "close_pane",
+    "focus",
+    "move",
+    "toggle_split",
+    "equalize",
+    "next_layout",
+    "toggle_floating",
+    "cycle_floats",
+    "toggle_group",
+    "group_next",
+    "group_prev",
+    "fullscreen",
+    "workspace",
+    "scratchpad_toggle",
+    "pane_menu",
+    "pane_switcher",
+    "workspace_switcher",
+    "copy_mode",
+    "hints",
+    "search",
+    "help",
+    "leader",
+    "exit_mode",
+];
+
+impl Action {
+    /// The action's name, without its arguments (`focus` for `focus next`).
+    pub fn name(&self) -> String {
+        let s = self.to_string();
+        s.split(' ').next().unwrap_or_default().to_string()
+    }
+
+    /// Whether a toolbar sends it into a ranma inside ([`FORWARDED`]).
+    pub fn forwarded(&self) -> bool {
+        FORWARDED.contains(&self.name().as_str())
+    }
+}
 
 /// Whether an action from the catalogue cannot run without an argument.
 pub fn needs_arg(hint: &str) -> bool {
@@ -979,6 +1029,16 @@ impl FromStr for Action {
             "leader" => no_arg(Action::Leader),
             "send_leader" => no_arg(Action::SendLeader),
             "keyboard" => no_arg(Action::Keyboard),
+            "toolbar_target" => match rest {
+                None | Some("toggle") => Ok(Action::ToolbarTarget(None)),
+                Some("follow") => Ok(Action::ToolbarTarget(Some(false))),
+                Some("here") => Ok(Action::ToolbarTarget(Some(true))),
+                Some(other) => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: other.into(),
+                    expected: "follow, here or toggle",
+                }),
+            },
             "paste_image" => no_arg(Action::PasteImage),
             "reload_config" => no_arg(Action::ReloadConfig),
             "quit" => match rest {
@@ -1158,6 +1218,9 @@ impl fmt::Display for Action {
             Action::Leader => f.write_str("leader"),
             Action::SendLeader => f.write_str("send_leader"),
             Action::Keyboard => f.write_str("keyboard"),
+            Action::ToolbarTarget(None) => f.write_str("toolbar_target"),
+            Action::ToolbarTarget(Some(false)) => f.write_str("toolbar_target follow"),
+            Action::ToolbarTarget(Some(true)) => f.write_str("toolbar_target here"),
             Action::PasteImage => f.write_str("paste_image"),
             Action::ReloadConfig => f.write_str("reload_config"),
             Action::Quit { now: false } => f.write_str("quit"),
@@ -1168,6 +1231,33 @@ impl fmt::Display for Action {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn what_a_toolbar_sends_in_is_named_in_the_catalogue() {
+        for name in FORWARDED {
+            assert!(CATALOGUE.iter().any(|(n, _)| n == name), "{name}");
+        }
+        for a in ["focus next", "new_pane left", "workspace 3", "leader"] {
+            assert!(a.parse::<Action>().unwrap().forwarded(), "{a}");
+        }
+        for a in [
+            "exec true",
+            "keyboard",
+            "toolbar_target",
+            "module_click x",
+            "quit",
+        ] {
+            assert!(!a.parse::<Action>().unwrap().forwarded(), "{a}");
+        }
+        for a in [
+            "toolbar_target",
+            "toolbar_target follow",
+            "toolbar_target here",
+        ] {
+            assert_eq!(a.parse::<Action>().unwrap().to_string(), a);
+        }
+        assert!("toolbar_target there".parse::<Action>().is_err());
+    }
     use super::*;
 
     fn a(s: &str) -> Action {

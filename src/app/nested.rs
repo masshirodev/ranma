@@ -206,7 +206,49 @@ impl App {
                 .filter(|n| self.config.bar.all().any(|b| b == n))
                 .collect(),
             click_token: self.click_token.clone(),
+            actions: crate::action::FORWARDED
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
         }
+    }
+
+    /// The report of the ranma a toolbar button acts on instead of this one:
+    /// the one in the focused pane, while it takes forwarded actions and the
+    /// toolbar follows the focus (`toolbar_target`).
+    pub(super) fn toolbar_inner(&self) -> Option<&Report> {
+        if self.toolbar_here {
+            return None;
+        }
+        self.report_of(self.focused()?)
+            .filter(|r| !r.click_token.is_empty() && !r.actions.is_empty())
+    }
+
+    /// What to write into the focused pane so the ranma there runs a
+    /// toolbar button's `action`, or `None` when this one runs it: the
+    /// toolbar acts here, the action is not one a toolbar sends in, or the
+    /// ranma there does not take it (older, or not listing it).
+    pub(super) fn toolbar_action_bytes(&self, action: &Action) -> Option<Vec<u8>> {
+        if !action.forwarded() {
+            return None;
+        }
+        let r = self.toolbar_inner()?;
+        let name = action.name();
+        r.actions
+            .contains(&name)
+            .then(|| nestbar::action_paste(&r.click_token, &action.to_string()))
+    }
+
+    /// A toolbar button's action: sent into the ranma in the focused pane
+    /// when the toolbar follows the focus there, else run here.
+    pub(super) fn run_toolbar_action(&mut self, action: Action) {
+        if let Some(bytes) = self.toolbar_action_bytes(&action)
+            && let Some(p) = self.focused().and_then(|f| self.panes.get(&f))
+        {
+            p.write(bytes);
+            return;
+        }
+        self.run_action(action);
     }
 
     /// A click on a bar module, or `module_click`: the ranma whose value it

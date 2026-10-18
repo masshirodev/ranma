@@ -339,5 +339,8 @@ macOS, not native Windows" records what differs.
 - [x] Child exit without `pidfd_open` (kernels before 5.3, which Android
   tablets still ship): a thread in `waitid(WNOWAIT)` closes a pipe
 - [x] Built and run on a 4.14 tablet in Termux
+- [x] The desk's ranma inside the phone's: one toolbar (mobile.ranma's
+  `mobile_nested`), whose buttons follow the focus into the inner ranma
+  (`toolbar_target`, c369)
 - [ ] Release binaries for Termux (`aarch64-linux-android`), or a Termux
   package
