@@ -19,6 +19,13 @@ commit log has the detail.
   the kernels Android tablets ship (4.14 included, which has no
   `pidfd_open`). The cpu module stays empty, since Android keeps
   `/proc/stat` from apps. The README's install section has the details.
+- Toolbar buttons follow the focus into a ranma inside: with the desk's
+  ranma in a pane of the phone's own, `focus next`, `new_pane`, `leader` and
+  the other pane and workspace actions act on the desk's (CONFIG.md,
+  Toolbars, "A ranma inside"). `toolbar_target [follow|here|toggle]` pins
+  them to this ranma or lets them follow; `ranma.has("action.toolbar_target")`
+  tells a plugin it is there. Both ranmas need this build; an older inner
+  leaves the buttons on the outer.
 
 ## [0.4.0] - 2026-10-16
 

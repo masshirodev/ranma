@@ -347,6 +347,7 @@ sent them, which it is not asked to.
 | `exit_mode` | Leave WM mode (or a user mode). From a key, or from Lua (`ranma.action("exit_mode")`), where it wins over the bind's own `exit = false`. |
 | `leader` | Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a phone has no easy way to type `ctrl+b`) or a script: `ranma action leader`. Unlike the key, a second one does not send the leader to the program; `send_leader` does that. |
 | `send_leader` | Send the leader chord to the focused program. |
+| `toolbar_target [follow\|here\|toggle]` | Where toolbar buttons act while the focused pane holds another ranma (a phone's own ranma with the desk's in a pane): `follow` (the default) sends them into that ranma, `here` keeps them on this one, and without an argument it toggles. See [Toolbars](#toolbars--ranmatoolbarname-def), "A ranma inside". |
 | `keyboard` | Open the phone's on-screen keyboard, for a toolbar button. Termux opens it for a tap only when no program tracks the mouse, and ranma always does, so this turns mouse reporting off for 1.5 seconds, or until a key is typed: the tap that ran it usually opens the keyboard, and if not, the next one does. Elsewhere it does nothing you would see. |
 | `paste_image` | Type the paths of the files copied on the clipboard, else of its image, into the focused pane (`leader v`), uploading them first when the pane runs `ssh`. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `reload_config` | Reload `init.lua` and the theme. The profile in use stays in use, if the new config still defines it. |
@@ -1833,6 +1834,29 @@ ranma.toolbar("touch", {
 - Show and hide them with the `toolbar NAME on|off|toggle` action, or name
   them in a [profile](#profiles--ranmaprofilename-def)'s `toolbars`.
 
+**A ranma inside.** While the focused pane holds another ranma (a phone
+running its own, with the desk's in a pane over SSH), a button acts on *that*
+ranma: `focus next` moves its focus, `new_pane` opens a pane there, `leader`
+puts it in WM mode. Each level passes it on, so in a chain it reaches the
+innermost ranma on the focus path. It is sent the way a followed module's
+click is ([ranma inside ranma](#ranma-inside-ranma)), and only for the actions
+a thumb uses on panes and workspaces: `new_pane`, `close_pane`, `focus`,
+`move`, `toggle_split`, `equalize`, `next_layout`, `toggle_floating`,
+`cycle_floats`, `toggle_group`, `group_next`, `group_prev`, `fullscreen`,
+`workspace`, `scratchpad_toggle`, `pane_menu`, `pane_switcher`,
+`workspace_switcher`, `copy_mode`, `hints`, `search`, `help`, `leader` and
+`exit_mode`. Everything else stays here: `keyboard` (the terminal is this
+one's), `send` and `latch` (their keys reach the inner through the pane
+anyway), `toolbar`, `profile`, and a Lua function. While a button acts inside,
+it looks the way the inner's state says (`leader` is active while that ranma
+is in WM mode), not this ranma's. An inner from 0.4.0 or before takes none of
+them, and the buttons act here.
+
+A `toolbar_target` button chooses: its text says where the buttons act now
+(`inner` or `here`, whatever `text` the config gave it), it is *active* while
+they act inside and *locked* while `toolbar_target here` keeps them on this
+ranma. mobile.ranma puts one first in its toolbar.
+
 **What gives way on a short screen.** When the bar or a toolbar is large,
 the rows decide, in this order: under 30 rows the monocle strip folds into
 the bar (its tabs where they fit, else one `2/4 nvim` chip that opens the
@@ -2159,6 +2183,7 @@ the spelling against this table:
 | Capability | What it means |
 |---|---|
 | `action.keyboard` | the `keyboard` action, which opens a phone's keyboard |
+| `action.toolbar_target` | the `toolbar_target` action, and toolbar buttons that follow the focus into a ranma inside |
 | `border.gradient` | `colors.border_*_gradient` and `border.gradient_angle` |
 | `hook.before_close` | the `before_close` event, whose handler can keep a pane |
 | `hook.float_change` | the `float_change` event |

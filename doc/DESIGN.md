@@ -3169,9 +3169,8 @@ into [mobile.ranma](https://github.com/masshirodev/mobile.ranma):
   phone's ranma is mobile too and draws the touch toolbar; the desk's, in its
   pane, drew one more under it. With `ranma.client().outer` set it uses
   `mobile_nested` instead, the monocle layout alone: the bar is the outer's
-  already. The outer's buttons act on the outer's panes, not the inner's;
-  forwarding a tap on them into the focused inner ranma, as keys are, is not
-  done.
+  already. The outer's buttons act where the focus is: see "A toolbar acts
+  where the focus is" below.
 - **The keyboard button is behind `ranma.has("action.keyboard")`**, a
   capability added for it, since the plugin is loaded into the latest release
   by its CI and the `keyboard` action came after 0.3.0. Without it, the slot
@@ -3364,7 +3363,41 @@ pane printed them. Decided (2026-10-14, revised the same day):
 - **Still not a plugin channel.** `module_click` is a click, from a bind, a
   script or the outer alike; the channel above stays its own decision. Its
   paste could carry more than a click, which is exactly why it carries one
-  fixed word and a name, and nothing else.
+  fixed word and a name, and nothing else. (Widened once, on purpose and by
+  the same rules, for toolbar buttons: the next section.)
+
+**A toolbar acts where the focus is** (2026-10-18, c369). Since a phone can
+run its own ranma (Termux), the desk's ranma sits in one of its panes, and
+mobile.ranma leaves the touch toolbar to the phone's. Its buttons then moved
+the phone's focus and opened the phone's panes, while the screen was the
+desk's: the toolbar could not drive the ranma you were looking at. Decided:
+
+- **The buttons follow the focus.** While the focused pane holds a ranma that
+  takes them, a button runs its action there, and each level passes it on
+  (`run_toolbar_action`), so it reaches the innermost ranma on the focus
+  path, as a followed module's value comes from there. A `toolbar_target`
+  action pins them here (`here`) or lets them follow again (`follow`, the
+  default); a button for it says `inner` or `here`. Following was chosen
+  over a level picked by hand, because the pane you are looking at is almost
+  always the ranma you mean, and an override covers the rest.
+- **The same channel, a second word.** `ranma-action <token> <action>`, a
+  bracketed paste with the click's token, taken at the top of the inner's
+  input, before any modal: nothing is typed, nothing can forge it. The
+  report gains `actions`, the names the inner takes; an outer sends only
+  those, and an inner that lists none (older) leaves the buttons here.
+- **An allowlist, checked on both sides** (`action::FORWARDED`): the actions
+  a thumb uses on panes and workspaces, `leader` and `exit_mode`. Never
+  `exec`, `module_click`, `profile`, `toolbar`, `reload_config`, `quit` or a
+  Lua function. The inner parses the paste and runs it only when its own list
+  names it, so even an outer that lists more cannot make it run a command;
+  what a toolbar paste carries stays a toolbar's, not a plugin channel's.
+  `keyboard` stays out because the terminal whose mouse it turns off is
+  this one's; `send` and `latch` because their keys reach the inner through
+  the pane already.
+- **A forwarded face shows the inner's state** as far as the report tells
+  it: `leader` is active while the inner is in WM mode, and nothing is
+  disabled for this side's reasons (`focus next` with one pane here). The
+  inner's other toggles (fullscreen, sync) are not reported, and draw plain.
 
 ## Non-goals
 

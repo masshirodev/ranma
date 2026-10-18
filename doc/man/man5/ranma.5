@@ -610,6 +610,9 @@ Enter WM mode, as the leader does; in WM mode, leave it. For a toolbar button (a
 \fBsend_leader\fR
 Send the leader chord to the focused program.
 .TP
+\fBtoolbar_target [follow\e|here\e|toggle]\fR
+Where toolbar buttons act while the focused pane holds another ranma (a phone's own ranma with the desk's in a pane): \fBfollow\fR (the default) sends them into that ranma, \fBhere\fR keeps them on this one, and without an argument it toggles. See Toolbars\fR, "A ranma inside".
+.TP
 \fBkeyboard\fR
 Open the phone's on\-screen keyboard, for a toolbar button. Termux opens it for a tap only when no program tracks the mouse, and ranma always does, so this turns mouse reporting off for 1.5 seconds, or until a key is typed: the tap that ran it usually opens the keyboard, and if not, the next one does. Elsewhere it does nothing you would see.
 .TP
@@ -2437,6 +2440,29 @@ nothing.
 Show and hide them with the \fBtoolbar NAME on|off|toggle\fR action, or name
 them in a profile\fR's \fBtoolbars\fR.
 .PP
+\fBA ranma inside.\fR While the focused pane holds another ranma (a phone
+running its own, with the desk's in a pane over SSH), a button acts on \fIthat\fR
+ranma: \fBfocus next\fR moves its focus, \fBnew_pane\fR opens a pane there, \fBleader\fR
+puts it in WM mode. Each level passes it on, so in a chain it reaches the
+innermost ranma on the focus path. It is sent the way a followed module's
+click is (ranma inside ranma\fR), and only for the actions
+a thumb uses on panes and workspaces: \fBnew_pane\fR, \fBclose_pane\fR, \fBfocus\fR,
+\fBmove\fR, \fBtoggle_split\fR, \fBequalize\fR, \fBnext_layout\fR, \fBtoggle_floating\fR,
+\fBcycle_floats\fR, \fBtoggle_group\fR, \fBgroup_next\fR, \fBgroup_prev\fR, \fBfullscreen\fR,
+\fBworkspace\fR, \fBscratchpad_toggle\fR, \fBpane_menu\fR, \fBpane_switcher\fR,
+\fBworkspace_switcher\fR, \fBcopy_mode\fR, \fBhints\fR, \fBsearch\fR, \fBhelp\fR, \fBleader\fR and
+\fBexit_mode\fR. Everything else stays here: \fBkeyboard\fR (the terminal is this
+one's), \fBsend\fR and \fBlatch\fR (their keys reach the inner through the pane
+anyway), \fBtoolbar\fR, \fBprofile\fR, and a Lua function. While a button acts inside,
+it looks the way the inner's state says (\fBleader\fR is active while that ranma
+is in WM mode), not this ranma's. An inner from 0.4.0 or before takes none of
+them, and the buttons act here.
+.PP
+A \fBtoolbar_target\fR button chooses: its text says where the buttons act now
+(\fBinner\fR or \fBhere\fR, whatever \fBtext\fR the config gave it), it is \fIactive\fR while
+they act inside and \fIlocked\fR while \fBtoolbar_target here\fR keeps them on this
+ranma. mobile.ranma puts one first in its toolbar.
+.PP
 \fBWhat gives way on a short screen.\fR When the bar or a toolbar is large,
 the rows decide, in this order: under 30 rows the monocle strip folds into
 the bar (its tabs where they fit, else one \fB2/4 nvim\fR chip that opens the
@@ -2828,6 +2854,9 @@ the spelling against this table:
 .TP
 \fBaction.keyboard\fR
 the \fBkeyboard\fR action, which opens a phone's keyboard
+.TP
+\fBaction.toolbar_target\fR
+the \fBtoolbar_target\fR action, and toolbar buttons that follow the focus into a ranma inside
 .TP
 \fBborder.gradient\fR
 \fBcolors.border_*_gradient\fR and \fBborder.gradient_angle\fR

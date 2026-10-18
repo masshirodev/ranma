@@ -236,7 +236,7 @@ impl App {
             .filter_map(|(name, placed)| {
                 let placed = placed?;
                 let def = self.config.toolbar(name)?;
-                let labels: Vec<_> = def.buttons.iter().map(|b| b.label.clone()).collect();
+                let labels: Vec<_> = def.buttons.iter().map(|b| self.button_label(b)).collect();
                 Some(ShownToolbar {
                     name: name.clone(),
                     faces: toolbar::layout(&labels, placed.rect, placed.size),
@@ -339,7 +339,7 @@ impl App {
             Ok(a @ (Action::Send(_) | Action::Latch(_))) => self.run_action(a),
             Ok(a) => {
                 self.latches.release(false);
-                self.run_action(a);
+                self.run_toolbar_action(a);
             }
             Err(Ok(f)) => {
                 self.latches.release(false);
@@ -348,6 +348,21 @@ impl App {
             Err(Err(_)) => self.status = Some("lua: button function is gone".into()),
         }
         self.dirty = true;
+    }
+
+    /// A button's labels as drawn: `toolbar_target`'s text says where the
+    /// buttons act now (`inner` or `here`), whatever the config wrote.
+    fn button_label(&self, b: &crate::config::Button) -> toolbar::Label {
+        let mut l = b.label.clone();
+        if matches!(b.builtin(), Some(Action::ToolbarTarget(_))) {
+            let at = if self.toolbar_inner().is_some() {
+                "inner"
+            } else {
+                "here"
+            };
+            l.text = Some(at.into());
+        }
+        l
     }
 
     /// How a face is drawn now, from what its action would do.
@@ -373,6 +388,24 @@ impl App {
         else {
             return ButtonState::Normal;
         };
+        if let Action::ToolbarTarget(_) = action {
+            return if self.toolbar_here {
+                ButtonState::Locked
+            } else if self.toolbar_inner().is_some() {
+                ButtonState::Active
+            } else {
+                ButtonState::Normal
+            };
+        }
+        // Sent into the ranma inside: its state is that ranma's, and of it
+        // only the mode is reported.
+        if self.toolbar_action_bytes(action).is_some() {
+            let wm = self.toolbar_inner().is_some_and(|r| r.mode == "wm");
+            return match action {
+                Action::Leader if wm => ButtonState::Active,
+                _ => ButtonState::Normal,
+            };
+        }
         let focused = self.focused();
         let ws = self.active();
         match action {
@@ -650,11 +683,12 @@ impl App {
             .iter()
             .enumerate()
             .skip(from)
-            .map(|(i, b)| crate::picker::Item {
-                label: b.label.text.as_ref().map_or_else(
-                    || b.label.label.clone(),
-                    |t| format!("{} {t}", b.label.label),
-                ),
+            .map(|(i, b)| (i, self.button_label(b)))
+            .map(|(i, l)| crate::picker::Item {
+                label: l
+                    .text
+                    .as_ref()
+                    .map_or_else(|| l.label.clone(), |t| format!("{} {t}", l.label)),
                 detail: String::new(),
                 target: crate::picker::Target::Button(toolbar.to_string(), i),
                 current: false,
