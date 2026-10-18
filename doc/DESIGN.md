@@ -2997,9 +2997,12 @@ script, which is outside ranma.
 
 **Decided 2026-09-29** (brief `doc/briefs/done/MOBILE_VIEW.md`,
 handoff `doc/handoffs/done/MOBILE_VIEW_MOCK.txt`). A phone or a tablet in Termux
-attaches over SSH to the ranma already running on the PC or the VPS. It runs no
-ranma of its own: a native Android build would fight Android's killer of
-background processes for the one thing the server is for.
+attaches over SSH to the ranma already running on the PC or the VPS. It ran no
+ranma of its own when this was decided: a native Android build would fight
+Android's killer of background processes for the one thing the server is for.
+Since 2026-10-18 ranma builds in Termux ("Linux and macOS, not native
+Windows"), and a phone may start its own, with the desk's ranma in a pane over
+SSH; the plugin then reads `ranma.client().outer` (below).
 
 **ranma has no mobile mode.** The mobile view is a *profile* the user's
 `init.lua` switches to, built from pieces that each work on the desktop too:
@@ -3162,6 +3165,13 @@ into [mobile.ranma](https://github.com/masshirodev/mobile.ranma):
   went to `nil` whenever the desk drove, which took away a profile picked in
   the meantime (zen's). A phone taking the drive still replaces whatever is in
   use, as before: profiles do not stack.
+- **Nested in the phone's own ranma, it only goes monocle** (2026-10-18). The
+  phone's ranma is mobile too and draws the touch toolbar; the desk's, in its
+  pane, drew one more under it. With `ranma.client().outer` set it uses
+  `mobile_nested` instead, the monocle layout alone: the bar is the outer's
+  already. The outer's buttons act on the outer's panes, not the inner's;
+  forwarding a tap on them into the focused inner ranma, as keys are, is not
+  done.
 - **The keyboard button is behind `ranma.has("action.keyboard")`**, a
   capability added for it, since the plugin is loaded into the latest release
   by its CI and the `keyboard` action came after 0.3.0. Without it, the slot
