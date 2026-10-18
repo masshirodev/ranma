@@ -370,6 +370,20 @@ survive in a master workspace. The tree remembers the master's share, so a
 master that closes is replaced at the same width; `master_ratio` applies when
 a master area forms, one pane becoming two.
 
+**A pane leaving a split hands its share to its twin** (2026-10-18). A pane
+that opens beside one in a row of the same direction takes half of that
+one's share, so the rest of the row keeps its size. Closing it, floating it
+or moving it away used to drop its share and spread the gap over the whole
+row in proportion, so two even tiles, opened to 1 : ½ : ½, came back as
+1 : ½ — two thirds and a third, for nothing done to them. Now the share goes
+to the neighbour nearest its size, the one before it on a tie: the pane it was
+split from has the same share unless one of the two was resized since, so
+opening a pane and closing it is the identity. A guess, since the tree does not
+record which pane a pane came from, and one that only goes wrong after a
+resize, where a neighbour gets the space instead of the whole row. A strip's
+top row is column widths, not shares, and is left as it is: a column closing
+there does not widen its neighbour.
+
 **Enter on an empty workspace opens a shell there** (2026-10-01). With no
 pane, a key in normal mode reached nothing and was dropped; Enter is the key
 you reach for in a blank terminal, so it now runs `new_pane`. The keypad's
