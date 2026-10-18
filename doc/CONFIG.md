@@ -492,7 +492,7 @@ ranma.rule { title = "*NVIM*", workspace = 2, silent = true }
 | `program` | Glob matched against the program in the pane's foreground (`ssh`, `nvim`), once something runs there. |
 | `cwd` | Glob matched against the pane's directory, `~/` for home (`~/projects/*`). |
 | `host` | Glob matched against the host the pane is connected to: where its `ssh` goes, else the host a ranma inside it reports. |
-| `float` | Float the pane. |
+| `float` | Float the pane. A `command` rule floats it as it opens, straight into the floating layer, so the tiles are never split for it. |
 | `size` | `{ width%, height% }` of the workspace, each 10-100; implies `float`. |
 | `workspace` | Move the pane to this workspace, following it unless `silent = true`. |
 | `name` | Name the pane, as `rename_pane`. |
@@ -1038,6 +1038,7 @@ What ranma does with an image:
   screen stay, but placeholders printed before it are drawn blank: the new
   build does not know which image they named.
 
+## Toasts and `ranma notify`
 
 Toasts are short notifications stacked at the top right, gone after five seconds
 or when clicked. They come from three places:
@@ -1051,6 +1052,8 @@ or when clicked. They come from three places:
 `ranma action "<action>"` runs any action from a pane the same way, e.g.
 `ranma action "workspace 3"` or `ranma action "exec htop"`, which makes ranma
 scriptable from the shell.
+
+### Opening panes from scripts: `ranma open`
 
 `ranma open` opens a pane somewhere in particular, in one request:
 
@@ -1071,7 +1074,7 @@ ranma open --session ai --workspace empty --cwd ~/projects/kumiko \
 | `--side DIR` | with `--beside`: `left`, `right` (the default), `up` or `down` |
 | `-d`, `--background` | leave focus, the shown session and the shown workspace as they were |
 | `-P`, `--print` | print the new pane's id |
-| `--float W H` | float it, centred, `W`% by `H`% of the workspace |
+| `--float W H` | float it, centred, `W`% by `H`% of the workspace. It goes straight into the floating layer: the tiles are not split to make room, so they keep their sizes. |
 | `-- COMMAND` | what to run; the shell when left out. One argument is a command line for the shell (`'ai; exec zsh'`); several are a command and its arguments, quoted for you. |
 
 It is how scripts lay things out: one project per workspace, say, each started
@@ -1296,6 +1299,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | Function | Does |
 | --- | --- |
 | `ranma.action("workspace 3")` | Run an action, as a bind would. Checked when called: a bad action is an error naming it. |
+| `ranma.open { command, cwd, float, ... }` | Open a pane, as [`ranma open`](#opening-panes-from-scripts-ranma-open) does, with its options under the same names (underscores for dashes): `command` (a command line for the shell; the shell when left out), `cwd` (absolute, or from `~/`), `name`, `session`, `workspace` (a number, `next`, `prev`, `empty`), `workspace_name`, `accent`, `background` (`true` leaves focus where it is), `beside` (a pane id) with `side` (`left`, `right`, `up`, `down`), and `float = { width, height }` in percent, 10-100 (one number for both). A float goes straight into the floating layer, centred: the tiles are never split to make room for it, so their programs get no resize. Queued in order with `ranma.action`; checked when called, an unknown option or a bad value an error naming it. `ranma.has("open")`. |
 | `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. With no bar on screen (`bar.position = "hidden"`, in the theme or a profile), it is a toast instead, as is every bar message, so nothing is said into nowhere. |
 | `ranma.json.decode(text)`, `ranma.json.encode(value)` | JSON both ways, for plugins that read tools' output (`ranma.spawn({ "ai", "peers", "--json" }, ...)`). Works at load too. `null` decodes to `nil`, so `if card.description then` is false for a null one: a key holding null is absent, and an array with nulls has holes (`#` is unreliable; count with the indices you expect). |
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
@@ -2192,6 +2196,7 @@ the spelling against this table:
 | `hook.workspace_rename` | the `workspace_rename` event |
 | `module.nested` | `ranma.module`'s `nested` option (`follow`, `own`, `hide`) |
 | `mouse` | `ranma.mouse` binds |
+| `open` | `ranma.open`, and floats that open without resizing the tiles |
 | `pane.style` | `pane:style` and a rule's `style` |
 | `placement` | `ranma.placement` policies |
 | `rule.group` | a window rule's `group` |

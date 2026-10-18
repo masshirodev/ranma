@@ -119,6 +119,23 @@ T send-keys -t s C-b t
 sleep 0.5
 [ "$(screen | head -1 | grep -o '╭' | wc -l)" -eq 2 ] || fail "expected two panes side by side"
 
+# A float opens straight into the floating layer: the tiles beside it keep
+# their sizes, from `ranma open --float` and from `ranma.open` alike. In the
+# background, so focus stays where the rest of this script expects it.
+cat > "$CFG/float.sh" <<SH
+tiles() { $BIN panes --json | tr '}' '\n' | grep '"floating":false' | grep -o '"cols":[0-9]*' | tr '\n' ' '; }
+floats() { $BIN panes --json | grep -o '"floating":true' | wc -l | tr -d ' '; }
+B=\$(tiles)
+$BIN open -d --float 60 60 -- sleep 3; sleep 0.5; F=\$(tiles); NF=\$(floats)
+$BIN lua 'ranma.open { command = "sleep 3", float = 50, background = true }'; sleep 0.5; L=\$(tiles); NL=\$(floats)
+if [ "\$B" = "\$F" ] && [ "\$B" = "\$L" ] && [ "\$NF\$NL" = 12 ]; then echo FLOATS_OK; else echo "FLOATS_BAD [\$B] [\$F] [\$L] \$NF \$NL"; fi
+SH
+T send-keys -t s "clear; bash $CFG/float.sh" Enter
+wait_for 'FLOATS_' 24 || fail "the float check did not finish"
+screen | grep -q 'FLOATS_OK' || fail "opening a float resized the tiles: $(screen | grep -o 'FLOATS_BAD.*')"
+for _ in $(seq 1 20); do [ "$(screen | head -1 | grep -o '╭' | wc -l)" -eq 2 ] && ! screen | grep -q 'sleep 3' && break; sleep 0.25; done
+T send-keys -t s clear Enter; sleep 0.3
+
 # WM mode shows in the bar; Esc and Enter both leave it.
 T send-keys -t s C-b
 wait_for ' WM ' || fail "WM mode indicator missing"

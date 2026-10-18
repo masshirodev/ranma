@@ -816,7 +816,7 @@ Glob matched against the pane's directory, \fB~/\fR for home (\fB~/projects/*\fR
 Glob matched against the host the pane is connected to: where its \fBssh\fR goes, else the host a ranma inside it reports.
 .TP
 \fBfloat\fR
-Float the pane.
+Float the pane. A \fBcommand\fR rule floats it as it opens, straight into the floating layer, so the tiles are never split for it.
 .TP
 \fBsize\fR
 \fB{ width%, height% }\fR of the workspace, each 10\-100; implies \fBfloat\fR.
@@ -1452,6 +1452,7 @@ of them again to a terminal that attaches later.
 Closing a pane deletes its images. After \fBranma upgrade\fR the images on
 screen stay, but placeholders printed before it are drawn blank: the new
 build does not know which image they named.
+.SH "TOASTS AND \fBranma notify\fR"
 .PP
 Toasts are short notifications stacked at the top right, gone after five seconds
 or when clicked. They come from three places:
@@ -1467,6 +1468,7 @@ or when clicked. They come from three places:
 \fBranma action "<action>"\fR runs any action from a pane the same way, e.g.
 \fBranma action "workspace 3"\fR or \fBranma action "exec htop"\fR, which makes ranma
 scriptable from the shell.
+.SS "Opening panes from scripts: \fBranma open\fR"
 .PP
 \fBranma open\fR opens a pane somewhere in particular, in one request:
 .PP
@@ -1508,7 +1510,7 @@ leave focus, the shown session and the shown workspace as they were
 print the new pane's id
 .TP
 \fB\-\-float W H\fR
-float it, centred, \fBW\fR% by \fBH\fR% of the workspace
+float it, centred, \fBW\fR% by \fBH\fR% of the workspace. It goes straight into the floating layer: the tiles are not split to make room, so they keep their sizes.
 .TP
 \fB\-\- COMMAND\fR
 what to run; the shell when left out. One argument is a command line for the shell (\fB'ai; exec zsh'\fR); several are a command and its arguments, quoted for you.
@@ -1754,6 +1756,9 @@ Inside a bind function, a hook, a module's \fBrender\fR, a timer, or a
 .TP
 \fBranma.action("workspace 3")\fR
 Run an action, as a bind would. Checked when called: a bad action is an error naming it.
+.TP
+\fBranma.open { command, cwd, float, ... }\fR
+Open a pane, as \fBranma open\fR\fR does, with its options under the same names (underscores for dashes): \fBcommand\fR (a command line for the shell; the shell when left out), \fBcwd\fR (absolute, or from \fB~/\fR), \fBname\fR, \fBsession\fR, \fBworkspace\fR (a number, \fBnext\fR, \fBprev\fR, \fBempty\fR), \fBworkspace_name\fR, \fBaccent\fR, \fBbackground\fR (\fBtrue\fR leaves focus where it is), \fBbeside\fR (a pane id) with \fBside\fR (\fBleft\fR, \fBright\fR, \fBup\fR, \fBdown\fR), and \fBfloat = { width, height }\fR in percent, 10\-100 (one number for both). A float goes straight into the floating layer, centred: the tiles are never split to make room for it, so their programs get no resize. Queued in order with \fBranma.action\fR; checked when called, an unknown option or a bad value an error naming it. \fBranma.has("open")\fR.
 .TP
 \fBranma.notify("text")\fR
 Show a message in the bar for five seconds, or until the next key in WM mode. With no bar on screen (\fBbar.position = "hidden"\fR, in the theme or a profile), it is a toast instead, as is every bar message, so nothing is said into nowhere.
@@ -2881,6 +2886,9 @@ the \fBworkspace_rename\fR event
 .TP
 \fBmouse\fR
 \fBranma.mouse\fR binds
+.TP
+\fBopen\fR
+\fBranma.open\fR, and floats that open without resizing the tiles
 .TP
 \fBpane.style\fR
 \fBpane:style\fR and a rule's \fBstyle\fR

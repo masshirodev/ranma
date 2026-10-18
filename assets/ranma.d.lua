@@ -298,6 +298,24 @@ function ranma.v(...) end
 ---@param action string e.g. "workspace 3"
 function ranma.action(action) end
 
+---@class ranma.OpenSpec
+---@field command? string A command line for the shell; the shell when left out.
+---@field cwd? string Absolute, or from `~/`; the focused pane's directory when left out.
+---@field name? string
+---@field session? string Switched to, and made if there is none.
+---@field workspace? integer|"next"|"prev"|"empty"
+---@field workspace_name? string
+---@field accent? string The session's colour, as `session_accent`.
+---@field background? boolean Leave focus where it is.
+---@field beside? integer A pane id: open beside it, in its session and workspace.
+---@field side? "left"|"right"|"up"|"down" With `beside`; right when left out.
+---@field float? integer[]|integer `{ width, height }` in percent (10-100), or one number for both: straight into the floating layer, centred.
+
+---Open a pane, as `ranma open` does, once the function returns (in order with
+---`ranma.action`). A float never splits the tiles to make room.
+---@param spec ranma.OpenSpec
+function ranma.open(spec) end
+
 ---A message in the bar (a toast while no bar is on screen).
 ---@param text string
 function ranma.notify(text) end
