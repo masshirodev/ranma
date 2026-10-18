@@ -30,12 +30,20 @@ else
   NEW="$PWD/target/release/ranma"
 fi
 
+# ranma's processes, by exact name. Termux's pgrep matches nothing with -x
+# (not even its own shell), so the name is checked here instead.
+ranma_pids() {
+  local p
+  for p in $(pgrep ranma); do
+    [ "$(basename -- "$(ps -o comm= -p "$p" 2>/dev/null)")" = ranma ] && echo "$p"
+  done
+}
 WORK=$(mktemp -d)
 SOCK="ranma-compat-$$"
 T() { tmux -L "$SOCK" "$@"; }
 cleanup() {
   T kill-server 2>/dev/null || true
-  for p in $(pgrep -x ranma); do
+  for p in $(ranma_pids); do
     tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "XDG_RUNTIME_DIR=$WORK/rt" && kill "$p"
   done
   # /tmp is often a tmpfs: what a run leaves there is memory until reboot.
@@ -90,7 +98,7 @@ ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT -u RANMA -u RANMA_SOCKET XDG
 BIN="$WORK/bin/ranma"
 put() { cp "$1" "$BIN.new" && mv -f "$BIN.new" "$BIN"; }
 server_pid() {
-  for p in $(pgrep -x ranma); do
+  for p in $(ranma_pids); do
     if tr '\0' ' ' < "/proc/$p/cmdline" | grep -q ' server ' &&
       tr '\0' '\n' < "/proc/$p/environ" | grep -qx "XDG_RUNTIME_DIR=$WORK/rt"; then
       echo "$p"
