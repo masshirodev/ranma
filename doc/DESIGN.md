@@ -3297,12 +3297,17 @@ Rust, for predictable latency without a GC, and for the emulator:
   Packages follow: Homebrew (Linux and macOS), no Scoop or winget.
   **Android (Termux) takes the Linux half** (2026-10-17): it is Linux with
   its own `target_os`, the same `/proc` for the user's own processes and the
-  same 108-byte `sun_path`. Two things differ. Its kernels can predate
+  same 108-byte `sun_path`. Three things differ. Its kernels can predate
   `pidfd_open` (5.3; tablets ship 4.14), so `child_exit_fd` falls back to a
   pipe whose write end a thread closes once `waitid(WEXITED | WNOWAIT)` sees
   the exit: readable for good, as a pidfd is, and the child left for the
   `waitpid` that reaps it. And SELinux keeps `/proc/stat` from apps, so the
   cpu module is empty there, which `read_cpu` already answers with `None`.
+  And alacritty's event loop waits for a child's exit after an `EIO` from
+  the master only under `target_os = "linux"`: on Android it ends the loop
+  first, no exit is reported, and the pane stays with its program gone. The
+  pane's reader turns that `EIO` into `WouldBlock` there, so the loop goes on
+  to the exit as on Linux.
   Everything else is already in Termux: `$TMPDIR` is short enough for a
   socket, `xdg-open` is `termux-open`, `setsid` is there, and the terminal
   app takes OSC 52 for copies. `paste_image` has no backend, since Termux's

@@ -200,6 +200,19 @@ impl ScanReader {
     }
 }
 
+/// `EIO` from the master (the child hung up) as nothing to read yet, on
+/// `android`. alacritty's event loop waits for the child's exit after an
+/// `EIO` only under `target_os = "linux"`; on Android it ends the loop
+/// instead, before the exit is seen, and the pane stays open with its program
+/// gone. Read as `WouldBlock`, the loop goes on to the exit as on Linux.
+fn hangup_is_pending(e: std::io::Error, android: bool) -> std::io::Error {
+    if android && e.raw_os_error() == Some(libc::EIO) {
+        std::io::ErrorKind::WouldBlock.into()
+    } else {
+        e
+    }
+}
+
 impl std::io::Read for ScanReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if HOLD_OUTPUT.load(Ordering::Acquire) {
@@ -214,7 +227,10 @@ impl std::io::Read for ScanReader {
             return Ok(k);
         }
         let mut n = if self.raw.is_empty() {
-            let n = self.file.read(buf)?;
+            let n = self
+                .file
+                .read(buf)
+                .map_err(|e| hangup_is_pending(e, cfg!(target_os = "android")))?;
             self.tee(&buf[..n]);
             n
         } else {
@@ -1107,6 +1123,23 @@ fn terminfo_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hangup_waits_for_the_exit_on_android_only() {
+        use std::io::{Error, ErrorKind};
+        let eio = || Error::from_raw_os_error(libc::EIO);
+        assert_eq!(hangup_is_pending(eio(), true).kind(), ErrorKind::WouldBlock);
+        assert_eq!(
+            hangup_is_pending(eio(), false).raw_os_error(),
+            Some(libc::EIO),
+            "Linux's alacritty waits for the exit itself"
+        );
+        let other = Error::from_raw_os_error(libc::EBADF);
+        assert_eq!(
+            hangup_is_pending(other, true).raw_os_error(),
+            Some(libc::EBADF)
+        );
+    }
 
     /// What a shell printed, read through the PTY reader with reads of
     /// `chunk` bytes into a buffer of `buf` (as the event loop does), parsed
