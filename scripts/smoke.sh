@@ -50,10 +50,12 @@ echo 'return { setup = function() end }' > "$DATA/ranma/hako/hako.ranma/lua/hako
 # would fill the border and push a badge off it.
 export PROMPT_COMMAND='h=${HOSTNAME%%.*}; printf "\033]0;%s@%s:%s\007" "$USER" "${h:0:12}" "${PWD/#$HOME/\~}"'
 # No SSH variables: the title names the host only where a step asks for it.
+# No RANMA_MOBILE: run from a phone's session it would make every client a
+# phone, and the desk in the mobile-view step could never take the screen back.
 # The panes' shell: the bash on PATH. macOS's /bin/bash is 3.2, which keeps
 # a raw terminal past its prompt and writes ${PWD/#$HOME/\~} with the backslash.
 PANE_SHELL="$(command -v bash)"
-ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=$PANE_SHELL"
+ENV="env -u SSH_CONNECTION -u SSH_TTY -u SSH_CLIENT -u RANMA_MOBILE XDG_RUNTIME_DIR=$RT XDG_CACHE_HOME=$CACHE XDG_STATE_HOME=$STATE XDG_DATA_HOME=$DATA RANMA_CONFIG_DIR=$CFG RANMA_NO_UPDATE_CHECK=1 SHELL=$PANE_SHELL"
 # A process's command line and environment, one word a line: /proc on
 # Linux, ps on macOS (whose -E appends the environment to the command).
 proc_cmd() {
