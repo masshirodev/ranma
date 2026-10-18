@@ -1109,16 +1109,21 @@ impl App {
         side: Option<Dir>,
         cwd: Option<std::path::PathBuf>,
     ) -> Result<PaneId> {
-        self.open_pane_with(command, side, cwd, &[])
+        self.open_pane_with(command, side, cwd, &[], None)
     }
 
-    /// `open_pane_at` with variables for the child's environment.
+    /// `open_pane_at` with variables for the child's environment, and with
+    /// `float` (width and height in percent) centred in the floating layer.
+    /// A float, asked for here or by a command rule, goes straight into the
+    /// floating layer and never into the tree: tiling it first and lifting it
+    /// out would resize every tile twice.
     pub(super) fn open_pane_with(
         &mut self,
         command: Option<&str>,
         side: Option<Dir>,
         cwd: Option<std::path::PathBuf>,
         env: &[(String, String)],
+        float: Option<(u16, u16)>,
     ) -> Result<PaneId> {
         let spawn_cwd = cwd.or_else(|| {
             self.focused()
@@ -1155,13 +1160,28 @@ impl App {
         let width = self.config.settings.scroll_width.weight();
         let area = self.workspace_area();
         let in_scratch = self.scratch_shown;
+        // Rules act outside the scratchpad, and the last to match places it,
+        // as when they are applied one after another.
+        let ruled = command.filter(|_| !in_scratch).and_then(|c| {
+            self.config
+                .rules
+                .iter()
+                .rev()
+                .find(|r| r.float && r.matches_command(c))
+                .map(|r| r.size.unwrap_or((60, 60)))
+        });
         let ws = self.active_mut();
-        match (side, focused) {
+        let float_rect = if in_scratch {
             // Everything in the scratchpad floats: a new pane joins the pile.
-            _ if in_scratch => {
-                let r = ws.cascade(area, 80, 80);
-                ws.floating.push((id, r));
-            }
+            let (w, h) = float.unwrap_or((80, 80));
+            Some(ws.cascade(area, w, h))
+        } else {
+            float
+                .map(|(w, h)| area.centered(w, h))
+                .or_else(|| ruled.map(|(w, h)| ws.cascade(area, w, h)))
+        };
+        match (side, focused) {
+            _ if float_rect.is_some() => ws.floating.push((id, float_rect.unwrap())),
             // A strip: a new column beside the focused one; up and down, a
             // window in its column.
             (Some(dir @ (Dir::Left | Dir::Right)), f) if strip => {
@@ -1200,7 +1220,7 @@ impl App {
                 self.focus(id);
                 self.relayout();
                 if let Some(cmd) = command {
-                    self.apply_command_rules(id, cmd);
+                    self.apply_command_rules(id, cmd, true);
                 }
                 let ws = if self.scratch_shown {
                     SCRATCHPAD
@@ -1214,7 +1234,9 @@ impl App {
                 Ok(id)
             }
             Err(e) => {
-                self.active_mut().tree.remove(id);
+                let ws = self.active_mut();
+                ws.tree.remove(id);
+                ws.floating.retain(|(p, _)| *p != id);
                 self.relayout();
                 Err(e)
             }
@@ -3597,6 +3619,11 @@ impl App {
                             }
                         }
                         config::Op::Unwatch(id) => self.unwatch(id),
+                        config::Op::Open(spec) => {
+                            if let Err(e) = self.open_spec(*spec) {
+                                self.status = Some(format!("ranma.open: {e}"));
+                            }
+                        }
                         config::Op::Tooltip(spec) => {
                             self.tooltip = spec.and_then(|t| {
                                 let offset =
@@ -5347,7 +5374,7 @@ mod tests {
         for id in [1, 2] {
             with_pane(&mut a, id);
         }
-        a.apply_command_rules(2, "ssh prod-db");
+        a.apply_command_rules(2, "ssh prod-db", false);
         assert!(a.pane_theme(1).is_none(), "an unstyled pane is the theme");
         let t = a.pane_theme(2).unwrap();
         assert_eq!(t.colors.border_active, crate::theme::Color::Rgb(255, 0, 0));
@@ -5376,8 +5403,8 @@ mod tests {
         for id in [1, 2, 3, 4] {
             with_pane(&mut a, id);
         }
-        a.apply_command_rules(2, "ssh vps");
-        a.apply_command_rules(4, "ssh prod");
+        a.apply_command_rules(2, "ssh vps", false);
+        a.apply_command_rules(4, "ssh prod", false);
         let l = a.workspaces[&1]
             .tree
             .layout_full(Rect::new(0, 0, 80, 24), 0);

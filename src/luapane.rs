@@ -553,6 +553,72 @@ mod tests {
     }
 
     #[test]
+    fn open_is_read_strictly_and_queued_in_order_with_actions() {
+        let cfg = load_from(None, None, None).unwrap();
+        let a = pane(1, "x");
+        let (out, ops) = call(
+            &cfg,
+            &[(1, &a)],
+            r#"
+            ranma.open { command = "nvim 'a b'", cwd = "/srv", float = { 80, 60 }, name = "edit" }
+            ranma.action("equalize")
+            ranma.open { float = 50, background = true, workspace = 3 }
+            ranma.open { beside = 1, side = "down", cwd = "~/x" }
+            "#,
+        );
+        out.unwrap();
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            ops,
+            [
+                Op::Open(Box::new(crate::ipc::OpenSpec {
+                    command: Some("nvim 'a b'".into()),
+                    cwd: Some("/srv".into()),
+                    float: Some((80, 60)),
+                    name: Some("edit".into()),
+                    ..Default::default()
+                })),
+                Op::Action("equalize".parse().unwrap()),
+                Op::Open(Box::new(crate::ipc::OpenSpec {
+                    float: Some((50, 50)),
+                    background: true,
+                    workspace: Some(crate::action::WorkspaceTarget::Index(3)),
+                    ..Default::default()
+                })),
+                Op::Open(Box::new(crate::ipc::OpenSpec {
+                    beside: Some((1, crate::action::Dir::Down)),
+                    cwd: Some(home.join("x")),
+                    ..Default::default()
+                })),
+            ]
+        );
+        for (src, says) in [
+            ("ranma.open { comand = 'x' }", "unknown option `comand`"),
+            (
+                "ranma.open { float = { 5, 50 } }",
+                "`float` is { width, height }",
+            ),
+            (
+                "ranma.open { float = { 50 } }",
+                "`float` is { width, height }",
+            ),
+            ("ranma.open { cwd = 'src' }", "`cwd` must be absolute"),
+            ("ranma.open { side = 'left' }", "`side` needs `beside`"),
+            ("ranma.open { beside = 1, side = 'in' }", "`in` is not left"),
+            (
+                "ranma.open { background = 1 }",
+                "`background` must be true or false",
+            ),
+            ("ranma.open { command = 3 }", "`command` must be a string"),
+        ] {
+            let (out, ops) = call(&cfg, &[(1, &a)], src);
+            let err = out.unwrap_err().to_string();
+            assert!(err.contains(says), "{src}: {err}");
+            assert!(ops.is_empty(), "{src}");
+        }
+    }
+
+    #[test]
     fn a_handle_outliving_its_pane_says_so() {
         let cfg = load_from(None, None, None).unwrap();
         let a = pane(1, "x");

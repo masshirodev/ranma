@@ -1278,6 +1278,23 @@ first rather than refusing it, since asking where a pane goes is asking for it
 to float. Halves split an odd width with the extra cell on the right, so
 `snap left` and `snap right` tile the workspace exactly.
 
+**A pane opened as a float never touches the tree** (2026-10-18). `ranma open
+--float`, a `command` rule with `float`, and the only way a plugin had,
+`exec` then `float_size`, all opened a tile and lifted it out: the tiles split
+to make room, their programs got a resize, the float left, and they got
+another (and, before the share fix in "The model", came back the wrong size).
+Opening is now told up front: given a float size, or a rule that floats the
+command, the pane is put in the floating layer as it is made and spawned at
+its float's size, so neither it nor the tiles are resized. Rules are matched
+before placing for that, and their `float` is then skipped when they are
+applied to the new pane, since it is already done. **`ranma.open` gives a
+plugin the same request** `ranma open` makes, with the same options under the
+same names, read as strictly. It is queued like `ranma.action` and returns
+nothing: the pane exists only once the callback has returned, and a plugin
+that wants it hears `pane_open`. A `float` option on `exec` was the smaller
+change and the wrong one: an action is a line a key runs, and `ranma open`
+already had the whole vocabulary of where a pane goes.
+
 The scratchpad is Hyprland's special workspace: one per ranma, shown over the
 current workspace, and it is **all floats**. (It first tiled its panes inside a
 centred box, a small tiled screen of its own; that was not what a scratchpad is

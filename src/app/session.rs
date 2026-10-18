@@ -191,8 +191,14 @@ impl App {
         if let Some((target, _)) = spec.beside {
             self.focus(target);
         }
-        let result =
-            self.open_pane_with(spec.command.as_deref(), side, spec.cwd.clone(), &spec.env);
+        let float = spec.float.map(|(w, h)| (w as u16, h as u16));
+        let result = self.open_pane_with(
+            spec.command.as_deref(),
+            side,
+            spec.cwd.clone(),
+            &spec.env,
+            float,
+        );
         match result {
             Ok(id) => {
                 if let Some(name) = spec.name.as_deref() {
@@ -203,15 +209,6 @@ impl App {
                 }
                 if spec.accent.is_some() {
                     self.sessions[self.active_session].accent = spec.accent;
-                }
-                if let Some((w, h)) = spec.float {
-                    let area = self.workspace_area();
-                    if !self.active().is_floating(id) {
-                        self.toggle_floating_pane(id);
-                    }
-                    if let Some(r) = self.active_mut().float_rect_mut(id) {
-                        *r = area.centered(w as u16, h as u16);
-                    }
                 }
                 if spec.return_focus
                     && let Some(p) = prior

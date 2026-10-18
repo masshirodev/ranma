@@ -11,14 +11,22 @@ use crate::layout::{PaneId, Placement};
 pub(super) const RULES_OWNER: &str = "rules";
 
 impl App {
-    pub(super) fn apply_command_rules(&mut self, id: PaneId, command: &str) {
+    /// `opening`: the pane is new, and `open_pane_with` has already floated
+    /// it where a rule says to.
+    pub(super) fn apply_command_rules(&mut self, id: PaneId, command: &str, opening: bool) {
         let rules: Vec<(usize, Rule)> = self
             .config
             .rules
             .iter()
             .enumerate()
             .filter(|(_, r)| r.matches_command(command))
-            .map(|(i, r)| (i, r.clone()))
+            .map(|(i, r)| {
+                let mut r = r.clone();
+                if opening {
+                    r.float = false;
+                }
+                (i, r)
+            })
             .collect();
         for (i, r) in rules {
             self.rules_applied.insert((id, i));

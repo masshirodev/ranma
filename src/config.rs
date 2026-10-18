@@ -1086,6 +1086,8 @@ pub enum Op {
     RefreshModule(String),
     /// Stop a `pane:watch`.
     Unwatch(u64),
+    /// Open a pane, as `ranma open` does (`ranma.open`).
+    Open(Box<crate::ipc::OpenSpec>),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1336,6 +1338,113 @@ pub fn config_dir() -> Option<PathBuf> {
 
 fn rt_err(msg: impl Into<String>) -> mlua::Error {
     mlua::Error::RuntimeError(msg.into())
+}
+
+/// `ranma.open`'s table, read as strictly as `ranma open`'s flags: the same
+/// names (underscores for dashes), each checked, an unknown one refused.
+fn open_spec(t: &Table) -> mlua::Result<crate::ipc::OpenSpec> {
+    let bad = |k: &str, why: &str| rt_err(format!("ranma.open: `{k}` {why}"));
+    let mut spec = crate::ipc::OpenSpec::default();
+    let mut side = None;
+    for pair in t.pairs::<Value, Value>() {
+        let (k, v) = pair?;
+        let Value::String(k) = k else {
+            return Err(rt_err("ranma.open: takes a table of named options"));
+        };
+        let k = k.to_str()?.to_string();
+        let text = |v: &Value| match v {
+            Value::String(s) => Ok(s.to_str()?.to_string()),
+            _ => Err(bad(&k, &format!("must be a string, not {}", v.type_name()))),
+        };
+        match k.as_str() {
+            "command" => spec.command = Some(text(&v)?),
+            "name" => spec.name = Some(text(&v)?),
+            "session" => spec.session = Some(text(&v)?),
+            "workspace_name" => spec.workspace_name = Some(text(&v)?),
+            "cwd" => {
+                let c = text(&v)?;
+                let path = match c.strip_prefix("~") {
+                    Some(rest) if rest.is_empty() || rest.starts_with('/') => {
+                        let home =
+                            dirs::home_dir().ok_or_else(|| bad(&k, "has `~` and no home"))?;
+                        home.join(rest.trim_start_matches('/'))
+                    }
+                    _ => PathBuf::from(&c),
+                };
+                // ranma's own directory means nothing to a plugin.
+                if !path.is_absolute() {
+                    return Err(bad(&k, "must be absolute or start with `~/`"));
+                }
+                spec.cwd = Some(path);
+            }
+            "workspace" => {
+                let w = match &v {
+                    Value::Integer(n) => n.to_string(),
+                    _ => text(&v)?,
+                };
+                spec.workspace =
+                    Some(crate::action::parse_workspace(&w).map_err(|e| bad(&k, &e.to_string()))?);
+            }
+            "accent" => {
+                spec.accent = Some(
+                    text(&v)?
+                        .parse::<crate::theme::Color>()
+                        .map_err(|e| bad(&k, &e.to_string()))?,
+                )
+            }
+            "background" => match v {
+                Value::Boolean(b) => spec.background = b,
+                _ => return Err(bad(&k, "must be true or false")),
+            },
+            "float" => {
+                let pct = |v: Value| match v {
+                    Value::Integer(n) if (10..=100).contains(&n) => Some(n as u8),
+                    _ => None,
+                };
+                let size = match v {
+                    Value::Table(wh) if wh.raw_len() == 2 => {
+                        pct(wh.raw_get(1)?).zip(pct(wh.raw_get(2)?))
+                    }
+                    one @ Value::Integer(_) => pct(one).map(|n| (n, n)),
+                    _ => None,
+                };
+                spec.float = Some(size.ok_or_else(|| {
+                    bad(
+                        &k,
+                        "is { width, height } (or one number for both), each 10-100 percent",
+                    )
+                })?);
+            }
+            "beside" => match v {
+                Value::Integer(n) if n > 0 => {
+                    spec.beside = Some((n as u64, crate::action::Dir::Right))
+                }
+                _ => return Err(bad(&k, "must be a pane id")),
+            },
+            "side" => side = Some(text(&v)?),
+            _ => {
+                return Err(rt_err(format!(
+                    "ranma.open: unknown option `{k}` (expected command, cwd, name, session, \
+                     workspace, workspace_name, accent, background, float, beside, side)"
+                )));
+            }
+        }
+    }
+    if let Some(side) = side {
+        let Some((pane, _)) = spec.beside else {
+            return Err(bad("side", "needs `beside`"));
+        };
+        match format!("new_pane {side}").parse() {
+            Ok(Action::NewPaneAt(d)) => spec.beside = Some((pane, d)),
+            _ => {
+                return Err(bad(
+                    "side",
+                    &format!("`{side}` is not left, right, up or down"),
+                ));
+            }
+        }
+    }
+    Ok(spec)
 }
 
 /// The error for a function that builds the configuration called once it has
@@ -1718,6 +1827,7 @@ pub const CAPABILITIES: &[&str] = &[
     "hook.workspace_rename",
     "module.nested",
     "mouse",
+    "open",
     "pane.style",
     "placement",
     "rule.group",
@@ -2560,6 +2670,18 @@ fn install_api(
                 )
             })?;
             rt.ops.push(Op::Action(action));
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "open",
+        lua.create_function(|lua, t: Table| {
+            let spec = open_spec(&t)?;
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.open only works inside binds, hooks and modules, not at config load")
+            })?;
+            rt.ops.push(Op::Open(Box::new(spec)));
             Ok(())
         })?,
     )?;
