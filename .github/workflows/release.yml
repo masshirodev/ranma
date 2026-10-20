@@ -7,7 +7,7 @@
 # linked against or newer, and 22.04's 2.35 is older than every current distro
 # (a build on Arch asks for whatever Arch has, 2.44 at the time of writing).
 # Every channel ships these binaries (two for Linux, two for macOS on its own
-# runners); nothing is built twice.
+# runners, one for Termux cross-built with the NDK); nothing is built twice.
 # workflow_dispatch builds and tests everything without publishing.
 name: release
 
@@ -33,6 +33,10 @@ jobs:
             runner: macos-15
           - target: x86_64-apple-darwin
             runner: macos-15-intel
+          # Termux: cross-built with the runner's NDK, a tarball for install.sh
+          # (ROADMAP 16). Nothing here can run it; it was tested on a tablet.
+          - target: aarch64-linux-android
+            runner: ubuntu-22.04
     runs-on: ${{ matrix.runner }}
     env:
       TARGET: ${{ matrix.target }}
@@ -44,7 +48,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.target != 'aarch64-linux-android'
         with:
           tool: cargo-deb,cargo-generate-rpm
 
@@ -61,13 +65,21 @@ jobs:
         run: scripts/changelog.sh "${GITHUB_REF_NAME#v}" >/dev/null
 
       - name: Test
+        if: matrix.target != 'aarch64-linux-android'
         run: cargo test --locked --quiet
       - name: Build
-        run: cargo build --locked --release --target "$TARGET"
+        run: |
+          case "$TARGET" in
+            *-linux-android) packaging/android.sh ;;
+            *) cargo build --locked --release --target "$TARGET" ;;
+          esac
       - name: Package
         run: |
           packaging/package.sh "$TARGET"
-          "target/$TARGET/release/ranma" --version
+          case "$TARGET" in
+            *-linux-android) ;;
+            *) "target/$TARGET/release/ranma" --version ;;
+          esac
 
       - uses: actions/upload-artifact@v4
         with:

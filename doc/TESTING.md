@@ -292,6 +292,24 @@ seconds in a `script` PTY. The release workflow runs `deb rpm script brew` on an
 x86_64 and an arm64 runner and `repo` on x86_64 before it publishes anything.
 `build.sh` keeps its caches on `/mnt/hdd2/ranma-pkgtest` when that exists.
 
+## On Android
+
+No runner can start the Termux build (`aarch64-linux-android`), so release.yml
+only builds and packages it, and a change to the Android half of `src/os/` or
+to how it is built is checked on a device. On the workstation:
+
+```sh
+packaging/android.sh && packaging/package.sh aarch64-linux-android
+```
+
+then, in Termux on the device, `install.sh` from the tarball
+(`RANMA_INSTALL_FROM=DIR sh install.sh --prefix DIR --no-upgrade`, so the
+device's own ranma stays) and `scripts/smoke.sh` with that binary as
+`target/release/ranma` and a `cargo` on `PATH` that does nothing. Copy over
+`ssh host 'cat > file' < file`: Termux's sshd has no SFTP server, so `scp`
+hangs. Last run 2026-10-20 on a Xiaomi Pad 5 (Termux, kernel 4.14): installed,
+`--check-config` with hako and mobile.ranma, `smoke: ok`, idle 0 ticks.
+
 ## By hand
 
 Not covered by any automated check: the `hover` event. tmux cannot send

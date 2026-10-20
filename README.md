@@ -92,16 +92,33 @@ you add, installed with one key. A few to start from:
 
 ## Install
 
-Release builds run on any Linux with glibc 2.34 or newer (Ubuntu 22.04,
-Debian 12, Fedora 35, RHEL 9 and later), on x86_64 and aarch64.
-
-Any distro, into `~/.local` (or `/usr/local` as root); run it again to update:
+Linux (x86_64, aarch64), macOS (Apple silicon, Intel) and Android in Termux
+(aarch64), into `~/.local` (`/usr/local` as root, `$PREFIX` in Termux). Run it
+again to update:
 
 ```sh
 curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh
 ```
 
-Debian and Ubuntu, from the apt repository:
+Or with a package manager. Every channel ships the same release binary,
+except `cargo install` and Nix, which build it:
+
+| Where | How |
+| --- | --- |
+| Debian, Ubuntu | the apt repository, below |
+| Fedora, RHEL, openSUSE | the dnf repository, below |
+| Homebrew (macOS, Linux) | `brew install masshirodev/tap/ranma` |
+| Nix | `nix run github:masshirodev/ranma`, or the flake's `packages.<system>.default` / `overlays.default` |
+| Rust | `cargo binstall ranma` (the binary) or `cargo install ranma` (built) |
+| npm | `npm install -g @masshirodev/ranma` (Node stays running beside each client) |
+| By hand | each [release](https://github.com/masshirodev/ranma/releases) has the tarballs, `.deb` and `.rpm` |
+
+Arch: the AUR's `ranma-bin` and `ranma-git` are written
+([`packaging/aur/`](packaging/aur)) but not published yet; until they are, use
+the install script, Homebrew or a build from source.
+
+<details>
+<summary>The apt repository (Debian 12+, Ubuntu 22.04+)</summary>
 
 ```sh
 sudo install -d /etc/apt/keyrings
@@ -111,36 +128,35 @@ echo "deb [signed-by=/etc/apt/keyrings/ranma.asc] https://masshirodev.github.io/
 sudo apt update && sudo apt install ranma
 ```
 
-Fedora, RHEL and openSUSE, from the dnf repository:
+</details>
+
+<details>
+<summary>The dnf repository (Fedora, RHEL 9+, openSUSE)</summary>
 
 ```sh
 sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ranma/ranma.repo
-sudo dnf install ranma      # openSUSE: sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma
+sudo dnf install ranma
+# openSUSE:
+sudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma
 ```
 
-Homebrew (Linux, and macOS from 0.3.0): `brew install masshirodev/tap/ranma`.
+</details>
 
-Arch, from the AUR: `ranma-bin` (the release binary).
+### After an upgrade
 
-Nix: `nix run github:masshirodev/ranma`, or `packages.<system>.default` /
-`overlays.default` of the flake in a NixOS or home-manager config.
-
-Rust users: `cargo binstall ranma` (the release binary) or `cargo install
-ranma` (built). npm: `npm install -g @masshirodev/ranma` (Node stays running
-beside each client; the others do not need it).
-
-Or by hand: each [release](https://github.com/masshirodev/ranma/releases) has
-the tarball, `.deb` and `.rpm` for both architectures. Put `ranma` on your
-`PATH` and the `man/` pages under a `share/man` beside it.
-
-A package manager replaces the binary but skips what `install.sh` does after
-an upgrade. Run it yourself:
+The install script and `./install.sh` check the new binary against your config
+and put the previous one back if it is rejected, so a terminal that starts
+ranma never falls back to a plain shell; then they move running servers onto
+the new build. A package manager replaces the binary and does neither, so run
+it yourself:
 
 ```sh
-ranma --check-config && ranma upgrade --all   # check the new build, then move running servers onto it
+ranma --check-config && ranma upgrade --all   # shells and scrollback stay
 ```
 
-From source:
+### From source
+
+Needs Rust 1.88 or newer and a C compiler (ranma builds its Lua from source).
 
 ```sh
 ./install.sh            # build, install to ~/.cargo/bin, check it against your config
@@ -148,50 +164,52 @@ From source:
 ./install.sh --uninstall
 ```
 
-**Linux and macOS** (macOS from 0.3.0, arm64 and Intel). WSL2 works, and so
-does Android in [Termux](https://termux.dev), built from source there (`pkg
-install rust` and the `./install.sh` above; no release binary, since Termux
-is not glibc). The BSDs and native Windows do not: what ranma asks the OS
-about a pane (its program, its directory) is answered by `/proc` on Linux and
-libproc on macOS, and nothing else is written yet (doc/DESIGN.md, "Linux and
-macOS, not native Windows").
+### Platforms
 
-On Android, the cpu module stays empty (the system keeps `/proc/stat` from
-apps), and Android 12 and later may kill a server left running in the
-background; turn off the phantom process killer (`adb shell
-"settings put global settings_enable_monitor_phantom_procs false"`) if a
-detached ranma does not survive.
+- **Linux** with glibc 2.34 or newer for the release binary (Ubuntu 22.04,
+  Debian 12, Fedora 35, RHEL 9 and later); musl systems such as Alpine build
+  from source. WSL2 works.
+- **macOS**, arm64 and Intel. The binaries are not notarised; Homebrew and the
+  install script do not quarantine them.
+- **Android, in [Termux](https://termux.dev)**, aarch64 (release binaries
+  from 0.5.0; before that, or on other architectures, `pkg install rust` and
+  build from source). The cpu module stays empty, since Android keeps
+  `/proc/stat` from apps. Android 12 and later may kill a server left running
+  in the background; turn off the phantom process killer (`adb shell
+  "settings put global settings_enable_monitor_phantom_procs false"`) if a
+  detached ranma does not survive.
+- **Not** the BSDs or native Windows: what ranma asks the OS about a pane (its
+  program, its directory) is answered by `/proc` on Linux and libproc on
+  macOS, and nothing else is written yet (doc/DESIGN.md, "Linux and macOS, not
+  native Windows").
 
-Needs Rust 1.88 or newer (`cargo`) and a C compiler (ranma builds its Lua from
-source). Optional, at run time:
+Optional, at run time:
 
 - `wl-paste` (wl-clipboard) or `xclip` for `paste_image` on Wayland or X11;
-  under WSL it uses `powershell.exe`, and on macOS `osascript`, which is
-  always there. Any other command can be set with
-  `paste.image_command`.
+  under WSL it uses `powershell.exe`, and on macOS `osascript`. Any other
+  command can be set with `paste.image_command`.
 - OpenSSH (`ssh`) on both ends for pasting files into a pane that runs ssh.
 - `xdg-open` for opening links from hint mode.
+- `git`, for hako, the plugin manager, to clone itself.
 - `tmux`, only for the smoke test (`scripts/smoke.sh`).
 
-After installing, the new binary is run against your config; if it rejects it,
-the previous binary is put back, so a terminal that starts ranma never falls
-back to a plain shell because of an upgrade. Running instances keep the old binary until
-they exit.
+### Then
 
-Then start it with `ranma` (or from your shell startup: see
-[`doc/CONFIG.md`](doc/CONFIG.md)), and see [First steps](#first-steps) for the keys.
+Start it with `ranma` (or from your shell startup: see
+[`doc/CONFIG.md`](doc/CONFIG.md)), and see [First steps](#first-steps) for the
+keys.
 
 ```sh
 ranma --dump-config    # the default init.lua, which documents every option
 ranma --check-config   # validate ~/.config/ranma/init.lua and its theme
 ```
 
-The install also puts man pages beside the binary, in `~/.cargo/share/man`
-(man-db finds them there by itself; with mandoc, the install says what to
-add to `MANPATH`):
-`man ranma` (the commands), `man 5 ranma` (the configuration, which is
-`doc/CONFIG.md`) and `man ranma-keys` (the default keys). They are generated
-and committed in [`doc/man/`](doc/man).
+Every install puts the man pages beside the binary (`share/man`): `man ranma`
+(the commands), `man 5 ranma` (the configuration, which is `doc/CONFIG.md`)
+and `man ranma-keys` (the default keys). They are generated and committed in
+[`doc/man/`](doc/man).
+
+## Documentation
 
 - [`doc/DESIGN.md`](doc/DESIGN.md): what ranma is, what it refuses to be, and why
 - [`doc/CONFIG.md`](doc/CONFIG.md): the configuration and theme reference
