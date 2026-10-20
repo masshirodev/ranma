@@ -27,6 +27,17 @@ binaries are not signed or notarised. Homebrew and a `curl | sh` install do not
 quarantine what they download, so Gatekeeper does not stop them, while a
 tarball opened from a browser would need `xattr -d com.apple.quarantine`.
 
+For Termux (`aarch64-linux-android`), only the tarball and its `.sha256`, for
+`install.sh` (which installs into Termux's `$PREFIX`) and `cargo binstall`.
+`packaging/android.sh` cross-builds it on ubuntu-22.04 with the runner's
+Android NDK (`$ANDROID_NDK_LATEST_HOME`), linked against API 24, the oldest
+Android Termux installs on; it links only bionic's `libc`, `libm` and `libdl`.
+Nothing in the workflow can run it, so its tests and `--version` are skipped
+there: a change to the Android half is tested on a device (doc/TESTING.md,
+"On Android"). On the workstation, `packaging/android.sh` finds the NDK under
+`~/Android/Sdk/ndk`, and `packaging/package.sh aarch64-linux-android` makes the
+tarball.
+
 The tarball holds:
 
 - `ranma`, the binary. Everything else it needs at run time is compiled in

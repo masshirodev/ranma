@@ -318,7 +318,7 @@ daily-driver set (nested ranma over SSH, an upgrade in place, the bar's cpu and
 mem) by hand on a Mac. The first half passes (2026-10-13: the suite and the
 smoke on macos-15 and macos-15-intel in ci.yml); the second waits for a Mac.
 
-- [ ] A Homebrew tap serving the Linux release binaries, bumped by release.yml
+- [x] A Homebrew tap serving the release binaries (Linux and macOS), bumped by release.yml
 - [x] `src/os/`: everything that reads `/proc` or opens a pidfd behind one
   module, Linux unchanged
 - [x] The macOS half: foreground program, command line and directory from
@@ -343,5 +343,5 @@ macOS, not native Windows" records what differs.
 - [x] The desk's ranma inside the phone's: one toolbar (mobile.ranma's
   `mobile_nested`), whose buttons follow the focus into the inner ranma
   (`toolbar_target`, c369)
-- [ ] Release binaries for Termux (`aarch64-linux-android`), or a Termux
-  package
+- [x] Release binaries for Termux (`aarch64-linux-android`): cross-built with
+  the NDK (`packaging/android.sh`), installed by `install.sh` into `$PREFIX`

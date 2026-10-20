@@ -4,7 +4,8 @@
 #   ranma-<version>-<target>.tar.gz (+ .sha256)   the tarball: AUR ranma-bin,
 #                                                 install.sh, cargo binstall,
 #                                                 Homebrew (the only file for
-#                                                 an apple-darwin target)
+#                                                 an apple-darwin or Android
+#                                                 target)
 #   ranma_<version>-1_<arch>.deb                  apt, and by hand
 #   ranma-<version>-1.<arch>.rpm                  dnf and zypper, and by hand
 #
@@ -35,6 +36,11 @@ case "$target" in
   *-apple-darwin)
     # A tarball only: Homebrew and install.sh unpack it.
     otool -L "$bin"
+    ;;
+  *-linux-android)
+    # A tarball only, for Termux: install.sh unpacks it. What it links should
+    # be bionic's libc, libm and libdl, which every Android has.
+    readelf -d "$bin" | grep NEEDED
     ;;
   *)
     cargo deb --no-build --no-strip --target "$target" --output dist/

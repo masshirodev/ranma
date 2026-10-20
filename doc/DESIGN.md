@@ -3298,7 +3298,11 @@ Rust, for predictable latency without a GC, and for the emulator:
   linked on ubuntu-22.04, so a bug report from any of them is about the same
   build, and each channel costs packaging, not a build of its own. The
   exceptions build from source because that is what they are: `ranma-git`,
-  `cargo install`, and Nix (nixpkgs builds everything itself). The
+  `cargo install`, and Nix (nixpkgs builds everything itself). Termux gets
+  a release binary too (2026-10-20), cross-built with the Android NDK for
+  API 24 and shipped as a tarball that `install.sh` puts in `$PREFIX`: one
+  more target, not a channel, so no Termux package and no repository for one
+  (termux-packages takes projects it already knows, as homebrew-core does). The
   repositories are on GitHub Pages, rebuilt whole from the last three
   releases on each tag, so there is no branch of old binaries to keep and
   nothing to run besides GitHub. Distributions' own archives (Debian, Fedora,

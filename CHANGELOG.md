@@ -19,6 +19,9 @@ commit log has the detail.
   the kernels Android tablets ship (4.14 included, which has no
   `pidfd_open`). The cpu module stays empty, since Android keeps
   `/proc/stat` from apps. The README's install section has the details.
+- A release binary for Termux (`aarch64-linux-android`): `curl -fsSL
+  https://masshirodev.github.io/ranma/install.sh | sh` in Termux installs it
+  into `$PREFIX`, and `cargo binstall ranma` finds it too.
 - Toolbar buttons follow the focus into a ranma inside: with the desk's
   ranma in a pane of the phone's own, `focus next`, `new_pane`, `leader` and
   the other pane and workspace actions act on the desk's (CONFIG.md,

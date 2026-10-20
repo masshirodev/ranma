@@ -1,13 +1,13 @@
 #!/bin/sh
 # Install ranma from its latest release, for any Linux with glibc 2.34 or newer,
-# and macOS:
+# macOS, and Android in Termux (aarch64):
 #
 #   curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh
 #
 # Options, after `sh -s --` when piped:
 #   --version X.Y.Z   that release instead of the latest
 #   --prefix DIR      install to DIR/bin and DIR/share/man (default ~/.local,
-#                     or /usr/local when run as root)
+#                     or /usr/local when run as root, or $PREFIX in Termux)
 #   --no-upgrade      leave running servers on their old build
 #   --uninstall       remove what this script installed
 #
@@ -87,8 +87,17 @@ main() {
     esac
     shift
   done
+  # Termux's own prefix is on its PATH and MANPATH; ~/.local is on neither.
+  android=0
+  [ "$(uname -o 2>/dev/null)" = Android ] && android=1
   if [ -z "$prefix" ]; then
-    if [ "$(id -u)" -eq 0 ]; then prefix=/usr/local; else prefix="$HOME/.local"; fi
+    if [ "$android" -eq 1 ] && [ -n "${PREFIX:-}" ]; then
+      prefix="$PREFIX"
+    elif [ "$(id -u)" -eq 0 ]; then
+      prefix=/usr/local
+    else
+      prefix="$HOME/.local"
+    fi
   fi
   bin_dir="$prefix/bin"
   man_dir="$prefix/share/man"
@@ -102,7 +111,7 @@ main() {
   fi
 
   case "$(uname -s)" in
-    Linux) os=unknown-linux-gnu ;;
+    Linux) if [ "$android" -eq 1 ]; then os=linux-android; else os=unknown-linux-gnu; fi ;;
     Darwin) os=apple-darwin ;;
     *) fail "ranma runs on Linux and macOS; WSL2 works. Build from source: $repo#install" ;;
   esac
@@ -111,7 +120,10 @@ main() {
     aarch64 | arm64) target="aarch64-$os" ;;
     *) fail "no release build for $(uname -m). Build from source: $repo#install" ;;
   esac
-  [ "$os" = apple-darwin ] || check_libc
+  if [ "$os" = linux-android ] && [ "$target" != aarch64-linux-android ]; then
+    fail "the Termux build is aarch64 only. Build from source: $repo#install"
+  fi
+  if [ "$os" = unknown-linux-gnu ]; then check_libc; fi
   command -v tar >/dev/null || fail "needs tar"
 
   # A package manager's ranma first on PATH would hide this one.
