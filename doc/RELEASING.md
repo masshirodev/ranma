@@ -3,8 +3,8 @@
 A release is a `v*` tag. `.github/workflows/release.yml` builds it for x86_64
 and aarch64, installs every package on the distros it is for, and publishes:
 the GitHub release, the apt and dnf repositories on GitHub Pages, the
-Homebrew tap, crates.io and npm. The AUR packages in `packaging/aur/` are
-updated from it by hand.
+Homebrew tap, crates.io and npm. The AUR's `ranma-bin` follows it, packaged
+by someone else ("The AUR packages").
 
 ## What a release contains
 
@@ -91,7 +91,8 @@ from source and updates as before (`doc/CONFIG.md`, "Updating").
    test is not run again there: CI (`.github/workflows/ci.yml`) ran it on
    every push to `main`, so wait for it to be green on the commit you tag.
 4. Approve the staged npm versions ("The other channels", npm).
-5. Update the AUR packages (below).
+5. Nothing for the AUR: `ranma-bin` is its maintainer's to bump, and
+   `ranma-git` follows `main` by itself ("The AUR packages").
 
 To try everything without releasing, run the workflow by hand
 (`gh workflow run release.yml`): it builds and install-tests every package as
@@ -173,10 +174,21 @@ moves nixpkgs forward. `packaging/test/run.sh nix` builds it in a container.
 
 ## The AUR packages
 
-`packaging/aur/` holds the two packages, each a directory that is the whole
-AUR repository: `PKGBUILD`, `ranma.install` and the generated `.SRCINFO`.
+**`ranma-bin` on the AUR is not ours.** Rafael Dominiquini submitted it on
+2026-10-11, while AUR account creation was closed to us, and keeps it current
+(0.4.0 the day it was released). It installs the same x86_64 release tarball,
+so a bug report from it is about the release build. It differs from
+`packaging/aur/ranma-bin` in having no aarch64 and no `ranma.install`, so
+pacman upgrades without the note below. Both are things to offer its
+maintainer (an AUR comment, or a request to co-maintain), not reasons to
+submit a second package. `ranma-git` is still free on the AUR and ours to
+publish once there is an account.
 
-- **ranma-bin** installs the release tarball. After each release, set
+`packaging/aur/` holds our two packages, each a directory that is the whole
+AUR repository: `PKGBUILD`, `ranma.install` and the generated `.SRCINFO`.
+`ranma-bin` there is the reference for what we would like the AUR's to do.
+
+- **ranma-bin** installs the release tarball. To test it after a release, set
   `pkgver`, reset `pkgrel=1`, put the release's sha256 in `sha256sums`, and
   regenerate `.SRCINFO` (`makepkg --printsrcinfo > .SRCINFO`).
 - **ranma-git** builds `main` with cargo. Its `pkgver()` computes the version,
