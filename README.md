@@ -107,15 +107,12 @@ except `cargo install` and Nix, which build it:
 | --- | --- |
 | Debian, Ubuntu | the apt repository, below |
 | Fedora, RHEL, openSUSE | the dnf repository, below |
+| Arch (AUR) | `ranma-bin` (x86_64), maintained by Rafael Dominiquini |
 | Homebrew (macOS, Linux) | `brew install masshirodev/tap/ranma` |
 | Nix | `nix run github:masshirodev/ranma`, or the flake's `packages.<system>.default` / `overlays.default` |
 | Rust | `cargo binstall ranma` (the binary) or `cargo install ranma` (built) |
 | npm | `npm install -g @masshirodev/ranma` (Node stays running beside each client) |
 | By hand | each [release](https://github.com/masshirodev/ranma/releases) has the tarballs, `.deb` and `.rpm` |
-
-Arch: the AUR's `ranma-bin` and `ranma-git` are written
-([`packaging/aur/`](packaging/aur)) but not published yet; until they are, use
-the install script, Homebrew or a build from source.
 
 <details>
 <summary>The apt repository (Debian 12+, Ubuntu 22.04+)</summary>
@@ -215,7 +212,7 @@ and `man ranma-keys` (the default keys). They are generated and committed in
 - [`doc/CONFIG.md`](doc/CONFIG.md): the configuration and theme reference
 - [`doc/ROADMAP.md`](doc/ROADMAP.md): milestones
 - [`doc/TESTING.md`](doc/TESTING.md): what to run, and what each check proves
-- [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and the AUR packages
+- [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and every channel it reaches
 - [`doc/examples/`](doc/examples): whole configurations to copy, the screenshot's among them
 - [`scripts/demo/README.md`](scripts/demo/README.md): re-recording the gif above
 
