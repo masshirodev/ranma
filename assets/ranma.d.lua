@@ -50,7 +50,7 @@ ranma.config_dir = nil
 ---@field nested? "auto"|"off"
 ---@field outer_leader? string
 ---@field title_host? "ssh"|"always"|"never"
----@field theme_colors? "own"|"outer"
+---@field theme_colors? "own"|"outer"|"inner"
 ---@field restore? "ask"|"off"
 ---@field pane_idle? number Seconds a printing pane must stay quiet for pane_idle, 0.5-3600.
 ---@field remain_on_exit? "off"|"failed"|"on" Whether a pane stays when its program ends.

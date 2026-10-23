@@ -423,7 +423,10 @@ pub struct App {
     toolbar_here: bool,
     /// The colours the ranma around the attached client sent (see `nested`).
     outer_colors: Option<serde_json::Map<String, serde_json::Value>>,
-    /// The theme's own colours while the outer's are drawn instead.
+    /// The colours the ranma in the focused pane reported, while
+    /// `theme_colors = "inner"` draws with them (see `nested`).
+    inner_colors: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The theme's own colours while another ranma's are drawn instead.
     own_colors: Option<crate::theme::Colors>,
     /// The pane drawn without a border last time (see `frameless`).
     frameless_was: Option<PaneId>,
@@ -572,6 +575,7 @@ impl App {
             click_token: crate::nestbar::new_click_token(),
             toolbar_here: false,
             outer_colors: None,
+            inner_colors: None,
             own_colors: None,
             frameless_was: None,
             hako_clone: None,
@@ -6474,6 +6478,71 @@ mod tests {
         a.set_outer_colors(None);
         assert_eq!(a.config.theme.colors.border_active, mine);
         assert!(a.dirty);
+    }
+
+    /// `theme_colors = "inner"` draws with the colours the ranma in the
+    /// focused pane reports, its own theme's again once focus leaves that
+    /// pane; and the report passes the innermost's colours on, at its top
+    /// level only.
+    #[test]
+    fn the_focused_inners_colours_are_taken_when_asked_for() {
+        use crate::theme::Color;
+        let (mut a, id) = with_ranma_inside("ranma.set { theme_colors = 'inner' }");
+        let mine = a.config.theme.colors.clone();
+        let report = |colors: Option<serde_json::Map<String, serde_json::Value>>| {
+            let mut r = crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{},"ws":[{{"n":1}}]}}"#,
+                crate::nestbar::PROTOCOL
+            ))
+            .unwrap();
+            r.colors = colors;
+            r
+        };
+        let mut theirs = mine.clone();
+        theirs.border_active = Color::Rgb(9, 8, 7);
+        theirs.bar_bg = Color::Rgb(1, 2, 3);
+        let wire = serde_json::to_value(&theirs).unwrap().as_object().cloned();
+
+        // An inner too old to send colours leaves this theme's.
+        a.reports.insert(id, report(None));
+        a.follow_inner_colors();
+        assert_eq!(a.config.theme.colors.border_active, mine.border_active);
+        let sent = a.own_report().colors.expect("its own theme's");
+        assert_eq!(
+            sent["border_active"],
+            serde_json::to_value(mine.border_active).unwrap()
+        );
+
+        a.reports.insert(id, report(wire.clone()));
+        a.dirty = false;
+        a.follow_inner_colors();
+        assert_eq!(a.config.theme.colors.border_active, Color::Rgb(9, 8, 7));
+        assert_eq!(a.config.theme.colors.bar_bg, Color::Rgb(1, 2, 3));
+        assert!(a.dirty);
+        // Passed on outward as the innermost's, and only at the top.
+        let out = a.own_report();
+        assert_eq!(out.colors.unwrap()["border_active"], "#090807");
+        let nest = out.ws.iter().find_map(|w| w.nest.as_ref()).unwrap();
+        assert!(nest.colors.is_none());
+
+        // Focus leaves the pane: this theme's own come back.
+        let ws = a.current;
+        a.workspaces.get_mut(&ws).unwrap().focused = Some(id + 100);
+        a.follow_inner_colors();
+        assert_eq!(a.config.theme.colors.border_active, mine.border_active);
+        assert_eq!(a.config.theme.colors.bar_bg, mine.bar_bg);
+        a.workspaces.get_mut(&ws).unwrap().focused = Some(id);
+        a.follow_inner_colors();
+        assert_eq!(a.config.theme.colors.border_active, Color::Rgb(9, 8, 7));
+
+        // `"outer"` and `"own"` never take them.
+        for setting in ["outer", "own"] {
+            let (mut b, id) =
+                with_ranma_inside(&format!("ranma.set {{ theme_colors = '{setting}' }}"));
+            b.reports.insert(id, report(wire.clone()));
+            b.follow_inner_colors();
+            assert_eq!(b.config.theme.colors.border_active, mine.border_active);
+        }
     }
 
     /// Inside another ranma, `paste_image` is the outer one's to do: the

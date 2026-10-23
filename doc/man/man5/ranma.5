@@ -262,7 +262,7 @@ What \fBpaste_image\fR reads an image off the clipboard with: a shell command wr
 \fBtheme_colors\fR
 Default: \fB"own"\fR
 .br
-\fB"outer"\fR: inside another ranma, draw with its \fB[colors]\fR rather than this theme's. See ranma inside ranma\fR.
+\fB"outer"\fR: inside another ranma, draw with its \fB[colors]\fR rather than this theme's. \fB"inner"\fR: while the focused pane holds a ranma, draw with that one's. See ranma inside ranma\fR.
 .TP
 \fBrestore\fR
 Default: \fB"ask"\fR
@@ -1138,6 +1138,18 @@ They are sent at attach and never later (after that, what reaches the
 client is read as keys), so a theme changed on the outer shows here at the
 next attach. A terminal with no ranma around it gets this theme's own
 colours back. \fB"own"\fR (the default) never takes them.
+.IP \(bu 2
+\fBtheme_colors = "inner"\fR is the other direction: while the focused pane
+holds a ranma, this one draws its whole frame (borders, bar, floats,
+pickers, toasts) with that ranma's \fB[colors]\fR, and with its own theme's
+again as soon as focus moves to a pane without one. The ranma inside sends
+them in its report, so unlike \fB"outer"\fR they follow at once: a theme
+changed in there, or focus moving deeper, shows here on the next report.
+In a chain the innermost ranma on the focus path wins (each level passes
+on the colours from further in, or its own theme's). As with \fB"outer"\fR,
+only \fB[colors]\fR move, a role the inner does not send keeps this theme's
+colour, and a pane's own colours (\fBranma.rule\fR) still win. An inner older
+than this setting sends none, and this theme's colours stay.
 .SH "MOUSE"
 .PP
 With \fBmouse = "click"\fR (the default) or \fB"hover"\fR, ranma takes the mouse from your

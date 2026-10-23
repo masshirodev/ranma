@@ -139,6 +139,10 @@ ranma.set {
   -- Only colours: borders, styles and the bar's shape stay this theme's, and
   -- a terminal with no ranma around it gets this theme's colours back.
   -- (Needs nested = "auto" on the outer one, and an outer from 2026-10-08 on.)
+  -- "inner" is the other way round: while the focused pane holds a ranma
+  -- (over ssh, say), the whole frame here takes that ranma's [colors], the
+  -- innermost one's in a chain, and gets this theme's back when focus
+  -- leaves it. (Needs nested = "auto" here, and an inner from 2026-10-23 on.)
   theme_colors = "own",
 
   -- A server keeps a snapshot of its sessions, layouts, directories and

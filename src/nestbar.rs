@@ -112,6 +112,14 @@ pub struct Report {
     /// buttons itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<String>,
+    /// The `[colors]` of the innermost ranma on its focus path, its own
+    /// theme's when none further in sent any, spelt as `colors_osc` spells
+    /// them: an outer with `theme_colors = "inner"` draws with these while
+    /// this ranma's pane has focus. Only the report's top level carries them
+    /// (a nested copy goes without), so a chain costs one set however deep.
+    /// An outer that does not know the field ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 const CLICK_WORD: &str = "ranma-click";
@@ -954,6 +962,7 @@ mod tests {
             clicks: Vec::new(),
             click_token: String::new(),
             actions: Vec::new(),
+            colors: None,
         }
     }
 
