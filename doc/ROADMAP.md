@@ -132,6 +132,9 @@ an outer shows it.
   `S` as a workspace holds one: expanded while shown, counted while hidden
 - [x] `theme_colors = "outer"`: an inner ranma draws with the outer's
   `[colors]`, sent with the answer at attach and laid over its own leniently
+- [x] `theme_colors = "inner"`: the outer draws with the focused inner's
+  `[colors]`, carried in its report (the innermost's, relayed one level at a
+  time) and dropped when focus leaves it
 - [x] `pane_strip` shows the panes of the innermost ranma on the path with
   two or more, from the report's `panes`
 - [x] Bar modules follow the nested path: the report's `modules`, drawn in

@@ -166,7 +166,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `wm_mode.hint_at` | `"bar"` | Where the which-key hint stands: `"bar"` (on the bar from its left end, by the mode), or `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` of the space the panes use, clear of the bar. A user mode may set its own. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout. It reads images only. Unset: `powershell.exe` under WSL, the pasteboard through `osascript` on macOS (nothing to install), `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
-| `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. See [ranma inside ranma](#ranma-inside-ranma). |
+| `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. `"inner"`: while the focused pane holds a ranma, draw with that one's. See [ranma inside ranma](#ranma-inside-ranma). |
 | `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
 | `pane_idle` | `5` | Seconds a pane that was printing must stay quiet before the `pane_idle` hook hears of it, 0.5-3600. See [Hooks](#hooks--ranmaonevent-fn). |
 | `remain_on_exit` | `"off"` | tmux's `remain-on-exit`: whether a pane stays when its program ends. `"off"` closes it; `"failed"` keeps it when the status is not 0 or a signal ended it; `"on"` always. A pane that stays keeps what it printed, with ` [exited 3] ` (or `[killed by signal 9]`) under it; in it, Enter runs the same command again in the directory it first started in, `q` closes it, other keys go nowhere. `ranma wait` answers when the program ends, not when the pane closes. Panes that stayed close when the server upgrades: their PTY is gone. |
@@ -772,6 +772,17 @@ Over SSH, three levels deep, each machine starting ranma: with
   client is read as keys), so a theme changed on the outer shows here at the
   next attach. A terminal with no ranma around it gets this theme's own
   colours back. `"own"` (the default) never takes them.
+- `theme_colors = "inner"` is the other direction: while the focused pane
+  holds a ranma, this one draws its whole frame (borders, bar, floats,
+  pickers, toasts) with that ranma's `[colors]`, and with its own theme's
+  again as soon as focus moves to a pane without one. The ranma inside sends
+  them in its report, so unlike `"outer"` they follow at once: a theme
+  changed in there, or focus moving deeper, shows here on the next report.
+  In a chain the innermost ranma on the focus path wins (each level passes
+  on the colours from further in, or its own theme's). As with `"outer"`,
+  only `[colors]` move, a role the inner does not send keeps this theme's
+  colour, and a pane's own colours (`ranma.rule`) still win. An inner older
+  than this setting sends none, and this theme's colours stay.
 
 ## Mouse
 

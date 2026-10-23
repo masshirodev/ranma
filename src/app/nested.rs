@@ -22,6 +22,15 @@ use crate::nestbar::{self, Report, Ws};
 
 type PlaceFn = fn(&Report, &str, u16, PaneId) -> Option<(u16, usize, Segment)>;
 
+/// A report as it goes into this ranma's own, under a workspace: without its
+/// colours, which only the top level carries (`Report::colors`).
+fn nest_copy(r: &Report) -> Box<Report> {
+    Box::new(Report {
+        colors: None,
+        ..r.clone()
+    })
+}
+
 /// A pane's compact label, placed (see `App::nest_labels`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct NestLabel {
@@ -127,10 +136,7 @@ impl App {
                     urgent,
                     activity,
                     key: keys.get(&n).cloned(),
-                    nest: focused
-                        .and_then(|f| self.report_of(f))
-                        .cloned()
-                        .map(Box::new),
+                    nest: focused.and_then(|f| self.report_of(f)).map(nest_copy),
                 }
             })
             .collect();
@@ -157,8 +163,7 @@ impl App {
                 .scratch
                 .focused
                 .and_then(|f| self.report_of(f))
-                .cloned()
-                .map(Box::new),
+                .map(nest_copy),
             mode: match (self.mode, self.hints.is_some()) {
                 (Mode::Wm, _) => "wm",
                 (Mode::Copy, _) => {
@@ -210,6 +215,17 @@ impl App {
                 .iter()
                 .map(|a| a.to_string())
                 .collect(),
+            colors: self
+                .focused()
+                .and_then(|f| self.report_of(f))
+                .and_then(|r| r.colors.clone())
+                .or_else(|| {
+                    let own = self
+                        .own_colors
+                        .as_ref()
+                        .unwrap_or(&self.config.theme.colors);
+                    serde_json::to_value(own).ok()?.as_object().cloned()
+                }),
         }
     }
 
@@ -368,6 +384,9 @@ impl App {
         if nestbar::report_osc(&r).len() > crate::osc::MAX {
             r.modules.clear();
         }
+        if nestbar::report_osc(&r).len() > crate::osc::MAX {
+            r.colors = None;
+        }
         if self.last_report.as_ref() != Some(&r) {
             self.host_out.push(nestbar::report_osc(&r));
             self.last_report = Some(r);
@@ -400,21 +419,44 @@ impl App {
         self.adopt_colors();
     }
 
-    /// Draw with the outer ranma's colours when the setting asks for them
-    /// and it sent some, else with the theme's own: laid over them, so a
-    /// role the outer did not send keeps this theme's colour.
+    /// Draw with another ranma's colours when the setting asks for them and
+    /// that ranma sent some (the outer's at attach, the focused inner's in
+    /// its report), else with the theme's own: laid over them, so a role the
+    /// other did not send keeps this theme's colour.
     pub(super) fn adopt_colors(&mut self) {
+        use crate::config::ThemeColors;
         if let Some(own) = self.own_colors.take() {
             self.config.theme.colors = own;
         }
-        if self.config.settings.theme_colors == crate::config::ThemeColors::Outer
-            && let Some(wire) = &self.outer_colors
-        {
-            let own = self.config.theme.colors.clone();
-            self.config.theme.colors = own.overlay(wire);
-            self.own_colors = Some(own);
+        let wire = match self.config.settings.theme_colors {
+            ThemeColors::Own => None,
+            ThemeColors::Outer => self.outer_colors.as_ref(),
+            ThemeColors::Inner => self.inner_colors.as_ref(),
+        };
+        if let Some(theirs) = wire.map(|w| self.config.theme.colors.overlay(w)) {
+            self.own_colors = Some(std::mem::replace(&mut self.config.theme.colors, theirs));
         }
         self.dirty = true;
+    }
+
+    /// Under `theme_colors = "inner"`, take the colours of the ranma in the
+    /// focused pane when they changed: focus moved onto or off a pane
+    /// holding one, or its report brought others (its own focus moved
+    /// deeper). Called once per round of events, beside `report_outward`.
+    pub fn follow_inner_colors(&mut self) {
+        if self.config.settings.theme_colors != crate::config::ThemeColors::Inner {
+            self.inner_colors = None;
+            return;
+        }
+        let now = self
+            .focused()
+            .and_then(|f| self.report_of(f))
+            .and_then(|r| r.colors.as_ref());
+        if now == self.inner_colors.as_ref() {
+            return;
+        }
+        self.inner_colors = now.cloned();
+        self.adopt_colors();
     }
 
     /// This ranma draws no bar of its own: an outer one shows its workspaces,

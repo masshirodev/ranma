@@ -182,6 +182,9 @@ pub enum ThemeColors {
     /// The `[colors]` of the ranma around it, sent when the terminal
     /// attached; its own theme's anywhere else.
     Outer,
+    /// The `[colors]` of the innermost ranma on the focus path, from its
+    /// report, while the focused pane holds one; its own theme's otherwise.
+    Inner,
 }
 
 /// When ranma's title names the host it runs on (`⧉ ranma@vps · nvim`).
@@ -4628,6 +4631,8 @@ mod tests {
         assert_eq!(cfg.settings.theme_colors, ThemeColors::Own);
         let cfg = with_user("ranma.set { theme_colors = 'outer' }").unwrap();
         assert_eq!(cfg.settings.theme_colors, ThemeColors::Outer);
+        let cfg = with_user("ranma.set { theme_colors = 'inner' }").unwrap();
+        assert_eq!(cfg.settings.theme_colors, ThemeColors::Inner);
         assert!(with_user("ranma.set { theme_colors = 'inherit' }").is_err());
         assert_eq!(with_user("").unwrap().settings.restore, RestoreMode::Ask);
         let cfg = with_user("ranma.set { restore = 'off' }").unwrap();

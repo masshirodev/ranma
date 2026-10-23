@@ -2777,6 +2777,35 @@ with the outer's colours instead. Decided:
   terminal with no ranma around it brings the inner's own colours back, and
   a config reload lays the outer's over the new theme again.
 
+**The outer in the focused inner's colours** (2026-10-23), the reverse:
+`theme_colors = "inner"` on the outer draws its whole frame with the
+`[colors]` of the ranma in the focused pane, so moving into the VPS's ranma
+recolours the desk around it, and moving out restores it. Decided:
+
+- **Carried in the report**, not a message of its own: the report already
+  goes outward on every change, as an OSC in the pane's output, which the
+  outer's pane parser reads at any time, so there is none of the hello's
+  read-once problem and a theme changed inside shows at once. The field is
+  `colors`, ignored by an older outer; an older inner sends none and the
+  outer keeps its own. No protocol bump.
+- **The innermost on the path wins, relayed one level at a time.** Each
+  ranma reports the colours from its focused pane's report, or its own
+  theme's when none came, so the outermost reads only its direct inner's.
+  Nested copies of reports (under `ws`, `scratch_nest`) go without them,
+  so a chain costs one set of colours however deep, and a report past the
+  OSC limit drops them after its modules.
+- **The theme's own colours, not what it draws.** A ranma under `"outer"`
+  still reports its theme's: reporting the outer's back to it would make
+  the setting a mirror.
+- **Followed once per round**, beside `report_outward`: focus or a report
+  changing re-lays the colours only when the wire differs, so a quiet round
+  costs a lookup and a comparison.
+- **The whole frame, not the focused pane's border alone.** Asked for that
+  way; the flicker of the frame changing as focus moves is the point (you
+  see which machine you are on). A per-region variant would need colours
+  per pane through every draw path.
+- `[palette]` stays out, as with `"outer"`.
+
 **The bar's modules follow the nested path** (2026-10-12, c310). The nested
 bar carried an inner ranma's workspaces, mode and status, but none of its
 modules. So with the VPS's ranma focused inside the PC's, the PC's bar kept

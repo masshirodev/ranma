@@ -482,9 +482,9 @@ pub fn builtin() -> Vec<Opt> {
             "theme_colors",
             "general",
             "Theme colours",
-            choices(&["own", "outer"]),
+            choices(&["own", "outer", "inner"]),
             Init,
-            "Inside another ranma: draw with this theme's colours, or the outer ranma's.",
+            "Draw with this theme's colours, the outer ranma's (when nested), or the focused inner ranma's.",
         ),
         opt(
             "wm_mode.sticky",
