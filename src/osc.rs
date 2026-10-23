@@ -60,6 +60,9 @@ pub enum Mark {
     RanmaReport(String),
     /// A ranma in the pane asks this one to run `paste_image` for it.
     RanmaPasteImage,
+    /// A ranma in the pane asks this one to open a file of its machine here
+    /// (`nestbar::open_here_osc`): the path there.
+    RanmaOpenHere(String),
     /// A kitty graphics command (`ESC _ G ... ESC \`), its body from the
     /// `G` (see `graphics`).
     Graphics(Vec<u8>),
@@ -343,6 +346,11 @@ impl Scanner {
                 r => {
                     if let Some(json) = r.strip_prefix("report;") {
                         out.push(Mark::RanmaReport(json.to_string()));
+                    } else if let Some(path) = r
+                        .strip_prefix("open-here;")
+                        .and_then(crate::nestbar::open_here_path)
+                    {
+                        out.push(Mark::RanmaOpenHere(path));
                     }
                 }
             },
@@ -558,12 +566,15 @@ mod tests {
         let mut bytes = crate::nestbar::HELLO.as_bytes().to_vec();
         bytes.extend(b"\x1b]51377;report;{\"v\":1}\x07\x1b]51377;ranma;1\x07");
         bytes.extend(crate::nestbar::PASTE_IMAGE.as_bytes());
+        bytes.extend(crate::nestbar::open_here_osc("/tmp/a;b\x07.png"));
+        bytes.extend(b"\x1b]51377;open-here;zz\x07");
         assert_eq!(
             s.feed(&bytes, t),
             vec![
                 Mark::RanmaHello,
                 Mark::RanmaReport("{\"v\":1}".into()),
-                Mark::RanmaPasteImage
+                Mark::RanmaPasteImage,
+                Mark::RanmaOpenHere("/tmp/a;b\x07.png".into()),
             ]
         );
     }

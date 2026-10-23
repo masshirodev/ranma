@@ -1091,6 +1091,9 @@ pub enum Op {
     Unwatch(u64),
     /// Open a pane, as `ranma open` does (`ranma.open`).
     Open(Box<crate::ipc::OpenSpec>),
+    /// Open a file of this machine on the machine at the keyboard
+    /// (`ranma.open_here`).
+    OpenHere(String),
 }
 
 /// What the `ranma` global writes into while the config runs.
@@ -1831,6 +1834,7 @@ pub const CAPABILITIES: &[&str] = &[
     "module.nested",
     "mouse",
     "open",
+    "open_here",
     "pane.style",
     "placement",
     "rule.group",
@@ -2657,6 +2661,22 @@ fn install_api(
                 rt_err("ranma.copy only works inside binds, hooks, modules and timers, not at config load")
             })?;
             rt.ops.push(Op::Copy(text));
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "open_here",
+        lua.create_function(|lua, path: String| {
+            if !path.starts_with('/') {
+                return Err(rt_err(format!(
+                    "ranma.open_here: takes an absolute path, not `{path}`"
+                )));
+            }
+            let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
+                rt_err("ranma.open_here only works inside binds, hooks, modules and timers, not at config load")
+            })?;
+            rt.ops.push(Op::OpenHere(path));
             Ok(())
         })?,
     )?;

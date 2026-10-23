@@ -11,6 +11,7 @@ pub mod chrome;
 pub mod client;
 pub mod config;
 pub mod devtools;
+pub mod fetch;
 pub mod graphics;
 pub mod hako;
 pub mod hints;

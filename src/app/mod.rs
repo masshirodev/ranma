@@ -33,6 +33,7 @@ mod drag;
 mod hints;
 mod layouts;
 mod nested;
+mod open_here;
 pub use nested::NestLabel;
 mod paste;
 mod pickerspec;
@@ -394,8 +395,12 @@ pub struct App {
     /// A paste waiting on its upload (see `paste`).
     pending_paste: Option<paste::PendingPaste>,
     paste_seq: u64,
-    /// The pane a key was last passed to a ranma in, and when: a ranma there
-    /// asking for `paste_image` is only heard just after (see `paste`).
+    /// A file `ranma.open_here` is fetching (see `open_here`).
+    pending_open: Option<open_here::PendingOpen>,
+    open_seq: u64,
+    /// The pane a key or a click was last passed to a ranma in, and when: a
+    /// ranma there asking for `paste_image` or `open_here` is only heard just
+    /// after (see `paste`, `open_here`).
     passed_key: Option<(PaneId, Instant)>,
     /// The which-key hint is up (see `whichkey`).
     hint_on: bool,
@@ -563,6 +568,8 @@ impl App {
             hint_due: None,
             pending_paste: None,
             paste_seq: 0,
+            pending_open: None,
+            open_seq: 0,
             passed_key: None,
             hint_on: false,
             wm_chord: None,
@@ -1599,6 +1606,7 @@ impl App {
             AppEvent::UpdateAvailable(b) => self.update_found(b),
             AppEvent::Servers(list) => self.open_server_switcher(list),
             AppEvent::Pasted { id, result } => self.pasted(id, result),
+            AppEvent::Fetched { id, result } => self.fetched(id, result),
             // The event loop (run.rs) deals with clients itself.
             AppEvent::Attach { .. }
             | AppEvent::Upgrade { .. }
@@ -1913,6 +1921,7 @@ impl App {
                 self.nested_mark(id, m);
             }
             crate::osc::Mark::RanmaPasteImage => self.paste_image_asked(id),
+            crate::osc::Mark::RanmaOpenHere(path) => self.open_here_asked(id, path),
             // The reader puts tags into the output itself; none reach here.
             crate::osc::Mark::Tag { .. } => {}
             crate::osc::Mark::Graphics(body) => {
@@ -2489,6 +2498,11 @@ impl App {
             let row = y.clamp(v.inner.y, v.inner.bottom().saturating_sub(1)) - v.inner.y;
             if let Some(bytes) = input::encode_mouse(m.kind, m.modifiers, col, row, modes) {
                 p.write(bytes);
+                // A click in a ranma's text can be its `click` hook, whose
+                // `ranma.open_here` asks this one (see `open_here`).
+                if matches!(m.kind, MouseEventKind::Down(_)) && p.hosts_ranma() {
+                    self.passed_key = Some((v.id, Instant::now()));
+                }
             }
         } else if let Some(lines) = scroll {
             if modes.alt_screen && modes.alternate_scroll {
@@ -3614,6 +3628,7 @@ impl App {
                         config::Op::ScreenSet(id, up) => self.screen_update(id, *up),
                         config::Op::ScreenClose(id) => self.screen_close(id),
                         config::Op::Copy(text) => self.set_host_clipboard(&text, "lua", None),
+                        config::Op::OpenHere(path) => self.open_here(path),
                         config::Op::RefreshModule(name) => {
                             if self.config.modules.contains_key(&name) {
                                 self.run_module(&name);
@@ -6577,6 +6592,139 @@ mod tests {
         a.passed_key = Some((2, Instant::now()));
         a.paste_image_asked(1);
         assert!(a.pending_paste.is_none(), "a key to another pane");
+    }
+
+    /// Inside another ranma, `ranma.open_here` asks the outer one, which is
+    /// on the machine with the screen; an outer too old to take it is told
+    /// about rather than sent a request it would drop.
+    #[test]
+    fn a_nested_ranma_asks_the_outer_one_to_open_a_file() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        a.host_out.clear();
+        a.open_here("/tmp/shot.png".into());
+        assert!(a.pending_open.is_none(), "nothing fetched here");
+        assert_eq!(
+            a.host_out,
+            vec![crate::nestbar::open_here_osc("/tmp/shot.png")]
+        );
+        a.host_out.clear();
+        a.set_outer(Some(crate::nestbar::OPEN_HERE_SINCE - 1));
+        a.host_out.clear();
+        a.open_here("/tmp/shot.png".into());
+        assert!(a.host_out.is_empty());
+        assert!(!a.toasts.is_empty(), "says the outer is too old");
+    }
+
+    /// Attached over ssh with no ranma around the terminal, there is no
+    /// screen on this side to open anything on.
+    #[test]
+    fn open_here_from_a_terminal_across_ssh_says_why_not() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.client_remote = true;
+        a.open_here("/tmp/shot.png".into());
+        assert!(a.pending_open.is_none());
+        assert!(!a.toasts.is_empty());
+    }
+
+    /// The request is heard only from a pane that runs a ranma and was
+    /// clicked or typed into a moment ago: printed out of the blue, it would
+    /// have files opened on this desktop.
+    #[test]
+    fn an_open_here_request_nobody_clicked_for_is_ignored() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.passed_key = Some((1, Instant::now()));
+        a.open_here_asked(1, "/tmp/shot.png".into());
+        assert!(a.pending_open.is_none(), "no ranma in the pane");
+        let (mut a, id) = with_ranma_inside("");
+        a.open_here_asked(id, "/tmp/shot.png".into());
+        assert!(a.pending_open.is_none(), "no click");
+        a.passed_key = Some((id, Instant::now() - Duration::from_secs(60)));
+        a.open_here_asked(id, "/tmp/shot.png".into());
+        assert!(a.pending_open.is_none(), "too long after the click");
+        a.passed_key = Some((id + 1, Instant::now()));
+        a.open_here_asked(id, "/tmp/shot.png".into());
+        assert!(a.pending_open.is_none(), "a click in another pane");
+        a.passed_key = Some((id, Instant::now()));
+        a.open_here_asked(id, "/nowhere/shot.png".into());
+        let p = a.pending_open.as_ref().expect("fetching");
+        assert!(!p.forward, "the outermost opens it itself");
+    }
+
+    /// A click passed to a ranma in a pane is what lets its request in.
+    #[test]
+    fn a_click_into_an_inner_ranma_lets_its_open_here_in() {
+        use crossterm::event::{KeyModifiers as K, MouseButton as B, MouseEventKind as E};
+        let (tx, rx) = std::sync::mpsc::channel();
+        let config = crate::config::load_from(None, None, None).unwrap();
+        let mut a = App::new(config, tx, 100, 10);
+        // A ranma inside turns the mouse on, so clicks are passed to it.
+        let set = format!(
+            "exec printf '\\033[?1000h\\033[?1006h\\033]2;{}inner\\007'; sleep 5",
+            crate::pane::NESTED_MARKER
+        );
+        a.run_action(set.parse().unwrap());
+        let id = a.focused().unwrap();
+        pump(&mut a, &rx, |a| {
+            a.panes[&id].hosts_ranma() && a.panes[&id].modes().wants_mouse()
+        });
+        assert!(a.passed_key.is_none());
+        let v = a.frame().views.into_iter().find(|v| v.id == id).unwrap();
+        a.handle_mouse(MouseEvent {
+            kind: E::Down(B::Left),
+            column: v.inner.x + 1,
+            row: v.inner.y + 1,
+            modifiers: K::CONTROL,
+        });
+        assert_eq!(a.passed_key.map(|(p, _)| p), Some(id));
+    }
+
+    /// A failed fetch says why; an answer for a fetch since replaced is
+    /// dropped.
+    #[test]
+    fn a_fetch_that_failed_says_why() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.pending_open = Some(open_here::PendingOpen {
+            id: 3,
+            forward: false,
+            cancel: Default::default(),
+        });
+        a.handle(AppEvent::Fetched {
+            id: 2,
+            result: Err("late".into()),
+        });
+        assert!(a.toasts.is_empty(), "not this fetch's answer");
+        assert!(a.pending_open.is_some());
+        a.handle(AppEvent::Fetched {
+            id: 3,
+            result: Err("no such file".into()),
+        });
+        assert!(a.pending_open.is_none());
+        assert_eq!(a.toasts.len(), 1);
+    }
+
+    /// `ranma.open_here` takes an absolute path, as the far side's ranma
+    /// must name the file without a shell to expand it.
+    #[test]
+    fn open_here_refuses_a_relative_path() {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        let mut a = app(Some(
+            r#"ranma.bind("alt+z", function() ranma.open_here("shot.png") end, { global = true })"#,
+        ));
+        with_pane(&mut a, 1);
+        a.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::ALT));
+        assert!(a.pending_open.is_none());
+        assert!(
+            a.status
+                .as_deref()
+                .is_some_and(|s| s.contains("absolute path")),
+            "{:?}",
+            a.status
+        );
     }
 
     /// Pasted paths into a pane that runs no ssh are only text.

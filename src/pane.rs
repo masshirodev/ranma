@@ -76,6 +76,12 @@ pub enum AppEvent {
         id: u64,
         result: std::result::Result<String, String>,
     },
+    /// A file `ranma.open_here` fetched (see `fetch`): its path here, or why
+    /// not.
+    Fetched {
+        id: u64,
+        result: std::result::Result<std::path::PathBuf, String>,
+    },
     /// A shell mark or a notification a pane's program sent (see `osc`).
     Mark(PaneId, crate::osc::Mark),
     /// `ranma upgrade`: take the new build in place (see `app::upgrade`).

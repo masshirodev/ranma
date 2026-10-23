@@ -1011,6 +1011,38 @@ after its last session closes, so a quick reconnect is instant too. It
 applies to every ssh from that machine, not only ranma's; `ssh -O exit
 HOST` closes a master that has gone stale.
 
+## Opening a far file here
+
+The way back. A picture, a PDF or a video on the far side of an `ssh` cannot
+be shown there, where there is no screen: `xdg-open` on a server opens
+nothing. **`ranma.open_here(path)`** carries the file to the machine at the
+keyboard and opens it there with `xdg-open` (`open` on macOS). openpath's
+ctrl+click on such a file does this when its ranma has one around it.
+
+- Called in a ranma with a ranma around it (over ssh, the usual
+  PC → VPS), it asks that one: `ESC ] 51377 ; open-here ; <path in hex> BEL`
+  over the nested bar's private OSC. The ranma around it fetches the file
+  with the pane's own `ssh` command line, as an upload goes (`BatchMode=yes`,
+  forwards cleared, no tty, a reconnecting tunnel tried once more), into
+  `$TMPDIR/ranma-open-UID/HASH/NAME`, and opens it. A toast says where it is
+  fetching from. The same file always lands in the same place.
+- In a chain (work → PC → VPS) each ranma in the middle fetches the file
+  from the one inside it, then asks on up with its own copy's path.
+- Called in the outermost ranma, it opens the file where it is. Called from a
+  terminal that reached this ranma over SSH with no ranma around it, there is
+  nothing on the other side to ask, and a toast says so.
+
+**Only what a viewer shows.** The file's name must end in `png`, `jpg`,
+`jpeg`, `gif`, `webp`, `bmp`, `tif`, `tiff`, `avif`, `heic`, `pdf`, `mp4`,
+`m4v`, `mov`, `mkv`, `webm`, `mp3`, `m4a`, `flac`, `ogg`, `opus` or `wav`, and its
+first bytes must be that kind's. Scripts, `.desktop` entries, HTML and SVG
+never are, since an opener could run them. A request is heard only from a
+pane that runs a ranma and that a key or a click was passed to in the last 35
+seconds, so a program printing the sequence cannot have files opened on your
+desktop. A file over 50 MB, or 30 seconds, fails it with a toast. The ranma
+around must be this build or newer (nested protocol 3); with an older one a
+toast says to upgrade it.
+
 ## Images in panes
 
 Programs that draw images with the kitty graphics protocol show them inside
@@ -1314,6 +1346,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.notify("text")` | Show a message in the bar for five seconds, or until the next key in WM mode. With no bar on screen (`bar.position = "hidden"`, in the theme or a profile), it is a toast instead, as is every bar message, so nothing is said into nowhere. |
 | `ranma.json.decode(text)`, `ranma.json.encode(value)` | JSON both ways, for plugins that read tools' output (`ranma.spawn({ "ai", "peers", "--json" }, ...)`). Works at load too. `null` decodes to `nil`, so `if card.description then` is false for a null one: a key holding null is absent, and an array with nulls has holes (`#` is unreliable; count with the indices you expect). |
 | `ranma.copy(text)` | Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too). |
+| `ranma.open_here(path)` | Open a file of this machine (an absolute path) with the desktop's opener on the machine at the keyboard: here when this ranma is that one, else fetched over the ssh of the ranma around it and opened there. Only pictures, PDFs, audio and video. Runs in the background; a failure is a toast. See [Opening a far file here](#opening-a-far-file-here). `ranma.has("open_here")`. |
 | `ranma.refresh_module(name)` | Run a bar module again now, so data a plugin fetched in the background (a `ranma.spawn`'s `on_exit`) shows at once rather than at the next interval. |
 | `ranma.module_shown(name)` | Whether that module is on screen now (placed in the bar, with a bar showing). `ranma.state().modules` lists them all. |
 | `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
@@ -2208,6 +2241,7 @@ the spelling against this table:
 | `module.nested` | `ranma.module`'s `nested` option (`follow`, `own`, `hide`) |
 | `mouse` | `ranma.mouse` binds |
 | `open` | `ranma.open`, and floats that open without resizing the tiles |
+| `open_here` | `ranma.open_here`, which opens a file of this machine on the machine at the keyboard |
 | `pane.style` | `pane:style` and a rule's `style` |
 | `placement` | `ranma.placement` policies |
 | `rule.group` | a window rule's `group` |
