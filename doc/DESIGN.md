@@ -3463,6 +3463,41 @@ desk's: the toolbar could not drive the ranma you were looking at. Decided:
   disabled for this side's reasons (`focus next` with one pane here). The
   inner's other toggles (fullscreen, sync) are not reported, and draw plain.
 
+### Opening a far file here
+
+**Decided 2026-10-23.** The reverse of pasting files over ssh. A picture on
+the VPS, named on its screen, cannot be opened there: openpath's ctrl+click
+ran `xdg-open` on a machine with no screen. The click reaches the VPS's
+ranma (its text is the inner's, see "ranma inside ranma"), which knows the
+file but not the screen; the PC's ranma knows the screen and the pane's
+`ssh`, but not the file. So the inner one asks and the outer one fetches:
+
+- `ranma.open_here(path)` in a ranma with a ranma around it sends
+  `open-here;<hex path>` over the nested OSC (hex, so no byte of a path can
+  end the sequence). The outer runs the pane's `ssh` argv cut as an upload
+  cuts it (`paste::upload_argv`) with `cat -- 'PATH'` as the remote
+  command, keeps the bytes under `$TMPDIR/ranma-open-UID/HASH/NAME`
+  (`paste::private_dir`, the same ownership check), and opens them with
+  `xdg-open`. A middle ranma fetches, then asks on up with its own copy.
+- Nested protocol 3 is the version that takes it (`OPEN_HERE_SINCE`): an
+  inner under an older outer says so instead of sending what would be
+  dropped.
+
+**The guard is the point.** Anything a program on the far machine prints
+reaches the outer ranma, so a request alone would let a compromised server
+open files on the desktop, and an opener runs a `.desktop` entry or a
+script. Three checks, all needed: the request comes from a pane that runs a
+ranma and that a key or a click was passed to in the last 35 seconds (as
+`paste_image`'s request, with room for a chain's fetch in the middle); the
+name has a picture, PDF, audio or video extension; and the bytes start the
+way that kind does, because an opener goes by content as well as by name.
+HTML and SVG are left out on purpose: a browser runs their scripts.
+
+A plain `ssh` pane with nothing on the far side is not covered: the click
+is this ranma's, its openpath looks for the path on this machine, and
+nothing tells it the pane's far directory reliably. A ranma on the far side
+is the supported way, and every interactive shell here starts one.
+
 ## Non-goals
 
 - Keeping processes across a reboot. Nothing survives one. A server's

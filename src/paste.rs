@@ -381,9 +381,14 @@ pub fn typed<S: AsRef<str>>(paths: &[S]) -> String {
 /// This machine's paste directory, made if missing and refused unless it is
 /// ours: in `/tmp` the name is predictable, so somebody may have made it first.
 pub fn local_dir() -> Result<PathBuf, String> {
+    private_dir("ranma-paste")
+}
+
+/// `$TMPDIR/<prefix>-UID`, made if missing and refused unless it is ours.
+pub fn private_dir(prefix: &str) -> Result<PathBuf, String> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt};
     let uid = unsafe { libc::getuid() };
-    let dir = std::env::temp_dir().join(format!("ranma-paste-{uid}"));
+    let dir = std::env::temp_dir().join(format!("{prefix}-{uid}"));
     match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -496,7 +501,7 @@ fn upload(
 }
 
 /// A regular file, small enough to carry. A folder is refused, not packed.
-fn check_file(p: &Path) -> Result<(), String> {
+pub(crate) fn check_file(p: &Path) -> Result<(), String> {
     let m = std::fs::metadata(p).map_err(|e| format!("{}: {e}", p.display()))?;
     if m.is_dir() {
         return Err(format!(
@@ -647,10 +652,10 @@ fn from_clipboard(
 }
 
 /// How long a failed connection waits before its one retry.
-const RETRY_AFTER: Duration = Duration::from_secs(1);
+pub(crate) const RETRY_AFTER: Duration = Duration::from_secs(1);
 
 /// Sleep, unless cancelled or past the deadline first; whether it slept.
-fn wait(cancel: &AtomicBool, d: Duration, deadline: Instant) -> bool {
+pub(crate) fn wait(cancel: &AtomicBool, d: Duration, deadline: Instant) -> bool {
     let until = Instant::now() + d;
     if until >= deadline {
         return false;
@@ -683,7 +688,7 @@ pub fn ssh_reason(stderr: &str) -> String {
 
 /// How a command failed.
 #[derive(Debug)]
-enum Failed {
+pub(crate) enum Failed {
     Cancelled,
     TimedOut,
     Spawn(String),
@@ -692,7 +697,7 @@ enum Failed {
 }
 
 impl Failed {
-    fn message(self, name: &str) -> String {
+    pub(crate) fn message(self, name: &str) -> String {
         match self {
             Failed::Cancelled => "cancelled".into(),
             Failed::TimedOut => format!("{name} took over {}s", TIMEOUT.as_secs()),
@@ -723,7 +728,7 @@ fn run(
     run_raw(cmd, stdin, cancel, deadline).map_err(|f| f.message(&name))
 }
 
-fn run_raw(
+pub(crate) fn run_raw(
     cmd: &mut Command,
     stdin: Option<std::fs::File>,
     cancel: &AtomicBool,

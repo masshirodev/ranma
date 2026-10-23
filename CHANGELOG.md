@@ -15,6 +15,14 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.open_here(path)` opens a file of this machine on the machine at the
+  keyboard: from a ranma over ssh, the ranma around it fetches the file
+  through the pane's own ssh and opens it with `xdg-open`, the way pasted
+  files are uploaded the other way (CONFIG.md, "Opening a far file here").
+  Only pictures, PDFs, audio and video, checked by name and content, and only
+  just after a click or a key into that pane. openpath uses it for ctrl+click
+  over ssh. `ranma.has("open_here")`. Nested protocol 3: both ranmas need this
+  build, and an older outer is told about rather than sent the request.
 - Android, in Termux: ranma builds from source there and runs natively, on
   the kernels Android tablets ship (4.14 included, which has no
   `pidfd_open`). The cpu module stays empty, since Android keeps

@@ -337,6 +337,13 @@ function ranma.json.encode(value) end
 ---@param text string
 function ranma.copy(text) end
 
+---Open a file of this machine (an absolute path) with the desktop's opener on
+---the machine at the keyboard: fetched over ssh by the ranma around this one
+---when there is one. Pictures, PDFs, audio and video only; a failure is a
+---toast. `ranma.has("open_here")`.
+---@param path string
+function ranma.open_here(path) end
+
 ---Run a bar module again now (data fetched in the background shows at once).
 ---@param name string
 function ranma.refresh_module(name) end

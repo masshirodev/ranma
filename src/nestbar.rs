@@ -21,13 +21,17 @@ use crate::theme::RoleDef;
 /// The protocol this build speaks. A report or an answer from `OLDEST` up
 /// to here is understood; anything else is ignored, and its holder is drawn
 /// as if no report had come.
-pub const PROTOCOL: u32 = 2;
+pub const PROTOCOL: u32 = 3;
 /// The oldest protocol still understood.
 pub const OLDEST: u32 = 1;
 /// From this version an outer ranma labels the border of a pane whose ranma
 /// it is not showing in its bar (the compact label below), so the ranma
 /// inside draws no bar of its own even then. Version 1 did not.
 pub const EDGE_SINCE: u32 = 2;
+/// From this version an outer ranma takes `open_here_osc`: it fetches a file
+/// from the pane's machine and opens it on its own. Before it, the request
+/// would be ignored, so an inner one says so instead of sending it.
+pub const OPEN_HERE_SINCE: u32 = 3;
 
 /// Whether this build understands a peer speaking version `v`.
 pub fn speaks(v: u32) -> bool {
@@ -329,6 +333,26 @@ pub const HELLO: &str = "\x1b]51377;?\x07";
 /// clipboard is on the machine at the keyboard, which the outermost ranma is
 /// on (DESIGN.md, "Pasting files into a pane that runs ssh").
 pub const PASTE_IMAGE: &str = "\x1b]51377;paste-image\x07";
+
+/// An inner ranma asks the one around it to open a file of the inner's
+/// machine on the outer's (DESIGN.md, "Opening a far file here"):
+/// `open-here;<path in hex>`, hex so no byte of the path can end the OSC.
+pub fn open_here_osc(path: &str) -> Vec<u8> {
+    let hex: String = path.bytes().map(|b| format!("{b:02x}")).collect();
+    format!("\x1b]{OSC};open-here;{hex}\x07").into_bytes()
+}
+
+/// The path an `open_here_osc` carries, if it is well formed.
+pub fn open_here_path(hex: &str) -> Option<String> {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) {
+        return None;
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok())
+        .collect::<Option<Vec<u8>>>()?;
+    String::from_utf8(bytes).ok()
+}
 
 /// An outer ranma's answer to `HELLO`: `ranma;1;<newest>`. The first number
 /// stays 1 for good, because a version-1 inner accepts exactly that and reads

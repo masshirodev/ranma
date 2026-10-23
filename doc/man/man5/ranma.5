@@ -1422,6 +1422,39 @@ own socket, and \fBControlPersist 10m\fR keeps the master open ten minutes
 after its last session closes, so a quick reconnect is instant too. It
 applies to every ssh from that machine, not only ranma's; \fBssh \-O exit
 HOST\fR closes a master that has gone stale.
+.SH "OPENING A FAR FILE HERE"
+.PP
+The way back. A picture, a PDF or a video on the far side of an \fBssh\fR cannot
+be shown there, where there is no screen: \fBxdg\-open\fR on a server opens
+nothing. \fB\fBranma.open_here(path)\fB\fR carries the file to the machine at the
+keyboard and opens it there with \fBxdg\-open\fR (\fBopen\fR on macOS). openpath's
+ctrl+click on such a file does this when its ranma has one around it.
+.IP \(bu 2
+Called in a ranma with a ranma around it (over ssh, the usual
+PC → VPS), it asks that one: \fBESC ] 51377 ; open\-here ; <path in hex> BEL\fR
+over the nested bar's private OSC. The ranma around it fetches the file
+with the pane's own \fBssh\fR command line, as an upload goes (\fBBatchMode=yes\fR,
+forwards cleared, no tty, a reconnecting tunnel tried once more), into
+\fB$TMPDIR/ranma\-open\-UID/HASH/NAME\fR, and opens it. A toast says where it is
+fetching from. The same file always lands in the same place.
+.IP \(bu 2
+In a chain (work → PC → VPS) each ranma in the middle fetches the file
+from the one inside it, then asks on up with its own copy's path.
+.IP \(bu 2
+Called in the outermost ranma, it opens the file where it is. Called from a
+terminal that reached this ranma over SSH with no ranma around it, there is
+nothing on the other side to ask, and a toast says so.
+.PP
+\fBOnly what a viewer shows.\fR The file's name must end in \fBpng\fR, \fBjpg\fR,
+\fBjpeg\fR, \fBgif\fR, \fBwebp\fR, \fBbmp\fR, \fBtif\fR, \fBtiff\fR, \fBavif\fR, \fBheic\fR, \fBpdf\fR, \fBmp4\fR,
+\fBm4v\fR, \fBmov\fR, \fBmkv\fR, \fBwebm\fR, \fBmp3\fR, \fBm4a\fR, \fBflac\fR, \fBogg\fR, \fBopus\fR or \fBwav\fR, and its
+first bytes must be that kind's. Scripts, \fB.desktop\fR entries, HTML and SVG
+never are, since an opener could run them. A request is heard only from a
+pane that runs a ranma and that a key or a click was passed to in the last 35
+seconds, so a program printing the sequence cannot have files opened on your
+desktop. A file over 50 MB, or 30 seconds, fails it with a toast. The ranma
+around must be this build or newer (nested protocol 3); with an older one a
+toast says to upgrade it.
 .SH "IMAGES IN PANES"
 .PP
 Programs that draw images with the kitty graphics protocol show them inside
@@ -1780,6 +1813,9 @@ JSON both ways, for plugins that read tools' output (\fBranma.spawn({ "ai", "pee
 .TP
 \fBranma.copy(text)\fR
 Put text on the clipboard of the terminal driving ranma, as copy mode's yank does (OSC 52, so over SSH too).
+.TP
+\fBranma.open_here(path)\fR
+Open a file of this machine (an absolute path) with the desktop's opener on the machine at the keyboard: here when this ranma is that one, else fetched over the ssh of the ranma around it and opened there. Only pictures, PDFs, audio and video. Runs in the background; a failure is a toast. See Opening a far file here\fR. \fBranma.has("open_here")\fR.
 .TP
 \fBranma.refresh_module(name)\fR
 Run a bar module again now, so data a plugin fetched in the background (a \fBranma.spawn\fR's \fBon_exit\fR) shows at once rather than at the next interval.
@@ -2901,6 +2937,9 @@ the \fBworkspace_rename\fR event
 .TP
 \fBopen\fR
 \fBranma.open\fR, and floats that open without resizing the tiles
+.TP
+\fBopen_here\fR
+\fBranma.open_here\fR, which opens a file of this machine on the machine at the keyboard
 .TP
 \fBpane.style\fR
 \fBpane:style\fR and a rule's \fBstyle\fR
