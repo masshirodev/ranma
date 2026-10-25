@@ -185,7 +185,8 @@ pub enum Action {
     Help,
     /// The same picker listing every action, bound or not, and running a typed one.
     CommandPalette,
-    /// The settings panel: every option, edited in place.
+    /// The settings panel: every option, edited in place. With it or a
+    /// plugin's screen open, the keyboard moves between that and the panes.
     Settings,
     /// Keyboard scrollback and selection (vi keys) in the focused pane.
     CopyMode,

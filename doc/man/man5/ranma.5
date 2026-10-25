@@ -563,7 +563,7 @@ The palette in help mode (\fB?\fR, \fBleader ?\fR): every bind, filterable by ke
 The palette in command mode (\fB:\fR, \fBleader :\fR): every action, bound or not, with its argument and key. \fBTab\fR completes one into the query; type its argument and the line heads the list as \fBrun: …\fR, or as the parser's error if it would not parse. \fBEnter\fR runs it (one that needs an argument completes instead). The query's first character is the mode: \fB?\fR keys, \fB:\fR or \fB>\fR commands; typing it switches, \fBCtrl+U\fR clears the rest.
 .TP
 \fBsettings\fR
-The settings panel: every option, edited in place and saved to \fBsettings.toml\fR. \fBleader p\fR, or \fB:settings\fR in the palette. See The settings panel\fR.
+The settings panel: every option, edited in place and saved to \fBsettings.toml\fR. \fBleader p\fR, or \fB:settings\fR in the palette. With the panel or a plugin's screen already open, it moves the keyboard between it and the panes instead. See The settings panel\fR.
 .TP
 \fBsearch\fR
 Search the focused pane's history, most recent match first (see Copy mode\fR).
@@ -2046,7 +2046,15 @@ last). After that it knows everything, the settings panel's values included.
 ranma's own, the theme keys it shows, and every plugin's, grouped. The panes
 are laid out beside it, so a change to gaps, borders or dimming shows as you
 make it. Closing gives them their width back. The bar says \fBSET\fR while it is
-open, and it has the keyboard.
+open and has the keyboard.
+.PP
+The panel can hand the keyboard to the panes and stay open, for typing in a
+shell while reading it: click a pane, move the focus (\fBleader\fR and an arrow), or
+press \fBleader p\fR again. Its frame then takes the unfocused border colour, and
+every key (\fBesc\fR and \fBq\fR included) goes to the focused pane. A click on the
+panel, or \fBleader p\fR, gives it the keyboard back. The leader always reaches
+ranma, even while the panel has the keyboard. The same goes for a plugin's
+screen (see Screens\fR).
 .TP
 \fB↑↓\fR \fBj\fR \fBk\fR
 Move. \fBtab\fR jumps to the next group, \fBshift+tab\fR back.
@@ -2078,7 +2086,7 @@ The keys and the marks.
 \fBw\fR
 Save to \fBsettings.toml\fR.
 .TP
-\fBesc\fR
+\fBesc\fR \fBq\fR
 Close. With unsaved edits it asks: \fBw\fR save, \fBd\fR discard, \fBesc\fR keep editing.
 .PP
 Edits apply live as you make them and are saved only with \fBw\fR. One that ranma
@@ -2249,8 +2257,11 @@ one row kept in view), \fBhome\fR \fBend\fR (the first and last row), \fBtab\fR 
 heading), \fB/\fR (filter),
 \fBesc\fR (close) and \fB?\fR (keys), plus \fB←→\fR \fBh\fR \fBl\fR and \fBenter\fR on an editable row.
 A screen or row binding one of them is an error naming it. \fBspace\fR peeks
-(the screen folds to its selected row at the bottom) and \fBo\fR opens the
-plugin's options, unless the plugin binds those keys itself. A key's function
+(the screen folds to its selected row at the bottom), \fBo\fR opens the
+plugin's options and \fBq\fR does what \fBesc\fR does, unless the plugin binds those
+keys itself. Like the settings panel, a screen hands the keyboard to the
+panes and stays open when a pane is clicked, the focus moves, or \fBleader p\fR
+is pressed; a click on it or \fBleader p\fR takes it back. A key's function
 gets the selected row's id (\fBnil\fR with nothing selected). The footer shows the
 selected row's keys, then the screen's, dropping from the end; \fB? keys\fR always
 stays. The mouse selects a row and the wheel moves through them.

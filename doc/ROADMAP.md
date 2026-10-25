@@ -265,6 +265,7 @@ features below the line live outside the repository.
 - [x] `ranma.open`: `ranma open` from Lua, floats straight into the floating layer
 - [x] Design: `doc/briefs/done/SETTINGS_PANEL.md`, handoff in `doc/handoffs/`
 - [x] The settings panel and `settings.toml` (designed from `doc/handoffs/done/SETTINGS_PANEL.html`)
+- [x] The slot hands the keyboard to the panes and stays open (click, focus move, `leader p`); `q` closes a screen
 
 Plugins, not here: a repository each (`masshirodev/history.ranma`,
 `compose.ranma`, `openpath.ranma`, `linkhover.ranma`, `agents.ranma`),

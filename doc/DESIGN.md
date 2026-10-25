@@ -896,7 +896,8 @@ Where it departs from the handoff:
 
 What it does not do yet:
 
-- The mouse: the panel ignores it, and clicking `‹ ›` does nothing.
+- The mouse over the panel: clicking `‹ ›` does nothing. A click only gives
+  the panel the keyboard (see "The slot can let go of the keyboard").
 - Setting a value back to unset over a file that sets it cannot be saved.
   TOML has no "unset", so the panel says to remove it from the file instead.
 - A profile switched while the panel is open drops its live edits. Closing
@@ -913,6 +914,7 @@ What it does not do yet:
   tooltips. `src/luascreen.rs` reads `ranma.screen`'s table as strictly as a
   config. `src/app/screen.rs` gives it the slot it shares with settings.
 - A screen floats over the workspace in settings' place, and resizes nothing.
+  Panes it covers stay covered while it has handed the keyboard to them.
   The handoff's reason: the agents list is opened and closed all day, and a
   resize would reflow every agent's program each time.
 - Updates are coalesced to one redraw per 100 ms (ranma's own frame cap is
@@ -949,6 +951,33 @@ Where it departs from the handoff:
 Not done yet: the handoff's rule that the nested-ranma label gives way to
 badges when both share the title's edge (bar on top, title on top). Each still
 lays itself out on its own there. The two only meet in that configuration.
+
+**The slot can let go of the keyboard** (2026-10-25). The settings panel and
+plugin screens had the keyboard for as long as they were open, so reading a
+Kumiko card meant closing it to type, and opening it again to read on. Now the
+slot hands the keyboard to the panes and stays open. A click on a pane does
+it, and so does any action that moves the focus (`leader` arrows, a new
+pane, another workspace), because a focus move means "type there". `settings`
+(`leader p`) toggles it either way, and a click on the slot takes it back.
+Opening a screen or the panel, and settings asking about unsaved edits, give
+the slot the keyboard, since each of those wants an answer.
+
+- **The leader always reaches this ranma** while the slot has the keyboard,
+  and never goes to a ranma in the focused pane. The slot belongs to this
+  ranma, and without the leader no key could leave the slot. Global binds
+  still go to the slot: a screen may bind `alt+` keys.
+- `leader p` reuses `settings` instead of adding an action with a key of its
+  own. A new default key would have added a row to the which-key hint, whose
+  rows are pinned at 80×24 ("Every action has a key"). Its old meaning with a
+  screen open (close the screen, open settings) was reachable only from the
+  palette, and `o` on the screen already opens its plugin's options.
+- **Unfocused, the slot draws its frame as `border_inactive`.** That colour is
+  swapped in after the handoff's drawing, so the ports stay cell for cell. The
+  focused pane's cursor shows again unless the slot covers it.
+- `q` closes a screen, as it already closed settings, unless the plugin binds
+  `q`. It is not in `RESERVED`: a plugin with a `q` of its own would start
+  failing at `ranma.screen`. The footer and keys card do not list it: they are
+  the handoff's drawing, and settings has never listed its `q` either.
 
 **What the plugin manager's screen added** (2026-10-10, from
 `doc/handoffs/PLUGIN_MANAGER.md`, card c196). The manager (hako, a plugin in

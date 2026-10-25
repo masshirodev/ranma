@@ -197,16 +197,24 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     }
     draw_tooltip(f, app, &frame);
     draw_toasts(f, app);
+    // The slot has the cursor while it has the keyboard. Handed to the
+    // panes, it stays drawn, and the focused pane's cursor shows unless the
+    // slot covers it.
     if app.settings_panel().is_some() {
         draw_settings(f, app);
+    } else if app.plugin_screen().is_some() {
+        draw_plugin_screen(f, app);
+    }
+    if app.slot_has_keys() && app.picker().is_none() {
         return None;
     }
-    if app.plugin_screen().is_some() && app.picker().is_none() {
-        draw_plugin_screen(f, app);
-        return None;
-    }
-    if app.plugin_screen().is_some() {
-        draw_plugin_screen(f, app);
+    if let (Some((x, y, w, h)), Some((_, at))) = (app.slot_rect(), cursor)
+        && at.x >= x
+        && at.x < x + w
+        && at.y >= y
+        && at.y < y + h
+    {
+        cursor = None;
     }
     if let (Some(p), Some(l)) = (app.picker(), app.sheet_layout()) {
         draw_sheet(f, app, p, &l);
@@ -217,7 +225,7 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
         // The picker's query line has the cursor; nothing else does.
         return None;
     }
-    cursor
+    cursor.map(|(c, _)| c)
 }
 
 /// The logo and the keys, centred as one block on the empty workspace.
@@ -330,7 +338,7 @@ fn draw_pane(
     app: &App,
     view: &PaneView,
     pane: &crate::pane::Pane,
-) -> Option<CursorState> {
+) -> Option<(CursorState, Position)> {
     let term = pane.term.lock();
     let content = term.renderable_content();
     let rows = term.screen_lines() as i32;
@@ -512,11 +520,15 @@ fn draw_pane(
         );
         buf.set_stringn(inner.x, y, &prompt, inner.w as usize, style);
         let cx = inner.x + (1 + s.query.width() as u16).min(inner.w.saturating_sub(1));
-        f.set_cursor_position(Position::new(cx, y));
-        return Some(CursorState {
-            shape: CursorShape::Beam,
-            blinking: false,
-        });
+        let at = Position::new(cx, y);
+        f.set_cursor_position(at);
+        return Some((
+            CursorState {
+                shape: CursorShape::Beam,
+                blinking: false,
+            },
+            at,
+        ));
     }
 
     // A user mode is WM mode for its keys only: it is typed into the pane
@@ -540,14 +552,15 @@ fn draw_pane(
     if !visible {
         return None;
     }
-    f.set_cursor_position(Position::new(
-        inner.x + c.point.column.0 as u16,
-        inner.y + line as u16,
-    ));
-    Some(CursorState {
-        shape: c.shape,
-        blinking: term.cursor_style().blinking,
-    })
+    let at = Position::new(inner.x + c.point.column.0 as u16, inner.y + line as u16);
+    f.set_cursor_position(at);
+    Some((
+        CursorState {
+            shape: c.shape,
+            blinking: term.cursor_style().blinking,
+        },
+        at,
+    ))
 }
 
 /// A column across the strip's edge (`layout = "scrolling"`): the pane
@@ -1330,7 +1343,38 @@ fn draw_settings(f: &mut Frame, app: &App) {
         &lines,
         b.style,
     );
+    let mut grid = grid;
+    unfocus_slot(app, &mut grid);
     paint_grid(f, app, &grid, &st.colors);
+}
+
+/// A slot that handed the keyboard to the panes draws its frame as an
+/// unfocused pane's border, so where typing goes reads at a glance.
+fn unfocus_slot(app: &App, grid: &mut crate::settings::Grid) {
+    use crate::settings::Paint;
+    if app.slot_has_keys() {
+        return;
+    }
+    let Some((x, y, w, h)) = app.slot_rect() else {
+        return;
+    };
+    let (gw, gh) = (grid.w, grid.h);
+    let edge = |cx: u16, cy: u16| {
+        (cx == x || cx + 1 == x + w) && cy >= y && cy < y + h
+            || (cy == y || cy + 1 == y + h) && cx >= x && cx < x + w
+    };
+    for cy in y..(y + h).min(gh) {
+        for cx in x..(x + w).min(gw) {
+            if !edge(cx, cy) {
+                continue;
+            }
+            if let Some(Some(cell)) = grid.cells.get_mut(cy as usize * gw as usize + cx as usize)
+                && cell.fg == Paint::Role("mode_bg")
+            {
+                cell.fg = Paint::Role("border_inactive");
+            }
+        }
+    }
 }
 
 /// A plugin's tooltip, anchored to its cell, never over the bar. One whose
@@ -1393,6 +1437,8 @@ fn draw_plugin_screen(f: &mut Frame, app: &App) {
         &lines,
         b.style,
     );
+    let mut grid = grid;
+    unfocus_slot(app, &mut grid);
     paint_grid(f, app, &grid, &app.colors());
 }
 

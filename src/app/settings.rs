@@ -78,6 +78,7 @@ impl App {
             crate::theme::names(config::config_dir().as_deref()),
         );
         panel.scope = scope.map(|(_, back)| (all, back));
+        self.slot_keys = true;
         self.settings = Some(SettingsState {
             panel,
             settings: self.config.settings.clone(),
@@ -107,7 +108,8 @@ impl App {
         out
     }
 
-    /// The panel has the keyboard while it is open; the mouse is left alone.
+    /// What the slot routes to the panel (`App::slot_route`): its keys while
+    /// it has the keyboard; the mouse over it is left alone.
     pub(super) fn settings_input(&mut self, ev: Event) {
         match ev {
             Event::Key(k) if k.kind != KeyEventKind::Release => self.settings_key(&k),
@@ -116,10 +118,6 @@ impl App {
                     t.push_str(text.trim_end_matches('\n'));
                     self.dirty = true;
                 }
-            }
-            Event::Resize(w, h) => {
-                self.screen = crate::layout::Rect::new(0, 0, w, h);
-                self.relayout();
             }
             _ => {}
         }

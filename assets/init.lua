@@ -381,6 +381,7 @@ ranma.bind("shift+v", "choose_buffer")
 ranma.bind("?", "help")
 ranma.bind(":", "command_palette")
 -- The settings panel: every option, edited in place and saved to settings.toml.
+-- With it (or a plugin's screen) open, moves the keyboard to the panes and back.
 ranma.bind("p", "settings")
 
 -- Global binds -------------------------------------------------------------------

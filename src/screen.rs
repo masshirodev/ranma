@@ -1000,6 +1000,7 @@ impl Screen {
                     Outcome::Peek
                 }
                 "esc" => Outcome::Close,
+                "q" if !self.plugin_binds("q") => Outcome::Close,
                 _ => self.plugin_key(&name),
             };
         }
@@ -1013,11 +1014,14 @@ impl Screen {
             "tab" => self.next_group(false),
             "backtab" => self.next_group(true),
             "?" => self.help = true,
-            "esc" if self.back.is_some() => {
+            // `q` is `esc`, as in settings, unless the plugin binds it: a
+            // plugin's own `q` keeps working, so none is broken by this.
+            "esc" | "q" if self.back.is_some() && (name == "esc" || !self.plugin_binds("q")) => {
                 self.pop();
                 return Outcome::Pop;
             }
             "esc" => return Outcome::Close,
+            "q" if !self.plugin_binds("q") => return Outcome::Close,
             "/" if self.filter != Filter::Off => self.filtering = true,
             "left" | "h" | "right" | "l" => {
                 if let Some(r) = self.selected()
@@ -1149,17 +1153,21 @@ impl Screen {
 
     /// A key the plugin bound: on the selected row first, then the screen's.
     fn plugin_key(&self, name: &str) -> Outcome {
-        let row = self.selected();
-        let on_row = row.is_some_and(|r| {
-            r.keys.iter().any(|(k, _)| k == name) || r.alts.iter().any(|(_, a)| a == name)
-        });
-        if on_row
-            || self.keys.iter().any(|(k, _)| k == name)
-            || self.alts.iter().any(|(_, a)| a == name)
-        {
-            return Outcome::Key(name.to_string(), row.map(|r| r.id.clone()));
+        if self.plugin_binds(name) {
+            let row = self.selected().map(|r| r.id.clone());
+            return Outcome::Key(name.to_string(), row);
         }
         Outcome::Stay
+    }
+
+    /// Whether the plugin binds this key, on the selected row or the screen.
+    fn plugin_binds(&self, name: &str) -> bool {
+        let on_row = self.selected().is_some_and(|r| {
+            r.keys.iter().any(|(k, _)| k == name) || r.alts.iter().any(|(_, a)| a == name)
+        });
+        on_row
+            || self.keys.iter().any(|(k, _)| k == name)
+            || self.alts.iter().any(|(_, a)| a == name)
     }
 
     /// The area the screen takes on a `w` × `h` screen.

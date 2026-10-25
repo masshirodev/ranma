@@ -274,6 +274,9 @@ pub struct App {
     stashed_screen: Option<screen::PluginScreen>,
     /// A screen waiting for settings to answer about unsaved edits.
     pending_screen: Option<Box<crate::luascreen::ScreenSpec>>,
+    /// Whether the slot (settings or a plugin's screen) has the keyboard,
+    /// or has handed it to the panes behind it while staying open.
+    slot_keys: bool,
     /// When a plugin's screen was last drawn, and when it is next due.
     screen_drawn: Option<Instant>,
     screen_redraw_due: Option<Instant>,
@@ -498,6 +501,7 @@ impl App {
             picker: None,
             settings: None,
             plugin_screen: None,
+            slot_keys: true,
             watches: std::collections::BTreeMap::new(),
             watch_pending: HashSet::new(),
             watch_due: None,
@@ -2023,14 +2027,22 @@ impl App {
         if matches!(ev, Event::Key(_)) && self.tooltip.take().is_some() {
             self.dirty = true;
         }
-        // The settings panel has the keyboard while it is open.
-        if self.settings.is_some() {
-            self.settings_input(ev);
+        // The slot (settings, a plugin's screen) has the keyboard while it is
+        // open, unless it handed it to the panes; the leader and the mouse
+        // outside it reach the workspace either way.
+        let route = self.slot_route(&ev);
+        if route == screen::Route::Done {
             return;
         }
-        // So does a plugin's screen, unless a prompt it opened is up.
-        if self.plugin_screen.is_some() && self.picker.is_none() && self.screen_input(&ev) {
-            return;
+        if route == screen::Route::Slot {
+            if self.settings.is_some() {
+                self.settings_input(ev);
+                return;
+            }
+            // A plugin's screen, unless a prompt it opened is up.
+            if self.picker.is_none() && self.screen_input(&ev) {
+                return;
+            }
         }
         // Toolbars answer taps in every mode, over an open picker too: the
         // button that opened a sheet closes it.
@@ -3025,6 +3037,15 @@ impl App {
     }
 
     fn run_action(&mut self, action: Action) {
+        let before = self.focused();
+        self.run_action_inner(action);
+        // Focus moving to a pane takes the keyboard there, past an open slot.
+        if self.slot_open() && self.focused() != before {
+            self.slot_keys = false;
+        }
+    }
+
+    fn run_action_inner(&mut self, action: Action) {
         let focused = self.focused();
         let floating = focused.is_some_and(|f| self.active().is_floating(f));
         let area = self.workspace_area();
@@ -3345,6 +3366,9 @@ impl App {
             Action::SessionSwitcher => self.open_session_switcher(),
             Action::Help => self.open_palette(crate::picker::PaletteMode::Help),
             Action::CommandPalette => self.open_palette(crate::picker::PaletteMode::Command),
+            // With the slot open, settings or a plugin's screen, the key
+            // moves the keyboard between it and the panes instead.
+            Action::Settings if self.slot_open() => self.toggle_slot_keys(),
             Action::Settings => self.open_settings(),
             Action::CopyMode => self.enter_copy_mode(None),
             Action::Hints => self.enter_hints(),
@@ -4589,8 +4613,16 @@ impl App {
     /// One module's current output: built-ins from state, others from the cache.
     fn segment(&self, name: &str) -> Segment {
         match name {
-            "mode" if self.settings.is_some() => vec![Piece::new(" SET ", Style::Mode)],
-            "mode" if self.plugin_screen.is_some() => {
+            "mode"
+                if self.settings.is_some() && self.slot_has_keys() && self.mode == Mode::Normal =>
+            {
+                vec![Piece::new(" SET ", Style::Mode)]
+            }
+            "mode"
+                if self.plugin_screen.is_some()
+                    && self.slot_has_keys()
+                    && self.mode == Mode::Normal =>
+            {
                 let chip = &self.plugin_screen.as_ref().expect("checked").screen.chip;
                 vec![Piece::new(format!(" {chip} "), Style::Mode)]
             }
@@ -7701,10 +7733,107 @@ mod tests {
             "agents",
             "back to the screen"
         );
-        // Opening settings itself closes the screen, which hears it.
+        // `settings` with the screen open moves the keyboard; closed, it
+        // opens settings.
         a.run_action(crate::action::Action::Settings);
-        assert!(a.plugin_screen().is_none() && a.settings_panel().is_some());
+        assert!(a.plugin_screen().is_some() && !a.slot_has_keys());
+        key(&mut a, KeyCode::Esc);
+        assert!(a.plugin_screen().is_some(), "esc went to the pane");
+        a.run_action(crate::action::Action::Settings);
+        assert!(a.slot_has_keys());
+        key(&mut a, KeyCode::Esc);
         assert_eq!(ran(&a).last().unwrap(), "closed");
+        a.run_action(crate::action::Action::Settings);
+        assert!(a.settings_panel().is_some());
+    }
+
+    fn mouse_down(a: &mut App, x: u16, y: u16) {
+        a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        })));
+    }
+
+    fn leader_then(a: &mut App, c: char) {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        a.handle(AppEvent::Input(Event::Key(KeyEvent::new(
+            KeyCode::Char('b'),
+            KeyModifiers::CONTROL,
+        ))));
+        key(a, KeyCode::Char(c));
+    }
+
+    #[test]
+    fn a_screen_hands_the_keyboard_to_the_panes_and_takes_it_back() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        lua(&mut a, AGENTS);
+        assert!(a.slot_has_keys(), "a screen opens with the keyboard");
+        let (x, y, _, _) = a.slot_rect().unwrap();
+        assert!(x > 2, "the screen leaves the left side to the panes");
+
+        // A click on a pane: the screen stays, its keys stop reaching it.
+        mouse_down(&mut a, 2, 3);
+        assert!(a.plugin_screen().is_some() && !a.slot_has_keys());
+        typed(&mut a, "nq");
+        key(&mut a, KeyCode::Esc);
+        assert!(a.plugin_screen().is_some(), "esc and q went to the pane");
+        assert!(ran(&a).is_empty(), "{:?}", ran(&a));
+
+        // A click on the screen takes the keyboard back.
+        mouse_down(&mut a, x + 1, y + 1);
+        assert!(a.slot_has_keys());
+        typed(&mut a, "n");
+        assert_eq!(ran(&a), ["new api"]);
+
+        // leader p moves it either way; the leader never reaches the screen.
+        leader_then(&mut a, 'p');
+        assert!(a.plugin_screen().is_some() && !a.slot_has_keys());
+        leader_then(&mut a, 'p');
+        assert!(a.slot_has_keys());
+
+        // Focus moving to another workspace takes the keyboard with it.
+        a.run_action("workspace 2".parse().unwrap());
+        assert!(a.plugin_screen().is_some() && !a.slot_has_keys());
+    }
+
+    #[test]
+    fn q_closes_a_screen_unless_the_plugin_binds_it() {
+        let mut a = app(None);
+        lua(&mut a, AGENTS);
+        typed(&mut a, "q");
+        assert!(a.plugin_screen().is_none());
+        assert_eq!(ran(&a), ["closed"]);
+        lua(
+            &mut a,
+            r#"ran = {}
+            ranma.screen { title = "q", keys = { { "q", "quit", function() table.insert(ran, "own q") end } },
+              body = { { "row", id = "r", name = "r" } } }"#,
+        );
+        typed(&mut a, "q");
+        assert!(a.plugin_screen().is_some(), "the plugin's own q");
+        assert_eq!(ran(&a), ["own q"]);
+    }
+
+    #[test]
+    fn settings_hands_the_keyboard_to_the_panes() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.run_action(crate::action::Action::Settings);
+        assert!(a.settings_panel().is_some() && a.slot_has_keys());
+        mouse_down(&mut a, 1, 3);
+        assert!(!a.slot_has_keys());
+        typed(&mut a, "q");
+        key(&mut a, KeyCode::Esc);
+        assert!(a.settings_panel().is_some(), "q and esc went to the pane");
+        let (x, y, _, _) = a.slot_rect().unwrap();
+        mouse_down(&mut a, x + 1, y + 1);
+        typed(&mut a, "q");
+        assert!(a.settings_panel().is_none(), "q closes it again");
     }
 
     #[test]

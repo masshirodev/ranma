@@ -5,13 +5,18 @@
 //! never resizes a pane: it previews nothing about the layout, and the agents
 //! list is opened and closed all day. One slot: opening a screen closes
 //! settings (which asks first about unsaved edits) or the screen before it.
+//!
+//! The slot has the keyboard when it opens, and can hand it to the panes
+//! while it stays open, so a card can be read beside the shell it is typed
+//! into: a click on a pane, a focus move, or `settings` again (`leader p`)
+//! hands it over; a click on the slot or `leader p` takes it back.
 
 use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use mlua::Function;
 
-use super::App;
+use super::{App, Mode};
 use crate::luascreen::{Hooks, ScreenSpec, Update};
 use crate::screen::{Outcome, Screen};
 
@@ -26,6 +31,17 @@ pub struct PluginScreen {
     query_due: Option<Instant>,
 }
 
+/// Where an input event goes while the slot is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Route {
+    /// To the slot: settings or the plugin's screen.
+    Slot,
+    /// To the workspace, as with no slot open.
+    Workspace,
+    /// Taken already (the leader, from a slot with the keyboard).
+    Done,
+}
+
 /// A plugin's screen is redrawn at most this often, however fast it updates.
 const SCREEN_FRAME: Duration = Duration::from_millis(100);
 /// `on_query` runs this long after the last key typed into the filter.
@@ -36,12 +52,85 @@ impl App {
         self.plugin_screen.as_ref()
     }
 
+    /// Whether settings or a plugin's screen is open.
+    pub fn slot_open(&self) -> bool {
+        self.settings.is_some() || self.plugin_screen.is_some()
+    }
+
+    /// Whether the open slot has the keyboard (false with none open).
+    pub fn slot_has_keys(&self) -> bool {
+        self.slot_open() && self.slot_keys
+    }
+
+    /// Where the open slot is on screen: (x, y, w, h).
+    pub fn slot_rect(&self) -> Option<(u16, u16, u16, u16)> {
+        let bar_y = self.bar_rect().map(|b| b.y);
+        let (w, h) = (self.screen.w, self.screen.h);
+        if let Some(st) = self.settings.as_ref() {
+            return Some(st.panel.rect(w, h, bar_y));
+        }
+        self.plugin_screen
+            .as_ref()
+            .map(|ps| ps.screen.rect(w, h, bar_y))
+    }
+
+    /// `settings` with the slot open: the keyboard moves between it and
+    /// the panes.
+    pub(super) fn toggle_slot_keys(&mut self) {
+        self.slot_keys = !self.slot_keys;
+        self.dirty = true;
+    }
+
+    /// Where an event goes. The slot gets the keys while it has the
+    /// keyboard, except the leader, which enters WM mode here (never the
+    /// focused pane's own ranma: the slot is this one's). The mouse goes
+    /// by where it is: a press on the slot gives it the keyboard, a press
+    /// outside gives the keyboard to the workspace and acts there as usual.
+    pub(super) fn slot_route(&mut self, ev: &Event) -> Route {
+        if !self.slot_open() {
+            return Route::Workspace;
+        }
+        match ev {
+            Event::Key(k) => {
+                if !self.slot_keys || self.mode != Mode::Normal {
+                    return Route::Workspace;
+                }
+                let leader = self.config.settings.leader;
+                if k.kind != KeyEventKind::Release && crate::input::chord_of(k) == Some(leader) {
+                    self.enter_wm(leader);
+                    self.status = None;
+                    return Route::Done;
+                }
+                Route::Slot
+            }
+            Event::Paste(_) if self.slot_keys && self.mode == Mode::Normal => Route::Slot,
+            Event::Mouse(m) => {
+                let Some((x, y, w, h)) = self.slot_rect() else {
+                    return Route::Workspace;
+                };
+                let inside = m.column >= x && m.column < x + w && m.row >= y && m.row < y + h;
+                if matches!(m.kind, MouseEventKind::Down(_)) && inside != self.slot_keys {
+                    self.slot_keys = inside;
+                    self.dirty = true;
+                }
+                if inside {
+                    Route::Slot
+                } else {
+                    Route::Workspace
+                }
+            }
+            _ => Route::Workspace,
+        }
+    }
+
     /// `ranma.screen`: into the slot. Settings with unsaved edits asks first,
     /// and the screen opens once it is answered.
     pub(super) fn open_plugin_screen(&mut self, spec: ScreenSpec) {
         if let Some(st) = self.settings.as_mut() {
             if !st.panel.unsaved().is_empty() {
+                // The question needs an answer from the keyboard.
                 st.panel.confirm = true;
+                self.slot_keys = true;
                 self.pending_screen = Some(Box::new(spec));
                 self.dirty = true;
                 return;
@@ -55,6 +144,7 @@ impl App {
         if screen.options && screen.group.is_none() {
             screen.group = Some(screen.title.clone());
         }
+        self.slot_keys = true;
         self.plugin_screen = Some(PluginScreen {
             id: spec.id,
             screen,
@@ -76,6 +166,7 @@ impl App {
             return;
         }
         if let Some(back) = self.stashed_screen.take() {
+            self.slot_keys = true;
             self.plugin_screen = Some(back);
             self.dirty = true;
         }

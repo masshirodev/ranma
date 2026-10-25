@@ -331,7 +331,7 @@ sent them, which it is not asked to.
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | The palette in help mode (`?`, `leader ?`): every bind, filterable by key or action; `Enter` runs the selected one. |
 | `command_palette` | The palette in command mode (`:`, `leader :`): every action, bound or not, with its argument and key. `Tab` completes one into the query; type its argument and the line heads the list as `run: …`, or as the parser's error if it would not parse. `Enter` runs it (one that needs an argument completes instead). The query's first character is the mode: `?` keys, `:` or `>` commands; typing it switches, `Ctrl+U` clears the rest. |
-| `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. `leader p`, or `:settings` in the palette. See [The settings panel](#the-settings-panel). |
+| `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. `leader p`, or `:settings` in the palette. With the panel or a plugin's screen already open, it moves the keyboard between it and the panes instead. See [The settings panel](#the-settings-panel). |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` (`open` on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
@@ -1489,7 +1489,15 @@ last). After that it knows everything, the settings panel's values included.
 ranma's own, the theme keys it shows, and every plugin's, grouped. The panes
 are laid out beside it, so a change to gaps, borders or dimming shows as you
 make it. Closing gives them their width back. The bar says ` SET ` while it is
-open, and it has the keyboard.
+open and has the keyboard.
+
+The panel can hand the keyboard to the panes and stay open, for typing in a
+shell while reading it: click a pane, move the focus (`leader` and an arrow), or
+press `leader p` again. Its frame then takes the unfocused border colour, and
+every key (`esc` and `q` included) goes to the focused pane. A click on the
+panel, or `leader p`, gives it the keyboard back. The leader always reaches
+ranma, even while the panel has the keyboard. The same goes for a plugin's
+screen (see [Screens](#screens-ranmascreen)).
 
 | Key | |
 | --- | --- |
@@ -1503,7 +1511,7 @@ open, and it has the keyboard.
 | `space` | Peek: the panel folds to one row at the bottom, the workspace full width; `←→` still steps. |
 | `?` | The keys and the marks. |
 | `w` | Save to `settings.toml`. |
-| `esc` | Close. With unsaved edits it asks: `w` save, `d` discard, `esc` keep editing. |
+| `esc` `q` | Close. With unsaved edits it asks: `w` save, `d` discard, `esc` keep editing. |
 
 Edits apply live as you make them and are saved only with `w`. One that ranma
 refuses (a leader that is no chord, a theme that does not load) is taken back,
@@ -1657,8 +1665,11 @@ one row kept in view), `home` `end` (the first and last row), `tab` (next
 heading), `/` (filter),
 `esc` (close) and `?` (keys), plus `←→` `h` `l` and `enter` on an editable row.
 A screen or row binding one of them is an error naming it. `space` peeks
-(the screen folds to its selected row at the bottom) and `o` opens the
-plugin's options, unless the plugin binds those keys itself. A key's function
+(the screen folds to its selected row at the bottom), `o` opens the
+plugin's options and `q` does what `esc` does, unless the plugin binds those
+keys itself. Like the settings panel, a screen hands the keyboard to the
+panes and stays open when a pane is clicked, the focus moves, or `leader p`
+is pressed; a click on it or `leader p` takes it back. A key's function
 gets the selected row's id (`nil` with nothing selected). The footer shows the
 selected row's keys, then the screen's, dropping from the end; `? keys` always
 stays. The mouse selects a row and the wheel moves through them.
