@@ -2278,6 +2278,21 @@ Decided:
   send no `B` get `input = nil` and a plugin falls back to the program's own
   keys (`home`, `end`), as before. Not marks' `command` line plus a column:
   that would hand the cell-versus-byte problem back to every plugin.
+- **An empty line is the PTY reader's to say.** A prompt drawn again after
+  `B` (zle-line-init, powerlevel10k's async git status) is printed under
+  the old `B` tag, and the new `B` lands only on the first character
+  typed: with nothing typed, the grid cannot tell the prompt from input.
+  So the reader keeps one more fact per pane, whether a `B` is waiting for
+  its character, and then the input is empty at the cursor. Found on the
+  real prompt, the same day (2026-10-26).
+- **A suggestion is not input.** zsh-autosuggestions and fish draw a
+  suggestion after the cursor, under the same `B` tag, and accepting it is
+  the editor's business: a vi layer counting it as typed text sends Right
+  into it, which accepts it. Nothing in the grid says "suggestion" but its
+  look, so a trailing run after the cursor drawn dim or grey (colour 8, the
+  grey ramp 232-255) is left out, with the blanks zle draws around it. A
+  comment typed in grey at the end of the line, after the cursor, is left
+  out with it; that is the price of reading looks, and the smaller one.
 - **"A full-screen program" is the alternate screen**, not a list of
   names: editors, pagers, `htop`, `fzf` and a ranma all switch to it, here
   or over ssh. `screen_change` is seen on a pane's wakeup and as a pane

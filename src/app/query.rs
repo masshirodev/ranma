@@ -240,6 +240,7 @@ impl App {
                     title: p.label().to_string(),
                     cols: p.size.cols,
                     rows: p.size.rows,
+                    input_waiting: Some(p.input_waiting.clone()),
                     ..PaneEntry::new(id, p.pid, &p.term)
                 })
             })

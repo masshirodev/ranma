@@ -115,6 +115,13 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// The shell said its command line starts here (133;B) and has printed
+    /// nothing since: nothing is typed yet, and the cursor is where typing
+    /// goes. A `B` tag lands only on a character, so the grid cannot say it.
+    pub fn input_waiting(&self) -> bool {
+        self.pending.last().is_some_and(|k| k == "B")
+    }
+
     /// Feed bytes as read from the PTY; returns what they finished saying.
     pub fn feed(&mut self, bytes: &[u8], now: Instant) -> Vec<Mark> {
         let mut out = Vec::new();

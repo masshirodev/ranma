@@ -138,6 +138,8 @@ pub type Tee = Arc<std::sync::Mutex<Option<std::sync::mpsc::SyncSender<Vec<u8>>>
 
 struct ScanReader {
     tee: Tee,
+    /// The scanner's `input_waiting`, for `pane:cursor()` on ranma's thread.
+    input_waiting: Arc<AtomicBool>,
     /// The PTY's own descriptor, duplicated: the event loop polls the
     /// original and reads through this one, which is the same open file.
     file: std::fs::File,
@@ -263,6 +265,8 @@ impl std::io::Read for ScanReader {
         while at < n {
             let (marks, used) = self.scanner.feed_until_graphics(&buf[at..n], now);
             at += used;
+            self.input_waiting
+                .store(self.scanner.input_waiting(), Ordering::Release);
             let mut placed = None;
             let mut tag = None;
             for m in marks {
@@ -461,6 +465,9 @@ pub struct Pane {
     pub master_fd: std::os::fd::RawFd,
     /// `pipe_pane`'s sink, shared with the PTY reader.
     tee: Tee,
+    /// A shell's prompt said where its command line starts and nothing is
+    /// typed yet (`osc::Scanner::input_waiting`), as the PTY reader last saw.
+    pub input_waiting: Arc<AtomicBool>,
     /// The PTY's I/O thread; it drops the PTY (hanging up the child) as it ends.
     io_thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -647,9 +654,11 @@ impl Pane {
         } = parts;
         let master_fd = master.as_raw_fd();
         let tee: Tee = Arc::default();
+        let input_waiting: Arc<AtomicBool> = Arc::default();
         let pty = ScanPty {
             reader: ScanReader {
                 tee: tee.clone(),
+                input_waiting: input_waiting.clone(),
                 placer: Default::default(),
                 out: Vec::new(),
                 raw: Vec::new(),
@@ -690,6 +699,7 @@ impl Pane {
             command: None,
             start_cwd: None,
             tee,
+            input_waiting,
             master_fd,
             io_thread,
         })
@@ -1155,11 +1165,21 @@ mod tests {
         chunk: usize,
         buf: usize,
     ) -> Term<alacritty_terminal::event::VoidListener> {
+        read_through(bytes, chunk, buf).0
+    }
+
+    /// [`through_the_reader`], with whether a `B` waits for its character.
+    fn read_through(
+        bytes: &[u8],
+        chunk: usize,
+        buf: usize,
+    ) -> (Term<alacritty_terminal::event::VoidListener>, bool) {
         use std::io::{Read, Write};
         let (r, mut w) = std::io::pipe().unwrap();
         let (tx, _rx) = std::sync::mpsc::channel();
         let mut reader = ScanReader {
             tee: Default::default(),
+            input_waiting: Default::default(),
             file: std::fs::File::from(std::os::fd::OwnedFd::from(r)),
             scanner: Default::default(),
             proxy: Proxy {
@@ -1195,7 +1215,7 @@ mod tests {
                 }
             }
         }
-        term
+        (term, reader.input_waiting.load(Ordering::Acquire))
     }
 
     fn marks_through_the_reader(
@@ -1298,7 +1318,8 @@ mod tests {
     }
 
     fn cursor_after(bytes: &[u8]) -> crate::panetext::CursorAt {
-        crate::panetext::cursor(&through_the_reader(bytes, 4096, 4096))
+        let (term, waiting) = read_through(bytes, 4096, 4096);
+        crate::panetext::cursor(&term, waiting)
     }
 
     const PROMPT: &[u8] = b"\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07";
@@ -1313,6 +1334,65 @@ mod tests {
         assert_eq!(c.input, Some((2, 9)));
         assert!(c.visible);
         assert_eq!(c.shape, "block");
+    }
+
+    #[test]
+    fn a_prompt_drawn_again_with_nothing_typed_is_not_input() {
+        // zle draws the prompt again after B (an async redraw, zle-line-init):
+        // the old B tag is still open over it, and the new B has no
+        // character to land on yet.
+        let c = cursor_after(&[PROMPT, b"\r\x1b[K$ \x1b]133;B\x07"].concat());
+        assert_eq!(c.offset, 2);
+        assert_eq!(c.input, Some((2, 2)), "{c:?}");
+        // Typed after the redraw: the new B lands on the text.
+        let c = cursor_after(&[PROMPT, b"\r\x1b[K$ \x1b]133;B\x07ls"].concat());
+        assert_eq!(c.input, Some((2, 4)));
+        // A command that ran is not waiting for input any more.
+        let c = cursor_after(
+            &[
+                PROMPT,
+                b"
+\x1b]133;C\x07",
+            ]
+            .concat(),
+        );
+        assert_eq!(c.input, None);
+    }
+
+    #[test]
+    fn a_suggestion_after_the_cursor_is_not_input() {
+        // zsh-autosuggestions' default (colour 8), a grey of the 256-colour
+        // ramp (fg=245), fish's bright black, and dim text: drawn after what
+        // was typed, the cursor left before it.
+        for ghost in [
+            &b"\x1b[38;5;8mus\x1b[0m"[..],
+            b"\x1b[38;5;245mus\x1b[0m",
+            b"\x1b[90mus\x1b[0m",
+            b"\x1b[2mus\x1b[0m",
+        ] {
+            let c = cursor_after(&[PROMPT, b"git stat", ghost, b"\x1b[2D"].concat());
+            assert_eq!(c.text, "$ git status");
+            assert_eq!((c.offset, c.input), (10, Some((2, 10))), "{ghost:?}");
+        }
+        // Recorded from zsh with zsh-autosuggestions: `git stat` with `us`
+        // suggested, then four Backspaces. zle draws `pull` in grey and then
+        // plain spaces over what is left of `status`.
+        let c = cursor_after(
+            &[
+                PROMPT,
+                b"git stat\x1b[8D\x1b[32mg\x1b[32mi\x1b[32mt\x1b[39m\x1b[5C\x1b[38;5;245mus\x1b[39m\x08\x08",
+                b"\x08\x1b[38;5;245mu\x1b[38;5;245ms\x1b[39m\x1b[39m \x08\x08\x08\x08\x08\x08\x08\x08\x08\x08",
+                b"\x1b[39mg\x1b[39mi\x1b[39mt\x1b[4C\x08\x1b[38;5;245mu\x1b[38;5;245ms\x1b[39m\x1b[39m \x08\x08\x08\x08",
+                b"\x1b[38;5;245mu\x1b[38;5;245ms\x1b[39m\x1b[39m \x08\x08\x08\x08 \x1b[39m \x1b[39m \x08\x08\x08\x08\x08\x08\x08",
+                b"\x1b[32mg\x1b[32mi\x1b[32mt\x1b[39m\x1b[1C\x1b[38;5;245mpull\x1b[39m\x08\x08\x08\x08",
+            ]
+            .concat(),
+        );
+        assert_eq!(c.text, "$ git pull");
+        assert_eq!((c.offset, c.input), (6, Some((2, 6))));
+        // Grey typed text before the cursor is still typed text.
+        let c = cursor_after(&[PROMPT, b"\x1b[90mgit\x1b[0m"].concat());
+        assert_eq!(c.input, Some((2, 5)));
     }
 
     #[test]

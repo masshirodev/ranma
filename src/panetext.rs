@@ -343,7 +343,8 @@ pub struct CursorAt {
     pub offset: usize,
     /// What was typed at a shell prompt, as characters of `text` from..to,
     /// when the cursor is in it: the cells the prompt's `B` mark (OSC 133)
-    /// tagged, in one run through the cursor. None without the mark.
+    /// tagged, in one run through the cursor, less a suggestion drawn faint
+    /// after it. None without the mark.
     pub input: Option<(usize, usize)>,
 }
 
@@ -357,7 +358,11 @@ fn tag_of(cell: &alacritty_terminal::term::cell::Cell) -> Option<(u64, bool)> {
 }
 
 /// Where the cursor of `term` is, and its line. See [`CursorAt`].
-pub fn cursor<T>(term: &Term<T>) -> CursorAt {
+/// `waiting`: the PTY reader saw a `B` with nothing printed after it
+/// (`osc::Scanner::input_waiting`), so nothing is typed yet. The grid cannot
+/// say so: a tag lands only on a character, and a prompt drawn again after
+/// `B` is drawn under the old one.
+pub fn cursor<T>(term: &Term<T>, waiting: bool) -> CursorAt {
     use alacritty_terminal::term::TermMode;
     use alacritty_terminal::vte::ansi::CursorShape;
 
@@ -398,6 +403,8 @@ pub fn cursor<T>(term: &Term<T>) -> CursorAt {
     let prompt = prompt.filter(|n| *n == newest);
 
     let mut text = String::new();
+    // Per character: drawn the way line editors draw a suggestion (below).
+    let mut ghost: Vec<bool> = Vec::new();
     let mut chars = 0;
     let mut offset = None;
     // The first character under the prompt's tag, and where its run ends.
@@ -426,9 +433,12 @@ pub fn cursor<T>(term: &Term<T>) -> CursorAt {
             }
             text.push(if cell.c.is_control() { ' ' } else { cell.c });
             chars += 1;
+            let faint = is_ghost(cell);
+            ghost.push(faint);
             if let Some(extra) = cell.zerowidth() {
                 text.extend(extra);
                 chars += extra.len();
+                ghost.extend(extra.iter().map(|_| faint));
             }
         }
     }
@@ -436,19 +446,32 @@ pub fn cursor<T>(term: &Term<T>) -> CursorAt {
     // Trimmed, but the cursor may stand after spaces the user typed.
     let kept = text.trim_end().chars().count().max(offset);
     let text: String = text.chars().take(kept).collect();
-    let input = prompt.map(|_| {
-        // The first tagged run starts after the cursor: it is a right prompt
-        // drawn under the same tag, and nothing is typed yet.
-        let Some(from) = from.filter(|f| *f <= offset) else {
-            return (offset, offset);
-        };
-        let run = to.unwrap_or(chars).max(offset);
-        // Spaces the line editor drew over deleted characters are tagged
-        // too; only those before the cursor are the user's.
-        let typed = text.chars().take(run).collect::<String>();
-        let end = typed.trim_end().chars().count().max(offset).max(from);
-        (from, end.min(kept))
-    });
+    let input = if waiting {
+        Some((offset, offset))
+    } else {
+        prompt.map(|_| {
+            // The first tagged run starts after the cursor: it is a right prompt
+            // drawn under the same tag, and nothing is typed yet.
+            let Some(from) = from.filter(|f| *f <= offset) else {
+                return (offset, offset);
+            };
+            // `text` is trimmed already; the cursor is never past its end.
+            let mut run = to.unwrap_or(chars).max(offset).min(kept);
+            // Trimmed from the end, never past the cursor: a suggestion drawn
+            // after what was typed (zsh-autosuggestions, fish), which is the
+            // editor's to accept, not input; and blanks, which a line editor
+            // draws over what it deleted or what a suggestion replaced, and
+            // which are the user's only before the cursor.
+            let shown: Vec<char> = text.chars().collect();
+            while run > offset
+                && (ghost.get(run - 1).copied().unwrap_or(false)
+                    || shown.get(run - 1).is_some_and(|c| c.is_whitespace()))
+            {
+                run -= 1;
+            }
+            (from, run)
+        })
+    };
     CursorAt {
         line,
         col,
@@ -465,6 +488,21 @@ pub fn cursor<T>(term: &Term<T>) -> CursorAt {
         offset,
         input,
     }
+}
+
+/// Drawn as line editors draw a suggestion after the cursor: dim, or grey.
+/// Grey is colour 8 (zsh-autosuggestions' default, fish's) or the 256-colour
+/// palette's grey ramp, 232 to 255, where people move it (`fg=245`). Text
+/// typed in grey after the cursor at the end of the line (a comment, as
+/// zsh-syntax-highlighting may draw one) is taken for a suggestion too.
+fn is_ghost(cell: &alacritty_terminal::term::cell::Cell) -> bool {
+    use alacritty_terminal::vte::ansi::{Color, NamedColor};
+    cell.flags.contains(Flags::DIM)
+        || matches!(
+            cell.fg,
+            Color::Indexed(8 | 232..=255)
+                | Color::Named(NamedColor::BrightBlack | NamedColor::DimForeground)
+        )
 }
 
 /// Whether the program in `term` is on the alternate screen: a full-screen

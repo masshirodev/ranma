@@ -40,6 +40,8 @@ pub struct PaneEntry {
     pub rows: u16,
     pub pid: u32,
     pub term: Weak<FairMutex<Term<Proxy>>>,
+    /// The pane's `input_waiting` (see `pane::Pane`), for `:cursor()`.
+    pub input_waiting: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl PaneEntry {
@@ -57,6 +59,7 @@ impl PaneEntry {
             rows: 0,
             pid,
             term: Arc::downgrade(term),
+            input_waiting: None,
         }
     }
 }
@@ -191,10 +194,14 @@ impl UserData for Handle {
             Ok(out)
         });
         m.add_method("cursor", |lua, h, ()| {
+            let waiting =
+                h.0.input_waiting
+                    .as_ref()
+                    .is_some_and(|w| w.load(std::sync::atomic::Ordering::Acquire));
             let c = {
                 let term = h.term()?;
                 let term = term.lock();
-                panetext::cursor(&term)
+                panetext::cursor(&term, waiting)
             };
             let t = lua.create_table()?;
             t.set("line", c.line)?;

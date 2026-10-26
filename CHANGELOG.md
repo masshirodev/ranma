@@ -18,7 +18,7 @@ commit log has the detail.
 - `pane:cursor()`: where the program's cursor is and the line it stands on,
   soft-wrapped rows joined, with the cursor's offset in characters and, at a
   shell prompt that sends OSC 133 `B`, what was typed (`input`, a right
-  prompt left out). `pane:alt_screen()` and the `screen_change` event say
+  prompt and a grey suggestion left out). `pane:alt_screen()` and the `screen_change` event say
   when a full-screen program takes a pane, over ssh too. `ranma.mode`'s
   `cursor` (`block`, `bar`, `underline`) draws the focused pane's cursor in
   that shape while the mode is on. For a vi layer over a shell
