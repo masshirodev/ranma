@@ -1297,6 +1297,67 @@ mod tests {
         }
     }
 
+    fn cursor_after(bytes: &[u8]) -> crate::panetext::CursorAt {
+        crate::panetext::cursor(&through_the_reader(bytes, 4096, 4096))
+    }
+
+    const PROMPT: &[u8] = b"\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07";
+
+    #[test]
+    fn the_cursor_knows_its_line_and_what_was_typed_at_the_prompt() {
+        // Typed, then two arrows left: the cursor stands on `h`.
+        let c = cursor_after(&[PROMPT, b"echo hi\x1b[2D"].concat());
+        assert_eq!((c.line, c.col, c.start), (0, 7, 0));
+        assert_eq!(c.text, "$ echo hi");
+        assert_eq!(c.offset, 7);
+        assert_eq!(c.input, Some((2, 9)));
+        assert!(c.visible);
+        assert_eq!(c.shape, "block");
+    }
+
+    #[test]
+    fn a_right_prompt_under_the_same_mark_is_not_input() {
+        // Nothing typed: the right prompt drawn at the edge, the cursor sent
+        // back to where typing goes.
+        let c = cursor_after(&[PROMPT, b"\x1b[18GRP\r\x1b[2C"].concat());
+        assert_eq!(c.offset, 2);
+        assert_eq!(c.input, Some((2, 2)));
+        // Typed, with the right prompt there too.
+        let c = cursor_after(&[PROMPT, b"ls\x1b[18GRP\r\x1b[4C"].concat());
+        assert_eq!(c.text, "$ ls             RP");
+        assert_eq!(c.input, Some((2, 4)));
+    }
+
+    #[test]
+    fn spaces_typed_before_the_cursor_and_at_a_wrap_are_kept() {
+        let c = cursor_after(&[PROMPT, b"ls  "].concat());
+        assert_eq!(
+            (c.text.as_str(), c.offset, c.input),
+            ("$ ls  ", 6, Some((2, 6)))
+        );
+        // Seventeen a's and a space fill the 20-column row; `b` wraps.
+        let c = cursor_after(&[PROMPT, b"aaaaaaaaaaaaaaaaa b"].concat());
+        assert_eq!((c.line, c.start), (1, 0));
+        assert_eq!(c.text, "$ aaaaaaaaaaaaaaaaa b");
+        assert_eq!((c.offset, c.input), (21, Some((2, 21))));
+    }
+
+    #[test]
+    fn no_input_once_the_command_runs_or_without_marks() {
+        let c = cursor_after(&[PROMPT, b"make\r\n\x1b]133;C\x07building"].concat());
+        assert_eq!((c.line, c.text.as_str(), c.input), (1, "building", None));
+        let c = cursor_after(b"$ plain");
+        assert_eq!((c.offset, c.input), (7, None));
+    }
+
+    #[test]
+    fn the_alternate_screen_is_seen() {
+        let t = through_the_reader(b"$ ", 4096, 4096);
+        assert!(!crate::panetext::alt_screen(&t));
+        let t = through_the_reader(b"$ nvim\r\n\x1b[?1049h", 4096, 4096);
+        assert!(crate::panetext::alt_screen(&t));
+    }
+
     #[test]
     fn device_attributes_say_the_clipboard_is_passed_on() {
         assert_eq!(pty_reply("\x1b[?6c".into()), "\x1b[?62;22;52c");

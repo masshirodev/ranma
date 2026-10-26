@@ -556,7 +556,7 @@ fn draw_pane(
     f.set_cursor_position(at);
     Some((
         CursorState {
-            shape: c.shape,
+            shape: app.user_mode_cursor().unwrap_or(c.shape),
             blinking: term.cursor_style().blinking,
         },
         at,

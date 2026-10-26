@@ -190,6 +190,33 @@ impl UserData for Handle {
             }
             Ok(out)
         });
+        m.add_method("cursor", |lua, h, ()| {
+            let c = {
+                let term = h.term()?;
+                let term = term.lock();
+                panetext::cursor(&term)
+            };
+            let t = lua.create_table()?;
+            t.set("line", c.line)?;
+            t.set("col", c.col)?;
+            t.set("visible", c.visible)?;
+            t.set("shape", c.shape)?;
+            t.set("text", c.text)?;
+            t.set("start", c.start)?;
+            t.set("offset", c.offset)?;
+            if let Some((from, to)) = c.input {
+                let i = lua.create_table()?;
+                i.set("from", from)?;
+                i.set("to", to)?;
+                t.set("input", i)?;
+            }
+            Ok(t)
+        });
+        m.add_method("alt_screen", |_, h, ()| {
+            let term = h.term()?;
+            let term = term.lock();
+            Ok(panetext::alt_screen(&term))
+        });
         m.add_method("range", |_, h, ()| {
             let term = h.term()?;
             let term = term.lock();

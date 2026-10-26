@@ -320,6 +320,160 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
     out
 }
 
+/// Where a pane's cursor is and the line it stands on, for a script that
+/// edits that line through the program (a vi layer over a shell).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CursorAt {
+    /// The cursor's line and column (from 0), as `lines` and `search` count.
+    pub line: i32,
+    pub col: usize,
+    /// Whether the program shows it.
+    pub visible: bool,
+    /// `block`, `underline`, `bar`, `hollow` or `hidden`, as the program set it.
+    pub shape: &'static str,
+    /// The line it is on, its soft-wrapped rows joined: what a line editor
+    /// holds, where `lines` would trim each row and lose the spaces at a wrap.
+    /// Trimmed on the right, never short of the cursor.
+    pub text: String,
+    /// The row that line starts on.
+    pub start: i32,
+    /// How many characters of `text` come before the cursor. Columns count
+    /// cells and Lua strings count bytes; characters are what a line editor
+    /// moves over, one arrow each.
+    pub offset: usize,
+    /// What was typed at a shell prompt, as characters of `text` from..to,
+    /// when the cursor is in it: the cells the prompt's `B` mark (OSC 133)
+    /// tagged, in one run through the cursor. None without the mark.
+    pub input: Option<(usize, usize)>,
+}
+
+/// A shell mark's tag on a cell (see `osc`): its number, which grows mark by
+/// mark, and whether it carries a `B` (what follows is typed at a prompt).
+fn tag_of(cell: &alacritty_terminal::term::cell::Cell) -> Option<(u64, bool)> {
+    let h = cell.hyperlink()?;
+    let tag = h.uri().strip_prefix(crate::osc::TAG)?;
+    let (n, kinds) = tag.split_once(':')?;
+    Some((n.parse().ok()?, kinds.split('.').any(|k| k == "B")))
+}
+
+/// Where the cursor of `term` is, and its line. See [`CursorAt`].
+pub fn cursor<T>(term: &Term<T>) -> CursorAt {
+    use alacritty_terminal::term::TermMode;
+    use alacritty_terminal::vte::ansi::CursorShape;
+
+    let (top, bottom) = line_range(term);
+    let cols = term.columns();
+    let point = term.grid().cursor.point;
+    let (line, col) = (point.line.0, point.column.0.min(cols.saturating_sub(1)));
+    let shape = term.cursor_style().shape;
+    let wraps = |l: i32| {
+        term.grid()[Line(l)][Column(cols - 1)]
+            .flags
+            .contains(Flags::WRAPLINE)
+    };
+    let mut start = line;
+    while start > top && wraps(start - 1) {
+        start -= 1;
+    }
+    let mut last = line;
+    while last < bottom && wraps(last) {
+        last += 1;
+    }
+
+    // The prompt the cursor is at: the newest `B` on its line, unless a mark
+    // after it (a command started, or another prompt) says that one is over.
+    let mut prompt: Option<u64> = None;
+    let mut newest = 0;
+    for l in start..=bottom {
+        let row = &term.grid()[Line(l)];
+        for c in 0..cols {
+            if let Some((n, typed)) = tag_of(&row[Column(c)]) {
+                newest = newest.max(n);
+                if l <= last && typed {
+                    prompt = prompt.max(Some(n));
+                }
+            }
+        }
+    }
+    let prompt = prompt.filter(|n| *n == newest);
+
+    let mut text = String::new();
+    let mut chars = 0;
+    let mut offset = None;
+    // The first character under the prompt's tag, and where its run ends.
+    let (mut from, mut to) = (None, None);
+    for l in start..=last {
+        let row = &term.grid()[Line(l)];
+        for c in 0..cols {
+            if l == line && c == col {
+                offset = Some(chars);
+            }
+            let cell = &row[Column(c)];
+            if cell
+                .flags
+                .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+            {
+                continue;
+            }
+            if let Some(p) = prompt {
+                let tagged = tag_of(cell).is_some_and(|(n, _)| n == p);
+                if tagged && from.is_none() {
+                    from = Some(chars);
+                }
+                if from.is_some() && to.is_none() && !tagged {
+                    to = Some(chars);
+                }
+            }
+            text.push(if cell.c.is_control() { ' ' } else { cell.c });
+            chars += 1;
+            if let Some(extra) = cell.zerowidth() {
+                text.extend(extra);
+                chars += extra.len();
+            }
+        }
+    }
+    let offset = offset.unwrap_or(chars);
+    // Trimmed, but the cursor may stand after spaces the user typed.
+    let kept = text.trim_end().chars().count().max(offset);
+    let text: String = text.chars().take(kept).collect();
+    let input = prompt.map(|_| {
+        // The first tagged run starts after the cursor: it is a right prompt
+        // drawn under the same tag, and nothing is typed yet.
+        let Some(from) = from.filter(|f| *f <= offset) else {
+            return (offset, offset);
+        };
+        let run = to.unwrap_or(chars).max(offset);
+        // Spaces the line editor drew over deleted characters are tagged
+        // too; only those before the cursor are the user's.
+        let typed = text.chars().take(run).collect::<String>();
+        let end = typed.trim_end().chars().count().max(offset).max(from);
+        (from, end.min(kept))
+    });
+    CursorAt {
+        line,
+        col,
+        visible: term.mode().contains(TermMode::SHOW_CURSOR) && shape != CursorShape::Hidden,
+        shape: match shape {
+            CursorShape::Block => "block",
+            CursorShape::Underline => "underline",
+            CursorShape::Beam => "bar",
+            CursorShape::HollowBlock => "hollow",
+            CursorShape::Hidden => "hidden",
+        },
+        text,
+        start,
+        offset,
+        input,
+    }
+}
+
+/// Whether the program in `term` is on the alternate screen: a full-screen
+/// program (an editor, a pager, a ranma) rather than a line-by-line one.
+pub fn alt_screen<T>(term: &Term<T>) -> bool {
+    term.mode()
+        .contains(alacritty_terminal::term::TermMode::ALT_SCREEN)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

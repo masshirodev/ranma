@@ -1399,6 +1399,8 @@ line's number, so a number is good for the moment it was read in.
 | Method | |
 | --- | --- |
 | `:range()` | The first and last line that exist now: `-history, rows - 1`. |
+| `:cursor()` | Where the program's cursor is and the line it stands on: `{ line, col, visible, shape, text, start, offset, input }`. `line` and `col` as `:lines()` and `:search()` number them (`col` counts cells). `shape` is `block`, `underline`, `bar`, `hollow` or `hidden`, as the program set it. `text` is the line under the cursor with its soft-wrapped rows joined (what a line editor holds; `:lines()` would trim each row and lose a space at the wrap), trimmed on the right but never short of the cursor, and `start` the row it starts on. `offset` is how many **characters** of `text` come before the cursor: what a line editor moves over, one arrow each, where `col` counts cells and Lua indexes bytes. `input` is `{ from, to }`, characters of `text`, what was typed at a shell prompt when the cursor is at one: the run of cells under the prompt's `133;B` mark that reaches the cursor (a right prompt drawn under the same mark is past a gap, and left out). `nil` for a shell that sends no `B` (powerlevel10k does with `POWERLEVEL9K_TERM_SHELL_INTEGRATION=true`), and once the command has started. For a vi layer over a shell (vi.ranma). |
+| `:alt_screen()` | Whether the program is on the alternate screen: a full-screen program (an editor, a pager, `htop`, a ranma), told apart from a line-by-line one without knowing its name, over ssh too. `screen_change` says when it flips. |
 | `:lines(first, last)` | The text of those lines, both included (default: the screen), clamped to what exists, each trimmed on the right. |
 | `:search(pattern, { limit })` | Every match of the regex (copy mode's syntax), newest first, at most `limit` (default 100, never more than 1000), over the screen and the whole scrollback. Each is `{ line, col, end_line, end_col, text }`, columns from 0. A match running onto a wrapped row ends on the next line. |
 | `:cwd()` | The directory its process is in, or `nil`. |
@@ -2038,6 +2040,7 @@ ranma.mode("resize", {
   sticky = true,                           -- stay after a bind (default)
   hint = 1.5,                              -- its own which-key pause (below)
   hint_at = "top_right",                   -- and where it stands; default: wm_mode.hint_at
+  cursor = "block",                        -- the focused pane's cursor in it (below)
   on_enter = function() end,
   on_exit = function() end,
 })
@@ -2051,7 +2054,11 @@ and under the label as their heading unless a bind names a `group`. It
 shows after the mode's own `hint`: `false` never shows it in this mode, seconds
 (0 to 10) are its pause, and `true` or leaving it out follows
 `wm_mode.hint`. So a mode you know by heart can stay quiet while WM mode
-keeps its hint. A ranma inside another one sends its mode's label out with
+keeps its hint. `cursor` (`block`, `bar` or `underline`) draws the focused
+pane's cursor in that shape while the mode is on, over the shape the program
+asked for, which comes back when it ends: a vi layer's NORMAL as a block,
+while the shell's own is a bar. Left out, the program's shape stays. A
+program that hides its cursor keeps it hidden. A ranma inside another one sends its mode's label out with
 its mode, so the outer bar says ` ⧉ NORMAL `, not ` ⧉ WM `; an outer older
 than that still says WM.
 
@@ -2154,6 +2161,7 @@ end)
 | `pane_resize` | `pane`, `cols`, `rows` — a pane's terminal changed size: once the size settled (a mouse drag says it when the button is released), only for panes whose size really changed. A host resize changes every pane on screen, so keep it cheap. |
 | `float_change` | `pane`, `floating` — a pane floated, or was tiled again. |
 | `workspace_rename` | `workspace`, `name` (`nil` when cleared), `previous` — a workspace was named, renamed or its name cleared; not when the name stays the same. |
+| `screen_change` | `pane`, `workspace`, `visible`, `alt` — the pane's program went onto the alternate screen (`alt` true: a full-screen program started) or back. Seen as the pane prints; a pane out of sight sends no output news until it is shown, so a flip made there is told as it comes into view. Tracked only while a hook listens, and a new configuration does not hear of programs already on it: ask `pane:alt_screen()`. |
 | `before_close` | `pane`, `workspace`, `title`, `program` — the close key, the pane menu or a toolbar button is about to close a pane. **Return `false` to keep it** (a picker asking, say, for a pane still running something); anything else lets it close, and so does a hook that errors, so a broken hook never traps a pane. Not asked when a program ends, on `pane:close()`, on quit or on detach. Within a bind's time budget. |
 | `user:<name>` | whatever `ranma.emit(name, data)` passed — a plugin's own event; see below |
 
@@ -2248,11 +2256,15 @@ the spelling against this table:
 | `hook.float_change` | the `float_change` event |
 | `hook.layout_change` | the `layout_change` event |
 | `hook.pane_resize` | the `pane_resize` event |
+| `hook.screen_change` | the `screen_change` event |
 | `hook.workspace_rename` | the `workspace_rename` event |
+| `mode.cursor` | `ranma.mode`'s `cursor` |
 | `module.nested` | `ranma.module`'s `nested` option (`follow`, `own`, `hide`) |
 | `mouse` | `ranma.mouse` binds |
 | `open` | `ranma.open`, and floats that open without resizing the tiles |
 | `open_here` | `ranma.open_here`, which opens a file of this machine on the machine at the keyboard |
+| `pane.alt_screen` | `pane:alt_screen()` |
+| `pane.cursor` | `pane:cursor()` |
 | `pane.style` | `pane:style` and a rule's `style` |
 | `placement` | `ranma.placement` policies |
 | `rule.group` | a window rule's `group` |

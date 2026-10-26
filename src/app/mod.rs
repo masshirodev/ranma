@@ -236,6 +236,8 @@ pub struct App {
     silence_due: Option<Instant>,
     /// The directory each pane's shell was last seen in, for `cwd_change`.
     cwds: HashMap<PaneId, String>,
+    /// Panes on the alternate screen when `screen_change` last looked.
+    alt_screens: HashSet<PaneId>,
     /// The cell the pointer is over (pane, line, column, x, y), and when it
     /// has rested there long enough for `hover`.
     hover_at: Option<(PaneId, i32, u16, u16, u16)>,
@@ -492,6 +494,7 @@ impl App {
             silence: HashMap::new(),
             silence_due: None,
             cwds: HashMap::new(),
+            alt_screens: HashSet::new(),
             hover_at: None,
             hover_due: None,
             hover_sent: None,
@@ -1067,12 +1070,19 @@ impl App {
             });
         }
         // A peek is on screen too: its output is worth a frame.
+        let before = std::mem::take(&mut self.visible);
         self.visible = frame
             .views
             .iter()
             .map(|v| v.id)
             .chain(frame.peeks.iter().map(|p| p.id))
             .collect();
+        // Out of sight a pane stops sending wakeups, so a screen it changed
+        // meanwhile is noticed as it comes back into view.
+        let shown: Vec<PaneId> = self.visible.difference(&before).copied().collect();
+        for id in shown {
+            self.note_screen(id);
+        }
         self.dirty = true;
     }
 
@@ -1783,6 +1793,7 @@ impl App {
                 self.mark_activity(id, visible);
                 self.note_printed(id);
                 self.watch_output(id);
+                self.note_screen(id);
             }
             TermEvent::Bell => {
                 let (workspace, title) = (self.workspace_of(id), self.label_of(id));
@@ -2987,6 +2998,14 @@ impl App {
         Some(&m.label)
     }
 
+    /// The cursor shape the user mode on now asks for, if any.
+    pub fn user_mode_cursor(&self) -> Option<CursorShape> {
+        if self.mode != Mode::Wm {
+            return None;
+        }
+        self.config.modes.get(self.user_mode.as_ref()?)?.cursor
+    }
+
     /// `mode NAME`: WM mode with that mode's keys, after its `on_enter`.
     fn enter_user_mode(&mut self, name: &str) {
         let Some(mode) = self.config.modes.get(name) else {
@@ -3493,6 +3512,14 @@ impl App {
                 self.report_plugin_failures();
                 self.relayout();
                 self.render_state_modules();
+                // Seeded quietly: a hook that is new with this config hears of
+                // changes from now, not of every editor already open.
+                self.alt_screens = self
+                    .panes
+                    .iter()
+                    .filter(|(_, p)| crate::panetext::alt_screen(&p.term.lock()))
+                    .map(|(id, _)| *id)
+                    .collect();
                 self.emit(HookEvent::ConfigReload, |_| Ok(()));
                 self.start_hako();
             }
@@ -3695,6 +3722,33 @@ impl App {
             .get(&id)
             .map(|p| p.label().to_string())
             .unwrap_or_default()
+    }
+
+    /// `screen_change` if the pane went onto the alternate screen or back.
+    /// Looked at only while a hook listens, as it costs the terminal's lock.
+    fn note_screen(&mut self, id: PaneId) {
+        if !self.config.hooks.contains_key(&HookEvent::ScreenChange) {
+            return;
+        }
+        let Some(p) = self.panes.get(&id) else {
+            return;
+        };
+        let alt = crate::panetext::alt_screen(&p.term.lock());
+        if alt == self.alt_screens.contains(&id) {
+            return;
+        }
+        if alt {
+            self.alt_screens.insert(id);
+        } else {
+            self.alt_screens.remove(&id);
+        }
+        let (workspace, visible) = (self.workspace_of(id), self.visible.contains(&id));
+        self.emit(HookEvent::ScreenChange, |t| {
+            t.set("pane", id)?;
+            t.set("workspace", workspace)?;
+            t.set("visible", visible)?;
+            t.set("alt", alt)
+        });
     }
 
     /// A pane printed. Tracked only for a `pane_idle` hook: a pane nobody
@@ -8028,6 +8082,64 @@ mod tests {
                 a.handle(ev);
             }
         }
+    }
+
+    #[test]
+    fn screen_change_fires_as_a_pane_enters_and_leaves_the_alternate_screen() {
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(
+                r#"
+                seen = {}
+                ranma.on("screen_change", function(e)
+                  seen[#seen + 1] = tostring(e.alt) .. ":" .. tostring(e.visible)
+                end)
+                "#,
+            ),
+        )
+        .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        a.run_action(
+            r"exec printf '\033[?1049h'; sleep 0.3; printf '\033[?1049l'; sleep 30"
+                .parse()
+                .unwrap(),
+        );
+        let seen = |a: &App| -> Vec<String> {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        // No frames are drawn here: each event is followed by what a frame
+        // does first, or the pane sends one wakeup and then none.
+        let end = Instant::now() + Duration::from_secs(5);
+        while seen(&a).len() < 2 {
+            assert!(Instant::now() < end, "timed out: {:?}", seen(&a));
+            if let Ok(ev) = rx.recv_timeout(Duration::from_millis(50)) {
+                a.handle(ev);
+                a.begin_frame();
+            }
+        }
+        assert_eq!(seen(&a), ["true:true", "false:true"]);
+    }
+
+    #[test]
+    fn a_user_mode_sets_the_cursor_shape_only_while_it_is_on() {
+        let mut a = app(Some(
+            r#"ranma.mode("vi", { cursor = "bar", binds = { h = "send left" } })
+               ranma.mode("plain", { binds = { h = "send left" } })"#,
+        ));
+        assert_eq!(a.user_mode_cursor(), None);
+        a.run_action("mode vi".parse().unwrap());
+        assert_eq!(a.user_mode_cursor(), Some(CursorShape::Beam));
+        a.run_action("mode plain".parse().unwrap());
+        assert_eq!(
+            a.user_mode_cursor(),
+            None,
+            "a mode without one keeps the program's"
+        );
+        a.run_action(Action::ExitMode);
+        assert_eq!(a.user_mode_cursor(), None);
     }
 
     /// Board 01 of the scrolling handoff: four columns on 120 cells (zsh ⅓,

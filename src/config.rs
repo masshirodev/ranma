@@ -466,6 +466,9 @@ pub struct UserMode {
     pub hint: Option<Option<std::time::Duration>>,
     /// Where its which-key hint stands; `None` follows `wm_mode.hint_at`.
     pub hint_at: Option<HintAt>,
+    /// The focused pane's cursor shape while it is on; `None` keeps the
+    /// program's.
+    pub cursor: Option<alacritty_terminal::vte::ansi::CursorShape>,
     pub on_enter: Option<Rc<RegistryKey>>,
     pub on_exit: Option<Rc<RegistryKey>>,
 }
@@ -535,10 +538,13 @@ pub enum Event {
     /// The close key, the pane menu or a toolbar is about to close a pane: a
     /// hook returning false keeps it.
     BeforeClose,
+    /// A pane's program went onto the alternate screen (a full-screen
+    /// program started) or back to the main one.
+    ScreenChange,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 26] = [
+pub const EVENTS: [(&str, Event); 27] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -563,6 +569,7 @@ pub const EVENTS: [(&str, Event); 26] = [
     ("float_change", Event::FloatChange),
     ("workspace_rename", Event::WorkspaceRename),
     ("before_close", Event::BeforeClose),
+    ("screen_change", Event::ScreenChange),
     ("module_shown", Event::ModuleShown),
     ("module_hidden", Event::ModuleHidden),
 ];
@@ -1830,11 +1837,15 @@ pub const CAPABILITIES: &[&str] = &[
     "hook.float_change",
     "hook.layout_change",
     "hook.pane_resize",
+    "hook.screen_change",
     "hook.workspace_rename",
+    "mode.cursor",
     "module.nested",
     "mouse",
     "open",
     "open_here",
+    "pane.alt_screen",
+    "pane.cursor",
     "pane.style",
     "placement",
     "rule.group",
@@ -1953,6 +1964,7 @@ fn install_api(
                 sticky: true,
                 hint: None,
                 hint_at: None,
+                cursor: None,
                 on_enter: None,
                 on_exit: None,
             };
@@ -1972,6 +1984,19 @@ fn install_api(
                                 HintAt::NAMES.join(", ")
                             ))
                         })?);
+                    }
+                    ("cursor", Value::String(v)) => {
+                        use alacritty_terminal::vte::ansi::CursorShape;
+                        mode.cursor = Some(match &*v.to_str()? {
+                            "block" => CursorShape::Block,
+                            "bar" => CursorShape::Beam,
+                            "underline" => CursorShape::Underline,
+                            other => {
+                                return Err(rt_err(format!(
+                                    "{who}: cursor must be one of block, bar, underline, not `{other}`"
+                                )));
+                            }
+                        });
                     }
                     ("hint", v @ (Value::Integer(_) | Value::Number(_))) => {
                         let secs = match v {
@@ -2010,7 +2035,7 @@ fn install_api(
                             mode.binds.insert(path[0], bind);
                         }
                     }
-                    (k @ ("label" | "sticky" | "hint" | "hint_at" | "on_enter" | "on_exit" | "binds"), other) => {
+                    (k @ ("label" | "sticky" | "hint" | "hint_at" | "cursor" | "on_enter" | "on_exit" | "binds"), other) => {
                         return Err(rt_err(format!(
                             "{who}: `{k}` cannot be {}",
                             other.type_name()
@@ -2018,7 +2043,7 @@ fn install_api(
                     }
                     (k, _) => {
                         return Err(rt_err(format!(
-                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, hint_at, on_enter, on_exit)"
+                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, hint_at, cursor, on_enter, on_exit)"
                         )));
                     }
                 }
@@ -4169,6 +4194,14 @@ mod tests {
         assert!(
             err(r#"ranma.mode("m", { binds = { ["a b"] = "detach" } })"#)
                 .contains("keys inside a folder are bound with ranma.bind")
+        );
+        assert!(
+            err(r#"ranma.mode("m", { cursor = "beam", binds = {} })"#)
+                .contains("cursor must be one of block, bar, underline, not `beam`")
+        );
+        assert!(
+            err(r#"ranma.mode("m", { cursor = true, binds = {} })"#)
+                .contains("`cursor` cannot be boolean")
         );
     }
 

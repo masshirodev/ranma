@@ -2254,6 +2254,41 @@ With it (2026-10-13): `layout_change`, `pane_resize` (once per settled size,
 only panes whose size changed), `float_change` and `workspace_rename` (not
 when the name stays).
 
+### A line editor seen from Lua: `pane:cursor()`, `pane:alt_screen()`, a mode's cursor (2026-10-26)
+
+vi.ranma (the vi.lua above, made a plugin) puts a vi NORMAL over shells and
+Claude Code's prompt. Without these it sent emacs keys blind: it could not
+tell where the cursor stood, so `f`, `t`, `e`, yank and paste were out of
+reach, and it told a full-screen program from a shell by the process's name,
+which fails over ssh (the name is `ssh`, whatever runs on the far side).
+Decided:
+
+- **The cursor comes with its line, read in the core.** `pane:cursor()`
+  gives the line under the cursor with its soft-wrapped rows joined and the
+  cursor's offset in it in **characters**. Columns count cells and Lua
+  indexes bytes; a line editor moves one character per arrow, so characters
+  are the unit a script can act in. Joining rows in Lua from `:lines()`
+  cannot be done right: each row is trimmed, and a space at the wrap point
+  is gone.
+- **What was typed is the run under the prompt's `B` tag through the
+  cursor.** OSC 133 `B` is where the command line starts (the tags of
+  `pane:marks()`). The tag stays open until the next mark, so a right prompt
+  drawn after `B` is tagged too, but it is drawn past a gap of cells nobody
+  wrote, and a run that starts after the cursor is not input. Shells that
+  send no `B` get `input = nil` and a plugin falls back to the program's own
+  keys (`home`, `end`), as before. Not marks' `command` line plus a column:
+  that would hand the cell-versus-byte problem back to every plugin.
+- **"A full-screen program" is the alternate screen**, not a list of
+  names: editors, pagers, `htop`, `fzf` and a ranma all switch to it, here
+  or over ssh. `screen_change` is seen on a pane's wakeup and as a pane
+  comes into view (a pane out of sight sends no wakeups until it is drawn),
+  never during a frame, since Lua does not run on the render path. It is
+  looked for only while a hook listens, as it costs the terminal's lock, and
+  a reload seeds the state quietly instead of reporting every open editor.
+- **A mode can set the cursor's shape** (`cursor = "block"`), over the
+  program's while it is on: NORMAL shows at the cursor, where you are
+  looking, and not only in the bar. Hidden stays hidden.
+
 ### Small things a terminal is expected to do
 
 - **New panes start where you are.** A new pane, an `exec`, a new session and an

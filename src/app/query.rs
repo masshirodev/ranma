@@ -54,6 +54,7 @@ impl App {
     pub(super) fn pane_ended(&mut self, id: PaneId) {
         let reported = self.dead.remove(&id).is_some();
         self.cwds.remove(&id);
+        self.alt_screens.remove(&id);
         self.activity.remove(&id);
         self.silence.remove(&id);
         self.pipes.remove(&id);

@@ -119,6 +119,7 @@ function ranma.bind(keys, action, opts) end
 ---@field label? string What the bar's mode module says while it is on; the name in capitals by default.
 ---@field sticky? boolean Stay in it after a bind fires (default true); Esc and Enter leave.
 ---@field hint_at? ranma.HintAt Where its which-key hint stands; nil follows wm_mode.hint_at.
+---@field cursor? "block"|"bar"|"underline" The focused pane's cursor while it is on; nil keeps the program's.
 ---@field hint? boolean|number Its which-key pause in seconds (0 to 10); false never shows the hint in it; true or nil follows wm_mode.hint.
 ---@field on_enter? fun()
 ---@field on_exit? fun()
@@ -171,6 +172,7 @@ function ranma.unbind_all() end
 ---| "module_hidden"    # { name }: a bar module went off screen
 ---| "layout_change"    # { workspace, layout, previous }: workspace_layout gave it a layout
 ---| "pane_resize"      # { pane, cols, rows }: its terminal's size changed, settled
+---| "screen_change"    # { pane, workspace, visible, alt }: onto the alternate screen (a full-screen program) or back
 ---| "float_change"     # { pane, floating }: it floated, or was tiled again
 ---| "workspace_rename" # { workspace, name, previous }: named, renamed, or cleared (nil)
 ---| "before_close"     # { pane, workspace, title, program }: return false to keep the pane
@@ -423,6 +425,18 @@ local Pane = {}
 ---The first and last line that exist: -history, rows - 1.
 ---@return integer first, integer last
 function Pane:range() end
+
+---Where the program's cursor is, and the line it stands on: `text` is that
+---line with its soft-wrapped rows joined (from row `start`), `offset` the
+---characters of it before the cursor (one arrow each; `col` counts cells),
+---and `input` what was typed at a shell prompt (OSC 133 B), as characters
+---from..to of `text`, or nil.
+---@return { line: integer, col: integer, visible: boolean, shape: "block"|"underline"|"bar"|"hollow"|"hidden", text: string, start: integer, offset: integer, input: { from: integer, to: integer }? }
+function Pane:cursor() end
+
+---Whether the program is on the alternate screen: a full-screen program.
+---@return boolean
+function Pane:alt_screen() end
 
 ---Lines first to last (default: the screen); 0 is the screen's top row.
 ---@param first? integer

@@ -246,6 +246,9 @@ features below the line live outside the repository.
 - [x] `ranma --dump-types`, `ranma lua`, `ranma health`
 - [x] Pane reading and acting: `ranma.pane(id)`, `ranma.panes()`
 - [x] `pane:link_at(line, col)`
+- [x] `pane:cursor()` (the line under the cursor, the offset in characters,
+  what was typed at a prompt), `pane:alt_screen()` and `screen_change`, a
+  mode's `cursor` shape
 - [x] `pane:marks()` (OSC 133 prompt positions): each command's prompt,
   command line, output and finish, from tags the PTY scanner puts on the grid
 - [x] Events: `command_started`, `cwd_change`, `title_change`, `bell`,
