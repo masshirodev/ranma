@@ -2285,6 +2285,16 @@ Decided:
   So the reader keeps one more fact per pane, whether a `B` is waiting for
   its character, and then the input is empty at the cursor. Found on the
   real prompt, the same day (2026-10-26).
+- **A mode can let the program have the keys it does not bind**
+  (`pass`). A user mode used to swallow them, as WM mode does, which suits a
+  table of ranma's keys and not a layer over a program's: in vi.ranma's
+  NORMAL, `alt+f` and `ctrl+r` are the shell's and should stay so. Plain
+  characters stay swallowed under `"modified"`, since a stray letter typed
+  into a shell is the mistake a mode exists to prevent.
+- **Copy mode leaves a user mode, and says so.** It set its mode directly,
+  so a user mode it was entered from stayed set under it and outlived it,
+  and `mode_change` heard neither its start nor its end. It goes through
+  the same switch as every mode now, and `mode_change` names it `copy`.
 - **A suggestion is not input.** zsh-autosuggestions and fish draw a
   suggestion after the cursor, under the same `B` tag, and accepting it is
   the editor's business: a vi layer counting it as typed text sends Right

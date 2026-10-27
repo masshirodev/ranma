@@ -84,8 +84,9 @@ impl App {
             c.current = None;
             c.hits.clear();
         }
-        self.mode = Mode::Copy;
-        self.dirty = true;
+        // Through set_mode, which leaves a user mode: entered from one (a vi
+        // layer's `v`), copy mode used to keep it, and it outlived copy mode.
+        self.set_mode(Mode::Copy);
     }
 
     /// Leave copy mode: drop the vi cursor and selection, back to the live screen.

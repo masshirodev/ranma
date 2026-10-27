@@ -47,6 +47,17 @@ commit log has the detail.
   tells a plugin it is there. Both ranmas need this build; an older inner
   leaves the buttons on the outer.
 
+- `ranma.mode`'s `pass`: keys a mode leaves unbound go to the program
+  (`true`), or only those with Ctrl, Alt or Super and those that type no
+  character (`"modified"`), instead of being swallowed. `ranma.has("mode.pass")`.
+
+### Fixed
+
+- Copy mode entered from a user mode (vi.ranma's `v`) left the user mode on
+  underneath it, and it outlived copy mode: the bar said normal while the
+  mode was still set, and a plugin was never told. Copy mode now leaves it,
+  and `mode_change` says `copy` as it starts and `normal` as it ends.
+
 ## [0.4.0] - 2026-10-16
 
 ### Breaking

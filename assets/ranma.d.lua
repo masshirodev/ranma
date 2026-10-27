@@ -120,6 +120,7 @@ function ranma.bind(keys, action, opts) end
 ---@field sticky? boolean Stay in it after a bind fires (default true); Esc and Enter leave.
 ---@field hint_at? ranma.HintAt Where its which-key hint stands; nil follows wm_mode.hint_at.
 ---@field cursor? "block"|"bar"|"underline" The focused pane's cursor while it is on; nil keeps the program's.
+---@field pass? boolean|"modified" Unbound keys: false swallows them (default), "modified" sends those with ctrl/alt/super or that type no character to the program, true sends all.
 ---@field hint? boolean|number Its which-key pause in seconds (0 to 10); false never shows the hint in it; true or nil follows wm_mode.hint.
 ---@field on_enter? fun()
 ---@field on_exit? fun()
@@ -154,7 +155,7 @@ function ranma.unbind_all() end
 ---| "focus_change"     # { pane, previous }
 ---| "workspace_change" # { workspace, previous }
 ---| "session_switch"   # { session, previous }
----| "mode_change"      # { mode }
+---| "mode_change"      # { mode }: "wm", "normal", "copy" or a user mode's name
 ---| "config_reload"    # nothing; runs in the new config
 ---| "command_finished" # { pane, exit, duration, workspace, visible, title }
 ---| "driver_change"    # { cols, rows, mobile, remote, outer, previous_mobile }

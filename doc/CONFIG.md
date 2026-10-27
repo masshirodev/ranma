@@ -2041,6 +2041,7 @@ ranma.mode("resize", {
   hint = 1.5,                              -- its own which-key pause (below)
   hint_at = "top_right",                   -- and where it stands; default: wm_mode.hint_at
   cursor = "block",                        -- the focused pane's cursor in it (below)
+  pass = "modified",                       -- keys it does not bind (below); default false
   on_enter = function() end,
   on_exit = function() end,
 })
@@ -2058,7 +2059,21 @@ keeps its hint. `cursor` (`block`, `bar` or `underline`) draws the focused
 pane's cursor in that shape while the mode is on, over the shape the program
 asked for, which comes back when it ends: a vi layer's NORMAL as a block,
 while the shell's own is a bar. Left out, the program's shape stays. A
-program that hides its cursor keeps it hidden. A ranma inside another one sends its mode's label out with
+program that hides its cursor keeps it hidden.
+
+`pass` says what happens to a key the mode leaves unbound (and no global
+bind has). `false`, the default, swallows it, as WM mode does. `"modified"`
+sends a key with Ctrl, Alt or Super, or one that types no character (arrows,
+Tab, Backspace, Delete, Home, End, F-keys), on to the program, and still
+swallows plain and shifted characters: for a layer over a program's own
+keys, where `alt+f` and `ctrl+r` stay the program's but a stray letter must
+not type (vi.ranma's NORMAL). `true` sends every unbound key on. Esc, Enter
+and the leader keep their meaning whatever `pass` says.
+
+Copy mode entered from a user mode leaves it, as any other mode does:
+`mode_change` hears `copy`, then `normal` when copy mode ends.
+
+A ranma inside another one sends its mode's label out with
 its mode, so the outer bar says ` ⧉ NORMAL `, not ` ⧉ WM `; an outer older
 than that still says WM.
 
@@ -2141,7 +2156,7 @@ end)
 | `pane_close` | `pane`, `workspace` |
 | `focus_change` | `pane`, `previous` (either may be nil) |
 | `workspace_change` | `workspace`, `previous` |
-| `mode_change` | `mode`: `"wm"` or `"normal"` |
+| `mode_change` | `mode`: `"wm"`, `"normal"`, `"copy"`, or a user mode's name (`ranma.mode`) — whenever it changes, copy mode's start and end included |
 | `config_reload` | nothing; runs in the newly loaded config |
 | `session_switch` | `session`, `previous` (names) |
 | `command_finished` | `pane`, `exit` (the status, or nil), `duration` (seconds), `workspace` (nil if the pane is gone from view), `visible` (on screen now), `title` — when a shell that marks its commands (below) finishes one |
@@ -2259,6 +2274,7 @@ the spelling against this table:
 | `hook.screen_change` | the `screen_change` event |
 | `hook.workspace_rename` | the `workspace_rename` event |
 | `mode.cursor` | `ranma.mode`'s `cursor` |
+| `mode.pass` | `ranma.mode`'s `pass`, and copy mode leaving a user mode it was entered from (and `mode_change` saying `copy`) |
 | `module.nested` | `ranma.module`'s `nested` option (`follow`, `own`, `hide`) |
 | `mouse` | `ranma.mouse` binds |
 | `open` | `ranma.open`, and floats that open without resizing the tiles |

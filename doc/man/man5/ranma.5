@@ -2659,6 +2659,7 @@ ranma.mode("resize", {
   hint = 1.5,                              \-\- its own which\-key pause (below)
   hint_at = "top_right",                   \-\- and where it stands; default: wm_mode.hint_at
   cursor = "block",                        \-\- the focused pane's cursor in it (below)
+  pass = "modified",                       \-\- keys it does not bind (below); default false
   on_enter = function() end,
   on_exit = function() end,
 })
@@ -2677,7 +2678,21 @@ keeps its hint. \fBcursor\fR (\fBblock\fR, \fBbar\fR or \fBunderline\fR) draws t
 pane's cursor in that shape while the mode is on, over the shape the program
 asked for, which comes back when it ends: a vi layer's NORMAL as a block,
 while the shell's own is a bar. Left out, the program's shape stays. A
-program that hides its cursor keeps it hidden. A ranma inside another one sends its mode's label out with
+program that hides its cursor keeps it hidden.
+.PP
+\fBpass\fR says what happens to a key the mode leaves unbound (and no global
+bind has). \fBfalse\fR, the default, swallows it, as WM mode does. \fB"modified"\fR
+sends a key with Ctrl, Alt or Super, or one that types no character (arrows,
+Tab, Backspace, Delete, Home, End, F\-keys), on to the program, and still
+swallows plain and shifted characters: for a layer over a program's own
+keys, where \fBalt+f\fR and \fBctrl+r\fR stay the program's but a stray letter must
+not type (vi.ranma's NORMAL). \fBtrue\fR sends every unbound key on. Esc, Enter
+and the leader keep their meaning whatever \fBpass\fR says.
+.PP
+Copy mode entered from a user mode leaves it, as any other mode does:
+\fBmode_change\fR hears \fBcopy\fR, then \fBnormal\fR when copy mode ends.
+.PP
+A ranma inside another one sends its mode's label out with
 its mode, so the outer bar says \fB⧉ NORMAL\fR, not \fB⧉ WM\fR; an outer older
 than that still says WM.
 .SH "COMMANDS — \fBranma.command(name, fn, opts)\fR"
@@ -2773,7 +2788,7 @@ end)
 \fBworkspace\fR, \fBprevious\fR
 .TP
 \fBmode_change\fR
-\fBmode\fR: \fB"wm"\fR or \fB"normal"\fR
+\fBmode\fR: \fB"wm"\fR, \fB"normal"\fR, \fB"copy"\fR, or a user mode's name (\fBranma.mode\fR) — whenever it changes, copy mode's start and end included
 .TP
 \fBconfig_reload\fR
 nothing; runs in the newly loaded config
@@ -2959,6 +2974,9 @@ the \fBworkspace_rename\fR event
 .TP
 \fBmode.cursor\fR
 \fBranma.mode\fR's \fBcursor\fR
+.TP
+\fBmode.pass\fR
+\fBranma.mode\fR's \fBpass\fR, and copy mode leaving a user mode it was entered from (and \fBmode_change\fR saying \fBcopy\fR)
 .TP
 \fBmodule.nested\fR
 \fBranma.module\fR's \fBnested\fR option (\fBfollow\fR, \fBown\fR, \fBhide\fR)

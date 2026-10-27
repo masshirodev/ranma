@@ -469,8 +469,43 @@ pub struct UserMode {
     /// The focused pane's cursor shape while it is on; `None` keeps the
     /// program's.
     pub cursor: Option<alacritty_terminal::vte::ansi::CursorShape>,
+    /// Which keys it leaves unbound go on to the program instead of being
+    /// swallowed.
+    pub pass: ModePass,
     pub on_enter: Option<Rc<RegistryKey>>,
     pub on_exit: Option<Rc<RegistryKey>>,
+}
+
+/// What a user mode does with a key it does not bind (`ranma.mode`'s `pass`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModePass {
+    /// Swallowed, as in WM mode.
+    #[default]
+    None,
+    /// A key with Ctrl, Alt or Super, or one that types no character
+    /// (arrows, Tab, Backspace, F-keys) goes to the program; a plain or
+    /// shifted character is still swallowed. A layer over a program's own
+    /// keys (vi.ranma's NORMAL), where alt+f and ctrl+r stay the program's
+    /// but a stray letter must not type.
+    Modified,
+    /// Every key it does not bind goes to the program.
+    All,
+}
+
+impl ModePass {
+    pub fn lets(self, chord: Chord) -> bool {
+        use crate::keys::Key;
+        match self {
+            ModePass::None => false,
+            ModePass::All => true,
+            ModePass::Modified => {
+                chord.mods.ctrl
+                    || chord.mods.alt
+                    || chord.mods.super_
+                    || !matches!(chord.key, Key::Char(_) | Key::Space)
+            }
+        }
+    }
 }
 
 /// A command of the user's (`ranma.command`), run from the palette.
@@ -1840,6 +1875,7 @@ pub const CAPABILITIES: &[&str] = &[
     "hook.screen_change",
     "hook.workspace_rename",
     "mode.cursor",
+    "mode.pass",
     "module.nested",
     "mouse",
     "open",
@@ -1965,6 +2001,7 @@ fn install_api(
                 hint: None,
                 hint_at: None,
                 cursor: None,
+                pass: ModePass::None,
                 on_enter: None,
                 on_exit: None,
             };
@@ -1997,6 +2034,19 @@ fn install_api(
                                 )));
                             }
                         });
+                    }
+                    ("pass", Value::Boolean(b)) => {
+                        mode.pass = if b { ModePass::All } else { ModePass::None }
+                    }
+                    ("pass", Value::String(v)) => {
+                        mode.pass = match &*v.to_str()? {
+                            "modified" => ModePass::Modified,
+                            other => {
+                                return Err(rt_err(format!(
+                                    "{who}: pass must be true, false or \"modified\", not `{other}`"
+                                )));
+                            }
+                        };
                     }
                     ("hint", v @ (Value::Integer(_) | Value::Number(_))) => {
                         let secs = match v {
@@ -2035,7 +2085,7 @@ fn install_api(
                             mode.binds.insert(path[0], bind);
                         }
                     }
-                    (k @ ("label" | "sticky" | "hint" | "hint_at" | "cursor" | "on_enter" | "on_exit" | "binds"), other) => {
+                    (k @ ("label" | "sticky" | "hint" | "hint_at" | "cursor" | "pass" | "on_enter" | "on_exit" | "binds"), other) => {
                         return Err(rt_err(format!(
                             "{who}: `{k}` cannot be {}",
                             other.type_name()
@@ -2043,7 +2093,7 @@ fn install_api(
                     }
                     (k, _) => {
                         return Err(rt_err(format!(
-                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, hint_at, cursor, on_enter, on_exit)"
+                            "{who}: unknown key `{k}` (expected binds, label, sticky, hint, hint_at, cursor, pass, on_enter, on_exit)"
                         )));
                     }
                 }
@@ -4202,6 +4252,14 @@ mod tests {
         assert!(
             err(r#"ranma.mode("m", { cursor = true, binds = {} })"#)
                 .contains("`cursor` cannot be boolean")
+        );
+        assert!(
+            err(r#"ranma.mode("m", { pass = "some", binds = {} })"#)
+                .contains(r#"pass must be true, false or "modified", not `some`"#)
+        );
+        assert!(
+            err(r#"ranma.mode("m", { pass = 1, binds = {} })"#)
+                .contains("`pass` cannot be integer")
         );
     }
 

@@ -86,9 +86,10 @@ const HOVER_REST: Duration = Duration::from_millis(150);
 /// The workspace number the scratchpad reports in hook payloads and state.
 const SCRATCHPAD: u8 = 0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     /// Keys go to the focused pane; only the leader is looked at.
+    #[default]
     Normal,
     /// Keys are looked up in the bind table.
     Wm,
@@ -167,7 +168,7 @@ struct Observed {
     /// A ranma under the shown scratchpad that keeps its focus (see `held_focus`).
     held: Option<PaneId>,
     workspace: u8,
-    mode_wm: bool,
+    mode: Mode,
     user_mode: Option<String>,
     title: String,
     /// The host a ranma in the focused pane names: it goes into our own title.
@@ -1714,7 +1715,7 @@ impl App {
             focus: self.focused(),
             held: self.held_focus(),
             workspace: self.current,
-            mode_wm: self.mode == Mode::Wm,
+            mode: self.mode,
             user_mode: self.user_mode.clone(),
             title: self.focused_title().unwrap_or("").to_string(),
             inner_host: self
@@ -1772,12 +1773,15 @@ impl App {
                 t.set("previous", before.workspace)
             });
         }
-        if now.mode_wm != before.mode_wm || now.user_mode != before.user_mode {
-            // A user mode by its name; WM mode's own is "wm".
-            let mode = match (&now.user_mode, now.mode_wm) {
+        if now.mode != before.mode || now.user_mode != before.user_mode {
+            // A user mode by its name; WM mode's own is "wm", copy mode's
+            // "copy", as ranma.state() names them. Copy mode was once
+            // silent here, and a plugin tracking the mode missed its end.
+            let mode = match (&now.user_mode, now.mode) {
                 (Some(m), _) => m.clone(),
-                (None, true) => "wm".into(),
-                (None, false) => "normal".into(),
+                (None, Mode::Wm) => "wm".into(),
+                (None, Mode::Copy) => "copy".into(),
+                (None, Mode::Normal) => "normal".into(),
             };
             self.emit(HookEvent::ModeChange, |t| t.set("mode", mode));
         }
@@ -2722,6 +2726,15 @@ impl App {
                 self.run_bind(chord, true);
                 return;
             }
+            // And with `pass`, the program's: the mode lays its keys over the
+            // program's instead of taking all of them.
+            if self.user_mode_pass().lets(chord) {
+                if self.selection_pane.is_some() {
+                    self.clear_selection();
+                }
+                self.typed(|modes| input::encode_key(&key, modes));
+                return;
+            }
         }
         // The outer leader again, unbound: one level down, to the ranma inside.
         if chord == outer && !self.wm_binds().contains_key(&chord) {
@@ -2998,6 +3011,15 @@ impl App {
         Some(&m.label)
     }
 
+    /// What the user mode on now does with keys it leaves unbound.
+    fn user_mode_pass(&self) -> crate::config::ModePass {
+        self.user_mode
+            .as_ref()
+            .and_then(|n| self.config.modes.get(n))
+            .map(|m| m.pass)
+            .unwrap_or_default()
+    }
+
     /// The cursor shape the user mode on now asks for, if any.
     pub fn user_mode_cursor(&self) -> Option<CursorShape> {
         if self.mode != Mode::Wm {
@@ -3043,7 +3065,7 @@ impl App {
         self.dirty = true;
     }
 
-    fn set_mode(&mut self, mode: Mode) {
+    pub(super) fn set_mode(&mut self, mode: Mode) {
         self.folder.clear();
         if mode != Mode::Wm {
             self.hint_due = None;
@@ -8121,6 +8143,83 @@ mod tests {
             }
         }
         assert_eq!(seen(&a), ["true:true", "false:true"]);
+    }
+
+    #[test]
+    fn a_mode_that_passes_hands_its_unbound_modified_keys_to_the_program() {
+        use crossterm::event::{KeyCode as C, KeyModifiers as M};
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(r#"ranma.mode("vi", { pass = "modified", binds = { h = "send left" } })"#),
+        )
+        .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        // Prints each byte it gets, as it gets it.
+        a.run_action(
+            r#"exec python3 -u -c "import sys,tty;tty.setraw(0);[print(repr(sys.stdin.read(1)),end=' ',flush=True) for _ in iter(int,1)]""#
+                .parse()
+                .unwrap(),
+        );
+        pump(&mut a, &rx, |a| {
+            a.focused_pane().is_some_and(|p| {
+                crate::pane::foreground_program(p.pid).as_deref() == Some("python3")
+            })
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        a.run_action("mode vi".parse().unwrap());
+        let press = |a: &mut App, code, mods| {
+            a.handle(AppEvent::Input(Event::Key(KeyEvent::new(code, mods))));
+        };
+        press(&mut a, C::Char('q'), M::NONE);
+        press(&mut a, C::Char('f'), M::ALT);
+        press(&mut a, C::Char('h'), M::NONE);
+        press(&mut a, C::Char('x'), M::NONE);
+        press(&mut a, C::Char('r'), M::CONTROL);
+        pump(&mut a, &rx, |a| screen(a).join("\n").contains(r"'\x12'"));
+        let s = screen(&a).join("\n");
+        // alt+f is ESC f; h is the mode's (left: ESC [ D); ctrl+r is 0x12.
+        assert!(s.contains(r"'\x1b' 'f'"), "{s}");
+        assert!(s.contains(r"'\x1b' '[' 'D'"), "{s}");
+        assert!(
+            !s.contains("'q'") && !s.contains("'x'"),
+            "plain letters stay swallowed: {s}"
+        );
+        assert_eq!(a.user_mode.as_deref(), Some("vi"), "and the mode stays");
+    }
+
+    #[test]
+    fn mode_change_hears_copy_mode_start_and_end() {
+        // vi.ranma entered copy mode from its NORMAL and never heard it end,
+        // so it believed NORMAL was still on and left the pane modeless.
+        let config = crate::config::load_from(
+            None,
+            None,
+            Some(
+                r#"
+                seen = {}
+                ranma.mode("vi", { binds = { h = "send left" } })
+                ranma.on("mode_change", function(e) seen[#seen + 1] = e.mode end)
+                "#,
+            ),
+        )
+        .unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        a.run_action("exec sleep 30".parse().unwrap());
+        // Each as its own input, as a key would be: after_event reports.
+        a.run_action("mode vi".parse().unwrap());
+        a.after_event();
+        a.run_action(Action::CopyMode);
+        a.after_event();
+        assert_eq!(a.user_mode, None, "copy mode left the user mode");
+        key(&mut a, crossterm::event::KeyCode::Esc);
+        let seen: Vec<String> = {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        assert_eq!(seen, ["vi", "copy", "normal"]);
     }
 
     #[test]
