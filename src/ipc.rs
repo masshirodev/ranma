@@ -256,14 +256,7 @@ fn serve_client(
     let Ok(stream) = writer.try_clone() else {
         return;
     };
-    if tx
-        .send(AppEvent::Attach {
-            id,
-            writer,
-            hello: Box::new(hello),
-        })
-        .is_err()
-    {
+    if tx.send(AppEvent::Attach { id, writer, hello }).is_err() {
         return;
     }
     read_client(id, std::io::Read::chain(&early[..], stream), tx);

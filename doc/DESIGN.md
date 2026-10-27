@@ -3087,6 +3087,28 @@ starts, gets a scrubbed environment with no `WSL_*` in it, and every terminal
 opened later attaches to that server. Windows interop works there regardless,
 so WSL is also recognised by `/proc/sys/kernel/osrelease`.
 
+**Reaching Windows from a server that outlived its window** (2026-10-27,
+`src/wslinterop.rs`). A Linux process starts a `.exe` through the socket
+`$WSL_INTEROP` names, `/run/WSL/<pid>_interop`, where `<pid>` is the `/init`
+relay of one terminal window's WSL session; the socket goes when the window
+closes. A server outlives its window, so the variable it inherited soon names
+nothing, and every `.exe` it or its panes start waits ten seconds and fails
+with `UtilAcceptVsock: accept4 failed 110`: `paste_image`, but also nvim's
+clipboard, `code`, `explorer.exe`. So every program the server starts (panes,
+the clipboard reader, `ranma.spawn` jobs, the bar's `exec` modules, pipes,
+the link opener) is given a socket that works now: the one the last attached
+client sent in its hello (its window is open, by being attached), else the
+server's own if it is still there, else the newest live session socket in
+`/run/WSL`. A client reached over SSH has no `WSL_INTEROP` to send, which is
+why the scan is there at all. The boot sessions' `1_interop` and `2_interop`
+never go away, but on WSL 2 they fail the same way, and a `connect` succeeds on
+every one of them dead or alive; only running a program tells, at ten seconds
+a dead try, so they are never picked and nothing is probed. A socket counts as
+live when its relay's pid is. With no window open there is nothing to give,
+the inherited value stays, and the failure says to open one instead of
+repeating WSL's words. A shell already running keeps the variable it started
+with: only panes opened after the fix get a fresh one.
+
 **Uploading with the pane's own ssh, not scp.** `ssh_host` strips the user, port
 and options, and `scp` spells some of them differently (`-P`, not `-p`). So the
 upload runs the foreground `ssh`'s own argv, cut after the destination, with a

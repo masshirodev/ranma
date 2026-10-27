@@ -225,7 +225,7 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
         stream.write_all(b"attach\n")?;
         proto::send_to_server(
             stream,
-            &ToServer::Hello(Hello {
+            &ToServer::Hello(Box::new(Hello {
                 build: crate::update::BUILD_SHA.to_string(),
                 cols,
                 rows,
@@ -239,7 +239,8 @@ fn attach(mut stream: UnixStream, name: &str, steal: bool, mobile: bool) -> Resu
                 mobile,
                 graphics,
                 cell_px: crate::client::cell_px(),
-            }),
+                wsl_interop: std::env::var(crate::wslinterop::VAR).ok(),
+            })),
         )?;
         Ok(())
     };

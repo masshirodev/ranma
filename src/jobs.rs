@@ -437,6 +437,7 @@ pub fn start(id: u64, spec: SpawnSpec, tx: Sender<AppEvent>) -> Option<i32> {
     if let Some(sock) = crate::ipc::socket_path() {
         cmd.env(crate::ipc::ENV, sock);
     }
+    crate::wslinterop::apply(&mut cmd);
     match spec.pane {
         Some(p) => cmd.env("RANMA_PANE", p.to_string()),
         None => cmd.env_remove("RANMA_PANE"),

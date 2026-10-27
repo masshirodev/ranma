@@ -65,11 +65,16 @@ pub struct Hello {
     /// Defaulted like `inside`.
     #[serde(default)]
     pub cell_px: Option<(u16, u16)>,
+    /// Its terminal's `WSL_INTEROP`: the socket of a WSL session whose window
+    /// is open, which Windows programs started from the server go through
+    /// (see `wslinterop`). Defaulted like `inside`.
+    #[serde(default)]
+    pub wsl_interop: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToServer {
-    Hello(Hello),
+    Hello(Box<Hello>),
     Event(crossterm::event::Event),
 }
 
@@ -154,7 +159,7 @@ pub fn read_to_server(r: &mut impl Read) -> io::Result<Option<ToServer>> {
         return Ok(None);
     };
     Ok(Some(match kind {
-        K_HELLO => ToServer::Hello(serde_json::from_slice(&p).map_err(bad)?),
+        K_HELLO => ToServer::Hello(Box::new(serde_json::from_slice(&p).map_err(bad)?)),
         K_EVENT => ToServer::Event(serde_json::from_slice(&p).map_err(bad)?),
         k => return Err(bad(format!("unknown frame kind {k} from a client"))),
     }))
@@ -203,16 +208,17 @@ mod tests {
             mobile: true,
             graphics: true,
             cell_px: Some((10, 20)),
+            wsl_interop: Some("/run/WSL/9_interop".into()),
         };
         let mut buf = Vec::new();
-        send_to_server(&mut buf, &ToServer::Hello(hello.clone())).unwrap();
+        send_to_server(&mut buf, &ToServer::Hello(Box::new(hello.clone()))).unwrap();
         let key = Event::Key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
         send_to_server(&mut buf, &ToServer::Event(key.clone())).unwrap();
         send_to_server(&mut buf, &ToServer::Event(Event::Resize(80, 24))).unwrap();
         let mut r = &buf[..];
         assert_eq!(
             read_to_server(&mut r).unwrap(),
-            Some(ToServer::Hello(hello))
+            Some(ToServer::Hello(Box::new(hello)))
         );
         assert_eq!(read_to_server(&mut r).unwrap(), Some(ToServer::Event(key)));
         assert_eq!(
@@ -261,6 +267,7 @@ mod tests {
             mobile: false,
             graphics: false,
             cell_px: None,
+            wsl_interop: None,
         })
         .unwrap();
         old.as_object_mut().unwrap().remove("graphics");
@@ -270,11 +277,13 @@ mod tests {
         old.as_object_mut().unwrap().remove("outer");
         old.as_object_mut().unwrap().remove("steal");
         old.as_object_mut().unwrap().remove("mobile");
+        old.as_object_mut().unwrap().remove("wsl_interop");
         let h: Hello = serde_json::from_value(old).unwrap();
         assert!(!h.mobile, "an older client is no phone");
         assert_eq!(h.inside, None);
         assert_eq!(h.outer, None);
         assert!(!h.steal, "an older client shares");
+        assert_eq!(h.wsl_interop, None);
     }
 
     #[test]

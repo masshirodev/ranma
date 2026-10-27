@@ -483,15 +483,15 @@ pub fn spawn_exec(name: String, generation: u64, command: String, tx: Sender<App
 
 pub fn run_command(command: &str, timeout: Duration) -> Result<String, String> {
     use std::os::unix::process::CommandExt;
-    let mut child = Command::new("/bin/sh")
-        .arg("-c")
+    let mut cmd = Command::new("/bin/sh");
+    cmd.arg("-c")
         .arg(command)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
-        .map_err(|e| format!("could not run: {e}"))?;
+        .process_group(0);
+    crate::wslinterop::apply(&mut cmd);
+    let mut child = cmd.spawn().map_err(|e| format!("could not run: {e}"))?;
     let pgid = child.id() as i32;
     let done = Arc::new(AtomicBool::new(false));
     let timed_out = Arc::new(AtomicBool::new(false));

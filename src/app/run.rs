@@ -639,6 +639,7 @@ fn event_loop(
         for ev in events.collect::<Vec<_>>() {
             match ev {
                 AppEvent::Attach { id, writer, hello } => {
+                    crate::wslinterop::attached(hello.wsl_interop.as_deref());
                     if hello.steal {
                         for mut old in clients.list.drain(..) {
                             old.send(&ToClient::Detached("taken over by another terminal".into()));
@@ -1008,6 +1009,7 @@ mod tests {
                 mobile: false,
                 graphics: false,
                 cell_px: None,
+                wsl_interop: None,
             },
         )
     }

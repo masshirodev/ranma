@@ -432,12 +432,10 @@ pub fn work(job: &Job) -> Result<String, String> {
         let p = match n {
             Named::Local(p) => p,
             Named::Windows(w) => {
-                let out = run(
-                    Command::new("wslpath").arg("-u").arg(&w),
-                    None,
-                    &job.cancel,
-                    deadline,
-                )?;
+                let mut cmd = Command::new("wslpath");
+                cmd.arg("-u").arg(&w);
+                crate::wslinterop::apply(&mut cmd);
+                let out = run(&mut cmd, None, &job.cancel, deadline)?;
                 PathBuf::from(String::from_utf8_lossy(&out).trim())
             }
         };
@@ -530,12 +528,10 @@ fn from_clipboard(
         Clipboard::Wsl => {
             let dir = local_dir()?;
             let tmp = dir.join(format!(".clipboard-{}.png", std::process::id()));
-            let win = run(
-                Command::new("wslpath").arg("-w").arg(&tmp),
-                None,
-                cancel,
-                deadline,
-            )?;
+            let mut cmd = Command::new("wslpath");
+            cmd.arg("-w").arg(&tmp);
+            crate::wslinterop::apply(&mut cmd);
+            let win = run(&mut cmd, None, cancel, deadline)?;
             let win = String::from_utf8_lossy(&win).trim().replace('\'', "''");
             let script = format!(
                 "[Console]::OutputEncoding = [Text.Encoding]::UTF8; \
@@ -544,18 +540,10 @@ fn from_clipboard(
                  $i = [Windows.Forms.Clipboard]::GetImage(); if ($i -eq $null) {{ exit 3 }}; \
                  $i.Save('{win}', [System.Drawing.Imaging.ImageFormat]::Png)"
             );
-            let r = run(
-                Command::new("powershell.exe").args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-STA",
-                    "-Command",
-                    &script,
-                ]),
-                None,
-                cancel,
-                deadline,
-            );
+            let mut cmd = Command::new("powershell.exe");
+            cmd.args(["-NoProfile", "-NonInteractive", "-STA", "-Command", &script]);
+            crate::wslinterop::apply(&mut cmd);
+            let r = run(&mut cmd, None, cancel, deadline);
             let out = match r {
                 Ok(out) => out,
                 Err(e) => {
@@ -704,6 +692,9 @@ impl Failed {
             Failed::Spawn(e) => format!("{name}: {e}"),
             Failed::Exit(Some(3), _) if name == "powershell.exe" => {
                 "the clipboard holds no image and no files".into()
+            }
+            Failed::Exit(_, err) if crate::wslinterop::unreachable(&err) => {
+                format!("{name}: {}", crate::wslinterop::UNREACHABLE)
             }
             Failed::Exit(code, err) => match err.lines().map(str::trim).rfind(|l| !l.is_empty()) {
                 Some(why) => format!("{name}: {why}"),

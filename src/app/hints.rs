@@ -92,9 +92,10 @@ impl App {
     /// did not come over SSH; from afar it copies instead and says why.
     fn pick_link(&mut self, target: &str, open: bool, pane: PaneId) {
         if open && !self.client_remote {
-            let spawned = std::process::Command::new("sh")
-                .args(["-c", crate::os::OPEN_URL_SH, "sh", target])
-                .status();
+            let mut cmd = std::process::Command::new("sh");
+            cmd.args(["-c", crate::os::OPEN_URL_SH, "sh", target]);
+            crate::wslinterop::apply(&mut cmd);
+            let spawned = cmd.status();
             self.status = Some(match spawned {
                 Ok(s) if s.success() => format!("opening {target}"),
                 _ => format!("could not run {} for {target}", crate::os::OPEN_URL_PROGRAM),

@@ -60,6 +60,7 @@ pub fn start(sink: &Sink, cwd: Option<&Path>) -> Result<SyncSender<Vec<u8>>> {
             if let Some(d) = cwd {
                 c.current_dir(d);
             }
+            crate::wslinterop::apply(&mut c);
             let mut child = c.spawn().with_context(|| format!("running {cmd}"))?;
             let stdin = child.stdin.take().context("no stdin")?;
             spawn(rx, stdin, Some(child))?;

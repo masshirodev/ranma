@@ -58,3 +58,4 @@ pub mod update;
 pub mod whichkey;
 pub mod winch;
 pub mod workspace;
+pub mod wslinterop;

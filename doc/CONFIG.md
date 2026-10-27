@@ -110,6 +110,16 @@ anything that has to create a directory there, such as `ranma tmux-shim`
 making `tmux-bin/`, can fail with *permission denied*. Lingering makes logind
 keep the directory from boot, owned by you, with or without a session.
 
+**On WSL, Windows programs need an open WSL window.** A `.exe` started from
+Linux goes through the WSL session of a terminal window that is still open.
+ranma gives every pane it opens, and every program it starts, the socket of
+the window you last attached from, or of any open one (from an SSH login,
+the newest), so a server keeps reaching Windows after the window that
+started it is closed. With no WSL window open at all, `powershell.exe`,
+`clip.exe` and `code` cannot start (`paste_image` says so). A shell opened
+before then keeps its old `WSL_INTEROP`; open a new pane, or
+`export WSL_INTEROP=$(ls -t /run/WSL/*_interop | head -1)` in it.
+
 **Upgrading keeps everything.** A server takes a new build by executing it in
 its own place: the shells keep running, unaware (they are still its children,
 their PTYs never close), every pane comes back with its screen and scrollback,

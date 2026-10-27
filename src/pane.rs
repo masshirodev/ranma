@@ -550,6 +550,11 @@ impl Pane {
         env.insert("COLORTERM".into(), "truecolor".into());
         env.insert("RANMA".into(), std::process::id().to_string());
         env.insert("RANMA_PANE".into(), id.to_string());
+        // Under WSL, a socket that still reaches Windows: the one this server
+        // inherited goes with the window it was started from.
+        if let Some(s) = crate::wslinterop::live() {
+            env.insert(crate::wslinterop::VAR.into(), s.display().to_string());
+        }
         // How `ranma notify` in this pane finds this ranma.
         if let Some(sock) = crate::ipc::socket_path() {
             env.insert(crate::ipc::ENV.into(), sock.display().to_string());

@@ -53,6 +53,14 @@ commit log has the detail.
 
 ### Fixed
 
+- On WSL, a server whose terminal window had closed could no longer start
+  Windows programs: `paste_image` failed with `UtilAcceptVsock: accept4
+  failed 110` after ten seconds, and so did nvim's clipboard, `code` and
+  any `.exe` in its panes. Programs the server starts now go through the
+  WSL session of an open window: the one you attached from, else the
+  newest. A client sends its `WSL_INTEROP` when it attaches. Panes opened
+  before the upgrade keep the old value (CONFIG.md, "On WSL, Windows
+  programs need an open WSL window").
 - Copy mode entered from a user mode (vi.ranma's `v`) left the user mode on
   underneath it, and it outlived copy mode: the bar said normal while the
   mode was still set, and a plugin was never told. Copy mode now leaves it,

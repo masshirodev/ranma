@@ -50,6 +50,7 @@ Everything that can be pure is, and is tested without a terminal:
 | `pty` | a redraw after an upgrade is a row-short resize and back, and a resize made meanwhile is not undone |
 | `man` | Markdown into roff: code, strong and emphasis as fonts, a code span across a line break, links as their text, headings as sections, lists, fences, tables as tagged paragraphs; no line starting a request; the keys page listing the folders, the keys outside WM mode and the strip's; the config page carrying every `##` section of `CONFIG.md` |
 | `main` (man pages) | `doc/man/` equal to what `--dump-man` writes now, and nothing in it that is not generated any more; every argument the CLI shows having help text |
+| `wslinterop` | the sockets in `/run/WSL` that count as live sessions (not the boot ones, not a dead relay's, not a link or another file); the attached terminal's socket first, then the server's own, then the newest; a closed window's passed over; none with no window open; WSL's own complaint recognised |
 | `paste` | which pastes are nothing but paths of files that exist (one or several; quoted, escaped, `file://`, a plain path with spaces, Windows under WSL) and which are text; a `text/uri-list` read for its local files; names made inert and paths quoted as words; the upload's ssh argv (its remote command dropped, `-t`/`-N`/`-f` taken out, glued values kept, `--`); the clipboard command per platform; a whole upload of two files through a stand-in ssh that runs the far side's real shell, and a folder refused |
 
 Seconds to run. Run them on every change.
