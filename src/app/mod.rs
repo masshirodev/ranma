@@ -310,6 +310,8 @@ pub struct App {
     update_job: Option<updating::UpdateJob>,
     /// The failed update's toast and its log, opened by a click on it.
     update_log: Option<(u64, std::path::PathBuf)>,
+    /// A Lua toast's `on_click`, by toast id; only toasts still shown.
+    toast_clicks: HashMap<u64, std::rc::Rc<mlua::RegistryKey>>,
     /// This server's name (`None` standalone), for what it leaves on disk.
     pub server_name: Option<String>,
     /// The theme to put back if the theme picker closes without a choice.
@@ -530,6 +532,7 @@ impl App {
             update_available: None,
             update_job: None,
             update_log: None,
+            toast_clicks: HashMap::new(),
             server_name: None,
             theme_preview: None,
             bind_click: None,
@@ -2325,6 +2328,9 @@ impl App {
             self.update_toast_clicked(id);
             self.toasts.dismiss(id);
             self.dirty = true;
+            if let Some(key) = self.toast_clicks.remove(&id) {
+                self.call_lua(|lua| lua.registry_value::<Function>(&key)?.call::<()>(()));
+            }
             return;
         }
         // A mouse bind of the user's comes before ranma's own handling, in
@@ -3530,6 +3536,8 @@ impl App {
                 self.badge_owners.retain(|o| o == rules::RULES_OWNER);
                 self.watches.clear();
                 self.watch_pending.clear();
+                // Their functions were the old Lua's.
+                self.toast_clicks.clear();
                 self.refresh_settings_panel();
                 self.report_plugin_failures();
                 self.relayout();
@@ -3662,13 +3670,23 @@ impl App {
         if let Some(msg) = rt.notify {
             self.status = Some(msg);
         }
-        for (text, urgent, timeout) in rt.toasts {
-            let level = if urgent {
+        for t in rt.toasts {
+            let level = if t.urgent {
                 crate::toast::Level::Urgent
             } else {
                 crate::toast::Level::Normal
             };
-            self.toast(text, level, timeout.map(Duration::from_secs_f64));
+            let timeout = t
+                .timeout
+                .map_or(crate::toast::DEFAULT_TIMEOUT, Duration::from_secs_f64);
+            let id = self.toasts.push(t.text, level, timeout, Instant::now());
+            self.dirty = true;
+            if let (Some(id), Some(f)) = (id, t.on_click) {
+                // Only the shown toasts keep theirs: at most MAX_SHOWN.
+                let toasts = &self.toasts;
+                self.toast_clicks.retain(|id, _| toasts.contains(*id));
+                self.toast_clicks.insert(id, f);
+            }
         }
         let out = match result {
             Ok(v) => Some(v),
@@ -7830,6 +7848,54 @@ mod tests {
             row: y,
             modifiers: crossterm::event::KeyModifiers::NONE,
         })));
+    }
+
+    #[test]
+    fn a_lua_toast_runs_its_on_click_when_clicked() {
+        let mut a = app(None);
+        lua(
+            &mut a,
+            r#"
+            ran = {}
+            ranma.toast("plain")
+            ranma.toast("agent done", { on_click = function() table.insert(ran, "clicked") end })
+            "#,
+        );
+        let at = |a: &App, text: &str| {
+            a.toast_layout()
+                .iter()
+                .find(|(t, _, _)| t.text == text)
+                .map(|(_, r, _)| (r.x + 1, r.y + 1))
+        };
+        // A toast without one is only dismissed.
+        let (x, y) = at(&a, "plain").unwrap();
+        mouse_down(&mut a, x, y);
+        assert!(at(&a, "plain").is_none());
+        assert!(ran(&a).is_empty());
+        let (x, y) = at(&a, "agent done").unwrap();
+        mouse_down(&mut a, x, y);
+        assert!(at(&a, "agent done").is_none(), "dismissed as well");
+        assert_eq!(ran(&a), vec!["clicked"]);
+        assert!(a.toast_clicks.is_empty());
+    }
+
+    #[test]
+    fn only_shown_toasts_keep_their_on_click() {
+        let mut a = app(None);
+        lua(
+            &mut a,
+            r#"for i = 1, 8 do ranma.toast("t" .. i, { on_click = function() end }) end"#,
+        );
+        assert_eq!(a.toast_clicks.len(), crate::toast::MAX_SHOWN);
+        lua(
+            &mut a,
+            r#"ranma.toast("   ", { on_click = function() end })"#,
+        );
+        assert_eq!(
+            a.toast_clicks.len(),
+            crate::toast::MAX_SHOWN,
+            "a blank toast is none"
+        );
     }
 
     fn leader_then(a: &mut App, c: char) {

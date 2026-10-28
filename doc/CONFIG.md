@@ -1094,12 +1094,16 @@ What ranma does with an image:
 ## Toasts and `ranma notify`
 
 Toasts are short notifications stacked at the top right, gone after five seconds
-or when clicked. They come from three places:
+or when clicked. A click on a plugin's toast also runs its `on_click`, if it gave
+one (a jump to the pane a message is about). They come from three places:
 
 - **Any pane:** `ranma notify "build done"`, `ranma notify -u "tests failed"`
   (urgent), `ranma notify -t 30 "..."` (seconds). Chain it after anything slow:
   `make && ranma notify done || ranma notify -u failed`.
-- **Lua:** `ranma.toast("text", { urgent = true, timeout = 10 })`.
+- **Lua:** `ranma.toast("text", { urgent = true, timeout = 10, on_click = fn })`.
+  `on_click` is called with no arguments when the toast is clicked, after it
+  is dismissed, and only then: a toast that times out or is pushed out by
+  newer ones never calls it. `ranma.has("toast.on_click")`.
 - **ranma:** a bell in a pane you cannot see says where it rang.
 
 `ranma action "<action>"` runs any action from a pane the same way, e.g.
@@ -1359,7 +1363,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.open_here(path)` | Open a file of this machine (an absolute path) with the desktop's opener on the machine at the keyboard: here when this ranma is that one, else fetched over the ssh of the ranma around it and opened there. Only pictures, PDFs, audio and video. Runs in the background; a failure is a toast. See [Opening a far file here](#opening-a-far-file-here). `ranma.has("open_here")`. |
 | `ranma.refresh_module(name)` | Run a bar module again now, so data a plugin fetched in the background (a `ranma.spawn`'s `on_exit`) shows at once rather than at the next interval. |
 | `ranma.module_shown(name)` | Whether that module is on screen now (placed in the bar, with a bar showing). `ranma.state().modules` lists them all. |
-| `ranma.toast("text", { urgent, timeout })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)). |
+| `ranma.toast("text", { urgent, timeout, on_click })` | Show a toast (see [Toasts](#toasts-and-ranma-notify)); `on_click` runs when it is clicked. |
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), its hidden workspaces (`hidden`, see `hide_workspace`), the bar modules on screen (`modules`), the profile in use (or `nil`), whether the current workspace is fullscreen, its layout (`"dwindle"`, `"master"`, …) and whether that is its own (`workspace_layout`) rather than the `layout` setting or a profile's, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.layouts()` | Every layout `load_layout NAME` takes: `{ { name, saved }, ... }`, `init.lua`'s (`saved = false`) first, then the saved ones they do not shadow. Read when asked. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
@@ -2298,6 +2302,7 @@ the spelling against this table:
 | `rule.style` | a window rule's `style` |
 | `theme.palette` | a theme's `[palette]` |
 | `theme.roles` | a theme's `[roles.<name>]` |
+| `toast.on_click` | `ranma.toast`'s `on_click` |
 
 ## Themes
 

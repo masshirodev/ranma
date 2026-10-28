@@ -1107,9 +1107,20 @@ pub struct Runtime {
     /// Every pane, for `ranma.pane` and `ranma.panes`.
     pub panes: Vec<crate::luapane::PaneEntry>,
     pub notify: Option<String>,
-    /// `ranma.toast` calls: text, urgent, timeout in seconds.
-    pub toasts: Vec<(String, bool, Option<f64>)>,
+    /// `ranma.toast` calls, in the order made.
+    pub toasts: Vec<LuaToast>,
     pub state: StateSnapshot,
+}
+
+/// A `ranma.toast` call.
+#[derive(Debug)]
+pub struct LuaToast {
+    pub text: String,
+    pub urgent: bool,
+    /// Seconds; the default when `None`.
+    pub timeout: Option<f64>,
+    /// Called when the toast is clicked, after it is dismissed.
+    pub on_click: Option<Rc<RegistryKey>>,
 }
 
 /// One thing a Lua call asked for, done after it returns.
@@ -1889,6 +1900,7 @@ pub const CAPABILITIES: &[&str] = &[
     "rule.style",
     "theme.palette",
     "theme.roles",
+    "toast.on_click",
 ];
 
 fn install_api(
@@ -2802,6 +2814,7 @@ fn install_api(
         lua.create_function(|lua, (text, opts): (String, Option<Table>)| {
             let mut urgent = false;
             let mut timeout = None;
+            let mut on_click = None;
             if let Some(t) = &opts {
                 for pair in t.pairs::<String, Value>() {
                     let (k, v) = pair?;
@@ -2809,15 +2822,18 @@ fn install_api(
                         ("urgent", Value::Boolean(b)) => urgent = b,
                         ("timeout", Value::Integer(n)) if n > 0 => timeout = Some(n as f64),
                         ("timeout", Value::Number(n)) if n > 0.0 => timeout = Some(n),
-                        ("urgent" | "timeout", other) => {
+                        ("on_click", Value::Function(f)) => {
+                            on_click = Some(Rc::new(lua.create_registry_value(f)?));
+                        }
+                        ("urgent" | "timeout" | "on_click", other) => {
                             return Err(rt_err(format!(
-                                "ranma.toast: bad `{k}` ({}); urgent is true/false, timeout positive seconds",
+                                "ranma.toast: bad `{k}` ({}); urgent is true/false, timeout positive seconds, on_click a function",
                                 other.type_name()
                             )));
                         }
                         _ => {
                             return Err(rt_err(format!(
-                                "ranma.toast: unknown option `{k}` (expected urgent, timeout)"
+                                "ranma.toast: unknown option `{k}` (expected urgent, timeout, on_click)"
                             )));
                         }
                     }
@@ -2826,7 +2842,12 @@ fn install_api(
             let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
                 rt_err("ranma.toast only works inside binds, hooks and modules, not at config load")
             })?;
-            rt.toasts.push((text, urgent, timeout));
+            rt.toasts.push(LuaToast {
+                text,
+                urgent,
+                timeout,
+                on_click,
+            });
             Ok(())
         })?,
     )?;
@@ -4698,6 +4719,7 @@ mod tests {
             ("ranma.toast('x', { loud = true })", "loud"),
             ("ranma.toast('x', { timeout = -1 })", "timeout"),
             ("ranma.toast('x', { urgent = 'yes' })", "urgent"),
+            ("ranma.toast('x', { on_click = 'focus' })", "on_click"),
         ] {
             let err = format!("{:#}", with_user(src).unwrap_err());
             assert!(err.contains(needle), "{src}: {err}");

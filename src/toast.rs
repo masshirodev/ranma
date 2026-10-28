@@ -2,7 +2,8 @@
 //!
 //! They come from Lua (`ranma.toast`), from `ranma notify` run in any pane (see
 //! `ipc`), and from ranma itself (a bell in a pane nobody can see). They never
-//! take focus or keys; a click dismisses one.
+//! take focus or keys; a click dismisses one, and runs what its sender gave
+//! for a click (a Lua toast's `on_click`, a failed update's log).
 
 use std::time::{Duration, Instant};
 
@@ -40,8 +41,15 @@ pub struct Toasts {
 }
 
 impl Toasts {
-    pub fn push(&mut self, text: impl Into<String>, level: Level, timeout: Duration, now: Instant) {
-        self.push_from(None, text, level, timeout, now);
+    /// Its id, or `None` when there was nothing to say (blank text).
+    pub fn push(
+        &mut self,
+        text: impl Into<String>,
+        level: Level,
+        timeout: Duration,
+        now: Instant,
+    ) -> Option<u64> {
+        self.push_from(None, text, level, timeout, now)
     }
 
     /// A toast with its sender: `source: text`, the source shortened first.
@@ -52,11 +60,11 @@ impl Toasts {
         level: Level,
         timeout: Duration,
         now: Instant,
-    ) {
+    ) -> Option<u64> {
         let text: String = text.into();
         let text = text.trim();
         if text.is_empty() {
-            return;
+            return None;
         }
         let source = source
             .map(|s| s.trim().to_string())
@@ -72,6 +80,7 @@ impl Toasts {
         if self.list.len() > MAX_SHOWN {
             self.list.remove(0);
         }
+        Some(self.next_id)
     }
 
     /// A toast that stays until it is changed or dismissed (a job's

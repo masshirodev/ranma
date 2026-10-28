@@ -1510,13 +1510,17 @@ build does not know which image they named.
 .SH "TOASTS AND \fBranma notify\fR"
 .PP
 Toasts are short notifications stacked at the top right, gone after five seconds
-or when clicked. They come from three places:
+or when clicked. A click on a plugin's toast also runs its \fBon_click\fR, if it gave
+one (a jump to the pane a message is about). They come from three places:
 .IP \(bu 2
 \fBAny pane:\fR \fBranma notify "build done"\fR, \fBranma notify \-u "tests failed"\fR
 (urgent), \fBranma notify \-t 30 "..."\fR (seconds). Chain it after anything slow:
 \fBmake && ranma notify done || ranma notify \-u failed\fR.
 .IP \(bu 2
-\fBLua:\fR \fBranma.toast("text", { urgent = true, timeout = 10 })\fR.
+\fBLua:\fR \fBranma.toast("text", { urgent = true, timeout = 10, on_click = fn })\fR.
+\fBon_click\fR is called with no arguments when the toast is clicked, after it
+is dismissed, and only then: a toast that times out or is pushed out by
+newer ones never calls it. \fBranma.has("toast.on_click")\fR.
 .IP \(bu 2
 \fBranma:\fR a bell in a pane you cannot see says where it rang.
 .PP
@@ -1833,8 +1837,8 @@ Run a bar module again now, so data a plugin fetched in the background (a \fBran
 \fBranma.module_shown(name)\fR
 Whether that module is on screen now (placed in the bar, with a bar showing). \fBranma.state().modules\fR lists them all.
 .TP
-\fBranma.toast("text", { urgent, timeout })\fR
-Show a toast (see Toasts\fR).
+\fBranma.toast("text", { urgent, timeout, on_click })\fR
+Show a toast (see Toasts\fR); \fBon_click\fR runs when it is clicked.
 .TP
 \fBranma.state()\fR
 \fB{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }\fR: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (\fBnames[2] == "kumiko"\fR; named workspaces only, empty ones included), its hidden workspaces (\fBhidden\fR, see \fBhide_workspace\fR), the bar modules on screen (\fBmodules\fR), the profile in use (or \fBnil\fR), whether the current workspace is fullscreen, its layout (\fB"dwindle"\fR, \fB"master"\fR, …) and whether that is its own (\fBworkspace_layout\fR) rather than the \fBlayout\fR setting or a profile's, the focused pane's id and title, \fB"wm"\fR, \fB"normal"\fR or \fB"copy"\fR, and the pane count.
@@ -3026,6 +3030,9 @@ a theme's \fB[palette]\fR
 .TP
 \fBtheme.roles\fR
 a theme's \fB[roles.<name>]\fR
+.TP
+\fBtoast.on_click\fR
+\fBranma.toast\fR's \fBon_click\fR
 .SH "THEMES"
 .PP
 A theme is \fB~/.config/ranma/themes/<name>.toml\fR, selected with

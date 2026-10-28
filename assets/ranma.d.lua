@@ -356,9 +356,10 @@ function ranma.refresh_module(name) end
 ---@return boolean
 function ranma.module_shown(name) end
 
----A toast.
+---A toast. `on_click` runs when it is clicked (after it is dismissed);
+---`ranma.has("toast.on_click")`.
 ---@param text string
----@param opts? { urgent?: boolean, timeout?: number }
+---@param opts? { urgent?: boolean, timeout?: number, on_click?: fun() }
 function ranma.toast(text, opts) end
 
 ---@class ranma.State
