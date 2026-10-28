@@ -271,6 +271,11 @@ here: this is a Cargo repo, and `core.hooksPath` does the same job without a
 | `pre-push` | `scripts/hooks.sh --check`, the tests under `cargo llvm-cov` at the 80% floor, `cargo test --doc`, `scripts/smoke.sh`, `hajime check --offline` (when it is on `PATH`) | `SKIP_HOOKS` `SKIP_TESTS` `SKIP_SMOKE` `SKIP_HAJIME` `SKIP_ALL` |
 | `commit-msg` | refuses `Co-Authored-By` trailers, `Claude-Session` references and emoji (Unicode's `Extended_Pictographic`, not the text symbols such as arrows) | `SKIP_COAUTHOR` `SKIP_EMOJI` `SKIP_ALL` |
 
+`pre-push` first unsets the variables git gives a hook (`GIT_DIR`,
+`GIT_INDEX_FILE` and the rest, `git rev-parse --local-env-vars`). Left set,
+a test that runs git in a temporary directory, as the `update` tests do,
+would act on this repository instead of its own.
+
 `agent-docs-budget` keeps `AGENTS.md` and `CLAUDE.md` under the agents' read
 limits (32 KB a file for Codex, 150 KB in total for Claude Code). It lives in the
 dotfiles, so a machine without them skips the step rather than failing it.

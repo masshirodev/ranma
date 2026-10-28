@@ -27,6 +27,12 @@ ok() { printf "${GREEN}[ok] %s${RESET}\n" "$1"; }
 skip() { printf "${YELLOW}[skip] %s${RESET}\n" "$1"; }
 fail() { printf "${RED}[fail] %s${RESET}\n" "$1"; }
 
+# git exports GIT_DIR, GIT_INDEX_FILE and the rest to every hook. A test that
+# runs `git init` or `git commit` in a temporary directory (the update tests
+# make checkouts of their own) would then act on THIS repository instead.
+# Every step below finds the repository from the working directory.
+unset $(git rev-parse --local-env-vars)
+
 if [ -n "$SKIP_ALL" ]; then
 	printf "${YELLOW}${BOLD}pre-push: SKIP_ALL set - skipping every check${RESET}\n"
 	exit 0

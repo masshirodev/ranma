@@ -7,10 +7,5 @@
 	"ports": {},
 	"floor": 80,
 	"board": "ranma",
-	"skip": [
-		{
-			"path": "doc/BOARD.md",
-			"why": "ranma is public and its tracked docs deliberately name no board or card (AGENTS.local.md: \"the public docs no longer do\"); the ranma board, its Plugin label and the card history are described in the gitignored AGENTS.local.md instead"
-		}
-	]
+	"skip": []
 }
