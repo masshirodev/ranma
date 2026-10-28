@@ -3400,6 +3400,15 @@ Rust, for predictable latency without a GC, and for the emulator:
 - **Control characters are drawn as blanks.** alacritty_terminal keeps a literal
   `\t` in the cell a tab starts from; sent to the host, it moves the cursor instead
   of drawing, and stale cells show through. Found by `scripts/smoke.sh`.
+- **A cell's symbol is as wide as the cell** (2026-10-28, c399). A cell's
+  character goes to the host with its zero-width marks, and a mark can widen
+  it: `❤` + VS16 is one cell in alacritty_terminal and two to unicode-width,
+  ratatui and the host. The host then draws everything after it in the run a
+  column right of where ranma's buffer has it, and the cells the two disagree
+  on are never rewritten, so stray text outlives the program's own full
+  redraws and shows over other workspaces (concord's FxTwitter stats line,
+  `❤️ 23.8K 👁️ 677.0K`). `fitted` drops a mark that would change the width
+  the emulator gave the cell; the base character is drawn in text presentation.
 - **Unfocused panes can fade** (`panes.dim_unfocused`, 2026-09-29, from tuios):
   each cell's foreground is mixed toward its background in real RGB, resolved
   through the program's own palette changes and then the host's colours (asked

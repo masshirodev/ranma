@@ -417,10 +417,12 @@ fn draw_pane(
         {
             out.set_char(' ');
         } else if let Some(extra) = cell.zerowidth() {
-            let mut s = String::with_capacity(8);
-            s.push(display_char(cell.c));
-            s.extend(extra);
-            out.set_symbol(&s);
+            let cols = if cell.flags.contains(Flags::WIDE_CHAR) {
+                2
+            } else {
+                1
+            };
+            out.set_symbol(&fitted(display_char(cell.c), extra, cols));
         } else {
             out.set_char(display_char(cell.c));
         }
@@ -561,6 +563,32 @@ fn draw_pane(
         },
         at,
     ))
+}
+
+/// A cell's character and its zero-width marks, as a symbol exactly `cols`
+/// columns wide: the columns the emulator gave the cell. The host draws a
+/// symbol at its own width, and ratatui's backend writes the next cell without
+/// moving the cursor when the two are neighbours, so a symbol wider than its
+/// cell (`❤` + VS16: one cell in alacritty_terminal, two to unicode-width and
+/// the host) pushes the rest of the run one column right of where ranma's
+/// buffer has it. The cells the two then disagree on are never rewritten:
+/// stray text that outlives the pane's own redraws and shows over other
+/// workspaces. A mark that would change the width is dropped; the rest stay.
+fn fitted(c: char, marks: &[char], cols: usize) -> String {
+    let mut s = String::with_capacity(8);
+    s.push(c);
+    s.extend(marks);
+    if s.width() == cols {
+        return s;
+    }
+    s.truncate(c.len_utf8());
+    for &m in marks {
+        s.push(m);
+        if s.width() != cols {
+            s.pop();
+        }
+    }
+    s
 }
 
 /// A column across the strip's edge (`layout = "scrolling"`): the pane
@@ -1937,6 +1965,92 @@ fn term_color(c: AColor, overrides: &alacritty_terminal::term::color::Colors) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_symbol_takes_the_columns_its_cell_has() {
+        // VS16 widens to unicode-width, not to the emulator: dropped in one cell.
+        assert_eq!(fitted('❤', &['\u{FE0F}'], 1), "❤");
+        assert_eq!(fitted('👁', &['\u{FE0F}'], 1), "👁");
+        // A cell that has the two columns keeps it.
+        assert_eq!(fitted('❤', &['\u{FE0F}'], 2), "❤\u{FE0F}");
+        // A mark that does not change the width stays.
+        assert_eq!(fitted('e', &['\u{0301}'], 1), "e\u{0301}");
+        assert_eq!(fitted('💬', &['\u{FE0F}'], 2), "💬\u{FE0F}");
+    }
+
+    /// The bug the fit is for, end to end: what the emulator makes of a
+    /// heart with VS16 and the letter after it, copied cell by cell as
+    /// `draw_pane` does, diffed by ratatui against an empty screen, and
+    /// written the way ratatui's crossterm backend writes it (a cursor move
+    /// only before a cell that is not the last one's neighbour) to a host that
+    /// advances by each symbol's width. The raw symbol puts the letter a
+    /// column right of the cell ranma believes it is in; the fitted one does not.
+    #[test]
+    fn a_vs16_emoji_in_one_cell_keeps_the_rest_of_the_row_in_place() {
+        use alacritty_terminal::event::VoidListener;
+        use alacritty_terminal::index::{Column, Line, Point};
+        use alacritty_terminal::term::{Config, Term};
+        use ratatui::buffer::Buffer;
+
+        struct Size;
+        impl Dimensions for Size {
+            fn total_lines(&self) -> usize {
+                1
+            }
+            fn screen_lines(&self) -> usize {
+                1
+            }
+            fn columns(&self) -> usize {
+                4
+            }
+        }
+        let mut term = Term::new(Config::default(), &Size, VoidListener);
+        let mut parser: alacritty_terminal::vte::ansi::Processor = Default::default();
+        parser.advance(&mut term, "❤\u{FE0F}X".as_bytes());
+        let heart = &term.grid()[Point::new(Line(0), Column(0))];
+        assert!(!heart.flags.contains(Flags::WIDE_CHAR), "one cell");
+        assert_eq!(term.grid()[Point::new(Line(0), Column(1))].c, 'X');
+
+        // Where each symbol lands on the host: (host column, ranma's column).
+        let landed = |fit: bool| {
+            let area = RRect::new(0, 0, 4, 1);
+            let mut buf = Buffer::empty(area);
+            for col in 0..4 {
+                let cell = &term.grid()[Point::new(Line(0), Column(col))];
+                let out = &mut buf[(col as u16, 0)];
+                match cell.zerowidth() {
+                    Some(marks) if fit => out.set_symbol(&fitted(cell.c, marks, 1)),
+                    Some(marks) => {
+                        let s: String = std::iter::once(cell.c)
+                            .chain(marks.iter().copied())
+                            .collect();
+                        out.set_symbol(&s)
+                    }
+                    None => out.set_char(cell.c),
+                };
+            }
+            let mut host = 0u16;
+            let mut last: Option<u16> = None;
+            let mut out = Vec::new();
+            for (x, _, c) in Buffer::empty(area).diff(&buf) {
+                if last.is_none_or(|l| x != l + 1) {
+                    host = x;
+                }
+                last = Some(x);
+                if c.symbol().contains('X') {
+                    out.push((host, x));
+                }
+                host += c.symbol().width() as u16;
+            }
+            out
+        };
+        assert_eq!(
+            landed(false),
+            vec![(2, 1)],
+            "the bug: X drawn a column right"
+        );
+        assert_eq!(landed(true), vec![(1, 1)]);
+    }
 
     #[test]
     fn a_gradient_runs_along_its_angle_one_colour_per_cell() {
