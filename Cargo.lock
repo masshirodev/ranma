@@ -12,6 +12,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "alacritty_terminal"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda177466b9524d59f1b12f0dd30b68696788e9992a7e959021c4a0ed96fcf59"
+dependencies = [
+ "base64",
+ "bitflags 2.13.2",
+ "home",
+ "libc",
+ "log",
+ "miow",
+ "parking_lot",
+ "piper",
+ "polling",
+ "regex-automata",
+ "rustix",
+ "rustix-openpty",
+ "serde",
+ "signal-hook 0.4.4",
+ "unicode-width",
+ "vte",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1381,6 +1406,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 name = "ranma"
 version = "0.4.0"
 dependencies = [
+ "alacritty_terminal",
  "anyhow",
  "clap",
  "clap_mangen",
@@ -1390,7 +1416,6 @@ dependencies = [
  "mlua",
  "notify",
  "polling",
- "ranma-alacritty-terminal",
  "ratatui",
  "serde",
  "serde_json",
@@ -1398,31 +1423,6 @@ dependencies = [
  "thiserror 2.0.21",
  "toml",
  "unicode-width",
-]
-
-[[package]]
-name = "ranma-alacritty-terminal"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b648e41b91c8cd434c6c2083af08d0e0d9e5558673eb983a4e87b0efd69aa7c"
-dependencies = [
- "base64",
- "bitflags 2.13.2",
- "home",
- "libc",
- "log",
- "miow",
- "parking_lot",
- "piper",
- "polling",
- "regex-automata",
- "rustix",
- "rustix-openpty",
- "serde",
- "signal-hook 0.4.4",
- "unicode-width",
- "vte",
- "windows-sys 0.59.0",
 ]
 
 [[package]]

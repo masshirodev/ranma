@@ -1968,26 +1968,31 @@ mod tests {
 
     #[test]
     fn a_symbol_takes_the_columns_its_cell_has() {
-        // VS16 widens to unicode-width: dropped from a cell the emulator kept
-        // at one column (the right margin without auto-wrap).
+        // VS16 widens to unicode-width, not to the emulator: dropped in one cell.
         assert_eq!(fitted('❤', &['\u{FE0F}'], 1), "❤");
         assert_eq!(fitted('👁', &['\u{FE0F}'], 1), "👁");
-        // A cell that has the two columns keeps it, and with it the colour.
+        // A cell that has the two columns keeps it.
         assert_eq!(fitted('❤', &['\u{FE0F}'], 2), "❤\u{FE0F}");
         // A mark that does not change the width stays.
         assert_eq!(fitted('e', &['\u{0301}'], 1), "e\u{0301}");
         assert_eq!(fitted('💬', &['\u{FE0F}'], 2), "💬\u{FE0F}");
     }
 
-    /// A one-row terminal with `bytes` written to it.
-    fn one_row(
-        columns: usize,
-        bytes: &str,
-    ) -> alacritty_terminal::Term<alacritty_terminal::event::VoidListener> {
+    /// The bug the fit is for, end to end: what the emulator makes of a
+    /// heart with VS16 and the letter after it, copied cell by cell as
+    /// `draw_pane` does, diffed by ratatui against an empty screen, and
+    /// written the way ratatui's crossterm backend writes it (a cursor move
+    /// only before a cell that is not the last one's neighbour) to a host that
+    /// advances by each symbol's width. The raw symbol puts the letter a
+    /// column right of the cell ranma believes it is in; the fitted one does not.
+    #[test]
+    fn a_vs16_emoji_in_one_cell_keeps_the_rest_of_the_row_in_place() {
         use alacritty_terminal::event::VoidListener;
+        use alacritty_terminal::index::{Column, Line, Point};
         use alacritty_terminal::term::{Config, Term};
+        use ratatui::buffer::Buffer;
 
-        struct Size(usize);
+        struct Size;
         impl Dimensions for Size {
             fn total_lines(&self) -> usize {
                 1
@@ -1996,97 +2001,55 @@ mod tests {
                 1
             }
             fn columns(&self) -> usize {
-                self.0
+                4
             }
         }
-        let mut term = Term::new(Config::default(), &Size(columns), VoidListener);
+        let mut term = Term::new(Config::default(), &Size, VoidListener);
         let mut parser: alacritty_terminal::vte::ansi::Processor = Default::default();
-        parser.advance(&mut term, bytes.as_bytes());
-        term
-    }
+        parser.advance(&mut term, "❤\u{FE0F}X".as_bytes());
+        let heart = &term.grid()[Point::new(Line(0), Column(0))];
+        assert!(!heart.flags.contains(Flags::WIDE_CHAR), "one cell");
+        assert_eq!(term.grid()[Point::new(Line(0), Column(1))].c, 'X');
 
-    /// Where each symbol of the row lands on the host, as (symbol, host
-    /// column, ranma's column): the row copied cell by cell as `draw_pane`
-    /// does (spacers left out, marks fitted when `fit`), diffed by ratatui
-    /// against an empty screen, and written the way ratatui's crossterm
-    /// backend writes it (a cursor move only before a cell that is not the
-    /// last one's neighbour) to a host that advances by each symbol's width.
-    fn landed(
-        term: &alacritty_terminal::Term<alacritty_terminal::event::VoidListener>,
-        fit: bool,
-    ) -> Vec<(String, u16, u16)> {
-        use alacritty_terminal::index::{Column, Line, Point};
-        use ratatui::buffer::Buffer;
-
-        let columns = term.columns();
-        let area = RRect::new(0, 0, columns as u16, 1);
-        let mut buf = Buffer::empty(area);
-        for col in 0..columns {
-            let cell = &term.grid()[Point::new(Line(0), Column(col))];
-            if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                continue;
+        // Where each symbol lands on the host: (host column, ranma's column).
+        let landed = |fit: bool| {
+            let area = RRect::new(0, 0, 4, 1);
+            let mut buf = Buffer::empty(area);
+            for col in 0..4 {
+                let cell = &term.grid()[Point::new(Line(0), Column(col))];
+                let out = &mut buf[(col as u16, 0)];
+                match cell.zerowidth() {
+                    Some(marks) if fit => out.set_symbol(&fitted(cell.c, marks, 1)),
+                    Some(marks) => {
+                        let s: String = std::iter::once(cell.c)
+                            .chain(marks.iter().copied())
+                            .collect();
+                        out.set_symbol(&s)
+                    }
+                    None => out.set_char(cell.c),
+                };
             }
-            let cols = if cell.flags.contains(Flags::WIDE_CHAR) {
-                2
-            } else {
-                1
-            };
-            let out = &mut buf[(col as u16, 0)];
-            match cell.zerowidth() {
-                Some(marks) if fit => out.set_symbol(&fitted(cell.c, marks, cols)),
-                Some(marks) => {
-                    let s: String = std::iter::once(cell.c)
-                        .chain(marks.iter().copied())
-                        .collect();
-                    out.set_symbol(&s)
+            let mut host = 0u16;
+            let mut last: Option<u16> = None;
+            let mut out = Vec::new();
+            for (x, _, c) in Buffer::empty(area).diff(&buf) {
+                if last.is_none_or(|l| x != l + 1) {
+                    host = x;
                 }
-                None => out.set_char(cell.c),
-            };
-        }
-        let mut host = 0u16;
-        let mut last: Option<u16> = None;
-        let mut out = Vec::new();
-        for (x, _, c) in Buffer::empty(area).diff(&buf) {
-            if last.is_none_or(|l| x != l + 1) {
-                host = x;
+                last = Some(x);
+                if c.symbol().contains('X') {
+                    out.push((host, x));
+                }
+                host += c.symbol().width() as u16;
             }
-            last = Some(x);
-            if c.symbol() != " " {
-                out.push((c.symbol().to_string(), host, x));
-            }
-            host += c.symbol().width() as u16;
-        }
-        out
-    }
-
-    /// The emulator (ranma's fork of alacritty_terminal) gives an emoji with
-    /// VS16 two cells, as the host draws it: the colour stays and the letter
-    /// after it is where ranma's buffer has it.
-    #[test]
-    fn a_vs16_emoji_takes_two_cells_and_keeps_its_colour() {
-        let term = one_row(6, "❤\u{FE0F}X");
+            out
+        };
         assert_eq!(
-            landed(&term, true),
-            vec![("❤\u{FE0F}".to_string(), 0, 0), ("X".to_string(), 2, 2)]
+            landed(false),
+            vec![(2, 1)],
+            "the bug: X drawn a column right"
         );
-    }
-
-    /// The one place the emulator still keeps it in one cell: the right
-    /// margin with auto-wrap off. Drawn whole it would be two wide on the host
-    /// and push what follows; fitted, it is one, without the colour.
-    #[test]
-    fn a_vs16_emoji_kept_in_one_cell_is_drawn_one_wide() {
-        // Auto-wrap off, then an emoji at the last column.
-        let term = one_row(4, "\x1b[?7labc❤\u{FE0F}");
-        let drawn = landed(&term, true);
-        assert_eq!(drawn.last(), Some(&("❤".to_string(), 3, 3)));
-        let unfitted = landed(&term, false);
-        assert_eq!(unfitted.last(), Some(&("❤\u{FE0F}".to_string(), 3, 3)));
-        assert_eq!(
-            unfitted.last().map(|(s, ..)| s.width()),
-            Some(2),
-            "wider than its cell"
-        );
+        assert_eq!(landed(true), vec![(1, 1)]);
     }
 
     #[test]

@@ -3381,7 +3381,7 @@ Rust, for predictable latency without a GC, and for the emulator:
 
 | Concern | Crate | Why |
 | --- | --- | --- |
-| Terminal emulation | `alacritty_terminal`, as `ranma-alacritty-terminal` | Years of VT edge cases already fixed; bounded scrollback. The fork adds two-cell VS16 emoji ("VS16 emoji take two cells"). |
+| Terminal emulation | `alacritty_terminal` | Years of VT edge cases already fixed; bounded scrollback. |
 | PTYs | `alacritty_terminal::tty` + its `EventLoop` | The PTY layer and per-pane I/O thread Alacritty itself runs: bounded reads, a fair lock against the renderer, wakeup events. |
 | Host terminal I/O | `crossterm` | Raw mode, input decoding, including the kitty keyboard protocol. |
 | Drawing | `ratatui` | Cell-buffer diffing: only changed cells are written. |
@@ -3402,32 +3402,27 @@ Rust, for predictable latency without a GC, and for the emulator:
   of drawing, and stale cells show through. Found by `scripts/smoke.sh`.
 - **A cell's symbol is as wide as the cell** (2026-10-28, c399). A cell's
   character goes to the host with its zero-width marks, and a mark can widen
-  it: `❤` + VS16 was one cell in alacritty_terminal and two to unicode-width,
-  ratatui and the host. The host then drew everything after it in the run a
-  column right of where ranma's buffer had it, and the cells the two disagreed
-  on were never rewritten, so stray text outlived the program's own full
-  redraws and showed over other workspaces (concord's FxTwitter stats line,
+  it: `❤` + VS16 is one cell in alacritty_terminal and two to unicode-width,
+  ratatui and the host. The host then draws everything after it in the run a
+  column right of where ranma's buffer has it, and the cells the two disagree
+  on are never rewritten, so stray text outlives the program's own full
+  redraws and shows over other workspaces (concord's FxTwitter stats line,
   `❤️ 23.8K 👁️ 677.0K`). `fitted` drops a mark that would change the width
-  the emulator gave the cell; the base character is then drawn in text
-  presentation. Since the emulator gives VS16 emoji two cells (next entry),
-  this is a guard for what is left: the right margin with auto-wrap off, and
-  any other mark the emulator and unicode-width measure differently.
-- **VS16 emoji take two cells, in a fork of alacritty_terminal** (2026-10-28,
-  c400). An emoji followed by VS16 is two cells wide (Unicode TR51), as
-  unicode-width, ratatui, kitty and WezTerm count it; upstream alacritty_terminal
-  keeps it in one on purpose. A ratatui program in a pane then wrote the rest
-  of such a line a column left of where it meant to, and its partial redraws
-  left fragments; `fitted` alone also cost the emoji its colour. The emulator
-  is `ranma-alacritty-terminal` (crates.io; the `ranma` branch of
-  `masshirodev/alacritty`): upstream 0.26.0 plus that widening, with the
-  library still named `alacritty_terminal`, so the dependency is renamed in
-  `Cargo.toml` and no code changed. *A published crate, not `[patch]` or a git
-  dependency*, because ranma is itself on crates.io, which ignores the one and
-  refuses the other: `cargo install ranma` would silently get upstream's
-  emulator back. The cost is rebasing the fork on each upstream release (its
-  `README.md`, "Keeping up with upstream"). It still reports upstream's version
-  to programs (`CSI > c`), so they see the code they run, not the fork's
-  numbering.
+  the emulator gave the cell; the base character is drawn in text presentation.
+- **VS16 emoji stay one cell** (2026-10-28, c400; tried and reverted the same
+  day). Programs disagree on `❤️`: unicode-width and every ratatui program
+  count two, glibc's `wcwidth` (U+2764 is 1, U+FE0F is 0) and everything laid
+  out with it, zsh, readline, vim, less and Claude Code's renderer among them,
+  count one. A terminal can only match one side; upstream alacritty_terminal
+  chose `wcwidth`, and so does ranma. Two cells were tried, in a published fork
+  of alacritty_terminal (`ranma-alacritty-terminal` 0.1.0), and every
+  `wcwidth` program then drifted a column on such lines, which is most of
+  what runs in a pane. So a ratatui program (concord) can still drift a column
+  inside its own pane on a line with a VS16 emoji, as it does in Alacritty,
+  Windows Terminal or any `wcwidth` terminal, until it repaints the line; the
+  fix for that is on the program's side (laying out as the terminal does, or
+  asking for grapheme widths with mode 2027 where a terminal offers it).
+  `fitted` keeps it from reaching the host screen.
 - **Unfocused panes can fade** (`panes.dim_unfocused`, 2026-09-29, from tuios):
   each cell's foreground is mixed toward its background in real RGB, resolved
   through the program's own palette changes and then the host's colours (asked
