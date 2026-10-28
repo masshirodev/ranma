@@ -12,7 +12,7 @@ categories = ["command-line-utilities"]
 exclude = ["doc/briefs/", "doc/handoffs/", "doc/screenshot.png", "doc/demo.gif", "doc/examples/screenshot/", "scripts/", ".githooks/", ".github/", "packaging/", "flake.nix", "flake.lock"]
 
 [dependencies]
-alacritty_terminal = "0.26"
+alacritty_terminal = { package = "ranma-alacritty-terminal", version = "0.1" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 clap_mangen = "0.3.3"
