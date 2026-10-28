@@ -242,8 +242,9 @@ scripts/hooks.sh
 ```
 
 They run `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` on
-commit, and `cargo test` plus the smoke test on push. `doc/TESTING.md` says what
-each check covers.
+commit, and on push the tests under `cargo llvm-cov` (80% of lines and
+functions, so it needs `cargo install cargo-llvm-cov`) plus the smoke test.
+`doc/TESTING.md` says what each check covers.
 
 ## License
 

@@ -4,7 +4,7 @@
 # or robot emoji (🤖).
 #
 # Skip flags (set to any non-empty value):
-#   SKIP_COAUTHOR SKIP_ALL
+#   SKIP_COAUTHOR SKIP_EMOJI SKIP_ALL
 
 RED='\033[0;31m'
 BOLD='\033[1m'
@@ -41,6 +41,20 @@ if grep -v '^[[:space:]]*#' "$1" | grep -q '🤖'; then
 	[ "$FAILED" -eq 0 ] && printf "\n" >&2
 	fail "Robot emoji (🤖) is not allowed in commit messages."
 	hint "Please remove any 🤖 emoji and try again."
+	FAILED=1
+fi
+
+# Any emoji, not only the robot (~/AGENTS.md: no emoji in commit messages).
+# Unicode's own Extended_Pictographic, minus the text symbols it also counts
+# (copyright, registered, trade mark, info, the plain arrows), so a commit
+# that writes (c) or an arrow is not refused. Needs a grep with -P; one
+# without it skips the check rather than refusing every commit.
+EMOJI='(?![\x{00A9}\x{00AE}\x{203C}\x{2049}\x{2122}\x{2139}\x{2194}-\x{2199}])\p{Extended_Pictographic}'
+if [ -z "$SKIP_EMOJI" ] && printf 'x' | grep -qP 'x' 2>/dev/null &&
+	grep -v '^[[:space:]]*#' "$1" | grep -qP "$EMOJI"; then
+	[ "$FAILED" -eq 0 ] && printf "\n" >&2
+	fail "Emoji are not allowed in commit messages."
+	hint "Found: $(grep -v '^[[:space:]]*#' "$1" | grep -oP "$EMOJI" | head -3 | tr -d '\n')"
 	FAILED=1
 fi
 

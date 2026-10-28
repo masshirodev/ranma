@@ -1,5 +1,6 @@
-# The pre-commit gate of AGENTS.md on every push to main and every pull
-# request: a contributor's change gets the same checks the hooks run here.
+# The gate of AGENTS.md on every push to main and every pull request: a
+# contributor's change gets the same checks the hooks run here, the coverage
+# floor included (on Linux; macOS runs the tests without measuring them).
 # doc/TESTING.md says what each one covers.
 name: ci
 
@@ -14,11 +15,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Rust toolchain
-        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview && rustup default stable
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked
+      # The suite under coverage, failing below the floor in .hajime.json
+      # (doc/TESTING.md, "Coverage"). It skips doctests on stable, so they
+      # run on their own.
+      - name: Tests, 80% floor
+        run: cargo llvm-cov --workspace --locked --fail-under-lines 80 --fail-under-functions 80
+      - run: cargo test --locked --doc
       # The smoke test drives the release build in a private headless tmux.
       - name: Smoke
         run: |

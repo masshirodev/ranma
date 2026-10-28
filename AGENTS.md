@@ -16,9 +16,14 @@ user's config and restores the previous one if it is rejected). `./install.sh
 --check` runs the gate above first. Prefer it to a bare `cargo install`.
 
 The git hooks in `.githooks/` enforce this: fmt and clippy on commit, the tests
-and the smoke on push, and `commit-msg` refuses `Co-Authored-By` trailers,
-`Claude-Session` references and the robot emoji. A fresh clone runs none of them
+under coverage and the smoke on push, and `commit-msg` refuses `Co-Authored-By`
+trailers, `Claude-Session` references and emoji. A fresh clone runs none of them
 until `scripts/hooks.sh` has armed it once. Make them pass; do not set skip flags.
+
+**Coverage floor: 80%** of lines and functions, `cargo llvm-cov` at every push
+and in CI (`.hajime.json`'s `floor`). It only rises: a change that lowers
+coverage adds tests in the same commit, and a change that raises it past the
+next whole number may raise the floor. `doc/TESTING.md`, "Coverage".
 
 `doc/TESTING.md` says what each check covers.
 

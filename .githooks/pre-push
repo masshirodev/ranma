@@ -1,8 +1,10 @@
 #!/usr/bin/env sh
 
-# The rest of the gate in AGENTS.md: the unit tests and the smoke test. The
-# tests are seconds; the smoke is about fifteen, which is why it waits for a push
-# rather than riding on every commit. See doc/TESTING.md, "Git hooks".
+# The rest of the gate in AGENTS.md: the hooks are armed, the unit tests pass
+# above the coverage floor, the smoke test, and the house rules hajime holds.
+# The tests under coverage are about a minute; the smoke is about fifteen
+# seconds, which is why they wait for a push rather than riding on every
+# commit. See doc/TESTING.md, "Git hooks".
 #
 # The smoke runs on every push, not only when a change touches app, pane, render
 # or input, because a hook cannot judge that and a skipped smoke is how a
@@ -10,7 +12,7 @@
 # scarce, SKIP_SMOKE is the flag to reach for.
 #
 # Skip flags (set to any non-empty value):
-#   SKIP_TESTS SKIP_SMOKE SKIP_ALL
+#   SKIP_HOOKS SKIP_TESTS SKIP_SMOKE SKIP_HAJIME SKIP_ALL
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,17 +33,42 @@ if [ -n "$SKIP_ALL" ]; then
 fi
 
 printf "${BOLD}pre-push: running repository checks${RESET}\n"
-printf "${DIM}  skip flags: SKIP_TESTS SKIP_SMOKE SKIP_ALL${RESET}\n"
+printf "${DIM}  skip flags: SKIP_HOOKS SKIP_TESTS SKIP_SMOKE SKIP_HAJIME SKIP_ALL${RESET}\n"
 
-if [ -n "$SKIP_TESTS" ]; then
-	skip "unit tests"
+# Reaching this file means pre-push runs, but a clone whose core.hooksPath was
+# set by hand to somewhere else runs this copy and not the others. The check
+# says which hooks git will actually run.
+if [ -n "$SKIP_HOOKS" ]; then
+	skip "hook arming"
 else
-	step "unit tests"
-	if ! cargo test --quiet; then
-		fail "unit tests failed"
+	step "hook arming"
+	if ! scripts/hooks.sh --check; then
+		fail "git hooks are not armed for this checkout: run scripts/hooks.sh"
 		exit 1
 	fi
-	ok "unit tests passed"
+	ok "hooks armed"
+fi
+
+# cargo llvm-cov runs the unit tests with coverage and fails below the floor
+# (.hajime.json's `floor`, doc/TESTING.md, "Coverage"). Branch coverage needs a
+# nightly toolchain, so stable holds lines and functions. It does not run
+# doctests on stable, so those run on their own after it.
+if [ -n "$SKIP_TESTS" ]; then
+	skip "unit tests + coverage"
+else
+	step "unit tests + coverage (80% floor)"
+	if ! cargo llvm-cov --workspace --quiet --fail-under-lines 80 --fail-under-functions 80; then
+		fail "a test failed or coverage fell below 80% (cargo install cargo-llvm-cov if it is missing)"
+		exit 1
+	fi
+	ok "unit tests passed above the floor"
+
+	step "doctests"
+	if ! cargo test --doc --quiet; then
+		fail "a doctest failed"
+		exit 1
+	fi
+	ok "doctests passed"
 fi
 
 if [ -n "$SKIP_SMOKE" ]; then
@@ -53,6 +80,23 @@ else
 		exit 1
 	fi
 	ok "smoke passed"
+fi
+
+# The house rules hajime (the maintainer's scaffolder) holds: briefs, what
+# git tracks, the floor's settings. Offline and seconds, so it runs on every
+# push. A machine without hajime (a contributor's) skips rather than fails,
+# like the agent-docs budget.
+if [ -n "$SKIP_HAJIME" ]; then
+	skip "house rules"
+elif command -v hajime >/dev/null 2>&1; then
+	step "house rules (hajime check)"
+	if ! hajime check --offline; then
+		fail "a house rule is broken: hajime apply fixes what it can, the rest says what to do"
+		exit 1
+	fi
+	ok "house rules hold"
+else
+	skip "hajime not installed"
 fi
 
 printf "\n${GREEN}${BOLD}[ok] pre-push checks passed${RESET}\n"

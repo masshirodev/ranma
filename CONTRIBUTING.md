@@ -63,6 +63,8 @@ can send.
 1. Read `doc/DESIGN.md` for the area you are touching. It records why things
    are the way they are.
 2. Arm the git hooks once per clone with `scripts/hooks.sh`. Do not skip them.
+   The push hook measures coverage, so install its tool once:
+   `cargo install cargo-llvm-cov` and `rustup component add llvm-tools-preview`.
 3. Before a commit, run:
 
    ```sh
@@ -70,7 +72,9 @@ can send.
    scripts/smoke.sh    # when the change touches app, pane, render or input
    ```
 
-   `doc/TESTING.md` says what each check covers.
+   `doc/TESTING.md` says what each check covers. Coverage of lines and
+   functions must stay at or above 80% (`cargo llvm-cov --summary-only`):
+   a change that lowers it brings tests with it.
 
 4. Keep the docs in step, in the same commit:
    - A new setting, action or event goes in `assets/init.lua` (it **is** the
@@ -86,7 +90,7 @@ can send.
 
 Write a sentence that says what changed and why, in the style of `git log`.
 The `commit-msg` hook refuses `Co-Authored-By` trailers, `Claude-Session`
-references and the robot emoji. If you used an AI tool, you are still the
+references and emoji. If you used an AI tool, you are still the
 author, so commit under your own name.
 
 ## License

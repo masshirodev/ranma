@@ -4,3 +4,6 @@ AGENTS.local.md
 doc/handoffs/**/*.zip
 __pycache__/
 /dist/
+
+# Machine-local and scratch, never committed (AGENTS.md)
+temp/

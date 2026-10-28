@@ -68,6 +68,37 @@ should now show, then run `python3 fixtures.py` in that directory. The Rust
 hint must then match the redrawn panels; a group past nine rows will not fit
 at 80×24.
 
+## Coverage — `cargo llvm-cov`
+
+**The floor is 80%** for lines and functions, held by `.githooks/pre-push`
+and CI with `cargo llvm-cov --workspace --fail-under-lines 80
+--fail-under-functions 80`, and recorded as `floor` in `.hajime.json`, whose
+check fails any commit that lowers it. A change that lowers coverage adds
+tests in the same commit; the floor is not lowered to make a push pass. It
+rises with the code: once both figures clear the next whole number, raise it
+in all three places together.
+
+It was set on 2026-10-28 at what the suite already held: lines 80.61%,
+functions 80.19% (regions 79.70%). The thinnest modules then were `tmux.rs`
+(lines 50%), `update.rs` (82%) and `toast.rs` (84%); the rest of the gap is
+spread thin, much of it the terminal and server paths the smoke drives but
+does not measure.
+
+Branch coverage is not held, because stable Rust cannot measure it (`cargo
+llvm-cov --branch` needs nightly). Regions are LLVM's own unit, not branches,
+and are left off rather than stand in for them. Doctests are not measured on
+stable either, so the hook and CI run them on their own after the suite.
+
+```sh
+cargo llvm-cov --summary-only        # the per-file table; about a minute
+cargo llvm-cov --html                # target/llvm-cov/html, line by line
+```
+
+Its build lives in `target/llvm-cov-target`, beside the normal one, so it
+does not throw away the incremental build `cargo test` uses. `cargo install
+cargo-llvm-cov` (and `rustup component add llvm-tools-preview`) on a machine
+without it, or the push fails at that step.
+
 ## Smoke test — `scripts/smoke.sh`
 
 Builds the release binary and drives it inside a **private headless tmux server**
@@ -237,15 +268,16 @@ here: this is a Cargo repo, and `core.hooksPath` does the same job without a
 | Hook | Runs | Skip flags |
 | --- | --- | --- |
 | `pre-commit` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `agent-docs-budget --check .` (when the dotfiles put it on `PATH`) | `SKIP_FORMAT` `SKIP_LINT` `SKIP_AGENT_DOCS` `SKIP_ALL` |
-| `pre-push` | `cargo test`, `scripts/smoke.sh` | `SKIP_TESTS` `SKIP_SMOKE` `SKIP_ALL` |
-| `commit-msg` | refuses `Co-Authored-By` trailers, `Claude-Session` references and 🤖 | `SKIP_COAUTHOR` `SKIP_ALL` |
+| `pre-push` | `scripts/hooks.sh --check`, the tests under `cargo llvm-cov` at the 80% floor, `cargo test --doc`, `scripts/smoke.sh`, `hajime check --offline` (when it is on `PATH`) | `SKIP_HOOKS` `SKIP_TESTS` `SKIP_SMOKE` `SKIP_HAJIME` `SKIP_ALL` |
+| `commit-msg` | refuses `Co-Authored-By` trailers, `Claude-Session` references and emoji (Unicode's `Extended_Pictographic`, not the text symbols such as arrows) | `SKIP_COAUTHOR` `SKIP_EMOJI` `SKIP_ALL` |
 
 `agent-docs-budget` keeps `AGENTS.md` and `CLAUDE.md` under the agents' read
 limits (32 KB a file for Codex, 150 KB in total for Claude Code). It lives in the
 dotfiles, so a machine without them skips the step rather than failing it.
 
-The split is by cost: fmt and clippy are seconds on a warm `target/`, the smoke
-is about fifteen, and pushes are rarer than commits. The smoke runs on every
+The split is by cost: fmt and clippy are seconds on a warm `target/`, the
+tests under coverage about a minute and the smoke about fifteen seconds, and
+pushes are rarer than commits. The smoke runs on every
 push rather than only for changes to `app`, `pane`, `render` or `input`, because
 a hook cannot tell which a change touches. On a machine where CPU is scarce,
 `SKIP_SMOKE` is the one to reach for.
@@ -254,7 +286,8 @@ a hook cannot tell which a change touches. On a machine where CPU is scarce,
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull
 request, on ubuntu-22.04: `cargo fmt --check`, clippy with `-D warnings`,
-`cargo test --locked`, the smoke test (tmux installed from apt), and
+the tests under `cargo llvm-cov --locked` at the 80% floor and the doctests,
+the smoke test (tmux installed from apt), and
 `scripts/compat.sh` against the latest release. A `macos` job runs clippy, the
 tests and the smoke on macos-15 (arm64) and macos-15-intel, with tmux and a
 current bash from Homebrew (macOS's own bash is 3.2). It is the
