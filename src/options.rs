@@ -712,6 +712,7 @@ pub fn builtin() -> Vec<Opt> {
         ));
     }
     r.push(opt("paste.upload", "paste", "Upload over ssh", Kind::Bool, Init, "A paste of local file paths into a pane running ssh uploads the files and types the far paths."));
+    r.push(opt("windows_clipboard", "paste", "Windows clipboard", Kind::Bool, Init, "Under WSL, copies are also set on Windows' clipboard directly, not only through the terminal."));
     r.push(Opt { unset: Some("auto".into()), ..opt("paste.image_command", "paste", "Image command", Kind::Text, Init, "A shell command that writes the clipboard's image as PNG to stdout. Unset: chosen for your system.") });
     r
 }

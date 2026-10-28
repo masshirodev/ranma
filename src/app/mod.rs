@@ -287,6 +287,9 @@ pub struct App {
     /// Bytes for the host terminal itself (OSC 52 clipboard writes), written by
     /// the event loop after the event that queued them.
     host_out: Vec<Vec<u8>>,
+    /// Under WSL, the thread setting Windows' clipboard, started by the first
+    /// copy that goes there (`winclip`).
+    win_clip: Option<crate::winclip::Writer>,
     /// (pane, rule index) pairs already applied, so title rules fire once.
     rules_applied: HashSet<(PaneId, usize)>,
     /// The named group a rule put each pane in (`group = "servers"`).
@@ -521,6 +524,7 @@ impl App {
             screen_redraw_due: None,
             copy: None,
             host_out: Vec::new(),
+            win_clip: None,
             rules_applied: HashSet::new(),
             pane_groups: HashMap::new(),
             pane_looks: HashMap::new(),

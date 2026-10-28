@@ -281,6 +281,8 @@ pub struct Settings {
     pub paste_upload: bool,
     /// Writes the clipboard's image as PNG to stdout; `None` is the platform's.
     pub paste_image_command: Option<String>,
+    /// Under WSL, copies also go straight to Windows' clipboard (`winclip`).
+    pub windows_clipboard: bool,
     /// An empty workspace shows the logo and how to start (Enter, help).
     pub splash: bool,
     /// How long a pane that printed must stay quiet for `pane_idle`.
@@ -324,6 +326,7 @@ impl Default for Settings {
             restore: RestoreMode::Ask,
             paste_upload: true,
             paste_image_command: None,
+            windows_clipboard: true,
             splash: true,
             pane_idle: std::time::Duration::from_secs(5),
             monitor_activity: false,
@@ -360,6 +363,7 @@ struct SettingsPatch {
     theme_colors: Option<ThemeColors>,
     restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
+    windows_clipboard: Option<bool>,
     splash: Option<bool>,
     pane_idle: Option<f64>,
     monitor_activity: Option<bool>,
@@ -1822,6 +1826,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(r) = patch.restore {
         s.restore = r;
+    }
+    if let Some(on) = patch.windows_clipboard {
+        s.windows_clipboard = on;
     }
     if let Some(p) = patch.paste {
         if let Some(u) = p.upload {
@@ -4550,6 +4557,14 @@ mod tests {
         );
         assert!(err.contains("uplaod"), "{err}");
         assert!(with_user(r#"ranma.set { paste = { image_command = " " } }"#).is_err());
+    }
+
+    #[test]
+    fn the_windows_clipboard_is_on_until_turned_off() {
+        assert!(with_user("").unwrap().settings.windows_clipboard);
+        let c = with_user("ranma.set { windows_clipboard = false }").unwrap();
+        assert!(!c.settings.windows_clipboard);
+        assert!(with_user(r#"ranma.set { windows_clipboard = "yes" }"#).is_err());
     }
 
     #[test]

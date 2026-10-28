@@ -166,6 +166,13 @@ ranma.set {
   paste = {
     upload = true,
   },
+
+  -- Under WSL, every copy (copy mode, a mouse selection, hints, a program's
+  -- OSC 52, ranma.copy) is also set on Windows' clipboard with powershell.exe,
+  -- besides going to the terminal as OSC 52, which ConPTY and a busy Windows
+  -- clipboard can lose. Not for a terminal attached over ssh, whose clipboard
+  -- is elsewhere. Elsewhere than WSL it does nothing.
+  windows_clipboard = true,
 }
 
 -- Panes -------------------------------------------------------------------------

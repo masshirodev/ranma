@@ -269,6 +269,11 @@ Default: unset
 .br
 What \fBpaste_image\fR reads an image off the clipboard with: a shell command writing PNG to stdout. It reads images only. Unset: \fBpowershell.exe\fR under WSL, the pasteboard through \fBosascript\fR on macOS (nothing to install), \fBwl\-paste\fR on Wayland, \fBxclip\fR on X11, which read copied files first.
 .TP
+\fBwindows_clipboard\fR
+Default: \fBtrue\fR
+.br
+Under WSL, every copy is also set on Windows' clipboard with \fBpowershell.exe\fR, besides going to the terminal as OSC 52: ConPTY (between \fBwsl.exe\fR and the terminal) and a Windows clipboard another program holds open can each lose an OSC 52 copy. Not for a terminal attached over ssh, whose clipboard is on another machine. A write that fails says so in a toast. Does nothing outside WSL.
+.TP
 \fBtheme_colors\fR
 Default: \fB"own"\fR
 .br
@@ -800,7 +805,9 @@ config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,
 say) are passed through too, and a pane says so when asked: its answer to
 the device\-attributes query (DA1) lists 52, which is what nvim waits for
 before it turns its OSC 52 clipboard on (\fB"+y\fR over SSH, with no other
-provider). Reading the clipboard back is not allowed.
+provider). Reading the clipboard back is not allowed. Under WSL, copies are
+also set on Windows' clipboard directly (\fBwindows_clipboard\fR), since an OSC 52
+copy can be lost between \fBwsl.exe\fR and the terminal.
 .SH "WINDOW RULES — \fBranma.rule { ... }\fR"
 .PP
 .RS 4

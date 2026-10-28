@@ -57,5 +57,6 @@ pub mod toolbar;
 pub mod update;
 pub mod whichkey;
 pub mod winch;
+pub mod winclip;
 pub mod workspace;
 pub mod wslinterop;

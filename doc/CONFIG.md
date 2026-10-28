@@ -176,6 +176,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `wm_mode.hint_at` | `"bar"` | Where the which-key hint stands: `"bar"` (on the bar from its left end, by the mode), or `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` of the space the panes use, clear of the bar. A user mode may set its own. |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout. It reads images only. Unset: `powershell.exe` under WSL, the pasteboard through `osascript` on macOS (nothing to install), `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
+| `windows_clipboard` | `true` | Under WSL, every copy is also set on Windows' clipboard with `powershell.exe`, besides going to the terminal as OSC 52: ConPTY (between `wsl.exe` and the terminal) and a Windows clipboard another program holds open can each lose an OSC 52 copy. Not for a terminal attached over ssh, whose clipboard is on another machine. A write that fails says so in a toast. Does nothing outside WSL. |
 | `theme_colors` | `"own"` | `"outer"`: inside another ranma, draw with its `[colors]` rather than this theme's. `"inner"`: while the focused pane holds a ranma, draw with that one's. See [ranma inside ranma](#ranma-inside-ranma). |
 | `restore` | `"ask"` | `"ask"`: a server keeps a snapshot of itself, and a fresh server of the same name offers it back (see [After a reboot](#after-a-reboot)). `"off"`: no snapshots, no question. |
 | `pane_idle` | `5` | Seconds a pane that was printing must stay quiet before the `pane_idle` hook hears of it, 0.5-3600. See [Hooks](#hooks--ranmaonevent-fn). |
@@ -486,7 +487,9 @@ config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,
 say) are passed through too, and a pane says so when asked: its answer to
 the device-attributes query (DA1) lists 52, which is what nvim waits for
 before it turns its OSC 52 clipboard on (`"+y` over SSH, with no other
-provider). Reading the clipboard back is not allowed.
+provider). Reading the clipboard back is not allowed. Under WSL, copies are
+also set on Windows' clipboard directly (`windows_clipboard`), since an OSC 52
+copy can be lost between `wsl.exe` and the terminal.
 
 ## Window rules — `ranma.rule { ... }`
 

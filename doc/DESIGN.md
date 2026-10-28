@@ -1502,7 +1502,30 @@ away from it), goes backward by default because history is above, and matches
 are computed for the visible rows only, capped, so a pathological regex cannot
 stall a keypress. Copies leave through OSC 52 to the host terminal, which owns
 the clipboard; ranma never touches a clipboard of its own, and programs' own OSC
-52 writes are passed through the same way. Reads are refused.
+52 writes are passed through the same way. Reads are refused. The one
+exception is WSL, below.
+
+**Under WSL, copies are also set on Windows' clipboard (2026-10-28, c398).**
+On the work machine (WezTerm on Windows, a WSL ranma, `ssh pc`, the PC's
+ranma) a mouse copy was said, kept in `choose_buffer` by both ranmas, and
+still sometimes never reached the clipboard: lost after the WSL ranma wrote
+it. Between `wsl.exe` and a Windows terminal sits ConPTY, which reads the
+output stream and writes it out again, and the terminal's own clipboard write
+fails without a word while another program (clipboard history, a password
+manager, RDP) holds the clipboard open. Neither is ranma's to fix, and both
+are out of reach of OSC 52. But a WSL ranma can start Windows programs
+(`wslinterop`, already used by `paste_image`), so `set_host_clipboard` also
+hands every copy to `winclip`: one thread running `powershell.exe` with
+`Clipboard.SetDataObject` and .NET's own retry against a busy clipboard. The
+text goes in as UTF-8 bytes on stdin, from an owner-only file unlinked
+before it is written, so no code page garbles Japanese and no command line or
+leftover file carries a password. One thread, newest copy wins: two copies
+land in the order made, and a burst waits on one PowerShell, not ten. OSC 52
+still goes out, for every terminal that is not Windows'. Not for a terminal
+attached over ssh (`client_remote`): its clipboard is elsewhere, and setting
+the Windows one would overwrite what the person at that machine copied.
+`windows_clipboard = false` turns it off. Text only, line breaks kept as
+copied (the same bytes OSC 52 carries).
 
 ### Links are hints, not clicks
 

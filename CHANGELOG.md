@@ -57,6 +57,13 @@ commit log has the detail.
 
 ### Fixed
 
+- Under WSL, copies sometimes never reached Windows' clipboard though ranma
+  had made them (the status said `copied`, `choose_buffer` listed them): the
+  OSC 52 they leave as can be lost in ConPTY, between `wsl.exe` and the
+  terminal, or by a clipboard another program holds open. A WSL ranma now
+  also sets Windows' clipboard itself with `powershell.exe`, retrying while
+  it is busy, for every copy made from a terminal on that machine (not one
+  attached over ssh). `windows_clipboard = false` turns it off.
 - On WSL, a server whose terminal window had closed could no longer start
   Windows programs: `paste_image` failed with `UtilAcceptVsock: accept4
   failed 110` after ten seconds, and so did nvim's clipboard, `code` and

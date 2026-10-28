@@ -376,8 +376,8 @@ impl App {
         self.dirty = true;
     }
 
-    /// Queue an OSC 52 write setting the host's clipboard, and tell the
-    /// `copy` hook: `source` is what copied (`copy_mode`, `mouse`, `hints`,
+    /// Queue an OSC 52 write setting the host's clipboard (under WSL, set
+    /// Windows' clipboard directly too), and tell the `copy` hook: `source` is what copied (`copy_mode`, `mouse`, `hints`,
     /// `osc52`, `lua`), `pane` the pane it came from.
     pub(super) fn set_host_clipboard(&mut self, text: &str, source: &str, pane: Option<PaneId>) {
         self.remember_copy(text);
@@ -385,6 +385,22 @@ impl App {
         seq.extend_from_slice(base64(text.as_bytes()).as_bytes());
         seq.push(0x07);
         self.host_out.push(seq);
+        // OSC 52 can be lost on its way to Windows' clipboard (ConPTY, or the
+        // clipboard held open by another program), so under WSL it is set
+        // directly as well.
+        if crate::winclip::wanted(
+            self.config.settings.windows_clipboard,
+            crate::winclip::wsl(),
+            self.client_remote,
+            text,
+        ) {
+            if self.win_clip.is_none() {
+                self.win_clip = crate::winclip::Writer::spawn(self.tx.clone());
+            }
+            if let Some(w) = &self.win_clip {
+                w.send(text);
+            }
+        }
         // A hook that copies (a history plugin putting one back) does not
         // hear its own copy: it would hear it forever.
         if !self.in_copy_hook {
