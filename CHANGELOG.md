@@ -57,6 +57,14 @@ commit log has the detail.
 
 ### Fixed
 
+- An update no longer fails for good after upstream's history is rewritten.
+  `main` was rewritten on 2026-10-30, and every update clone made before then
+  failed with "Not possible to fast-forward". `ranma update` and `leader U` now
+  move ranma's own clone to upstream when a fast-forward cannot reach it,
+  unless you changed files in it. **A ranma from before this release needs
+  the clone reset once by hand:** `git -C ~/.local/share/ranma/repo fetch &&
+  git -C ~/.local/share/ranma/repo reset --hard origin/main`, then update.
+
 - Search finds anchored patterns. Copy mode's `/` and `?`, `pane:search` and
   `pane:watch` ran alacritty's search, which gave up on `^` past the first line
   it read and matched `$` only on a row the text filled: `^150$` found nothing

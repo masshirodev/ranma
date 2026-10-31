@@ -14,9 +14,10 @@
 //! that cannot reach the remote (no network, no key) is a check that did not
 //! happen, never a hang or a prompt.
 //!
-//! Installing is the clone's own `git pull --ff-only && ./install.sh`, with the
-//! install script's safety net: a new binary that rejects the config is replaced
-//! by the old one again. A running ranma keeps its binary until it exits.
+//! Installing is the clone's own pull ([`pull_step`]) and `./install.sh`, with
+//! the install script's safety net: a new binary that rejects the config is
+//! replaced by the old one again. A running ranma keeps its binary until it
+//! exits.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -271,11 +272,32 @@ pub fn install_command(source: &Source) -> String {
     let clone = clone_step(source);
     format!(
         "{clone}{{ [ -d {dir}/.git ] || {{ echo {dir}' is not a git checkout; move it aside.'; false; }}; }} \
-         && cd {dir} && git pull --ff-only && ./install.sh; status=$?; echo; \
+         && cd {dir} && {pull} && ./install.sh; status=$?; echo; \
          if [ $status -eq 0 ]; then echo 'Updated. Running servers moved to the new build \
          in place (anything that could not is named above).'; \
-         else echo \"Update failed (exit $status); nothing was replaced.\"; fi"
+         else echo \"Update failed (exit $status); nothing was replaced.\"; fi",
+        pull = pull_step(source),
     )
+}
+
+/// Bringing the checkout up to upstream, run inside it. A checkout of the
+/// user's (`RANMA_SOURCE_DIR`) only ever fast-forwards: what is in it is
+/// theirs. The managed clone is ranma's own and only ever pulled into, so when
+/// upstream's history was rewritten (2026-10-30: a name taken out of every
+/// commit, and force-pushed) and a fast-forward cannot reach it, it is reset
+/// to upstream instead of failing every update from then on; the commit it
+/// was on is said, for the reflog. One with changes in its files is left alone.
+pub fn pull_step(source: &Source) -> String {
+    match source {
+        Source::Override(_) => "git pull --ff-only".to_string(),
+        Source::Managed(_) => "git fetch \
+             && { git merge --ff-only @{u} || { \
+             if [ -n \"$(git status --porcelain)\" ]; then \
+             echo 'It has changes of its own, so it was not reset: commit or drop them.'; false; \
+             else echo \"Upstream's history was rewritten: moving ranma's own clone to it \
+             (it was at $(git rev-parse --short HEAD)).\" && git reset -q --hard @{u}; fi; }; }"
+            .to_string(),
+    }
 }
 
 fn clone_step(source: &Source) -> String {
@@ -354,11 +376,12 @@ impl JobFiles {
         let dir = shell_quote(&source.dir().to_string_lossy());
         format!(
             "echo clone > {phase}; {{ {clone}{{ [ -d {dir}/.git ] || {{ echo {dir}' is not a git checkout; move it aside.'; false; }}; }} \
-             && cd {dir} && echo pull > {phase} && git pull --ff-only \
+             && cd {dir} && echo pull > {phase} && {pull} \
              && echo build > {phase} && ./install.sh; }}; s=$?; \
              git -C {dir} rev-parse --short HEAD > {commit} 2>/dev/null; \
              echo $s > {status}.tmp && mv {status}.tmp {status}",
             clone = clone_step(source),
+            pull = pull_step(source),
         )
     }
 
@@ -556,6 +579,68 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// Upstream's history rewritten under the managed clone: it is moved to
+    /// the new history, unless it has changes of its own; a checkout of the
+    /// user's never is.
+    #[test]
+    fn the_managed_clone_follows_a_rewritten_upstream() {
+        let root = std::env::temp_dir().join(format!("ranma-rewrite-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let up = root.join("upstream");
+        std::fs::create_dir_all(&up).unwrap();
+        run(&up, &["init", "-q", "-b", "main"]);
+        std::fs::write(up.join("Cargo.toml"), "author = a name\n").unwrap();
+        run(&up, &["add", "Cargo.toml"]);
+        run(&up, &["commit", "-q", "-m", "one"]);
+        run(&up, &["commit", "-q", "--allow-empty", "-m", "two"]);
+        for co in ["managed", "dirty", "mine"] {
+            run(&root, &["clone", "-q", up.to_str().unwrap(), co]);
+        }
+        // The rewrite: the same commits, the name gone, then one more.
+        run(&up, &["checkout", "-q", "--orphan", "new"]);
+        std::fs::write(up.join("Cargo.toml"), "author = masshirodev\n").unwrap();
+        run(&up, &["add", "Cargo.toml"]);
+        run(&up, &["commit", "-q", "-m", "one"]);
+        run(&up, &["commit", "-q", "--allow-empty", "-m", "two"]);
+        run(&up, &["commit", "-q", "--allow-empty", "-m", "three"]);
+        run(&up, &["branch", "-q", "-M", "new", "main"]);
+        let pull = |co: &str, source: &Source| {
+            let mut cmd = Command::new("sh");
+            for v in GIT_REDIRECTS {
+                cmd.env_remove(v);
+            }
+            cmd.arg("-c")
+                .arg(pull_step(source))
+                .current_dir(root.join(co))
+                .output()
+                .unwrap()
+        };
+
+        let managed = Source::Managed(root.join("managed"));
+        let out = pull("managed", &managed);
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(head(&root.join("managed")), head(&up));
+        assert!(String::from_utf8_lossy(&out.stdout).contains("history was rewritten"));
+        // Up to date now: a plain fast-forward, nothing said.
+        let out = pull("managed", &managed);
+        assert!(out.status.success());
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("rewritten"));
+
+        std::fs::write(root.join("dirty").join("Cargo.toml"), "edited\n").unwrap();
+        let out = pull("dirty", &Source::Managed(root.join("dirty")));
+        assert!(!out.status.success(), "changes of its own: not reset");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("changes of its own"));
+        assert_ne!(head(&root.join("dirty")), head(&up));
+
+        let out = pull("mine", &Source::Override(root.join("mine")));
+        assert!(
+            !out.status.success(),
+            "the user's checkout only fast-forwards"
+        );
+        assert_ne!(head(&root.join("mine")), head(&up));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn counts_commits_the_binary_lacks_upstream_and_locally() {
         let root = std::env::temp_dir().join(format!("ranma-update-{}", std::process::id()));
@@ -593,13 +678,18 @@ mod tests {
     fn the_install_command_quotes_the_directory() {
         assert_eq!(shell_quote("/a b/it's"), "'/a b/it'\\''s'");
         let managed = install_command(&Source::Managed("/d/ranma/repo".into()));
-        assert!(managed.contains("git pull --ff-only && ./install.sh"));
+        assert!(managed.contains("git fetch"));
+        assert!(managed.contains("git reset -q --hard @{u}; fi; }; } && ./install.sh"));
         assert!(
             managed
                 .contains("git clone 'https://github.com/masshirodev/ranma.git' '/d/ranma/repo'")
         );
         let over = install_command(&Source::Override("/src/ranma".into()));
-        assert!(over.contains("cd '/src/ranma' && git pull"));
+        assert!(over.contains("cd '/src/ranma' && git pull --ff-only && ./install.sh"));
+        assert!(
+            !over.contains("reset"),
+            "a checkout of the user's is never reset"
+        );
         assert!(
             !over.contains("git clone"),
             "a checkout of the user's is never cloned"

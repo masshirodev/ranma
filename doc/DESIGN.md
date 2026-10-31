@@ -3471,6 +3471,22 @@ Rust, for predictable latency without a GC, and for the emulator:
   often a dotfiles repository, and a clone does not belong in one.
   `RANMA_SOURCE_DIR` overrides it for one run; a variable, not a setting, so
   it is never left pointing at a branch.
+- The managed clone follows upstream even when upstream's history was
+  rewritten (2026-10-30). `main` was rewritten and force-pushed that day to
+  take a name out of every commit, and every managed clone made before it
+  failed each update from then on with git's "Not possible to fast-forward":
+  `git pull --ff-only` was built into the binary, so `leader U` could not
+  fetch its own fix. The clone is ranma's, only ever pulled into, so an
+  update now fetches and fast-forwards, and when that cannot reach upstream
+  it resets the clone to upstream, saying the commit it was on (the reflog
+  keeps it). A clone with changes in its files is left alone and the update
+  fails saying so. A `RANMA_SOURCE_DIR` checkout is the user's and still only
+  fast-forwards. A binary from before this has the old pull and needs the
+  clone reset by hand once (`git -C ~/.local/share/ranma/repo fetch && git -C
+  ~/.local/share/ranma/repo reset --hard origin/main`), which the pinned
+  issue on GitHub (#1) says. Merging the old history back into `main` would have
+  let the old binaries fast-forward, and would have published the name
+  again.
 - An update is a toast, not a pane (2026-10-12). `leader U` used to open a
   floating pane running the pull and the build, which covered the work for
   minutes of cargo output nobody read. It now runs in the background, and a

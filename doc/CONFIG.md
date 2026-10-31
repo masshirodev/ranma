@@ -58,8 +58,20 @@ ranma updates from a clone of its own, `~/.local/share/ranma/repo`
 the first time it checks or updates. It is not your development checkout and
 need not be anywhere in particular: a binary built in one place and copied to
 another machine, or a checkout moved after installing, updates all the same.
-An update is that clone's `git pull --ff-only && ./install.sh`; servers move to
-the new build in place.
+An update is that clone's pull and `./install.sh`; servers move to the new
+build in place. The clone is ranma's: when upstream's history was rewritten
+and a fast-forward cannot reach it, the update moves the clone to upstream,
+saying the commit it was on, unless you changed files in it.
+`RANMA_SOURCE_DIR` points it at a checkout of yours instead, which is only
+ever fast-forwarded.
+
+A ranma from before 2026-10-30 cannot do that, and `main` was rewritten that
+day: if an update fails with "Not possible to fast-forward", reset the clone
+once, and update again:
+
+```sh
+git -C ~/.local/share/ranma/repo fetch && git -C ~/.local/share/ranma/repo reset --hard origin/main
+```
 
 `leader U` runs it out of sight: a toast shows a spinner, the step (pulling,
 building) and how long it has taken, and stays until it is done. Your server
