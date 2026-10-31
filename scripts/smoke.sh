@@ -803,6 +803,16 @@ T send-keys -t s Enter; sleep 0.2
 T send-keys -t s y; sleep 0.4
 [ "$(T show-buffer 2>/dev/null)" = "needle-7" ] || fail "search + yank did not reach the clipboard"
 
+# Anchored, up in the scrollback: alacritty's own search gave up on `^` past
+# the first line it read, so this found nothing. 150 also ends 1150 and
+# starts 1500, which an anchor that held only half would take.
+T send-keys -t s 'seq 1 1600' Enter; sleep 0.8
+T send-keys -t s C-b /; sleep 0.2
+T send-keys -t s '^150$'; sleep 0.5
+T send-keys -t s Enter; sleep 0.2
+T send-keys -t s y; sleep 0.4
+[ "$(T show-buffer 2>/dev/null)" = "150" ] || fail "an anchored search did not reach the scrollback ($(T show-buffer 2>/dev/null))"
+
 # A match on the pane's bottom row (the line just typed): the prompt moves to
 # the top row instead of covering it, and the prompt's row holds the query
 # alone, not the rest of the line it was drawn over.

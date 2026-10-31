@@ -9,10 +9,11 @@
 //! scrolls the screen, so a number is good for the moment it was read in.
 
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::index::{Column, Direction, Line, Point};
+use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::Term;
 use alacritty_terminal::term::cell::Flags;
-use alacritty_terminal::term::search::{RegexIter, RegexSearch};
+
+use crate::linesearch::{self, Pattern};
 
 /// The most matches one search returns, whatever it is asked for: a search
 /// runs on ranma's own thread, so it must stay a few milliseconds.
@@ -69,36 +70,23 @@ pub struct Hit {
 
 /// Every match of `pattern`, newest first: from the bottom of the screen up
 /// through the scrollback, at most `limit` (and never more than
-/// [`MAX_HITS`]). The pattern is alacritty's regex, as copy mode's `/` takes.
+/// [`MAX_HITS`]). The pattern is the regex copy mode's `/` takes
+/// ([`crate::linesearch`]), matched one line at a time.
 pub fn search<T>(term: &Term<T>, pattern: &str, limit: usize) -> Result<Vec<Hit>, String> {
-    let mut regex =
-        RegexSearch::new(pattern).map_err(|e| format!("bad pattern `{pattern}`: {e}"))?;
+    let pattern = Pattern::new(pattern).map_err(|e| format!("bad pattern `{pattern}`: {e}"))?;
     let (top, bottom) = line_range(term);
-    let start = Point::new(Line(top), Column(0));
-    let end = Point::new(Line(bottom), Column(term.columns().saturating_sub(1)));
-    // Rightward, oldest first, keeping the newest `limit`: a leftward search
-    // reports every shorter match ending inside a longer one.
-    let limit = limit.min(MAX_HITS);
-    let mut kept = std::collections::VecDeque::with_capacity(limit);
-    for m in RegexIter::new(start, end, Direction::Right, term, &mut regex) {
-        if kept.len() == limit {
-            kept.pop_front();
-        }
-        if limit > 0 {
-            kept.push_back(m);
-        }
-    }
-    Ok(kept
-        .into_iter()
-        .rev()
-        .map(|m| Hit {
-            line: m.start().line.0,
-            col: m.start().column.0,
-            end_line: m.end().line.0,
-            end_col: m.end().column.0,
-            text: term.bounds_to_string(*m.start(), *m.end()),
-        })
-        .collect())
+    Ok(
+        linesearch::matches_up(term, &pattern, top, bottom, limit.min(MAX_HITS))
+            .into_iter()
+            .map(|m| Hit {
+                line: m.start().line.0,
+                col: m.start().column.0,
+                end_line: m.end().line.0,
+                end_col: m.end().column.0,
+                text: term.bounds_to_string(*m.start(), *m.end()),
+            })
+            .collect(),
+    )
 }
 
 /// One match a watch saw on the screen.
@@ -114,18 +102,15 @@ pub struct Seen {
 
 /// The matches of `regex` on the screen (never the scrollback: a look is
 /// bounded by the screen's size), one per row at most, top to bottom.
-pub fn screen_matches<T>(term: &Term<T>, regex: &mut RegexSearch) -> Vec<Seen> {
+pub fn screen_matches<T>(term: &Term<T>, pattern: &Pattern) -> Vec<Seen> {
     let rows = term.screen_lines() as i32;
     let offset = term.grid().display_offset() as i32;
-    let start = Point::new(Line(-offset), Column(0));
-    let end = Point::new(
-        Line(rows - 1 - offset),
-        Column(term.columns().saturating_sub(1)),
-    );
+    let (first, last) = (-offset, rows - 1 - offset);
     let mut out: Vec<Seen> = Vec::new();
-    for m in RegexIter::new(start, end, Direction::Right, term, regex).take(rows as usize * 4) {
+    for m in linesearch::matches_down(term, pattern, first, last, rows as usize * 4) {
         let line = m.start().line.0;
-        if out.last().is_some_and(|s| s.line == line) {
+        // A line wrapped in from above the screen can match off it.
+        if line < first || out.last().is_some_and(|s| s.line == line) {
             continue;
         }
         out.push(Seen {
@@ -573,13 +558,24 @@ mod tests {
         assert_eq!(newest[0].line, 0, "the limit keeps the newest");
         assert!(search(&t, "nope", 10).unwrap().is_empty());
         assert!(search(&t, "(", 10).unwrap_err().contains("bad pattern"));
+        // Anchored: the line starting with it, not the one with it mid-way,
+        // and on any line of the scrollback, not only the first one searched.
+        let at = |p| {
+            search(&t, p, 10)
+                .unwrap()
+                .iter()
+                .map(|h| (h.line, h.col))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(at("^https"), [(0, 0)]);
+        assert_eq!(at("^mid$"), [(-1, 0)]);
     }
 
     #[test]
     fn a_watch_sees_the_screen_and_only_whats_new() {
         let t = term("ok\r\nGo on? proceed?\r\n> 1. Yes");
-        let mut re = RegexSearch::new("proceed\\?").unwrap();
-        let now = screen_matches(&t, &mut re);
+        let re = Pattern::new("proceed\\?").unwrap();
+        let now = screen_matches(&t, &re);
         assert_eq!(now.len(), 1);
         assert_eq!(
             (now[0].line, now[0].col, now[0].text.as_str()),
@@ -592,20 +588,20 @@ mod tests {
         assert!(new_matches(&seen, &now).is_empty(), "still there: not news");
         // Scrolled up a row by more output: the same row's text, not news.
         let t = term("ok\r\nGo on? proceed?\r\n> 1. Yes\r\nmore");
-        assert!(new_matches(&seen, &screen_matches(&t, &mut re)).is_empty());
+        assert!(new_matches(&seen, &screen_matches(&t, &re)).is_empty());
         // Not in the scrollback: only the screen is looked at.
         let t = term("proceed?\r\na\r\nb\r\nc");
-        assert!(screen_matches(&t, &mut re).is_empty());
+        assert!(screen_matches(&t, &re).is_empty());
     }
 
     #[test]
     fn a_second_row_like_one_already_seen_is_news() {
         // A dev server restarted under its old banner: the same text on a
         // second row is a second match, and it is the lower one.
-        let mut re = RegexSearch::new("Local: ").unwrap();
+        let re = Pattern::new("Local: ").unwrap();
         let t = term("Local: x\r\n^C\r\nLocal: x");
-        let seen = seen_rows(&screen_matches(&term("Local: x"), &mut re));
-        let new = new_matches(&seen, &screen_matches(&t, &mut re));
+        let seen = seen_rows(&screen_matches(&term("Local: x"), &re));
+        let new = new_matches(&seen, &screen_matches(&t, &re));
         assert_eq!(new.len(), 1);
         assert_eq!(new[0].line, 2, "the new banner, not the old one");
     }

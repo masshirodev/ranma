@@ -57,6 +57,14 @@ commit log has the detail.
 
 ### Fixed
 
+- Search finds anchored patterns. Copy mode's `/` and `?`, `pane:search` and
+  `pane:watch` ran alacritty's search, which gave up on `^` past the first line
+  it read and matched `$` only on a row the text filled: `^150$` found nothing
+  in the scrollback. Each line (wrapped rows joined, the blanks after the text
+  left out) is now matched on its own with the `regex` crate's syntax, the
+  same syntax as before, so `^`, `$` and `\b` hold on every line, and case
+  is still ignored unless the pattern has a capital letter.
+
 - Under WSL, copies sometimes never reached Windows' clipboard though ranma
   had made them (the status said `copied`, `choose_buffer` listed them): the
   OSC 52 they leave as can be lost in ConPTY, between `wsl.exe` and the

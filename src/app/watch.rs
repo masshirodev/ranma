@@ -10,11 +10,11 @@
 
 use std::time::{Duration, Instant};
 
-use alacritty_terminal::term::search::RegexSearch;
 use mlua::Function;
 
 use super::App;
 use crate::layout::PaneId;
+use crate::linesearch::Pattern;
 use crate::panetext;
 
 /// How long after output a watched pane is looked at: what arrives within it
@@ -23,7 +23,7 @@ pub(super) const WATCH_LOOK: Duration = Duration::from_millis(100);
 
 pub(super) struct Watch {
     pane: PaneId,
-    regex: RegexSearch,
+    regex: Pattern,
     f: std::rc::Rc<mlua::RegistryKey>,
     /// The rows matched at the last look, by text, how many of each.
     seen: panetext::SeenRows,
@@ -46,7 +46,7 @@ impl App {
                 crate::luapane::MAX_WATCHES
             ));
         }
-        let regex = RegexSearch::new(pattern).map_err(|e| format!("pane:watch: {e}"))?;
+        let regex = Pattern::new(pattern).map_err(|e| format!("pane:watch: {e}"))?;
         self.watches.insert(
             id,
             Watch {
@@ -113,7 +113,7 @@ impl App {
             {
                 let term = p.term.lock();
                 for w in self.watches.values_mut().filter(|w| w.pane == pane) {
-                    let now = panetext::screen_matches(&term, &mut w.regex);
+                    let now = panetext::screen_matches(&term, &w.regex);
                     for s in panetext::new_matches(&w.seen, &now) {
                         calls.push((w.f.clone(), pane, s));
                     }

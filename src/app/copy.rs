@@ -7,15 +7,16 @@
 //! foot, wezterm, alacritty and tmux all accept.
 
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Boundary, Column, Direction, Line, Point, Side};
+use alacritty_terminal::index::{Boundary, Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
-use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
+use alacritty_terminal::term::search::Match;
 use alacritty_terminal::term::{Term, TermMode};
 use alacritty_terminal::vi_mode::ViMotion;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::{App, Mode};
 use crate::layout::PaneId;
+use crate::linesearch::{self, Pattern};
 use crate::pane::Proxy;
 
 pub struct CopyState {
@@ -30,7 +31,7 @@ pub struct CopyState {
 
 pub struct Search {
     pub query: String,
-    regex: Option<RegexSearch>,
+    regex: Option<Pattern>,
     /// The prompt is open and keys edit the query.
     pub editing: bool,
     /// Searching up, towards older output.
@@ -183,17 +184,16 @@ impl App {
         s.regex = if s.query.is_empty() {
             None
         } else {
-            RegexSearch::new(&s.query).ok()
+            Pattern::new(&s.query).ok()
         };
         let mut term = pane.term.lock();
-        let Some(regex) = s.regex.as_mut() else {
+        let Some(regex) = s.regex.as_ref() else {
             s.failed = !s.query.is_empty();
             c.current = None;
             term.vi_goto_point(s.origin);
             return;
         };
-        let (dir, side) = direction(s.backward);
-        c.current = term.search_next(regex, s.origin, dir, side, None);
+        c.current = linesearch::next_match(&term, regex, s.origin, s.backward);
         s.failed = c.current.is_none();
         match &c.current {
             Some(m) => term.vi_goto_point(*m.start()),
@@ -210,7 +210,7 @@ impl App {
         let Some(s) = c.search.as_mut() else {
             return;
         };
-        let Some(regex) = s.regex.as_mut() else {
+        let Some(regex) = s.regex.as_ref() else {
             return;
         };
         let backward = s.backward != reverse;
@@ -222,8 +222,7 @@ impl App {
         } else {
             from.add(&*term, Boundary::None, 1)
         };
-        let (dir, side) = direction(backward);
-        if let Some(m) = term.search_next(regex, origin, dir, side, None) {
+        if let Some(m) = linesearch::next_match(&term, regex, origin, backward) {
             term.vi_goto_point(*m.start());
             c.current = Some(m);
             s.failed = false;
@@ -335,21 +334,15 @@ impl App {
         let Some(pane) = self.panes.get(&c.pane) else {
             return;
         };
-        let Some(regex) = c.search.as_mut().and_then(|s| s.regex.as_mut()) else {
+        let Some(regex) = c.search.as_ref().and_then(|s| s.regex.as_ref()) else {
             return;
         };
         let term = pane.term.lock();
         let offset = term.grid().display_offset() as i32;
-        let start = Point::new(Line(-offset), Column(0));
-        let end = Point::new(
-            Line(-offset + term.screen_lines() as i32 - 1),
-            Column(term.columns().saturating_sub(1)),
-        );
-        // A screenful of matches is plenty; a pathological regex should not be
-        // able to stall a keypress.
-        c.hits = RegexIter::new(start, end, Direction::Right, &term, regex)
-            .take(500)
-            .collect();
+        let first = -offset;
+        let last = first + term.screen_lines() as i32 - 1;
+        // A screenful of matches is plenty.
+        c.hits = linesearch::matches_down(&term, regex, first, last, 500);
     }
 
     /// The wheel in copy mode moves the view and keeps the vi cursor in it.
@@ -414,14 +407,6 @@ impl App {
             });
             self.in_copy_hook = false;
         }
-    }
-}
-
-fn direction(backward: bool) -> (Direction, Side) {
-    if backward {
-        (Direction::Left, Side::Right)
-    } else {
-        (Direction::Right, Side::Left)
     }
 }
 

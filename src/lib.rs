@@ -22,6 +22,7 @@ pub mod jobs;
 pub mod keys;
 pub mod layout;
 pub mod layouts;
+pub mod linesearch;
 pub mod luapane;
 pub mod luascreen;
 pub mod luaui;

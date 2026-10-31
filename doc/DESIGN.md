@@ -1496,7 +1496,8 @@ press at a time, with everything else on the panel in the way. Decided:
 
 alacritty_terminal already has a vi cursor independent of the program's, the
 motions, selections that follow the cursor, and a regex search over the whole
-grid. Copy mode is a keymap over those and nothing more. Search is incremental
+grid. Copy mode is a keymap over those and nothing more, except the search
+(below). Search is incremental
 from where it started (editing the query refines the match instead of walking
 away from it), goes backward by default because history is above, and matches
 are computed for the visible rows only, capped, so a pathological regex cannot
@@ -1504,6 +1505,22 @@ stall a keypress. Copies leave through OSC 52 to the host terminal, which owns
 the clipboard; ranma never touches a clipboard of its own, and programs' own OSC
 52 writes are passed through the same way. Reads are refused. The one
 exception is WSL, below.
+
+**Search is ranma's, one line at a time (2026-10-30).** alacritty's search
+runs a lazy DFA over the grid as a single stream. It cannot anchor: once `^`
+can no longer match, which is one cell into the search, the DFA is dead and the
+whole search ends, so `^x` matched only on the first line read; every row runs
+to the last column in blanks, so `$` matched only text that filled its row; and
+it starts a fresh text after each match, so `^a` found every `a` of `aaa`.
+Searching the scrollback for a line by its start and end, the reason to search
+at all, found nothing. `linesearch` hands the `regex` crate one logical line at
+a time (wrapped rows joined, trailing blanks dropped) and maps the match's
+bytes back to cells. It is the syntax alacritty's DFA was built from
+(`regex-syntax`), so no pattern changes meaning except to work, and alacritty's
+smart case is kept. A match never crossed a line before either. The `regex`
+crate runs in linear time, so the cap on visible matches is the only bound a
+keypress needs. Copy mode, `pane:search` and `pane:watch` all use it; vi
+motions, selections and the rest of copy mode stay alacritty's.
 
 **Under WSL, copies are also set on Windows' clipboard (2026-10-28, c398).**
 On the work machine (WezTerm on Windows, a WSL ranma, `ssh pc`, the PC's

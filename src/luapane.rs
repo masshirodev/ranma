@@ -358,7 +358,7 @@ impl UserData for Handle {
             h.request(lua, PaneRequest::Style(table))
         });
         m.add_method("watch", |lua, h, (pattern, f): (String, mlua::Function)| {
-            alacritty_terminal::term::search::RegexSearch::new(&pattern)
+            crate::linesearch::Pattern::new(&pattern)
                 .map_err(|e| err(format!("pane:watch: bad pattern `{pattern}`: {e}")))?;
             let id = crate::jobs::next_id();
             let key = Callback(std::rc::Rc::new(lua.create_registry_value(f)?));

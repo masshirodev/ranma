@@ -799,6 +799,14 @@ next match / previous match
 \fBq\fR, \fBEsc\fR
 leave
 .PP
+A search is a regex in the syntax of Rust's \fBregex\fR crate, matched one line at
+a time: rows a long line wrapped onto are one line, and the blanks after its
+text are not part of it, so \fB^\fR and \fB$\fR are where the text starts and ends
+(\fB^150$\fR is the line \fB150\fR, not \fB1150\fR), and a match never runs from one line
+into the next. Case is ignored unless the pattern has a capital letter. A
+search goes round: past the oldest line it carries on from the newest.
+\fBpane:search\fR and \fBpane:watch\fR take the same patterns.
+.PP
 Copies go to your system clipboard through the terminal (OSC 52): kitty, foot,
 wezterm, alacritty and tmux accept it; some terminals need it allowed in their
 config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,

@@ -481,6 +481,14 @@ typed, often), the prompt takes the top row instead, so it never hides it. Every
 | `n` `N` | next match / previous match |
 | `q`, `Esc` | leave |
 
+A search is a regex in the syntax of Rust's `regex` crate, matched one line at
+a time: rows a long line wrapped onto are one line, and the blanks after its
+text are not part of it, so `^` and `$` are where the text starts and ends
+(`^150$` is the line `150`, not `1150`), and a match never runs from one line
+into the next. Case is ignored unless the pattern has a capital letter. A
+search goes round: past the oldest line it carries on from the newest.
+`pane:search` and `pane:watch` take the same patterns.
+
 Copies go to your system clipboard through the terminal (OSC 52): kitty, foot,
 wezterm, alacritty and tmux accept it; some terminals need it allowed in their
 config. Programs in panes that copy the same way (nvim's clipboard over OSC 52,

@@ -1417,6 +1417,7 @@ dependencies = [
  "notify",
  "polling",
  "ratatui",
+ "regex",
  "serde",
  "serde_json",
  "signal-hook 0.3.18",
