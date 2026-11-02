@@ -342,7 +342,8 @@ ranma.bind("$", "rename_session")
 ranma.bind("m", "move_workspace_to_session")
 -- Names: "," names the focused pane (as tmux's rename-window), overriding the
 -- title its program sets; "." names the current workspace, shown as 3:name in
--- the bar. An empty name goes back to none.
+-- the bar. An empty name goes back to none; "unname_workspace 3" clears
+-- workspace 3's from a bind or a plugin.
 ranma.bind(",", "rename_pane")
 ranma.bind(".", "rename_workspace")
 

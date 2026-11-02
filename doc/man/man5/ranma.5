@@ -579,6 +579,9 @@ Send the current workspace, with every pane in it, to another session and follow
 \fBrename_workspace [name]\fR
 Name the current workspace, shown as \fB3:name\fR in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask.
 .TP
+\fBunname_workspace [n]\fR
+Clear a workspace's name (the current one without a number), as an empty \fBrename_workspace\fR does for the current one; an empty workspace off screen then goes. For a plugin, which cannot give \fBrename_workspace\fR an empty name or another workspace's number.
+.TP
 \fBhide_workspace [n]\fR, \fBshow_workspace [n]\fR
 Keep a workspace (the current one without a number) out of the bar, the workspace switcher and \fBworkspace next\fR/\fBprev\fR, or put it back: where a plugin parks a program out of sight. \fBworkspace N\fR still goes there, and the bar shows it while you are on it. Kept while empty, as a named one is. \fBranma.state().hidden\fR lists them.
 .TP
@@ -2993,6 +2996,9 @@ the \fBkeyboard\fR action, which opens a phone's keyboard
 .TP
 \fBaction.toolbar_target\fR
 the \fBtoolbar_target\fR action, and toolbar buttons that follow the focus into a ranma inside
+.TP
+\fBaction.unname_workspace\fR
+the \fBunname_workspace\fR action
 .TP
 \fBborder.gradient\fR
 \fBcolors.border_*_gradient\fR and \fBborder.gradient_angle\fR

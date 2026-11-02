@@ -3456,6 +3456,14 @@ impl App {
             Action::RenameSession(None) => self.open_rename_prompt(self.active_session),
             Action::RenameWorkspace(Some(name)) => self.rename_workspace(self.current, &name),
             Action::RenameWorkspace(None) => self.open_rename_workspace(),
+            Action::UnnameWorkspace(n) => {
+                let n = n.unwrap_or(self.current);
+                if n != crate::app::SCRATCHPAD {
+                    self.rename_workspace(n, "");
+                    // An empty one off screen was kept only for its name.
+                    self.tidy();
+                }
+            }
             Action::HideWorkspace(n, hide) => {
                 let n = n.unwrap_or(self.current);
                 if n != crate::app::SCRATCHPAD {
@@ -5874,6 +5882,26 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{e:#}").contains("profile(\"z\")"), "{e:#}");
+    }
+
+    #[test]
+    fn unname_workspace_clears_a_name_and_lets_an_empty_one_go() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.relayout();
+        a.run_action("rename_workspace code".parse().unwrap());
+        a.run_action("workspace 2".parse().unwrap());
+        a.run_action("rename_workspace logs".parse().unwrap());
+        a.run_action("workspace 1".parse().unwrap());
+        assert!(a.workspaces.contains_key(&2), "kept empty for its name");
+        a.run_action("unname_workspace 2".parse().unwrap());
+        assert!(!a.workspaces.contains_key(&2), "empty and unnamed: gone");
+        a.run_action("unname_workspace".parse().unwrap());
+        assert_eq!(a.workspaces[&1].name, None, "the current one");
+        assert_eq!(a.focused(), Some(1), "its pane stays");
+        // Nothing to clear, or nothing there: no error, no workspace made.
+        a.run_action("unname_workspace 9".parse().unwrap());
+        assert!(!a.workspaces.contains_key(&9));
     }
 
     #[test]

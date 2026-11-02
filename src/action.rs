@@ -230,6 +230,10 @@ pub enum Action {
     RenameSession(Option<String>),
     /// Name the current workspace (an empty name clears it); without one, ask.
     RenameWorkspace(Option<String>),
+    /// Clear a workspace's name (the current one, without a number): what a
+    /// plugin uses, since `rename_workspace` names only the current one and
+    /// asks when given no name.
+    UnnameWorkspace(Option<u8>),
     /// Keep a workspace (the current one, without a number) out of the bar,
     /// the switcher and next/prev, or put it back.
     HideWorkspace(Option<u8>, bool),
@@ -436,6 +440,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("session_accent", "<#rrggbb|colour|none>"),
     ("move_workspace_to_session", "[name|next|prev]"),
     ("rename_workspace", "[name]"),
+    ("unname_workspace", "[n]"),
     ("hide_workspace", "[n]"),
     ("show_workspace", "[n]"),
     ("rename_pane", "[name]"),
@@ -975,6 +980,24 @@ impl FromStr for Action {
                     }),
             },
             "rename_workspace" => Ok(Action::RenameWorkspace(rest.map(str::to_string))),
+            "unname_workspace" => match (first, second) {
+                (None, _) => Ok(Action::UnnameWorkspace(None)),
+                (Some(n), None) => n
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .map(|n| Action::UnnameWorkspace(Some(n)))
+                    .ok_or(ActionError::BadArg {
+                        action: name.into(),
+                        arg: n.into(),
+                        expected: "a workspace number, 1-255",
+                    }),
+                _ => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "one workspace number",
+                }),
+            },
             "hide_workspace" | "show_workspace" => {
                 let hide = name == "hide_workspace";
                 match (first, second) {
@@ -1197,6 +1220,8 @@ impl fmt::Display for Action {
             Action::RenameSession(Some(n)) => write!(f, "rename_session {n}"),
             Action::RenameWorkspace(None) => f.write_str("rename_workspace"),
             Action::RenameWorkspace(Some(n)) => write!(f, "rename_workspace {n}"),
+            Action::UnnameWorkspace(None) => f.write_str("unname_workspace"),
+            Action::UnnameWorkspace(Some(n)) => write!(f, "unname_workspace {n}"),
             Action::HideWorkspace(n, hide) => {
                 f.write_str(if *hide {
                     "hide_workspace"
@@ -1426,6 +1451,8 @@ mod tests {
             "session_accent bright-red",
             "session_accent none",
             "rename_workspace web",
+            "unname_workspace",
+            "unname_workspace 3",
             "workspace_layout",
             "workspace_layout scrolling",
             "workspace_layout default",

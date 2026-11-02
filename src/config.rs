@@ -1885,6 +1885,7 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
 pub const CAPABILITIES: &[&str] = &[
     "action.keyboard",
     "action.toolbar_target",
+    "action.unname_workspace",
     "border.gradient",
     "hook.before_close",
     "hook.float_change",

@@ -350,6 +350,7 @@ sent them, which it is not asked to.
 | `session_accent <colour>` / `session_accent none` | Colour the current session: its focused border, its current workspace in the bar and its name there (see [Sessions](#sessions--ranmasessionname-opts)). `none` goes back to the config's accent for it, else the theme's. |
 | `move_workspace_to_session [name]` / `... next` / `... prev` | Send the current workspace, with every pane in it, to another session and follow it (`m`). Without a target it asks, like the session switcher; a name no session has creates it, as `ranma open --session` does. The workspace keeps its number unless that session uses it, then takes the lowest free one. A session left without panes ends. The scratchpad belongs to every session and does not move. |
 | `rename_workspace [name]` | Name the current workspace, shown as `3:name` in the bar (the number always shows). A named workspace stays listed while empty. Empty clears. Without a name, ask. |
+| `unname_workspace [n]` | Clear a workspace's name (the current one without a number), as an empty `rename_workspace` does for the current one; an empty workspace off screen then goes. For a plugin, which cannot give `rename_workspace` an empty name or another workspace's number. |
 | `hide_workspace [n]`, `show_workspace [n]` | Keep a workspace (the current one without a number) out of the bar, the workspace switcher and `workspace next`/`prev`, or put it back: where a plugin parks a program out of sight. `workspace N` still goes there, and the bar shows it while you are on it. Kept while empty, as a named one is. `ranma.state().hidden` lists them. |
 | `rename_pane [name]` | Name the focused pane. The name replaces the title its program sets, on the border, tabs, switcher and bar; empty goes back to the title. Without a name, ask. Window rules still match the program's title. |
 | `help` | The palette in help mode (`?`, `leader ?`): every bind, filterable by key or action; `Enter` runs the selected one. |
@@ -2303,6 +2304,7 @@ the spelling against this table:
 |---|---|
 | `action.keyboard` | the `keyboard` action, which opens a phone's keyboard |
 | `action.toolbar_target` | the `toolbar_target` action, and toolbar buttons that follow the focus into a ranma inside |
+| `action.unname_workspace` | the `unname_workspace` action |
 | `border.gradient` | `colors.border_*_gradient` and `border.gradient_angle` |
 | `hook.before_close` | the `before_close` event, whose handler can keep a pane |
 | `hook.float_change` | the `float_change` event |

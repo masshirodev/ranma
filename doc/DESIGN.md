@@ -1384,6 +1384,18 @@ wanted), else takes the lowest free one. Moving a workspace to *another server*
 is a different thing entirely — a live PTY and its grid would have to change
 processes — and is not planned.
 
+### Clearing a workspace's name from a plugin (2026-11-02)
+
+A named workspace is kept while empty, because a name you typed says the
+workspace is wanted. A name a plugin gave says no such thing: the
+workspace-naming config names a workspace after the agent in it, and once the
+agent's pane closes the name is stale and the empty workspace should go.
+`rename_workspace` cannot undo it — it names only the current workspace, and
+with no name it asks rather than clears — so `unname_workspace [n]` clears any
+workspace's name by number (`hide_workspace [n]`'s shape) and tidies, letting
+an empty one off screen go at once. Whether a name is the plugin's to clear is
+the plugin's business; ranma keeps no record of who named what.
+
 ### One picker for switching, renaming and help
 
 The pane switcher, the session switcher, the rename prompt and help are one
