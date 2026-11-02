@@ -1082,7 +1082,15 @@ next mark instead of covering one cell (2026-10-11, c239): shells draw their
 prompt again over itself (powerlevel10k's transient prompt on Enter, zsh on
 every resize, PROMPT_SP's `%`), a one-cell tag drawn over was gone, and with
 the user's own p10k setup `marks()` was always empty. Inside the run every
-redraw is tagged again. An output's tag (`C`) stays one cell; output is not
+redraw is tagged again. A `B` in a prompt ends the `A`'s run, so it carries
+the prompt (2026-11-01): its tag holds the `A`'s number and marks after a `^`
+(`ranma:133:9:B^7.D0.A`), which `marks()` reads only when the `A`'s own tag
+is gone. powerlevel10k draws its two-line prompt again from the top right
+after its `B` (`reset-prompt`), under the `B`'s tag, and once the dotfiles'
+prompt sent a `B` (for vi.ranma's `pane:cursor().input`) every `A` was drawn
+over and `marks()` was empty again. The carried copy rather than keeping the
+`A`'s run open past the `B`: the `B` has to start where the typing does, and
+the scanner cannot tell a redraw from typing. An output's tag (`C`) stays one cell; output is not
 redrawn, and a command that printed nothing (its `C` on a `%` zsh then
 erases) reads as output where it finished. The tag goes
 on a printed character only, never inside a sequence (a CSI's parameters or

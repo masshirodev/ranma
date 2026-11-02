@@ -1309,6 +1309,53 @@ mod tests {
     }
 
     #[test]
+    fn a_prompt_drawn_again_from_the_top_after_its_b_keeps_its_marks() {
+        // powerlevel10k's two-line prompt with a `B` in it, as the dotfiles
+        // draw it: right after the first draw it is drawn again from its top
+        // line (`reset-prompt`: up a line, clear below, both lines again, a
+        // second `B`), then again on Enter (the transient prompt), and only
+        // then the command runs. The `A`'s cells are drawn over under the
+        // `B`'s tag, which carries it. On Enter the prompt is one line, the
+        // top one: `make` is typed there.
+        let p10k = b"\x1b]133;A\x07~/src\r\n\xe2\x9d\xaf \x1b]133;B\x07\x1b[K\r\r\x1b[A\x1b[J\r\n\x1b[A\
+            ~/src\r\n\xe2\x9d\xaf \x1b]133;B\x07make\r\r\x1b[A\x1b[J\xe2\x9d\xaf \x1b]133;B\x07make\r\r\n\
+            \x1b]133;C\x07built\r\n\x1b]133;D;2\x07\x1b]133;A\x07~/src\r\n\xe2\x9d\xaf \x1b]133;B\x07\x1b[K\r\r\x1b[A\x1b[J\r\n\x1b[A\
+            ~/src\r\n\xe2\x9d\xaf \x1b]133;B\x07";
+        for chunk in [1, 3, 4096] {
+            let m = marks_through_the_reader(p10k, chunk, 4096);
+            assert_eq!(m.len(), 2, "chunk {chunk}: {m:?}");
+            assert_eq!(
+                (
+                    m[0].prompt,
+                    m[0].command,
+                    m[0].output,
+                    m[0].finished,
+                    m[0].exit
+                ),
+                (0, Some(0), Some(1), Some(2), Some(2)),
+                "chunk {chunk}"
+            );
+            // Nothing typed yet: its last `B` has no character to land on,
+            // and the command line is where the first one's tag starts.
+            assert_eq!(
+                (m[1].prompt, m[1].command, m[1].output, m[1].exit),
+                (2, Some(2), None, None),
+                "chunk {chunk}"
+            );
+        }
+        // Drawn once, the `A`'s own tag is there: what the `B` carries is
+        // not a second prompt, and the command line is where the `B` is.
+        let once = b"\x1b]133;A\x07~/src\r\n\xe2\x9d\xaf \x1b]133;B\x07ls\r\n\x1b]133;C\x07a\r\n\
+            \x1b]133;D;0\x07\x1b]133;A\x07$ ";
+        let m = marks_through_the_reader(once, 4096, 4096);
+        assert_eq!(m.len(), 2, "{m:?}");
+        assert_eq!(
+            (m[0].prompt, m[0].command, m[0].output, m[0].finished),
+            (0, Some(1), Some(2), Some(3))
+        );
+    }
+
+    #[test]
     fn marks_survive_any_split_and_a_full_buffer() {
         let whole = marks_through_the_reader(SESSION, 4096, 4096);
         for chunk in [1, 2, 3, 5, 7] {

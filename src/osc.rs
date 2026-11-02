@@ -19,7 +19,13 @@
 //! back. An output's tag (`C`) covers one character. A prompt's (`A`, `B`)
 //! stays open until the next mark: shells draw their prompt again over
 //! itself (powerlevel10k's transient prompt on Enter, zsh on a resize, the
-//! `%` of PROMPT_SP), and a one-cell tag drawn over is gone.
+//! `%` of PROMPT_SP), and a one-cell tag drawn over is gone. A `B` in a
+//! prompt carries that prompt's `A` (and the `D` before it) after a `^`
+//! (`ranma:133:9:B^7.D0.A`, 7 being the `A`'s tag): the `B` ends the `A`'s
+//! run, and a prompt drawn again after its `B` (powerlevel10k's
+//! `reset-prompt`, which redraws two lines from the top) is drawn under the
+//! `B`'s tag, so the `A`'s cells are gone and only the carried copy says
+//! where the prompt starts.
 //! Hints and `link_at` leave these links out. While a tag waits for its
 //! character, escape sequences are followed whole, so it never lands inside
 //! one; a program's own open link is never cut by one (no tag then).
@@ -110,6 +116,10 @@ pub struct Scanner {
     pending: Vec<String>,
     /// Tags so far: each one's number, so two alike are two marks.
     tags: u64,
+    /// The prompt drawn now: the number and marks of the tag its `A` went
+    /// in, carried by its `B`s (see the module's doc). None once its command
+    /// starts.
+    prompt: Option<(u64, String)>,
     /// A program's own OSC 8 link is open: a tag would end it, so none.
     link_open: bool,
 }
@@ -158,8 +168,16 @@ impl Scanner {
                         let kinds = std::mem::take(&mut self.pending);
                         let run = kinds.iter().any(|k| k == "A" || k == "B");
                         self.tags += 1;
+                        let mut tag = kinds.join(".");
+                        if kinds.iter().any(|k| k == "A") {
+                            self.prompt = Some((self.tags, tag.clone()));
+                        } else if kinds.iter().any(|k| k == "B")
+                            && let Some((n, prompt)) = &self.prompt
+                        {
+                            tag = format!("{tag}^{n}.{prompt}");
+                        }
                         out.push(Mark::Tag {
-                            kinds: format!("{}:{}", self.tags, kinds.join(".")),
+                            kinds: format!("{}:{tag}", self.tags),
                             run,
                         });
                         return (out, i + p);
@@ -291,6 +309,10 @@ impl Scanner {
                 } else {
                     None
                 };
+                // A command started or ended: no prompt is being drawn.
+                if matches!(kind, Some("C" | "D")) {
+                    self.prompt = None;
+                }
                 match kind {
                     Some("C") => {
                         self.started = Some(now);
@@ -465,6 +487,18 @@ mod tests {
         let first = b.iter().position(|c| *c == b'$').unwrap();
         let out = b.iter().rposition(|c| *c == b'f').unwrap();
         assert_eq!(found, vec![(first, "D2.A".into()), (out, "C".into())]);
+    }
+
+    #[test]
+    fn a_b_carries_its_prompt_until_the_command_starts() {
+        let mut s = Scanner::default();
+        let b = b"\x1b]133;D;2\x07\x1b]133;A\x07$ \x1b]133;B\x07l\r$ \x1b]133;B\x07ls\r\n\
+            \x1b]133;C\x07x\x1b]133;B\x07y\x1b]133;A\x07\x1b]133;B\x07$ ";
+        let kinds: Vec<String> = tags(&mut s, b).into_iter().map(|(_, k)| k).collect();
+        // Tag 1 is the prompt; each `B` in it carries it; after the `C`
+        // a `B` carries nothing; an `A` and a `B` on one character are
+        // their own prompt.
+        assert_eq!(kinds, ["D2.A", "B^1.D2.A", "B^1.D2.A", "C", "B", "A.B"]);
     }
 
     #[test]

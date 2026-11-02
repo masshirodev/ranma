@@ -249,6 +249,10 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
     // A prompt's tag covers every cell of it: each tag counts where it is
     // first seen.
     let mut seen = std::collections::HashSet::new();
+    // The prompts (their `A` tags' numbers) already read. A `B` carries its
+    // prompt's `A` (`9:B^7.D0.A`), which counts only where the `A`'s own tag
+    // is gone: drawn over by the prompt drawn again under the `B` (`osc`).
+    let mut prompts = std::collections::HashSet::new();
     for l in top..=bottom {
         let row = &term.grid()[Line(l)];
         for c in 0..cols {
@@ -261,8 +265,23 @@ pub fn marks<T>(term: &Term<T>) -> Vec<CommandMarks> {
             if !seen.insert(tag.to_string()) {
                 continue;
             }
-            let kinds = tag.split_once(':').map(|(_, k)| k).unwrap_or(tag);
-            for k in kinds.split('.') {
+            let (n, kinds) = tag.split_once(':').unwrap_or(("", tag));
+            let (own, carried) = match kinds.split_once('^') {
+                Some((own, carried)) => (own, carried.split_once('.')),
+                None => (kinds, None),
+            };
+            if own.split('.').any(|k| k == "A") {
+                prompts.insert(n.to_string());
+            }
+            let carried = match carried {
+                Some((prompt, kinds)) if prompts.insert(prompt.to_string()) => Some(kinds),
+                _ => None,
+            };
+            for k in carried
+                .into_iter()
+                .flat_map(|c| c.split('.'))
+                .chain(own.split('.'))
+            {
                 match k.split_at(k.len().min(1)) {
                     ("A", _) => out.push(CommandMarks {
                         prompt: l,
@@ -339,7 +358,9 @@ fn tag_of(cell: &alacritty_terminal::term::cell::Cell) -> Option<(u64, bool)> {
     let h = cell.hyperlink()?;
     let tag = h.uri().strip_prefix(crate::osc::TAG)?;
     let (n, kinds) = tag.split_once(':')?;
-    Some((n.parse().ok()?, kinds.split('.').any(|k| k == "B")))
+    // Its own marks: what a `B` carries of its prompt (`^`) is not new.
+    let own = kinds.split_once('^').map_or(kinds, |(own, _)| own);
+    Some((n.parse().ok()?, own.split('.').any(|k| k == "B")))
 }
 
 /// Where the cursor of `term` is, and its line. See [`CursorAt`].
