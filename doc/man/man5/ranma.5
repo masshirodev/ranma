@@ -2873,7 +2873,7 @@ nothing; runs in the newly loaded config
 \fBkey\fR, \fBvalue\fR, \fBprevious\fR, \fBsaved\fR — the settings panel changed an option: as an edit is made (\fBsaved\fR false), when it is put back, and once more for each edit saved (\fBsaved\fR true). \fBvalue\fR is \fBnil\fR for unset.
 .TP
 \fBcopy\fR
-\fBtext\fR, \fBsource\fR (\fBcopy_mode\fR, \fBmouse\fR for a drag, \fBhints\fR, \fBosc52\fR for a program's own copy, \fBlua\fR for \fBranma.copy\fR), \fBpane\fR (where it came from; \fBnil\fR for \fBlua\fR) — ranma put text on the clipboard. \fBtext\fR is whatever was copied, \fBpasswords included\fR: a plugin that keeps it keeps them (\fBchoose_buffer\fR keeps its copies in memory only for that reason). A copy the hook makes itself (\fBranma.copy\fR inside it) does not fire it again.
+\fBtext\fR, \fBsource\fR (\fBcopy_mode\fR, \fBmouse\fR for a drag in a pane, \fBslot\fR for a drag over settings or a plugin's screen, \fBhints\fR, \fBosc52\fR for a program's own copy, \fBlua\fR for \fBranma.copy\fR), \fBpane\fR (where it came from; \fBnil\fR for \fBslot\fR and \fBlua\fR) — ranma put text on the clipboard. \fBtext\fR is whatever was copied, \fBpasswords included\fR: a plugin that keeps it keeps them (\fBchoose_buffer\fR keeps its copies in memory only for that reason). A copy the hook makes itself (\fBranma.copy\fR inside it) does not fire it again.
 .TP
 \fBclient_focus\fR
 \fBfocused\fR — the window of the terminal driving the screen gained or lost the desktop's focus (you went to the browser and back), once per change; also \fBtrue\fR when a terminal attaches after the last one had lost it. Only the driving terminal's reports count (see "Several terminals on one server"). For "notify me when I am not looking at all".

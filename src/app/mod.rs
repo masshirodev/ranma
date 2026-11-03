@@ -46,6 +46,7 @@ mod scroll;
 pub use scroll::{Edge, Peek};
 mod session;
 mod settings;
+mod slotsel;
 mod snapshots;
 mod switch;
 mod themes;
@@ -327,6 +328,8 @@ pub struct App {
     placement_state: HashMap<u8, std::rc::Rc<mlua::RegistryKey>>,
     /// The pane holding a mouse selection, cleared by the next click or key.
     selection_pane: Option<PaneId>,
+    /// A mouse selection in the slot (see `slotsel`).
+    slot_sel: Option<slotsel::SlotSelection>,
     /// The last left click, for double and triple clicks: when, where, how many.
     last_click: Option<(Instant, u16, u16, u8)>,
     /// The pane a mouse press went to: its drags and its release follow it there,
@@ -547,6 +550,7 @@ impl App {
             snapshot_due: None,
             restore_offer: None,
             selection_pane: None,
+            slot_sel: None,
             last_click: None,
             mouse_capture: None,
             host_title: String::new(),
@@ -2057,6 +2061,13 @@ impl App {
             return;
         }
         if route == screen::Route::Slot {
+            // Text in the slot is selected as in a pane; a press still goes
+            // on to the slot, a selection's drag and release stop here.
+            match &ev {
+                Event::Mouse(m) if self.picker.is_none() && self.slot_select_mouse(*m) => return,
+                Event::Key(_) | Event::Paste(_) => self.clear_slot_selection(),
+                _ => {}
+            }
             if self.settings.is_some() {
                 self.settings_input(ev);
                 return;
@@ -8008,6 +8019,104 @@ mod tests {
         mouse_down(&mut a, x + 1, y + 1);
         typed(&mut a, "q");
         assert!(a.settings_panel().is_none(), "q closes it again");
+    }
+
+    fn mouse_at(a: &mut App, kind: MouseEventKind, x: u16, y: u16) {
+        a.handle(AppEvent::Input(Event::Mouse(MouseEvent {
+            kind,
+            column: x,
+            row: y,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        })));
+    }
+
+    /// Where `text` is drawn in the slot: (x, y) of its first character.
+    fn in_slot(a: &App, text: &str) -> (u16, u16) {
+        let g = a.slot_grid().unwrap();
+        for y in 0..g.h {
+            let row: String = (0..g.w)
+                .map(|x| g.get(x, y).map_or(' ', |c| c.ch))
+                .collect();
+            if let Some(i) = row.find(text) {
+                return (row[..i].chars().count() as u16, y);
+            }
+        }
+        panic!("{text:?} is not in the slot");
+    }
+
+    #[test]
+    fn text_in_a_plugin_screen_is_selected_and_copied_with_the_mouse() {
+        use crossterm::event::KeyCode;
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        lua(&mut a, AGENTS);
+        let (x, y) = in_slot(&a, "api · claude");
+        let last = x + "api · claude".chars().count() as u16 - 1;
+        let osc = |t: &str| {
+            let mut v = b"\x1b]52;c;".to_vec();
+            v.extend_from_slice(super::copy::base64(t.as_bytes()).as_bytes());
+            v.push(0x07);
+            v
+        };
+        // What went to the host's clipboard (the title goes out too).
+        let copies = |a: &App| -> Vec<Vec<u8>> {
+            a.host_out
+                .iter()
+                .filter(|b| b.starts_with(b"\x1b]52;"))
+                .cloned()
+                .collect()
+        };
+
+        // A plain click picks the row, as before, and copies nothing.
+        a.host_out.clear();
+        mouse_down(&mut a, x, y);
+        mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), x, y);
+        assert_eq!(
+            a.plugin_screen().unwrap().screen.sel.as_deref(),
+            Some("api")
+        );
+        assert!(copies(&a).is_empty());
+        assert!(a.slot_selected(&a.slot_grid().unwrap()).is_empty());
+
+        // A drag selects what it crosses and the release copies it.
+        mouse_down(&mut a, x, y);
+        mouse_at(&mut a, MouseEventKind::Drag(MouseButton::Left), last, y);
+        assert_eq!(a.slot_selected(&a.slot_grid().unwrap()), [(y, x, last)]);
+        mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), last, y);
+        assert_eq!(copies(&a), [osc("api · claude")]);
+        assert_eq!(a.status.as_deref(), Some("copied 12 characters"));
+        assert!(a.slot_has_keys());
+
+        // A key puts the highlight away (and still reaches the screen).
+        typed(&mut a, "n");
+        assert!(a.slot_selected(&a.slot_grid().unwrap()).is_empty());
+        assert_eq!(ran(&a), ["new api"]);
+
+        // Dragged out over the pane, it stays the slot's: clamped to the
+        // frame, and the pane neither takes the keyboard nor a selection.
+        a.host_out.clear();
+        let (sx, _, _, _) = a.slot_rect().unwrap();
+        mouse_down(&mut a, last, y);
+        mouse_at(&mut a, MouseEventKind::Drag(MouseButton::Left), 1, y);
+        mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), 1, y);
+        assert!(a.slot_has_keys(), "the drag never left the slot");
+        assert!(a.selection_pane.is_none());
+        let (_, from, _) = a.slot_selected(&a.slot_grid().unwrap())[0];
+        assert_eq!(from, sx + 1, "the frame is not part of it");
+        assert_eq!(copies(&a).len(), 1);
+
+        // A double click takes the word.
+        a.host_out.clear();
+        for _ in 0..2 {
+            mouse_down(&mut a, x + 1, y);
+            mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), x + 1, y);
+        }
+        assert_eq!(copies(&a), [osc("api")]);
+
+        // Esc still closes the screen; the selection goes with it.
+        key(&mut a, KeyCode::Esc);
+        assert!(a.plugin_screen().is_none());
+        assert!(a.slot_grid().is_none());
     }
 
     #[test]

@@ -15,6 +15,11 @@ commit log has the detail.
 
 ### Added
 
+- Text in the settings panel and in plugin screens (a Kumiko card, the
+  agents list) is selected with the mouse, as in a pane: drag, double click
+  for a word, triple click for a line, copied on release. A click still picks
+  the row. The `copy` hook hears it with `source = "slot"`.
+
 - `ranma.toast`'s `on_click`: a function called when the toast is clicked,
   after it is dismissed, so a plugin's toast can take you to what it is
   about (agents.ranma jumps to the agent's pane). `ranma.has("toast.on_click")`.

@@ -1357,23 +1357,43 @@ fn draw_which_key(f: &mut Frame, app: &App) {
 /// The settings panel: `crate::settings` draws it as theme roles into a grid,
 /// painted here in the colours it opened with.
 fn draw_settings(f: &mut Frame, app: &App) {
-    use crate::settings::Lines;
     let Some(st) = app.settings_panel() else {
         return;
     };
-    let screen = f.area();
-    let b = &st.theme.border;
-    let lines = Lines::of(b.style, b.chars.as_deref());
-    let grid = st.panel.draw(
-        screen.width,
-        screen.height,
-        app.bar_rect().map(|r| r.y),
-        &lines,
-        b.style,
-    );
-    let mut grid = grid;
+    draw_slot(f, app, &st.colors);
+}
+
+/// The slot's grid, its frame, its colours and its mouse selection.
+fn draw_slot(f: &mut Frame, app: &App, colors: &Colors) {
+    let Some(mut grid) = app.slot_grid() else {
+        return;
+    };
     unfocus_slot(app, &mut grid);
-    paint_grid(f, app, &grid, &st.colors);
+    paint_grid(f, app, &grid, colors);
+    // Selected as a pane's text is: the theme's selection colours, or reversed.
+    let selected = match (colors.selection_fg, colors.selection_bg) {
+        (None, None) => None,
+        (fg, bg) => Some(Style {
+            fg: fg.map(color),
+            bg: bg.map(color),
+            ..Style::default()
+        }),
+    };
+    let area = f.area();
+    let buf = f.buffer_mut();
+    for (y, from, to) in app.slot_selected(&grid) {
+        for x in from..=to {
+            if x >= area.width || y >= area.height {
+                continue;
+            }
+            let cell = &mut buf[(area.x + x, area.y + y)];
+            let style = match selected {
+                Some(sel) => cell.style().patch(sel),
+                None => cell.style().add_modifier(Modifier::REVERSED),
+            };
+            cell.set_style(style);
+        }
+    }
 }
 
 /// A slot that handed the keyboard to the panes draws its frame as an
@@ -1451,23 +1471,10 @@ fn draw_tooltip(f: &mut Frame, app: &App, frame: &crate::app::Frame) {
 
 /// A plugin's screen (`ranma.screen`), floated where settings sits.
 fn draw_plugin_screen(f: &mut Frame, app: &App) {
-    use crate::settings::Lines;
-    let Some(ps) = app.plugin_screen() else {
+    if app.plugin_screen().is_none() {
         return;
-    };
-    let screen = f.area();
-    let b = &app.config.theme.border;
-    let lines = Lines::of(b.style, b.chars.as_deref());
-    let grid = ps.screen.draw(
-        screen.width,
-        screen.height,
-        app.bar_rect().map(|r| r.y),
-        &lines,
-        b.style,
-    );
-    let mut grid = grid;
-    unfocus_slot(app, &mut grid);
-    paint_grid(f, app, &grid, &app.colors());
+    }
+    draw_slot(f, app, &app.colors());
 }
 
 /// Paint a grid of theme roles (`crate::settings::Grid`) in these colours.

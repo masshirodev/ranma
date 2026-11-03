@@ -257,7 +257,7 @@ impl App {
 // their clicks as before.
 
 /// Double and triple clicks: presses this close together on the same cell.
-const MULTI_CLICK: Duration = Duration::from_millis(400);
+pub(super) const MULTI_CLICK: Duration = Duration::from_millis(400);
 
 impl App {
     pub(super) fn start_selection(&mut self, v: PaneView, x: u16, y: u16) {

@@ -897,7 +897,8 @@ Where it departs from the handoff:
 What it does not do yet:
 
 - The mouse over the panel: clicking `‹ ›` does nothing. A click only gives
-  the panel the keyboard (see "The slot can let go of the keyboard").
+  the panel the keyboard (see "The slot can let go of the keyboard"), and a
+  drag selects its text ("Text in the slot is selected with the mouse").
 - Setting a value back to unset over a file that sets it cannot be saved.
   TOML has no "unset", so the panel says to remove it from the file instead.
 - A profile switched while the panel is open drops its live edits. Closing
@@ -978,6 +979,33 @@ the slot the keyboard, since each of those wants an answer.
   `q`. It is not in `RESERVED`: a plugin with a `q` of its own would start
   failing at `ranma.screen`. The footer and keys card do not list it: they are
   the handoff's drawing, and settings has never listed its `q` either.
+
+**Text in the slot is selected with the mouse** (2026-11-03). Capturing the
+mouse took the host's selection away, and panes got ranma's own selection to
+make up for it, but the slot never did: its mouse only picked a row and
+scrolled, so a Kumiko card's text could be read beside the shell and not
+copied without Shift. The slot is a grid ranma draws, not a terminal, so
+alacritty's selection has nothing to work on there; `src/app/slotsel.rs`
+selects over the drawn grid instead, with the panes' gestures:
+
+- A drag selects, a double click a word (alacritty's separators), a triple
+  click a line; the release copies over OSC 52 and says `copied N
+  characters`. The `copy` hook hears it as `source = "slot"`, with no pane.
+- **A press still does what it did**: it picks the row under it and takes the
+  keyboard. Only moving off the pressed cell, or clicking again, selects, so
+  a click on a row never leaves a highlight behind.
+- The selection stays inside the slot's frame, in reading order (rows between
+  the ends are taken whole), and a drag that leaves the slot is still the
+  slot's: dragging over a pane does not focus it or hand it the keyboard.
+- Copied text loses each row's trailing blanks and the slot's own left
+  margin (the least indentation of the rows that start at the frame), so a
+  card's body pastes as written, its indentation kept.
+- It goes on the next press, a key or paste to the slot, or the wheel over
+  it, since the text moves under a selection that would stay put. A plugin
+  updating its screen keeps it: the agents list updates every tick, and a
+  highlight that vanished mid-drag would make that screen unselectable.
+- Both slots draw through `App::slot_grid`, so what is copied is exactly what
+  is painted.
 
 **What the plugin manager's screen added** (2026-10-10, from
 `doc/handoffs/PLUGIN_MANAGER.md`, card c196). The manager (hako, a plugin in

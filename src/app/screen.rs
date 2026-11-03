@@ -108,6 +108,12 @@ impl App {
                 let Some((x, y, w, h)) = self.slot_rect() else {
                     return Route::Workspace;
                 };
+                // A selection dragged out of the slot is still the slot's.
+                if self.slot_drag_held()
+                    && matches!(m.kind, MouseEventKind::Drag(_) | MouseEventKind::Up(_))
+                {
+                    return Route::Slot;
+                }
                 let inside = m.column >= x && m.column < x + w && m.row >= y && m.row < y + h;
                 if matches!(m.kind, MouseEventKind::Down(_)) && inside != self.slot_keys {
                     self.slot_keys = inside;
