@@ -9,6 +9,8 @@ Lua and themed in TOML.
 
 Named for the 欄間, the carved transom panel above sliding doors.
 
+**Website:** [ranma.masshiro.pro](https://ranma.masshiro.pro).
+
 ![ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a second workspace and back, a toast from `ranma notify`, and the which-key hint WM mode shows when it waits](doc/demo.gif)
 
 **Status:** a daily driver. Every milestone of
@@ -215,6 +217,7 @@ and `man ranma-keys` (the default keys). They are generated and committed in
 - [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and every channel it reaches
 - [`doc/examples/`](doc/examples): whole configurations to copy, the screenshot's among them
 - [`scripts/demo/README.md`](scripts/demo/README.md): re-recording the gif above
+- [`doc/WEBSITE.md`](doc/WEBSITE.md): the website, [ranma.masshiro.pro](https://ranma.masshiro.pro), and how it deploys
 
 ## How it's built
 

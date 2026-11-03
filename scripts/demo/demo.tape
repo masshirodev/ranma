@@ -2,6 +2,9 @@
 # own (stage.sh) and runs this with it; run that, not vhs directly.
 
 Output doc/demo.gif
+# The website's video (site/scripts/captures.sh encodes it to AV1 and H.264).
+# The `# chapter:` lines are its chapters (site/lib/tape.mjs).
+Output temp/site/demo.mp4
 
 Set Shell bash
 Set FontSize 12
@@ -17,6 +20,7 @@ Type "cd ~/projects/ranma && clear"
 Enter
 Sleep 300ms
 Show
+# chapter: dwindle tiles nvim, btop, git log
 
 Type "ranma"
 Sleep 300ms
@@ -48,6 +52,7 @@ Type "git --no-pager log --oneline --graph -16"
 Enter
 Sleep 2.5s
 
+# chapter: leader space · layouts
 # Layouts: space steps through tmux's presets; the arrows move focus.
 Ctrl+B
 Sleep 500ms
@@ -62,6 +67,7 @@ Sleep 800ms
 Escape
 Sleep 500ms
 
+# chapter: leader w · a float
 # A float over the tiling.
 Ctrl+B
 Sleep 300ms
@@ -77,6 +83,7 @@ Type "ls src"
 Enter
 Sleep 2s
 
+# chapter: leader 2 · another workspace
 # A second workspace, and back.
 Ctrl+B
 Sleep 300ms
@@ -94,11 +101,13 @@ Sleep 1.2s
 Escape
 Sleep 500ms
 
+# chapter: ranma notify · a toast
 # Anything can raise a toast.
 Type "sleep 1 && ranma notify 'tests passed'"
 Enter
 Sleep 3s
 
+# chapter: the which-key hint
 # Pause in WM mode and the which-key hint lists every key.
 Ctrl+B
 Sleep 3s

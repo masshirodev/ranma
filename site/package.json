@@ -1,0 +1,25 @@
+{
+	"name": "ranma-site",
+	"private": true,
+	"description": "ranma.masshiro.pro: built from these files into build/, served as plain files. doc/WEBSITE.md.",
+	"license": "MIT OR Apache-2.0",
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"build": "node build.mjs",
+		"test": "node --test --experimental-test-coverage --test-coverage-include='lib/**' --test-coverage-include=build.mjs --test-coverage-lines=95 --test-coverage-functions=95 --test-coverage-branches=90 'test/*.test.mjs'",
+		"pretest:e2e": "node build.mjs",
+		"test:e2e": "playwright test",
+		"serve": "node scripts/serve.mjs",
+		"format": "prettier --write .",
+		"lint": "prettier --check ."
+	},
+	"devDependencies": {
+		"@fontsource-variable/ibm-plex-sans": "5.3.0",
+		"@fontsource/shippori-mincho": "5.3.0",
+		"@playwright/test": "1.60.0",
+		"prettier": "3.6.2"
+	}
+}

@@ -1,0 +1,9 @@
+node_modules/
+build/
+temp/
+static/media/
+static/fonts/
+package-lock.json
+test-results/
+playwright-report/
+e2e/frame.map.json

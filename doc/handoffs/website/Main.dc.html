@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ranma: a tiling window manager for the terminal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Shippori+Mincho:wght@600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:inherit;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 100vh; background: {{t.bg}}; color: {{t.text}}; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased">
+
+<!-- The bar: nav shaped like ranma's own bar, sections as workspaces -->
+<header style="position: sticky; top: 0; z-index: 5; background: {{t.bg}}; border-bottom: 1px solid {{t.rule}}">
+<nav aria-label="Sections" style="max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px">
+<a href="#top" style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 999px; background: {{t.pill}}; color: {{t.woodText}}; text-decoration: none; font-weight: 700">
+<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="14" height="14" rx="2"></rect><path d="M1 6h14M5.5 1v5M10.5 1v5M3 1l2.5 5M13 1l-2.5 5"></path></svg>ranma</a>
+<div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 999px; background: {{t.pill}}">
+<a href="#demo" style="padding: 2px 12px; border-radius: 999px; background: {{t.wood}}; color: {{t.onWood}}; text-decoration: none; font-weight: 700">1 demo</a>
+<a href="#features" style="padding: 2px 12px; border-radius: 999px; color: {{t.text}}; text-decoration: none">2 features</a>
+<a href="#config" style="padding: 2px 12px; border-radius: 999px; color: {{t.text}}; text-decoration: none">3 config</a>
+<a href="#why" style="padding: 2px 12px; border-radius: 999px; color: {{t.text}}; text-decoration: none">4 why</a>
+<a href="#install" style="padding: 2px 12px; border-radius: 999px; color: {{t.text}}; text-decoration: none">5 install</a>
+</div>
+<div style="flex: 1 1 0; min-width: 0"></div>
+<a href="https://github.com/masshirodev/ranma/releases/latest" style="padding: 4px 12px; border-radius: 999px; background: {{t.pill}}; color: {{t.text}}; text-decoration: none" aria-label="Latest release, version {{version}}">v{{version}}</a>
+<a href="https://github.com/masshirodev/ranma" style="padding: 4px 12px; border-radius: 999px; background: {{t.pill}}; color: {{t.text}}; text-decoration: none">GitHub</a>
+<button type="button" onClick="{{ toggleTheme }}" aria-label="Switch to {{otherMode}} theme" style="min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 0; background: {{t.pill}}; color: {{t.text}}; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px">
+<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 1.5a6.5 6.5 0 0 0 0 13z" fill="currentColor"></path></svg>{{modeLabel}}</button>
+</nav>
+</header>
+
+<main id="top">
+<!-- Hero -->
+<section style="max-width: 1200px; margin: 0 auto; padding: 72px 16px 40px; display: flex; flex-wrap: wrap; gap: 40px 64px; align-items: flex-end">
+<div style="flex: 999 1 560px; min-width: 0">
+<p style="margin: 0 0 18px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}; letter-spacing: 0.02em">Linux · macOS · Android in Termux</p>
+<h1 style="margin: 0; font-size: clamp(40px, 6vw, 72px); line-height: 1.04; font-weight: 600; letter-spacing: -0.025em; max-width: 14ch">A tiling window manager for the terminal.</h1>
+<p style="margin: 24px 0 0; font-size: 20px; line-height: 1.55; color: {{t.dim}}; max-width: 40em">i3's container tree and Hyprland's dwindle placement, where every window is a PTY. Sessions, workspaces, a floating layer and a scratchpad, driven by a leader key and a modal WM mode, configured in Lua and themed in TOML.</p>
+</div>
+<div style="flex: 1 1 280px; min-width: 0; display: flex; gap: 20px; align-items: flex-start">
+<span lang="ja" style="font-family: 'Shippori Mincho', serif; font-weight: 600; font-size: 64px; line-height: 1; writing-mode: vertical-rl; color: {{t.woodText}}">欄間</span>
+<p style="margin: 0; font-size: 15px; line-height: 1.6; color: {{t.dim}}"><strong style="color: {{t.text}}; font-weight: 600">ranma</strong>, named for the 欄間: the carved transom panel above sliding doors. A lattice framed in wood, with light coming through it.</p>
+</div>
+</section>
+
+<!-- One-liner -->
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 16px">
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 20px; border: 1px solid {{t.rule}}; border-radius: 10px; background: {{t.codeBg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px">
+<span aria-hidden="true" style="color: {{t.woodText}}">❯</span>
+<code style="flex: 1 1 0; min-width: 0; overflow-x: auto; white-space: pre; padding: 8px 0">curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh</code>
+<button type="button" onClick="{{ copy.oneliner }}" aria-label="Copy the install command" style="flex: none; min-height: 44px; min-width: 88px; padding: 0 16px; border-radius: 7px; border: 0; background: {{t.woodBtn}}; color: {{t.onWood}}; font: inherit; font-weight: 700; cursor: pointer">{{label.oneliner}}</button>
+</div>
+<p style="margin: 12px 0 0; font-size: 15px; color: {{t.dim}}">Run it again to update. Or apt, dnf, the AUR, Homebrew, Nix, cargo or npm: <a href="#install" style="color: {{t.woodText}}">every channel</a>.</p>
+</div>
+
+<!-- The doorway: lattice above, demo below -->
+<section id="demo" aria-label="ranma in motion" style="max-width: 1200px; margin: 0 auto; padding: 56px 16px 0">
+<div style="border: 2px solid {{t.wood}}; border-radius: 14px; overflow: hidden; background: {{t.bg2}}">
+<div style="color: {{t.wood}}; border-bottom: 2px solid {{t.wood}}; height: 88px; position: relative">
+<svg width="100%" height="88" aria-hidden="true" style="display: block"><defs><pattern id="ranma-kumiko" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M22 0L44 22L22 44L0 22Z M22 0V44 M0 22H44 M22 0L11 22L22 44L33 22Z" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55"></path></pattern></defs><rect x="0" y="0" width="100%" height="88" fill="url(#ranma-kumiko)"></rect><line x1="0" y1="1" x2="100%" y2="1" stroke="currentColor" stroke-width="3"></line></svg>
+</div>
+<img src="/_blob/24cbee66f7c201eed3beaf9f0561395a" alt="ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a second workspace and back, a toast from ranma notify, and the which-key hint WM mode shows when it waits" style="display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #141317">
+</div>
+<sc-if value="{{ showCapture }}" hint-placeholder-val="{{ true }}">
+<p style="margin: 10px 0 0; display: inline-block; padding: 4px 10px; border: 1px dashed {{t.shu}}; border-radius: 6px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.shuText}}">capture · video · 1600×900 WebM (AV1) + MP4 (H.264), muted loop, poster = screenshot.png, chapters as WebVTT</p>
+</sc-if>
+<ol aria-label="Chapters" style="list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px">
+<sc-for list="{{ chapters }}" as="ch" hint-placeholder-count="6">
+<li><a href="#demo" style="display: inline-flex; gap: 8px; align-items: center; min-height: 36px; padding: 4px 12px; border: 1px solid {{t.rule}}; border-radius: 999px; text-decoration: none; color: {{t.text}}"><span style="color: {{t.dim}}">{{ch.time}}</span>{{ch.label}}</a></li>
+</sc-for>
+</ol>
+</section>
+
+<!-- First steps: the keys -->
+<section aria-labelledby="keys-h" style="max-width: 1200px; margin: 0 auto; padding: 96px 16px 0">
+<div style="display: flex; flex-wrap: wrap; gap: 32px 64px">
+<div style="flex: 1 1 320px; min-width: 0; max-width: 420px">
+<h2 id="keys-h" style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.015em">The leader is <kbd style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.85em; padding: 0 10px; border: 1px solid {{t.rule}}; border-bottom-width: 3px; border-radius: 8px; background: {{t.panel}}; color: {{t.woodText}}">Ctrl+b</kbd>, the key tmux uses.</h2>
+<p style="margin: 20px 0 0; color: {{t.dim}}">Press it and let go, and ranma enters <strong style="color: {{t.text}}">WM mode</strong>: the keys you press now go to ranma instead of the program in the pane. Wait half a second and a panel lists what each key does. <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em">Esc</code> leaves it.</p>
+<p style="margin: 16px 0 0; color: {{t.dim}}">The leader is a setting, like everything else: <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">ranma.set { leader = "ctrl+a" }</code>. <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em">man ranma-keys</code> lists the rest.</p>
+</div>
+<div style="flex: 999 1 520px; min-width: 0; position: relative; border: 1px solid {{t.wood}}; border-radius: 10px; padding: 28px 24px 20px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.woodText}}; font-weight: 500">1 · first steps</span>
+<dl style="margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 32px">
+<sc-for list="{{ keys }}" as="k" hint-placeholder-count="9">
+<div style="display: flex; gap: 14px; align-items: baseline">
+<dt style="flex: none; width: 128px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.woodText}}">{{k.keys}}</dt>
+<dd style="margin: 0; font-size: 15px; color: {{t.text}}">{{k.does}}</dd>
+</div>
+</sc-for>
+</dl>
+</div>
+</div>
+</section>
+
+<!-- Features -->
+<section id="features" aria-labelledby="features-h" style="max-width: 1200px; margin: 0 auto; padding: 112px 16px 0">
+<h2 id="features-h" style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.015em">What it does</h2>
+<p style="margin: 12px 0 0; color: {{t.dim}}; max-width: 40em">A daily driver: every milestone of the roadmap is done. Six panels, the way the README groups them.</p>
+<div style="margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 40px 32px">
+
+<!-- 1 tiling -->
+<article style="position: relative; border: 1px solid {{t.wood}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.woodText}}; font-weight: 500">1 · tiling</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">Panes place themselves.</h3>
+<p style="margin: 0; color: {{t.dim}}">Dwindle splits the focused pane along its longer side, like Hyprland. Or group panes into tabs, float one over the tiling, keep a scratchpad, or lay a workspace out as niri's strip of scrolling columns. Window rules and saved layouts on top.</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 12px; margin-top: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.dim}}">
+<figure style="margin: 0"><div aria-hidden="true" style="position: relative; aspect-ratio: 16 / 10; border-radius: 4px; background: {{t.bg2}}"><div style="position: absolute; left: 3%; top: 5%; width: 46%; height: 90%; border: 1.5px solid {{t.wood}}; border-radius: 3px"></div><div style="position: absolute; left: 51%; top: 5%; width: 46%; height: 43%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div><div style="position: absolute; left: 51%; top: 52%; width: 22%; height: 43%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div><div style="position: absolute; left: 75%; top: 52%; width: 22%; height: 43%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div></div><figcaption style="margin-top: 6px">dwindle</figcaption></figure>
+<figure style="margin: 0"><div aria-hidden="true" style="position: relative; aspect-ratio: 16 / 10; border-radius: 4px; background: {{t.bg2}}"><div style="position: absolute; left: 3%; top: 5%; width: 30%; height: 14%; background: {{t.ai}}; border-radius: 2px"></div><div style="position: absolute; left: 35%; top: 5%; width: 30%; height: 14%; background: {{t.ruleStrong}}; border-radius: 2px"></div><div style="position: absolute; left: 67%; top: 5%; width: 30%; height: 14%; background: {{t.ruleStrong}}; border-radius: 2px"></div><div style="position: absolute; left: 3%; top: 23%; width: 94%; height: 72%; border: 1.5px solid {{t.wood}}; border-radius: 3px"></div></div><figcaption style="margin-top: 6px">tabbed</figcaption></figure>
+<figure style="margin: 0"><div aria-hidden="true" style="position: relative; aspect-ratio: 16 / 10; border-radius: 4px; background: {{t.bg2}}"><div style="position: absolute; left: 3%; top: 5%; width: 46%; height: 90%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div><div style="position: absolute; left: 51%; top: 5%; width: 46%; height: 90%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div><div style="position: absolute; left: 24%; top: 24%; width: 52%; height: 54%; border: 3px double {{t.ai}}; border-radius: 3px; background: {{t.bg2}}"></div></div><figcaption style="margin-top: 6px">floating</figcaption></figure>
+<figure style="margin: 0"><div aria-hidden="true" style="position: relative; aspect-ratio: 16 / 10; border-radius: 4px; background: {{t.bg2}}"><div style="position: absolute; left: 3%; top: 5%; width: 94%; height: 90%; border: 1.5px solid {{t.rule}}; border-radius: 3px; opacity: 0.6"></div><div style="position: absolute; left: 14%; top: 0; width: 72%; height: 52%; border: 1.5px solid {{t.wood}}; border-top: 0; border-radius: 0 0 3px 3px; background: {{t.bg2}}"></div></div><figcaption style="margin-top: 6px">scratchpad</figcaption></figure>
+<figure style="margin: 0"><div aria-hidden="true" style="position: relative; aspect-ratio: 16 / 10; border-radius: 4px; background: {{t.bg2}}; overflow: hidden"><div style="position: absolute; left: -18%; top: 5%; width: 32%; height: 90%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div><div style="position: absolute; left: 17%; top: 5%; width: 48%; height: 90%; border: 1.5px solid {{t.wood}}; border-radius: 3px"></div><div style="position: absolute; left: 68%; top: 5%; width: 48%; height: 90%; border: 1.5px solid {{t.ruleStrong}}; border-radius: 3px"></div></div><figcaption style="margin-top: 6px">scrolling</figcaption></figure>
+</div>
+</article>
+
+<!-- 2 sessions -->
+<article style="position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}">2 · sessions</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">Close the terminal. Nothing closes.</h3>
+<p style="margin: 0; color: {{t.dim}}">ranma runs as a server: closing the terminal, or losing SSH, only detaches, and <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">ranma</code> again picks up where you were. Workspaces and sessions with fuzzy switchers. An upgrade moves running servers to the new build without closing anything.</p>
+<div style="aspect-ratio: 16 / 9; border: 1px dashed {{t.ruleStrong}}; border-radius: 6px; background: {{t.bg2}}; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: {{t.dim}}">loop, 6 s: leader d, the terminal closes, <br>ranma, back where it was, the session switcher</div>
+<sc-if value="{{ showCapture }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.shuText}}">capture · loop · 1200×675</p></sc-if>
+</article>
+
+<!-- 3 copy mode -->
+<article style="position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}">3 · copy mode</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">Copy from history, over SSH too.</h3>
+<p style="margin: 0; color: {{t.dim}}">Copy mode is alacritty's vi mode, with history search. What you yank reaches the system clipboard by OSC 52, from a pane on the far side of an SSH connection as well. Files paste into a pane that runs ssh.</p>
+<div style="aspect-ratio: 16 / 9; border: 1px dashed {{t.ruleStrong}}; border-radius: 6px; background: {{t.bg2}}; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: {{t.dim}}">loop, 6 s: search back, select, yank, <br>paste it on the local side of an ssh pane</div>
+<sc-if value="{{ showCapture }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.shuText}}">capture · loop · 1200×675</p></sc-if>
+</article>
+
+<!-- 4 images -->
+<article style="position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}">4 · images and keys</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">The kitty protocols, both of them.</h3>
+<p style="margin: 0; color: {{t.dim}}">Images draw in panes with the kitty graphics protocol. The kitty keyboard protocol works both ways, so a program asking for exact keys gets them. Outside WM mode bytes pass through raw; a paste is trusted to bracketed paste, not guessed.</p>
+<div style="aspect-ratio: 16 / 9; border: 1px dashed {{t.ruleStrong}}; border-radius: 6px; background: {{t.bg2}}; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: {{t.dim}}">still: an image in a pane, <br>tiled beside a shell</div>
+<sc-if value="{{ showCapture }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.shuText}}">capture · still · 1200×675</p></sc-if>
+</article>
+
+<!-- 5 bar -->
+<article style="position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}">5 · the bar</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">waybar's shape, without waybar's config.</h3>
+<p style="margin: 0; color: {{t.dim}}">Modules in Lua or shell, left, centre and right. Run ranma inside ranma and the nested ones share the outer bar rather than stack their own. Toasts from <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">ranma notify</code> when a build finishes.</p>
+<div style="border-radius: 6px; overflow: hidden; background: #141317; border: 1px solid {{t.rule}}">
+<img src="/_blob/f5bb85338d96085fd04081283044f1ad" alt="The bar from the README screenshot: a ranma label, workspaces 1 nvim, 2 zsh, 3 vps, the focused workspace's panes, and cpu, memory, host and clock modules" style="display: block; width: 100%; aspect-ratio: 2560 / 110; object-fit: cover; object-position: top left">
+<img src="/_blob/f5bb85338d96085fd04081283044f1ad" alt="" style="display: block; width: 100%; aspect-ratio: 2560 / 420; object-fit: cover; object-position: 100% 6%; opacity: 0.9">
+</div>
+<p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.dim}}">From the screenshot's configuration, below.</p>
+</article>
+
+<!-- 6 mobile -->
+<article style="position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; padding: 32px 24px 24px; display: flex; flex-direction: column; gap: 16px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.dim}}">6 · mobile</span>
+<h3 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.3">A phone can drive it.</h3>
+<p style="margin: 0; color: {{t.dim}}">While a phone drives the screen, ranma switches to a mobile view built from scriptable pieces. And it runs on the phone itself, in Termux.</p>
+<div style="display: flex; gap: 16px; align-items: stretch">
+<div style="flex: none; width: 34%; aspect-ratio: 9 / 16; max-height: 240px; border: 1px dashed {{t.ruleStrong}}; border-radius: 14px; background: {{t.bg2}}; display: flex; align-items: center; justify-content: center; padding: 10px; text-align: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.dim}}">still: the mobile view, portrait</div>
+<sc-if value="{{ showCapture }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; align-self: flex-end; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.shuText}}">capture · still · 390×844 @2x</p></sc-if>
+</div>
+</article>
+</div>
+
+<!-- Plugins strip -->
+<div style="margin-top: 40px; display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: baseline; padding: 20px 24px; border-radius: 10px; background: {{t.panel}}">
+<h3 style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 700; color: {{t.woodText}}">plugins</h3>
+<p style="margin: 0; flex: 1 1 420px; color: {{t.dim}}; font-size: 16px">Plain Lua on the same API as <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">init.lua</code>, in Neovim's layout. <a href="https://github.com/masshirodev/hako.ranma" style="color: {{t.text}}">hako</a> comes with ranma and installs them; <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">leader L</code>, then <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em; color: {{t.text}}">B</code>, browses the <a href="https://github.com/masshirodev/ranma-plugins" style="color: {{t.text}}">official list</a>. A plugin that fails while loading is dropped whole; a watchdog stops one that hangs.</p>
+</div>
+</section>
+
+<!-- Config -->
+<section id="config" aria-labelledby="config-h" style="max-width: 1200px; margin: 0 auto; padding: 112px 16px 0">
+<h2 id="config-h" style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.015em">Configured in Lua, themed in TOML.</h2>
+<p style="margin: 12px 0 0; color: {{t.dim}}; max-width: 44em">The configuration behind the screenshot, as it is in <a href="https://github.com/masshirodev/ranma/tree/main/doc/examples/screenshot" style="color: {{t.text}}">doc/examples/screenshot</a>. Lua for behaviour, TOML for looks. Both are parsed strictly: a name ranma doesn't know is an error that names it.</p>
+<div style="margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 40px 32px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13.5px; line-height: 1.7">
+
+<figure style="margin: 0; position: relative; border: 1px solid {{t.wood}}; border-radius: 10px; background: {{t.codeBg}}">
+<figcaption style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-size: 14px; color: {{t.woodText}}; font-weight: 500">1 · init.lua</figcaption>
+<div style="overflow-x: auto; padding: 24px 20px 20px; display: flex; gap: 18px">
+<pre aria-hidden="true" style="margin: 0; text-align: right; color: {{t.faint}}; user-select: none; font: inherit">10
+11
+12
+13
+14
+15
+16
+17
+18
+ ⋯
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46</pre>
+<pre style="margin: 0; font: inherit; color: {{t.text}}"><code><span style="color: {{t.woodText}}">ranma.set</span> { theme = <span style="color: {{t.str}}">"sumi"</span> } <span style="color: {{t.comment}}; font-style: italic">-- themes/sumi.toml, beside this file</span>
+
+<span style="color: {{t.comment}}; font-style: italic">-- The left pill: a fixed label. The built-in `session` module would show the</span>
+<span style="color: {{t.comment}}; font-style: italic">-- session's name, but only once there is more than one session.</span>
+<span style="color: {{t.woodText}}">ranma.module</span>(<span style="color: {{t.str}}">"label"</span>, {
+  render = <span style="color: {{t.kw}}">function</span>()
+    <span style="color: {{t.kw}}">return</span> { text = <span style="color: {{t.str}}">"ranma"</span>, style = <span style="color: {{t.str}}">"accent"</span> }
+  <span style="color: {{t.kw}}">end</span>,
+})
+<span style="color: {{t.faint}}">⋯</span>
+<span style="color: {{t.woodText}}">ranma.module</span>(<span style="color: {{t.str}}">"cpu"</span>, { format = <span style="color: {{t.str}}">"\u{f4bc} %s"</span> }) <span style="color: {{t.comment}}; font-style: italic">-- nf-oct-cpu</span>
+<span style="color: {{t.woodText}}">ranma.module</span>(<span style="color: {{t.str}}">"mem"</span>, { format = <span style="color: {{t.str}}">"\u{f035b} %s"</span> }) <span style="color: {{t.comment}}; font-style: italic">-- nf-md-memory</span>
+<span style="color: {{t.woodText}}">ranma.module</span>(<span style="color: {{t.str}}">"clock"</span>, {
+  interval = <span style="color: {{t.num}}">60</span>,
+  render = <span style="color: {{t.kw}}">function</span>()
+    <span style="color: {{t.kw}}">return</span> <span style="color: {{t.str}}">"\u{f43a} "</span> .. os.date(<span style="color: {{t.str}}">"%H:%M"</span>) <span style="color: {{t.comment}}; font-style: italic">-- nf-oct-clock</span>
+  <span style="color: {{t.kw}}">end</span>,
+})
+
+<span style="color: {{t.woodText}}">ranma.bar</span> {
+  left = { <span style="color: {{t.str}}">"label"</span>, <span style="color: {{t.str}}">"workspaces"</span> },
+  center = { <span style="color: {{t.str}}">"pane_strip"</span> },
+  right = { <span style="color: {{t.str}}">"cpu"</span>, <span style="color: {{t.str}}">"mem"</span>, <span style="color: {{t.str}}">"host"</span>, <span style="color: {{t.str}}">"clock"</span> },
+}</code></pre>
+</div>
+</figure>
+
+<figure style="margin: 0; position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; background: {{t.codeBg}}">
+<figcaption style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-size: 14px; color: {{t.dim}}">2 · themes/sumi.toml</figcaption>
+<div style="overflow-x: auto; padding: 24px 20px 20px; display: flex; gap: 18px">
+<pre aria-hidden="true" style="margin: 0; text-align: right; color: {{t.faint}}; user-select: none; font: inherit">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+ ⋯
+46
+47
+48
+49
+50
+51</pre>
+<pre style="margin: 0; font: inherit; color: {{t.text}}"><code><span style="color: {{t.comment}}; font-style: italic"># sumi — ink, washi paper and hinoki wood. The airy variant.</span>
+<span style="color: {{t.comment}}; font-style: italic">#</span>
+<span style="color: {{t.comment}}; font-style: italic">#   ink      #141317  ground            washi    #e8e1d3  text</span>
+<span style="color: {{t.comment}}; font-style: italic">#   hinoki   #d9a55b  focus / accent    ai       #7b93c9  floats, tabs</span>
+<span style="color: {{t.comment}}; font-style: italic">#   shu      #e0533d  WM mode / urgent  matcha   #9db37a  occupied</span>
+<span style="color: {{t.comment}}; font-style: italic">#   kasumi   #6e665c  dim               sumi-2   #2a2724  module pills</span>
+
+<span style="color: {{t.woodText}}; font-weight: 700">[colors]</span>
+border_active = <span style="color: {{t.str}}">"#d9a55b"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #d9a55b"></span>
+border_inactive = <span style="color: {{t.str}}">"#3a3631"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #3a3631; outline: 1px solid {{t.rule}}"></span>
+border_floating = <span style="color: {{t.str}}">"#7b93c9"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #7b93c9"></span>
+bar_bg = <span style="color: {{t.str}}">"default"</span>
+bar_fg = <span style="color: {{t.str}}">"#e8e1d3"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #e8e1d3; outline: 1px solid {{t.rule}}"></span>
+bar_dim = <span style="color: {{t.str}}">"#6e665c"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #6e665c"></span>
+bar_accent = <span style="color: {{t.str}}">"#d9a55b"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #d9a55b"></span>
+bar_urgent = <span style="color: {{t.str}}">"#e0533d"</span> <span aria-hidden="true" style="display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; vertical-align: -0.05em; background: #e0533d"></span>
+<span style="color: {{t.faint}}">⋯</span>
+<span style="color: {{t.woodText}}; font-weight: 700">[border]</span>
+style = <span style="color: {{t.str}}">"rounded"</span>
+floating_style = <span style="color: {{t.str}}">"double"</span>
+title = <span style="color: {{t.str}}">"top"</span>
+title_align = <span style="color: {{t.str}}">"left"</span>
+title_format = <span style="color: {{t.str}}">" {index} · {title} "</span></code></pre>
+</div>
+</figure>
+</div>
+<div style="margin-top: 28px; display: flex; flex-wrap: wrap; gap: 12px 40px; font-size: 15px; color: {{t.dim}}">
+<p style="margin: 0"><code style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.text}}">ranma --dump-config</code> prints the default, with every option documented.</p>
+<p style="margin: 0"><code style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.text}}">ranma --check-config</code> checks yours and its theme.</p>
+<p style="margin: 0"><a href="https://github.com/masshirodev/ranma/blob/main/doc/CONFIG.md" style="color: {{t.woodText}}">CONFIG.md</a>, also <code style="font-family: 'JetBrains Mono', ui-monospace, monospace">man 5 ranma</code></p>
+</div>
+</section>
+
+<!-- Why not -->
+<section id="why" aria-labelledby="why-h" style="max-width: 1200px; margin: 0 auto; padding: 112px 16px 0">
+<h2 id="why-h" style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.015em">Why not tmux, zellij or tuios?</h2>
+<p style="margin: 12px 0 0; color: {{t.dim}}; max-width: 44em">They are good, and you may want one of them instead. ranma gets where it is mostly by refusing scope, not by out-engineering anyone.</p>
+<div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 24px">
+<div style="padding: 24px; border-radius: 10px; background: {{t.panel}}">
+<h3 style="margin: 0 0 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 700">tmux</h3>
+<p style="margin: 0; font-size: 16px; color: {{t.dim}}">Use tmux where it is already installed on every machine you touch. ranma keeps its leader, its five preset layouts and the things people style in it, and adds a window manager's tree: dwindle placement, a floating layer, a scratchpad. A tmux shim covers a stated subset for programs that drive tmux; matching tmux feature for feature is a non-goal.</p>
+</div>
+<div style="padding: 24px; border-radius: 10px; background: {{t.panel}}">
+<h3 style="margin: 0 0 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 700">zellij</h3>
+<p style="margin: 0; font-size: 16px; color: {{t.dim}}">zellij is a whole workspace with its own interface and WebAssembly plugins. ranma takes its shape from tiling window managers instead: i3's tree, Hyprland's placement, niri's columns. Its plugins are plain Lua on the same API as your init.lua.</p>
+</div>
+<div style="padding: 24px; border-radius: 10px; background: {{t.panel}}">
+<h3 style="margin: 0 0 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; font-weight: 700">tuios</h3>
+<p style="margin: 0; font-size: 16px; color: {{t.dim}}">tuios is the model for the feel. ranma aims to be the faster, less buggy daily driver by leaving things out:</p>
+<ul style="margin: 12px 0 0; padding-left: 18px; font-size: 15px; color: {{t.dim}}; display: flex; flex-direction: column; gap: 6px">
+<li>one process, one copy of each grid, queues bounded by bytes</li>
+<li>a server that owns everything and a client that holds nothing to desync</li>
+<li>bytes pass through raw outside WM mode; bracketed paste is trusted, not guessed</li>
+</ul>
+</div>
+</div>
+<div style="margin-top: 40px; position: relative; border: 1px solid {{t.shu}}; border-radius: 10px; padding: 32px 24px 24px">
+<span style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.shuText}}; font-weight: 500">what ranma refuses to be</span>
+<ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px 40px; font-size: 16px">
+<li><strong style="font-weight: 600">Not reboot-proof.</strong> <span style="color: {{t.dim}}">A snapshot brings back sessions, layouts and commands as new processes; the old ones are gone.</span></li>
+<li><strong style="font-weight: 600">Not remote.</strong> <span style="color: {{t.dim}}">No remote hosts, SSH or web servers, no clients keeping copies of the layout in step.</span></li>
+<li><strong style="font-weight: 600">No AI in the core.</strong> <span style="color: {{t.dim}}">A Lua hook can do that for someone who wants it.</span></li>
+<li><strong style="font-weight: 600">Not native Windows.</strong> <span style="color: {{t.dim}}">WSL2 is the Windows story. Not the BSDs yet either.</span></li>
+<li><strong style="font-weight: 600">Not tmux.</strong> <span style="color: {{t.dim}}">What it took from tmux it took in its own terms.</span></li>
+</ul>
+<p style="margin: 20px 0 0; font-size: 15px; color: {{t.dim}}"><a href="https://github.com/masshirodev/ranma/blob/main/doc/DESIGN.md" style="color: {{t.text}}">DESIGN.md</a> records every decision and what it rules out.</p>
+</div>
+</section>
+
+<!-- Install -->
+<section id="install" aria-labelledby="install-h" style="max-width: 1200px; margin: 0 auto; padding: 112px 16px 0">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px">
+<h2 id="install-h" style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; letter-spacing: -0.015em">Install</h2>
+<a href="https://github.com/masshirodev/ranma/releases/latest" style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.woodText}}">v{{version}} · {{released}} · changelog</a>
+</div>
+<p style="margin: 12px 0 0; color: {{t.dim}}; max-width: 44em">Linux (x86_64, aarch64), macOS (Apple silicon, Intel) and Android in Termux (aarch64), into <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.9em">~/.local</code>. Run it again to update; it checks the new binary against your config and moves running servers onto it.</p>
+<div style="margin-top: 24px; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 20px; border: 2px solid {{t.wood}}; border-radius: 10px; background: {{t.codeBg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px">
+<span aria-hidden="true" style="color: {{t.woodText}}">❯</span>
+<code style="flex: 1 1 0; min-width: 0; overflow-x: auto; white-space: pre; padding: 8px 0">curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh</code>
+<button type="button" onClick="{{ copy.oneliner }}" aria-label="Copy the install command" style="flex: none; min-height: 44px; min-width: 88px; padding: 0 16px; border-radius: 7px; border: 0; background: {{t.woodBtn}}; color: {{t.onWood}}; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">{{label.oneliner}}</button>
+</div>
+
+<h3 style="margin: 48px 0 0; font-size: 20px; font-weight: 600">Or with a package manager</h3>
+<p style="margin: 6px 0 0; font-size: 15px; color: {{t.dim}}">Every channel ships the same release binary, except cargo install and Nix, which build it.</p>
+<div role="list" style="margin-top: 20px; border-top: 1px solid {{t.rule}}">
+<sc-for list="{{ channels }}" as="c" hint-placeholder-count="6">
+<div role="listitem" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 12px 0; border-bottom: 1px solid {{t.rule}}">
+<div style="flex: 0 1 240px; min-width: 180px"><div style="font-weight: 600; font-size: 16px">{{c.where}}</div><div style="font-size: 13px; color: {{t.dim}}">{{c.note}}</div></div>
+<div style="flex: 999 1 420px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 16px; border-radius: 8px; background: {{t.codeBg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px">
+<code style="flex: 1 1 0; min-width: 0; overflow-x: auto; white-space: pre; padding: 8px 0">{{c.cmd}}</code>
+<button type="button" onClick="{{ c.copy }}" aria-label="Copy: {{c.where}}" style="flex: none; min-height: 40px; min-width: 72px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.ruleStrong}}; background: transparent; color: {{t.text}}; font: inherit; font-size: 13px; cursor: pointer">{{c.label}}</button>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 40px 32px">
+<sc-for list="{{ repos }}" as="r" hint-placeholder-count="2">
+<figure style="margin: 0; position: relative; border: 1px solid {{t.rule}}; border-radius: 10px; background: {{t.codeBg}}; display: flex; flex-direction: column">
+<figcaption style="position: absolute; top: -0.8em; left: 14px; padding: 0 6px; background: {{t.bg}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: {{t.text}}; font-weight: 500">{{r.title}}</figcaption>
+<pre style="margin: 0; padding: 26px 20px 12px; overflow-x: auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.75; color: {{t.text}}"><code>{{r.cmd}}</code></pre>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 12px 12px 20px; margin-top: auto">
+<span style="font-size: 13px; color: {{t.dim}}">{{r.note}}</span>
+<button type="button" onClick="{{ r.copy }}" aria-label="Copy the {{r.title}} commands" style="flex: none; min-height: 40px; min-width: 96px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.ruleStrong}}; background: transparent; color: {{t.text}}; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; cursor: pointer">{{r.label}}</button>
+</div>
+</figure>
+</sc-for>
+</div>
+
+<div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 24px 40px; font-size: 15px; color: {{t.dim}}">
+<div>
+<h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: {{t.text}}">Then</h3>
+<p style="margin: 0">Start it with <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.text}}">ranma</code>, and press <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.text}}">Ctrl+b ?</code> for every key. The man pages come with every install: <code style="font-family: 'JetBrains Mono', ui-monospace, monospace">man ranma</code>, <code style="font-family: 'JetBrains Mono', ui-monospace, monospace">man 5 ranma</code>, <code style="font-family: 'JetBrains Mono', ui-monospace, monospace">man ranma-keys</code>.</p>
+</div>
+<div>
+<h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: {{t.text}}">After a package-manager upgrade</h3>
+<p style="margin: 0">A package manager replaces the binary but doesn't check it or move servers. Shells and scrollback stay: <code style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.text}}">ranma --check-config &amp;&amp; ranma upgrade --all</code></p>
+</div>
+<div>
+<h3 style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: {{t.text}}">Platforms</h3>
+<p style="margin: 0">Linux with glibc 2.34+ (musl builds from source), WSL2, macOS arm64 and Intel, Termux on aarch64. Not the BSDs or native Windows. <a href="https://github.com/masshirodev/ranma#platforms" style="color: {{t.text}}">Details</a></p>
+</div>
+</div>
+</section>
+</main>
+
+<!-- Footer: a thin transom to close -->
+<footer style="margin-top: 112px; border-top: 2px solid {{t.wood}}; background: {{t.bg2}}">
+<div aria-hidden="true" style="color: {{t.wood}}; height: 24px; border-bottom: 1px solid {{t.rule}}"><svg width="100%" height="24" style="display: block"><rect x="0" y="0" width="100%" height="24" fill="url(#ranma-kumiko)"></rect></svg></div>
+<div style="max-width: 1200px; margin: 0 auto; padding: 40px 16px 48px; display: flex; flex-wrap: wrap; gap: 32px 64px; font-size: 15px">
+<div style="flex: 1 1 260px; min-width: 0">
+<p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; color: {{t.woodText}}">ranma <span lang="ja" style="font-family: 'Shippori Mincho', serif">欄間</span></p>
+<p style="margin: 8px 0 0; color: {{t.dim}}">v{{version}}, released {{released}}. Licensed under MIT or Apache-2.0, at your option. Made by <a href="https://github.com/masshirodev" style="color: {{t.text}}">masshirodev</a>.</p>
+<p style="margin: 8px 0 0; color: {{t.dim}}">Plain files: no analytics, no trackers, no third-party anything.</p>
+</div>
+<nav aria-label="Project links" style="flex: 2 1 480px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 24px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px">
+<a href="https://github.com/masshirodev/ranma" style="padding: 8px 0; color: {{t.text}}">GitHub</a>
+<a href="https://github.com/masshirodev/ranma/releases" style="padding: 8px 0; color: {{t.text}}">Releases</a>
+<a href="https://github.com/masshirodev/ranma/blob/main/CHANGELOG.md" style="padding: 8px 0; color: {{t.text}}">Changelog</a>
+<a href="https://github.com/masshirodev/ranma/tree/main/doc/man" style="padding: 8px 0; color: {{t.text}}">Man pages</a>
+<a href="https://github.com/masshirodev/ranma/blob/main/doc/CONFIG.md" style="padding: 8px 0; color: {{t.text}}">CONFIG.md</a>
+<a href="https://github.com/masshirodev/ranma/blob/main/doc/DESIGN.md" style="padding: 8px 0; color: {{t.text}}">DESIGN.md</a>
+<a href="https://github.com/masshirodev/ranma-plugins" style="padding: 8px 0; color: {{t.text}}">Plugins</a>
+<a href="https://github.com/masshirodev/ranma/blob/main/LICENSE-MIT" style="padding: 8px 0; color: {{t.text}}">Licence</a>
+</nav>
+</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Look"},"showCapture":{"editor":"boolean","default":true,"section":"Look"},"version":{"editor":"text","default":"0.4.0","section":"From the build"},"released":{"editor":"text","default":"2026-10-16","section":"From the build"},"$preview":{"width":1440,"height":7000}}'>
+const RANMA_THEMES = {
+  dark: {
+    bg: '#141317', bg2: '#1a191c', panel: '#1f1d1f', pill: '#2a2724', codeBg: '#18171a',
+    rule: '#3a3631', ruleStrong: '#57514a',
+    text: '#e8e1d3', dim: '#a89f90', faint: '#6e665c',
+    wood: '#d9a55b', woodText: '#d9a55b', woodBtn: '#d9a55b', onWood: '#141317',
+    ai: '#7b93c9', shu: '#e0533d', shuText: '#ee7a66',
+    kw: '#8fa5d6', str: '#a9bf86', num: '#e8a87c', comment: '#8a8173'
+  },
+  light: {
+    bg: '#f3eee3', bg2: '#ebe4d6', panel: '#e9e2d3', pill: '#e3dbca', codeBg: '#f8f5ee',
+    rule: '#d4c9b5', ruleStrong: '#b3a690',
+    text: '#1d1b1f', dim: '#5c544a', faint: '#9a8f7d',
+    wood: '#b8843a', woodText: '#83561a', woodBtn: '#83561a', onWood: '#fffaf0',
+    ai: '#3d5794', shu: '#b3381f', shuText: '#a33219',
+    kw: '#3d5794', str: '#4f6a2a', num: '#9a4a16', comment: '#7a705f'
+  }
+};
+
+const RANMA_CHANNELS = [
+  { id: 'aur', where: 'Arch (AUR)', note: 'x86_64, maintained by Rafael Dominiquini', cmd: 'ranma-bin' },
+  { id: 'brew', where: 'Homebrew', note: 'macOS, Linux', cmd: 'brew install masshirodev/tap/ranma' },
+  { id: 'nix', where: 'Nix', note: 'or the flake’s packages.<system>.default / overlays.default', cmd: 'nix run github:masshirodev/ranma' },
+  { id: 'binstall', where: 'Rust, the binary', note: 'cargo-binstall', cmd: 'cargo binstall ranma' },
+  { id: 'cargo', where: 'Rust, built', note: 'Rust 1.88+ and a C compiler', cmd: 'cargo install ranma' },
+  { id: 'npm', where: 'npm', note: 'Node stays running beside each client', cmd: 'npm install -g @masshirodev/ranma' },
+  { id: 'hand', where: 'By hand', note: 'tarballs, .deb and .rpm on each release', cmd: 'https://github.com/masshirodev/ranma/releases' }
+];
+
+const RANMA_REPOS = [
+  { id: 'apt', title: 'apt · Debian 12+, Ubuntu 22.04+', note: 'Signed; the key and repository stay on GitHub Pages.',
+    cmd: 'sudo install -d /etc/apt/keyrings\ncurl -fsSL https://masshirodev.github.io/ranma/ranma.asc | sudo tee /etc/apt/keyrings/ranma.asc >/dev/null\necho "deb [signed-by=/etc/apt/keyrings/ranma.asc] https://masshirodev.github.io/ranma/deb stable main" \\\n  | sudo tee /etc/apt/sources.list.d/ranma.list\nsudo apt update && sudo apt install ranma' },
+  { id: 'dnf', title: 'dnf · Fedora, RHEL 9+, openSUSE', note: 'The last line is openSUSE’s, with zypper.',
+    cmd: 'sudo curl -fsSL -o /etc/yum.repos.d/ranma.repo https://masshirodev.github.io/ranma/ranma.repo\nsudo dnf install ranma\n# openSUSE:\nsudo zypper addrepo https://masshirodev.github.io/ranma/ranma.repo && sudo zypper install ranma' }
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const mode = s.mode || this.props.theme || 'dark';
+    const t = RANMA_THEMES[mode] || RANMA_THEMES.dark;
+    const copied = s.copied;
+    const doCopy = (id, text) => () => {
+      try { if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } catch (e) {}
+      this.setState({ copied: id });
+      clearTimeout(this._ct);
+      this._ct = setTimeout(() => this.setState({ copied: null }), 1600);
+    };
+    const one = 'curl -fsSL https://masshirodev.github.io/ranma/install.sh | sh';
+    return {
+      t,
+      version: this.props.version ?? '0.4.0',
+      released: this.props.released ?? '2026-10-16',
+      showCapture: this.props.showCapture ?? true,
+      modeLabel: mode,
+      otherMode: mode === 'dark' ? 'light' : 'dark',
+      toggleTheme: () => this.setState({ mode: mode === 'dark' ? 'light' : 'dark' }),
+      copy: { oneliner: doCopy('oneliner', one) },
+      label: { oneliner: copied === 'oneliner' ? 'Copied' : 'Copy' },
+      channels: RANMA_CHANNELS.map((c) => ({ ...c, copy: doCopy(c.id, c.cmd), label: copied === c.id ? 'Copied' : 'Copy' })),
+      repos: RANMA_REPOS.map((r) => ({ ...r, copy: doCopy(r.id, r.cmd), label: copied === r.id ? 'Copied' : 'Copy all' })),
+      chapters: [
+        { time: '1', label: 'dwindle tiles nvim, btop, git log' },
+        { time: '2', label: 'leader space · layouts' },
+        { time: '3', label: 'leader w · a float' },
+        { time: '4', label: 'alt+2 · another workspace' },
+        { time: '5', label: 'ranma notify · a toast' },
+        { time: '6', label: 'the which-key hint' }
+      ],
+      keys: [
+        { keys: 'leader t', does: 'open a pane next to the focused one' },
+        { keys: 'leader ←↓↑→', does: 'move focus (Alt+arrows without the leader)' },
+        { keys: 'leader q', does: 'close the focused pane' },
+        { keys: 'leader 1…0', does: 'go to workspace 1-10 (Alt+1…0)' },
+        { keys: 'leader w', does: 'float the pane, or put it back' },
+        { keys: 'leader d', does: 'detach: ranma keeps running' },
+        { keys: 'leader ?', does: 'every key, searchable' },
+        { keys: 'leader :', does: 'run any action by name' },
+        { keys: 'leader p', does: 'the settings panel' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

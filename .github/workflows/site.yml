@@ -1,0 +1,103 @@
+# Builds ranma.masshiro.pro from site/ and puts it on the VPS (doc/WEBSITE.md).
+# The tests gate the deploy. A push to main that touches what the page reads
+# deploys it; so does a release tag (the page shows the latest release) and a
+# run by hand. Pull requests only build and test.
+name: site
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - site/**
+      - doc/examples/screenshot/**
+      - scripts/demo/demo.tape
+      - .github/workflows/site.yml
+  pull_request:
+    paths:
+      - site/**
+      - doc/examples/screenshot/**
+      - scripts/demo/demo.tape
+      - .github/workflows/site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cut short: rsync with --delay-updates swaps
+# the files in at the end, and a cancelled run must not leave a half.
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: site
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The page shows the latest v* tag, so it needs the tags.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/build/
+          retention-days: 7
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    environment:
+      name: ranma.masshiro.pro
+      url: https://ranma.masshiro.pro/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: build
+      # The key on the VPS is forced through rrsync, rooted at ~/sites/ranma:
+      # it can write there and do nothing else. The destination is named
+      # (public/, which Caddy serves) rather than a bare `host:`, so a key that
+      # somehow lost its rrsync lock would write into ~/public, never sync
+      # --delete over the whole home (Masshiro c60, 2026-11-03). The host key is
+      # pinned (SITE_KNOWN_HOSTS), never accepted on first sight. SSH on the VPS
+      # listens on 8443, not 22.
+      - name: rsync to the VPS
+        working-directory: .
+        env:
+          SITE_DEPLOY_KEY: ${{ secrets.SITE_DEPLOY_KEY }}
+          SITE_KNOWN_HOSTS: ${{ secrets.SITE_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SITE_DEPLOY_KEY" > ~/.ssh/site
+          printf '%s\n' "$SITE_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/site ~/.ssh/known_hosts
+          rsync -rlz --delete-delay --delay-updates --checksum \
+            -e 'ssh -p 8443 -i ~/.ssh/site -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts' \
+            build/ masshiro@193.203.183.177:public/
+          rm -f ~/.ssh/site
+      - name: The page is live
+        working-directory: .
+        run: |
+          for i in 1 2 3 4 5; do
+            curl -fsS https://ranma.masshiro.pro/ | grep -q 'A tiling window manager for the terminal' && exit 0
+            sleep 3
+          done
+          echo "ranma.masshiro.pro doesn't serve the page" >&2
+          exit 1

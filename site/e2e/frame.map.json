@@ -1,0 +1,113 @@
+{
+	"$spec": "/home/masshiro/projects/ranma/temp/design/handoff/Main.dc.html",
+	"screen": 0,
+	"screenTitle": "Linux · macOS · Android in Termux — A tiling window manager for the terminal.",
+	"url": "/",
+	"regions": [
+		{
+			"name": "frame",
+			"spec": ":root",
+			"app": "body",
+			"hint": "ranma",
+			"is": "block"
+		},
+		{
+			"name": "region1",
+			"spec": "div > div > div > header > nav",
+			"app": ".bar-nav",
+			"hint": "ranma",
+			"is": "flex gap 8px/12px"
+		},
+		{
+			"name": "region2",
+			"spec": "div > div > div > header > nav > a:nth-of-type(1)",
+			"app": ".pill-brand",
+			"hint": "ranma",
+			"is": "flex gap 8px/8px"
+		},
+		{
+			"name": "region3",
+			"spec": "div > div > div > header > nav > div:nth-of-type(1)",
+			"app": ".workspaces",
+			"hint": "1 demo",
+			"is": "flex gap 2px/2px"
+		},
+		{
+			"name": "region4",
+			"spec": "div > div > div > main > section:nth-of-type(1)",
+			"app": ".hero",
+			"hint": "Linux · macOS · Android in Termux",
+			"is": "flex gap 40px/64px"
+		},
+		{
+			"name": "region5",
+			"spec": "div > div > div > main > section:nth-of-type(3) > div > div:nth-of-type(2) > dl",
+			"app": ".keys-pane dl",
+			"hint": "leader t",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 300px), 1fr))"
+		},
+		{
+			"name": "region6",
+			"spec": "div > div > div > main > section:nth-of-type(4) > div:nth-of-type(1)",
+			"app": ".features",
+			"hint": "1 · tiling",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 480px), 1fr))"
+		},
+		{
+			"name": "region7",
+			"spec": "div > div > div > main > section:nth-of-type(4) > div:nth-of-type(1) > article:nth-of-type(1) > div",
+			"app": ".layouts",
+			"hint": "dwindle",
+			"is": "grid repeat(auto-fit, minmax(84px, 1fr))"
+		},
+		{
+			"name": "region8",
+			"spec": "div > div > div > main > section:nth-of-type(5) > div:nth-of-type(1)",
+			"app": ".code-files",
+			"hint": "1 · init.lua",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 480px), 1fr))"
+		},
+		{
+			"name": "region9",
+			"spec": "div > div > div > main > section:nth-of-type(6) > div:nth-of-type(1)",
+			"app": ".others",
+			"hint": "tmux",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 320px), 1fr))"
+		},
+		{
+			"name": "region10",
+			"spec": "div > div > div > main > section:nth-of-type(6) > div:nth-of-type(2) > ul",
+			"app": ".refuses ul",
+			"hint": "Not reboot-proof.",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 340px), 1fr))"
+		},
+		{
+			"name": "region11",
+			"spec": "div > div > div > main > section:nth-of-type(7) > div:nth-of-type(4)",
+			"app": ".repos",
+			"hint": "apt · Debian 12+, Ubuntu 22.04+",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 480px), 1fr))"
+		},
+		{
+			"name": "region12",
+			"spec": "div > div > div > main > section:nth-of-type(7) > div:nth-of-type(5)",
+			"app": ".then",
+			"hint": "Then",
+			"is": "grid repeat(auto-fit, minmax(min(100%, 340px), 1fr))"
+		},
+		{
+			"name": "region13",
+			"spec": "div > div > div > footer > div:nth-of-type(2)",
+			"app": ".foot-body",
+			"hint": "ranma",
+			"is": "flex gap 32px/64px"
+		},
+		{
+			"name": "region14",
+			"spec": "div > div > div > footer > div:nth-of-type(2) > nav",
+			"app": ".foot-links",
+			"hint": "GitHub",
+			"is": "grid repeat(auto-fit, minmax(150px, 1fr))"
+		}
+	]
+}

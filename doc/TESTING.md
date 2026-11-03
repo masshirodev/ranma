@@ -305,6 +305,14 @@ contributor's pull request, or a push with a skip flag. The release workflow
 `compat` job runs `scripts/compat.sh` with the binary it is about to publish
 against the latest release, before anything is published.
 
+## The website — `site/`
+
+The site's own checks (`npm run lint`, `npm test` for the build at a 95% floor,
+`npm run test:e2e` for the page in Playwright) run in
+`.github/workflows/site.yml` on any change that touches it, and gate its
+deploy. They don't run in the hooks: the site is separate from the binary, and
+a Rust change can't break it. [`WEBSITE.md`](WEBSITE.md), "Tests".
+
 ## Packages — `packaging/test/`
 
 Every way of installing ranma, tried on the distros it is for, in Docker:

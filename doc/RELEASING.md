@@ -113,6 +113,10 @@ and zypper), signs them, and adds `install.sh`, `ranma.repo`, the public key
 and `index.html`. The site is rebuilt whole every time, so there is no branch
 to keep; three releases is how far back a user can still downgrade.
 
+**The website**, ranma.masshiro.pro, is not the Pages site and holds none
+of these files. A `v*` tag redeploys it (`.github/workflows/site.yml`) so it
+shows the new version; [`WEBSITE.md`](WEBSITE.md).
+
 **The signing key** is a dedicated ed25519 key, "ranma packages",
 fingerprint `91193BB09A931FAEA274C4F30792F721B44E7B30`, without a passphrase
 or an expiry. The private half is the Actions secret `RANMA_PKG_SIGNING_KEY`,

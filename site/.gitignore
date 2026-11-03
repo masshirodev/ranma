@@ -1,0 +1,5 @@
+# site/: built output and test leftovers (doc/WEBSITE.md)
+node_modules/
+build/
+test-results/
+playwright-report/
