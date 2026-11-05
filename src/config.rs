@@ -1759,6 +1759,7 @@ struct Builder {
     module_fits: HashMap<String, ModuleFit>,
     workspaces_shown: u8,
     workspaces_numbers_only: bool,
+    workspaces_nested_theme: bool,
     workspaces_nested: NestedWorkspaces,
     title_nested: bool,
     rules: Vec<Rule>,
@@ -1827,6 +1828,9 @@ pub struct Config {
     pub workspaces_shown: u8,
     /// The workspaces module shows ` 3 ` for an unnamed workspace, not
     /// ` 3:nvim ` (the program in its focused pane).
+    /// The workspaces of ranmas inside drawn in the theme's workspace
+    /// formats (`nested_format = "theme"`), not `n:name` (card c465).
+    pub workspaces_nested_theme: bool,
     pub workspaces_numbers_only: bool,
     /// Which workspaces show the workspaces of a ranma inside them.
     pub workspaces_nested: NestedWorkspaces,
@@ -3280,7 +3284,7 @@ fn install_api(
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
                 let allowed: &[&str] = match name.as_str() {
-                    "workspaces" => &["show", "label", "nested", "style"],
+                    "workspaces" => &["show", "label", "nested", "nested_format", "style"],
                     "title" => &["nested", "style"],
                     _ => &["style"],
                 };
@@ -3328,6 +3332,22 @@ fn install_api(
                     lua.app_data_mut::<Builder>()
                         .ok_or_else(loading_only)?
                         .workspaces_numbers_only = numbers_only;
+                }
+                if name == "workspaces"
+                    && let Some(f) = opts.get::<Option<String>>("nested_format")?
+                {
+                    let theme = match f.as_str() {
+                        "names" => false,
+                        "theme" => true,
+                        other => {
+                            return Err(rt_err(format!(
+                                "ranma.module(\"workspaces\"): nested_format = \"{other}\" (expected \"names\" or \"theme\")"
+                            )));
+                        }
+                    };
+                    lua.app_data_mut::<Builder>()
+                        .ok_or_else(loading_only)?
+                        .workspaces_nested_theme = theme;
                 }
                 if name == "workspaces"
                     && let Some(nested) = opts.get::<Option<String>>("nested")?
@@ -4535,6 +4555,7 @@ pub fn load_full(
         module_fits: builder.module_fits,
         workspaces_shown: builder.workspaces_shown,
         workspaces_numbers_only: builder.workspaces_numbers_only,
+        workspaces_nested_theme: builder.workspaces_nested_theme,
         workspaces_nested: builder.workspaces_nested,
         title_nested: builder.title_nested,
         rules: builder.rules,

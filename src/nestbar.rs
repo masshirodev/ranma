@@ -570,7 +570,20 @@ pub fn ladder(expand_all: bool) -> Vec<Opts> {
 /// `path` is where these workspaces sit, for clicks: the outer holder's
 /// number, then each level's workspace down to here.
 pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) -> Segment {
-    let pad = level == 0;
+    pieces_in(set, level, on_path, o, path, None)
+}
+
+/// [`pieces`], each workspace drawn with the theme's formats when `fmt` is
+/// given (`nested_format = "theme"`), which carry their own spacing.
+pub fn pieces_in(
+    set: &Report,
+    level: usize,
+    on_path: bool,
+    o: &Opts,
+    path: &[u8],
+    fmt: Option<&WsFormats>,
+) -> Segment {
+    let pad = level == 0 && fmt.is_none();
     let mut out: Segment = Vec::new();
     let click = |n: u8| -> Option<Click> {
         let mut p = path.to_vec();
@@ -578,7 +591,7 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
         click_for(&p)
     };
     for (i, w) in set.ws.iter().enumerate() {
-        if !pad && i > 0 {
+        if !pad && i > 0 && fmt.is_none() {
             out.push(Piece::new(" ", Style::Normal));
         }
         let cur = w.n == set.current;
@@ -597,11 +610,20 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
                 cur,
                 here,
             };
-            expanded(&mut out, &at, n, level, o, path);
+            expanded(&mut out, &at, n, level, o, path, fmt);
             continue;
         }
-        let label = match (&w.name, keep_name) {
-            (Some(name), true) => format!("{}:{name}", w.n),
+        let urgent_here = w.urgent || nest.is_some_and(Report::any_urgent);
+        let label = match (fmt, &w.name, keep_name) {
+            (Some(f), name, keep) => f.render(
+                &w.n.to_string(),
+                name.as_deref().filter(|_| keep),
+                cur,
+                urgent_here,
+                w.activity,
+                w.occ,
+            ),
+            (None, Some(name), true) => format!("{}:{name}", w.n),
             _ => w.n.to_string(),
         };
         // The count goes with the name when the ladder drops names.
@@ -643,7 +665,7 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
         }
     }
     if set.scratch {
-        if !pad {
+        if !pad && fmt.is_none() {
             out.push(Piece::new(" ", Style::Normal));
         }
         // An ssh started in the scratchpad reaches a ranma like any pane: `S`
@@ -658,7 +680,7 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
                     cur: set.scratch_shown,
                     here,
                 };
-                expanded(&mut out, &at, n, level, o, path);
+                expanded(&mut out, &at, n, level, o, path, fmt);
             }
             _ => {
                 // Shown, the scratchpad is where that ranma is (its `current`
@@ -696,6 +718,58 @@ pub fn pieces(set: &Report, level: usize, on_path: bool, o: &Opts, path: &[u8]) 
     out
 }
 
+/// The theme's workspace formats, for `nested_format = "theme"`: every
+/// level of the expanded bar drawn as the workspaces module draws this
+/// ranma's own (dots, icons), not as `n:name` (card c465).
+pub struct WsFormats<'a> {
+    pub current: &'a crate::theme::Format,
+    pub plain: &'a crate::theme::Format,
+    pub urgent: Option<&'a crate::theme::Format>,
+    pub activity: Option<&'a crate::theme::Format>,
+    pub empty: Option<&'a crate::theme::Format>,
+}
+
+impl<'a> WsFormats<'a> {
+    pub fn of(bar: &'a crate::theme::Bar) -> WsFormats<'a> {
+        WsFormats {
+            current: &bar.workspace_current_format,
+            plain: &bar.workspace_format,
+            urgent: bar.workspace_urgent_format.as_ref(),
+            activity: bar.workspace_activity_format.as_ref(),
+            empty: bar.workspace_empty_format.as_ref(),
+        }
+    }
+
+    /// A workspace by its state, as the workspaces module picks: current,
+    /// urgent, activity, then empty or occupied.
+    fn render(
+        &self,
+        n: &str,
+        name: Option<&str>,
+        cur: bool,
+        urgent: bool,
+        activity: bool,
+        occ: bool,
+    ) -> String {
+        let f = if cur {
+            self.current
+        } else if let (true, Some(f)) = (urgent, self.urgent) {
+            f
+        } else if let (true, Some(f)) = (activity, self.activity) {
+            f
+        } else if let (false, Some(f)) = (occ, self.empty) {
+            f
+        } else {
+            self.plain
+        };
+        f.render(|v| match v {
+            "n" => Some(n.to_string()),
+            "name" => name.map(str::to_string),
+            _ => None,
+        })
+    }
+}
+
 /// A workspace (or `S`) whose ranma's workspaces are drawn after it.
 struct Holder<'a> {
     label: &'a str,
@@ -709,8 +783,16 @@ struct Holder<'a> {
 
 /// A holder expanded: its label, then the workspaces of the ranma inside it
 /// (`n`) in brackets.
-fn expanded(out: &mut Segment, at: &Holder, n: &Report, level: usize, o: &Opts, path: &[u8]) {
-    let pad = level == 0;
+fn expanded(
+    out: &mut Segment,
+    at: &Holder,
+    n: &Report,
+    level: usize,
+    o: &Opts,
+    path: &[u8],
+    fmt: Option<&WsFormats>,
+) {
+    let pad = level == 0 && fmt.is_none();
     let mut p = path.to_vec();
     p.push(at.n);
     let hold = click_for(&p);
@@ -720,7 +802,21 @@ fn expanded(out: &mut Segment, at: &Holder, n: &Report, level: usize, o: &Opts, 
         String::new()
     };
     let label = at.label;
-    if pad {
+    if let Some(f) = fmt {
+        // The holder in its state's format; the session follows it.
+        let style = if level == 0 && at.cur {
+            Style::WsActive
+        } else if at.here {
+            Style::WsHolder
+        } else {
+            Style::WsOccupied
+        };
+        let text = f.render(label, None, at.cur, false, false, true);
+        out.push(with(
+            Piece::new(format!("{}{sess}", text.trim_end()), style),
+            hold,
+        ));
+    } else if pad {
         let style = if at.cur {
             Style::WsActive
         } else {
@@ -737,9 +833,9 @@ fn expanded(out: &mut Segment, at: &Holder, n: &Report, level: usize, o: &Opts, 
         out.push(Piece::new(" ", Style::Normal));
     }
     out.push(with(Piece::new("[", Style::Dim), hold));
-    out.extend(pieces(n, level + 1, at.here, o, &p));
+    out.extend(pieces_in(n, level + 1, at.here, o, &p, fmt));
     out.push(with(Piece::new("]", Style::Dim), hold));
-    if pad {
+    if pad || (fmt.is_some() && level == 0) {
         out.push(Piece::new(" ", Style::Normal));
     }
 }
@@ -804,9 +900,10 @@ pub fn fit_nested(
     cols: u16,
     expand_all: bool,
     floor: usize,
+    fmt: Option<&WsFormats>,
 ) -> Vec<(u16, Piece)> {
     // The nested workspaces are one module: one pill, one pair of caps.
-    let build = |o: &Opts| -> Vec<Segment> { left(pieces(set, 0, true, o, &[])) };
+    let build = |o: &Opts| -> Vec<Segment> { left(pieces_in(set, 0, true, o, &[], fmt)) };
     if !expands(set, expand_all) {
         return crate::bar::fit(&build(&Opts::default()), center, right, sep, cols);
     }
@@ -1109,6 +1206,72 @@ mod tests {
         );
     }
 
+    /// `nested_format = "theme"`: every level in the theme's workspace
+    /// formats, by state, the current one's included (card c465).
+    #[test]
+    fn the_expanded_workspaces_take_the_themes_formats() {
+        let f = |s: &str| crate::theme::Format::parse(s).unwrap();
+        let (cur, plain, empty) = (f(" ●{name}"), f(" •[{name}]"), f(" ·"));
+        let fmt = WsFormats {
+            current: &cur,
+            plain: &plain,
+            urgent: None,
+            activity: None,
+            empty: Some(&empty),
+        };
+        let mut inner = report(1, vec![]);
+        inner.ws = vec![
+            Ws {
+                n: 1,
+                name: None,
+                occ: true,
+                urgent: false,
+                activity: false,
+                key: None,
+                nest: None,
+            },
+            Ws {
+                n: 2,
+                name: None,
+                occ: true,
+                urgent: false,
+                activity: false,
+                key: None,
+                nest: None,
+            },
+            Ws {
+                n: 3,
+                name: None,
+                occ: false,
+                urgent: false,
+                activity: false,
+                key: None,
+                nest: None,
+            },
+        ];
+        let mut outer = report(1, vec![]);
+        outer.ws = vec![Ws {
+            n: 1,
+            name: None,
+            occ: true,
+            urgent: false,
+            activity: false,
+            key: None,
+            nest: Some(Box::new(inner)),
+        }];
+        let text: String = pieces_in(&outer, 0, true, &Opts::default(), &[], Some(&fmt))
+            .iter()
+            .map(|p| p.text.clone())
+            .collect();
+        assert_eq!(text, " ●[ ● • ·] ", "{text:?}");
+        // Without, as ever.
+        let names: String = pieces(&outer, 0, true, &Opts::default(), &[])
+            .iter()
+            .map(|p| p.text.clone())
+            .collect();
+        assert!(names.contains("[1 2 3]"), "{names:?}");
+    }
+
     const TITLE: &str = "✳Features to yank from tuios";
 
     /// The whole bar as the design builds it: ` ⧉ ` and the workspaces on the
@@ -1128,6 +1291,7 @@ mod tests {
             cols,
             expand_all,
             TITLE_FLOOR,
+            None,
         );
         let mut row = vec![' '; cols as usize];
         for (x, p) in placed {

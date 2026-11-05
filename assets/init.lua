@@ -539,7 +539,9 @@ ranma.bar {
 -- nested: a workspace whose focused pane runs a ranma (over SSH, say) shows
 -- that ranma's workspaces in brackets, " 2 [1:kumiko 2:notes] ", and the ranma
 -- inside draws no bar. "focused" expands only the one you are in; "all" every
--- one holding a ranma; "off" none.
+-- one holding a ranma; "off" none. nested_format = "theme" draws them, the
+-- bracketed ones too, in the theme's workspace formats (dots) rather than
+-- " 1:name ".
 ranma.module("workspaces", { show = "occupied", label = "program", nested = "focused" })
 -- The title in the middle gives way while the focused pane runs a ranma that
 -- reports here: it shows the title on its own pane's border. "show" keeps both.

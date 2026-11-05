@@ -1485,7 +1485,7 @@ Shows: A message from ranma or \fBranma.notify\fR, while it is up, and nothing o
 \fBworkspaces\fR
 Shows: The workspaces as \fB3:name\fR, the current one highlighted, urgent ones marked; \fBS\fR when the scratchpad has panes. Clickable. The name is the one given with \fBrename_workspace\fR, else the program in the workspace's focused pane (\fB3:nvim\fR, \fB1:zsh\fR at a prompt), read from \fB/proc\fR at most twice a second and only when something happened. A connection is named for where it goes: \fB2:vps\fR for \fBssh vps\fR (the destination as typed); with no plain \fBssh\fR to read, such as under mosh, the host a ranma on the far side reports.
 .br
-\fBshow = "occupied"\fR (default), \fB"all"\fR (1\-10), or a number (\fBshow = 5\fR: 1\-5 always, any higher one that is occupied); \fBlabel = "program"\fR (default) or \fB"number"\fR (only \fB3\fR unless named); \fBnested = "focused"\fR (default), \fB"all"\fR or \fB"off"\fR: which workspaces show the workspaces of a ranma inside them (see ranma inside ranma\fR)
+\fBshow = "occupied"\fR (default), \fB"all"\fR (1\-10), or a number (\fBshow = 5\fR: 1\-5 always, any higher one that is occupied); \fBlabel = "program"\fR (default) or \fB"number"\fR (only \fB3\fR unless named); \fBnested = "focused"\fR (default), \fB"all"\fR or \fB"off"\fR: which workspaces show the workspaces of a ranma inside them (see ranma inside ranma\fR); \fBnested_format = "names"\fR (default: \fB1 [1:nvim 2:logs]\fR) or \fB"theme"\fR: every level, the brackets' too, in the theme's workspace formats (\fBworkspace_format\fR and the rest: dots, icons), names where a format has \fB{name}\fR
 .TP
 \fBtitle\fR
 Shows: The focused pane's title; nothing while that pane runs a ranma reporting to this one, which shows its title on its own pane's border (the same words twice otherwise)
@@ -3664,7 +3664,7 @@ drawn between the modules of a group, on its ground, in its role's \fBseparator\
 \fBbar.separator\fR's colour (and a group's separator's where its role gives none); unset, \fBbar_dim\fR. Its attributes are \fBstyles.separator\fR (unset, \fBdim\fR's).
 .TP
 \fBbar.module_left\fR, \fBmodule_right\fR
-drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
+drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default. Drawn in the module's ground: with none (\fBmodule_bg\fR unset, no role \fBbg\fR, and \fBbar_bg\fR the terminal's own), there is no colour to draw a cap in, and it is a blank.
 .TP
 \fBbar.module_padding_left\fR, \fBmodule_padding_right\fR
 \fB0\fR\-\fB4\fR: blank cells inside the left cap and the right one, on the module's ground. \fB0\fR by default. On a side with none, a filled chip that ends the module (the current workspace first in the list, with \fBchip_left\fR/\fBchip_right\fR set) has its own cap as the module's end, on the bar's ground, rather than the module's cap drawing a ring around it; a workspace there that is not current gives the blank its format starts or ends with to the module's cap, so the workspace hugs the edge either way and the module keeps its width.

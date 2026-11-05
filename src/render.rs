@@ -1895,6 +1895,23 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
             let w = (piece.text.width() as u16).min(room);
             buf.set_style(RRect::new(area.x + x, area.y, w, area.h), style);
         }
+        // A cap or an arrow is a ground drawn as a glyph. When that ground
+        // is the terminal's own ("default", no pill colour in the theme) it
+        // has no colour to draw a glyph in: "default" as ink is the
+        // terminal's text colour, which drew light outlines round pills that
+        // have no fill. So it is blank, as the ground it stands for is.
+        let ink_is_ground = matches!(
+            piece.style,
+            bar::Style::Cap
+                | bar::Style::RoleCap(_)
+                | bar::Style::Arrow(..)
+                | bar::Style::ChipCap(_)
+        ) && style.fg == Some(Color::Reset);
+        if ink_is_ground {
+            let blank = " ".repeat(piece.text.width());
+            buf.set_stringn(area.x + x, mid, &blank, room as usize, style);
+            continue;
+        }
         buf.set_stringn(area.x + x, mid, &piece.text, room as usize, style);
     }
 }
@@ -2751,6 +2768,42 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    /// A cap with no ground to draw (no `module_bg`, the bar on the
+    /// terminal's own background) is blank, not a glyph in the terminal's
+    /// text colour; with a ground it is the glyph in that ground.
+    #[test]
+    fn a_cap_with_no_ground_is_blank() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let caps = |colors: &str| {
+            let theme = format!(
+                "[colors]\nbar_bg = \"default\"\n{colors}\n[bar]\nmodule_left = \"(\"\nmodule_right = \")\"\n"
+            );
+            let (app, dir) = themed_app_with(
+                "capground",
+                &theme,
+                r#"ranma.module("m", { render = function() return "M" end })
+                   ranma.bar { left = { "m" }, center = {}, right = {} }"#,
+            );
+            let mut app = app;
+            app.render_state_modules();
+            let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+            t.draw(|f| {
+                let area = f.area();
+                draw_bar(f, &app, Rect::new(0, area.height - 1, area.width, 1));
+            })
+            .unwrap();
+            let _ = std::fs::remove_dir_all(dir);
+            rows(t.backend().buffer()).last().unwrap().clone()
+        };
+        let bare = caps("");
+        assert!(
+            bare.contains("M") && !bare.contains('(') && !bare.contains(')'),
+            "{bare:?}"
+        );
+        let filled = caps("module_bg = \"#222222\"");
+        assert!(filled.contains("(") && filled.contains(")"), "{filled:?}");
     }
 
     #[test]

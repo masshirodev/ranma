@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.module("workspaces", { nested_format = "theme" })`: the workspaces
+  of a ranma inside (` 1 [1:nvim 2:logs] `) in the theme's workspace formats
+  instead, every level, dots and all.
+
 - `nested_bar = "inner"`: over ssh into a ranma, this ranma draws that one's
   own bar, its modules, groups, priorities and look (arrows, caps, roles),
   so each host's bar is set on that host. This ranma's workspaces (that
@@ -214,6 +218,10 @@ commit log has the detail.
   character (`"modified"`), instead of being swallowed. `ranma.has("mode.pass")`.
 
 ### Fixed
+
+- A bar cap or arrow with no ground to draw (no `module_bg` and the bar on
+  the terminal's own background) was drawn in the terminal's text colour,
+  light outlines round pills with no fill; it is blank now.
 
 - A click on an error of a ranma inside another (over ssh), shown in the
   outer bar, did nothing: it now opens that ranma's own log, inside its

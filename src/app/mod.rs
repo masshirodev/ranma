@@ -5086,7 +5086,7 @@ impl App {
     }
 
     /// Lua modules without an interval re-render when observed state changes.
-    fn render_state_modules(&mut self) {
+    pub(crate) fn render_state_modules(&mut self) {
         let names: Vec<String> = self
             .config
             .modules
@@ -5729,9 +5729,13 @@ impl App {
                 // Modules go by priority before the workspaces lose their
                 // names: measured with the workspaces at their fullest.
                 // They are never dropped themselves.
+                let formats = self
+                    .config
+                    .workspaces_nested_theme
+                    .then(|| crate::nestbar::WsFormats::of(&self.config.theme.bar));
                 let fullest = crate::nestbar::ladder(expand_all)
                     .first()
-                    .map(|o| crate::nestbar::pieces(&set, 0, true, o, &[]))
+                    .map(|o| crate::nestbar::pieces_in(&set, 0, true, o, &[], formats.as_ref()))
                     .unwrap_or_default();
                 let mut left_entries = entries_in(&bar.left[..at], Side::Left);
                 left_entries.push((expansion(fullest), None));
@@ -5772,6 +5776,7 @@ impl App {
                     } else {
                         crate::nestbar::TITLE_FLOOR
                     },
+                    formats.as_ref(),
                 );
             }
         }

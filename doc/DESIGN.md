@@ -186,6 +186,18 @@ outer draws it** (`nested_bar = "inner"`, card c464).
   desk fact (a clock), now meeting a layout from elsewhere.
 - Off by default (`"outer"`): today's bar is unchanged until asked.
 
+Two things the first use showed (card c465). The bracketed workspaces kept
+their fixed `n:name` while the host's own theme drew dots, which is a
+choice rather than a fault (names say which session is which), so it is
+an option: `ranma.module("workspaces", { nested_format = "theme" })` draws
+every level in the theme's workspace formats. And the host's round pills
+came out as light outlines with nothing inside: its theme set caps and no
+pill ground (`module_bg`), the bar's ground was the terminal's own
+(`"default"`), and a cap is its ground drawn as a glyph, so it was drawn in
+"default" as an ink, which is the terminal's text colour. There is no
+colour to draw the terminal's background in, so such a cap or arrow is now
+blank, as the ground it stands for is; a pill wants a ground to be one.
+
 ### A log of what happened (2026-11-05)
 
 An error showed in the bar as its first line (`lua: runtime error:
