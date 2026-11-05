@@ -357,7 +357,7 @@ macOS, not native Windows" records what differs.
 
 The 2026-11-04 survey: a theme should be able to build a look (a GUI title
 bar, say), not only recolour ranma's. DESIGN.md, "Title bars a theme can
-build" (proposed). Cards c435 to c444 on the board; c426 to c434 are the
+build" (proposed). Cards c435 to c446 on the board; c426 to c434 are the
 behaviour half of the same survey and are not listed here.
 
 - [ ] Design: `doc/briefs/TITLE_BARS.md`, handoff in `doc/handoffs/`; the
@@ -375,3 +375,8 @@ behaviour half of the same survey and are not listed here.
 - [ ] Scrollbar looks (c442)
 - [ ] Splash art from a file (c443)
 - [ ] Caps per role (c444)
+- [ ] Design addendum: `doc/briefs/TITLE_BARS_ADDENDUM.md` (the bar), in the same
+  handoff
+- [ ] Powerline bars: a ground per module, groups, arrows (c445)
+- [ ] Workspaces in any form, hover, `show = N`, and `message` placed by the
+  config (c446)

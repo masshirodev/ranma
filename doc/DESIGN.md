@@ -2423,6 +2423,94 @@ Left out: images or pixel icons (a cell is a cell), animation (hover is a
 redraw on a pointer event, not a transition), a selector language over
 panes, and a GUI look shipped as a default.
 
+### Powerline bars: grounds, groups and arrows (2026-11-04, proposed)
+
+The bar can make pills: each module between `bar.module_left` and
+`module_right` on `colors.module_bg`, with chips rounded inside. It cannot
+make a powerline bar, for four reasons found in the code (`bar::boxed`,
+`bar::join`, `render::piece_style`):
+
+- **Every module stands on the one `module_bg`.** A role's `bg` colours only
+  that module's text cells, and its caps are still drawn in `module_bg`. A
+  blue clock pill beside a green git pill is impossible.
+- **A pill is one module.** Three modules cannot share a pill, and neither
+  can a whole side.
+- **A cap always stands on `bar_bg`**, never on its neighbour's ground, so
+  segments cannot abut with an arrow between them (the transition glyph
+  needs one ground as its colour and the next as its background).
+- **The caps are the same on both sides of the bar**, and the separator is
+  plain text in the `dim` style.
+
+Proposed, with the key names to be settled by the design addendum
+(`doc/briefs/TITLE_BARS_ADDENDUM.md`):
+
+- **A module's ground is its role's `bg`** when the role has one, and
+  `module_bg` otherwise. Its caps follow its ground, so a role is enough
+  to give a module a pill of its own colour (card c444, which also lets a
+  role carry its own caps).
+- **Groups are `init.lua`'s, because which modules go together is
+  layout.** A table inside a side is one pill:
+  `right = { "load", { "cpu", "mem", "clock", style = "sys" } }`.
+  `style` names the role whose ground the group stands on; unset, it is
+  `module_bg`. A whole side in one pill is a side holding one group.
+  Inside a group, modules keep their own text styles and their own clicks.
+  The group has caps only at its two ends, and between its modules goes
+  `bar.group_separator` (a thin `` or a space), drawn on the group's
+  ground. Groups do not nest. Today a table in a side is an error, so no
+  config written before this changes meaning.
+- **`bar.join = "pills"` (the default) or `"arrows"`.** With `arrows`,
+  neighbouring pills on the same side abut. Between them ranma draws the
+  side's arrow in the left pill's ground on the right pill's ground (on the
+  right side, the mirror). At the outer end of a side the arrow stands on
+  `bar_bg`. Where pills are separated by bar showing through, `pills` keeps
+  today's caps. The centre always uses pills, since it has no direction to
+  point in.
+- **Caps per side**: `[bar.left]`, `[bar.center]` and `[bar.right]` may
+  each set `module_left`, `module_right` and the `arrow`, over the bar's
+  own. Arrows point right on the left side and left on the right side by
+  default.
+- **The separator gets a role**: `colors.separator` with
+  `styles.separator`. Unset, it is `bar_dim` and the `dim` styles, as now.
+- **Budgeting is unchanged**: right first, then left, then the centre. A
+  group is cut with `…` inside its caps, so a cut pill is still a pill.
+- **Unchanged**: the large bar keeps square chips with no caps (its chips
+  are three rows tall); a nested ranma's modules still follow by name, and
+  in a group too; a theme and a config that set none of this look as
+  today.
+
+**Workspaces drawn as anything** (2026-11-04, proposed). A row of dots,
+always shown, with the current one bigger, is nearly possible:
+`workspace_format = " ○ "`, `workspace_current_format = " ● "` and
+`show = "all"` load today. The rest of it is not:
+
+- **A format per state.** Only `workspace_format` and
+  `workspace_current_format` exist, so an empty workspace and an occupied
+  one differ only in colour. Add `workspace_empty_format`,
+  `workspace_urgent_format` and `workspace_activity_format`. Each is unset
+  by default and falls back to `workspace_format`, so the precedence is
+  current, then urgent, then activity, then empty or occupied.
+- **Hover.** The bar has no hover state anywhere. Add
+  `workspace_hover_format` with `colors.ws_hover_fg` / `ws_hover_bg`, drawn
+  while the pointer is over a workspace. Modules get the same thing as a
+  `hover_style` role, as title pieces do. Pointer motion is already
+  reported (pickers select rows by hover); a hover redraws only the bar,
+  and only when the piece under the pointer changes.
+- **How many show.** `show` also takes a number (`show = 5`: 1 to 5
+  always, plus any higher one that is occupied), next to `"occupied"` and
+  `"all"`.
+
+**Messages go where the config puts them** (2026-11-04, proposed). Any
+module can sit on any side already, but a message (from ranma or
+`ranma.notify`) always takes the centre. With the workspaces moved to the
+centre, every message hides them. So `message` becomes a module name: a
+side that lists it shows messages there, in its place, and a config that
+lists it nowhere gets the centre, as today. Listed once at most, which is
+strict as names always are.
+
+A different glyph is how a dot gets bigger, since a cell cannot grow:
+`·` `•` `●` `⬤`. The nested bar's compact workspaces keep their own form,
+as they already do with the other formats.
+
 ### Mouse binds (2026-10-13)
 
 The mouse did what ranma decided (focus, drag a border, a menu on the right
