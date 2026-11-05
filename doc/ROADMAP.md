@@ -385,5 +385,5 @@ not listed here.
 - [x] Caps per role, for modules and title pieces (c444)
 - [x] Powerline bars: grounds, `style` on built-ins, groups, arrows, sides,
   cuts that keep caps, `center_min` (c445)
-- [ ] Workspaces in any form, hover colours, `show = N`, `message` placed by the
+- [x] Workspaces in any form, hover colours, `show = N`, `message` placed by the
   config (c446)
