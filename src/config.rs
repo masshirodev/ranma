@@ -271,6 +271,8 @@ pub struct Settings {
     pub buffers_kept: usize,
     /// Lines one notch of the wheel scrolls (card c429).
     pub mouse_wheel_lines: u8,
+    /// What the `logs` action opens the log in.
+    pub logs_open: LogsOpen,
     /// Where toasts stack, and how long one lasts unless it says (c430).
     pub toast_position: crate::toast::Corner,
     pub toast_timeout: std::time::Duration,
@@ -332,6 +334,7 @@ impl Default for Settings {
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
+            logs_open: LogsOpen::Pager,
             buffers_kept: crate::app::buffers_kept_default(),
             mouse_double_click: std::time::Duration::from_millis(400),
             toast_position: crate::toast::Corner::TopRight,
@@ -380,6 +383,7 @@ struct SettingsPatch {
     word_separators: Option<String>,
     hint_alphabet: Option<String>,
     mouse_wheel_lines: Option<u8>,
+    logs_open: Option<LogsOpen>,
     buffers_kept: Option<usize>,
     mouse_double_click: Option<u64>,
     hint_urls: Option<bool>,
@@ -840,6 +844,15 @@ impl TitleLayout {
             .chain(&self.right)
             .flat_map(TitleEntry::names)
     }
+}
+
+/// What the `logs` action opens ranma's log in: `less` at its end, or the
+/// editor (`$VISUAL`, else `$EDITOR`, else `vi`) on its last line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogsOpen {
+    Pager,
+    Editor,
 }
 
 /// A width on the bar: cells, or a share of the bar's (`"40%"`).
@@ -2433,6 +2446,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
             ));
         }
         s.buffers_kept = n;
+    }
+    if let Some(o) = patch.logs_open {
+        s.logs_open = o;
     }
     if let Some(n) = patch.mouse_wheel_lines {
         if !(1..=50).contains(&n) {
@@ -6624,6 +6640,19 @@ mod tests {
 
     /// The configurations in doc/examples are copied whole by readers, so one
     /// the strict parser rejects would fail on the first thing they try.
+    #[test]
+    fn logs_open_in_the_pager_unless_set_to_the_editor() {
+        let cfg = with_user("").unwrap();
+        assert_eq!(cfg.settings.logs_open, LogsOpen::Pager);
+        let cfg = with_user(r#"ranma.set { logs_open = "editor" }"#).unwrap();
+        assert_eq!(cfg.settings.logs_open, LogsOpen::Editor);
+        let e = format!(
+            "{:#}",
+            with_user(r#"ranma.set { logs_open = "nvim" }"#).unwrap_err()
+        );
+        assert!(e.contains("nvim"), "{e}");
+    }
+
     #[test]
     fn a_theme_key_given_to_ranma_bar_says_where_it_belongs() {
         let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());

@@ -181,6 +181,9 @@ pub enum Action {
     MoveToScratchpad,
     PaneSwitcher,
     SessionSwitcher,
+    /// ranma's log (`journal`) in a float: the pager, or the editor with
+    /// `logs_open = "editor"`, at its end.
+    Logs,
     /// Every bind, filterable; Enter runs the selected one.
     Help,
     /// The same picker listing every action, bound or not, and running a typed one.
@@ -499,6 +502,7 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("scratchpad_toggle", ""),
     ("move_to_scratchpad", ""),
     ("pane_switcher", ""),
+    ("logs", ""),
     ("session_switcher", ""),
     ("help", ""),
     ("command_palette", ""),
@@ -989,6 +993,7 @@ impl FromStr for Action {
             "scratchpad_toggle" => no_arg(Action::ScratchpadToggle),
             "move_to_scratchpad" => no_arg(Action::MoveToScratchpad),
             "pane_switcher" => no_arg(Action::PaneSwitcher),
+            "logs" => no_arg(Action::Logs),
             "session_switcher" => no_arg(Action::SessionSwitcher),
             "help" => no_arg(Action::Help),
             "command_palette" => no_arg(Action::CommandPalette),
@@ -1360,6 +1365,7 @@ impl fmt::Display for Action {
             Action::ScratchpadToggle => f.write_str("scratchpad_toggle"),
             Action::MoveToScratchpad => f.write_str("move_to_scratchpad"),
             Action::PaneSwitcher => f.write_str("pane_switcher"),
+            Action::Logs => f.write_str("logs"),
             Action::SessionSwitcher => f.write_str("session_switcher"),
             Action::Help => f.write_str("help"),
             Action::CommandPalette => f.write_str("command_palette"),

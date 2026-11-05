@@ -147,6 +147,46 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
 - Upgrading hands over every client: the driver as before (`client`), the rest
   in `others`, defaulted so a handover from a one-client build still reads.
 
+### A log of what happened (2026-11-05)
+
+An error showed in the bar as its first line (`lua: runtime error:
+...init.lua:35: attempt t…`, cut by the bar's width) and was gone with the
+next message; a module's `render` that failed showed `name: error` and
+nothing else; the traceback was dropped everywhere. Over ssh, after an
+upgrade, or with a plugin that failed while nobody looked, there was
+nothing to go back to. The owner asked for an error clicked in the bar to
+open "a floating panel with it, or the logs in nvim", and was "down to
+save logs of pretty much everything as long as it doesn't slow down the
+app".
+
+So there is one log, `$XDG_STATE_HOME/ranma/ranma.log`, every server in it
+(one file to open, each line naming its server), written by `journal`:
+errors in full (the Lua error with its traceback, a module's command
+failing, a plugin not loading, a failed reload) and what servers did
+(start, upgrade, reload and profile, terminals attaching and leaving).
+Not every key or frame: a log of everything is a log nobody reads, and
+the rest of what happens is in `ranma health` and the hooks.
+
+**It costs ranma's thread a channel send.** A thread of its own formats,
+dedupes, writes and rotates, blocked on the channel in between, so the
+idle smoke's zero wakeups hold. Writing from the event loop would have
+put a disk write, or a stall on a slow disk, in the path of a key. Repeats
+are folded there too: a module that fails every two seconds writes one
+line a minute at most, with the count. Past 2 MB the file moves to
+`ranma.log.1`: a size cap rather than a date, since a busy day and a quiet
+week should both fit, and two files are what a pager opens without a
+search. Before `journal::start` nothing is written, so tests and the CLI
+never touch the user's log.
+
+**Seeing it** is the `logs` action, which a click on an error in the bar
+runs: a float with the log, in `less +G` or, with `logs_open = "editor"`,
+`$VISUAL`/`$EDITOR` on its last line (`+`, which vi, vim, nvim and kakoune
+take), since "in nvim" was the owner's own wish and a pager is the default
+that works everywhere. A pane, not a screen of ranma's: search, copy and
+the editor's own keys come with it. `ranma logs` prints the end of the
+file, with no server needed, for the case it is most wanted in: ranma
+itself misbehaving.
+
 ### Upgrading a server in place
 
 **Decided 2026-09-29.** A server kept the binary it started with,

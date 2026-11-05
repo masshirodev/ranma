@@ -237,6 +237,7 @@ fn is_presence(ev: &Event) -> bool {
 
 /// Standalone: ranma in this terminal, ending with it.
 pub fn run(config: Config) -> Result<()> {
+    crate::journal::start("standalone");
     let (tx, rx) = mpsc::channel();
     // Raw mode, the alternate screen, and a panic hook that puts the terminal
     // back before the panic message prints.
@@ -295,6 +296,8 @@ pub fn run(config: Config) -> Result<()> {
 /// named `name`, until its last pane closes or it is quit.
 pub fn run_server(config: Config, name: &str) -> Result<()> {
     remember_exe();
+    crate::journal::start(name);
+    crate::journal::info(format!("server started, {}", crate::update::BUILD_SHA));
     let (tx, rx) = mpsc::channel();
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let mut term = terminal(Sink::Buffer(buffer.clone()), 80, 24)?;
@@ -350,8 +353,12 @@ pub fn run_server_resume(
     fallback: Option<&std::path::Path>,
 ) -> Result<()> {
     remember_exe();
+    crate::journal::start(name);
     let fail = |e: anyhow::Error, h: Option<&super::upgrade::Handover>| -> anyhow::Error {
         eprintln!("ranma: taking over from the old build failed: {e:#}");
+        crate::journal::error(format!(
+            "upgrade: taking over from the old build failed: {e:#}"
+        ));
         if let Some(prev) = fallback {
             // Keep every descriptor for the old build, as the old server did.
             if let Some(h) = h {
@@ -435,6 +442,7 @@ pub fn run_server_resume(
     if let Some(prev) = fallback {
         let _ = std::fs::remove_file(prev);
     }
+    crate::journal::info(format!("upgraded in place to {}", crate::update::BUILD_SHA));
     app.toast(
         format!("ranma upgraded to {}", crate::update::BUILD_SHA),
         crate::toast::Level::Normal,
@@ -708,6 +716,10 @@ fn event_loop(
                 }
                 AppEvent::ClientGone(id) => {
                     clients.remove(id);
+                    crate::journal::info(format!(
+                        "a terminal left ({} still attached)",
+                        clients.list.len()
+                    ));
                 }
                 AppEvent::Status(reply) => {
                     let _ = reply.send(proto::Status {
@@ -950,6 +962,17 @@ fn refuse_switch(
 /// A client attached (the screen already set up, for it or for the one
 /// driving): its early keys, and the first pane of a new server.
 fn attached(app: &mut App, hello: &proto::Hello) -> Result<()> {
+    crate::journal::info(format!(
+        "a terminal attached: {}x{}{}{}",
+        hello.cols,
+        hello.rows,
+        if hello.remote { ", over ssh" } else { "" },
+        if hello.outer.is_some() {
+            ", inside a ranma"
+        } else {
+            ""
+        },
+    ));
     // The first client of a new server: its first pane opens now, at the size
     // the client's terminal gives it.
     if app.panes.is_empty() {

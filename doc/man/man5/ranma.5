@@ -276,6 +276,11 @@ Default: \fB3\fR
 .br
 Lines one notch of the wheel scrolls (1\-50): through a pane's scrollback, in copy mode, and as that many arrow keys to a full\-screen program that takes no mouse (less, man). A program that takes the mouse gets the wheel as it is.
 .TP
+\fBlogs_open\fR
+Default: \fB"pager"\fR
+.br
+What the \fBlogs\fR action, and a click on an error in the bar, opens ranma's log in: \fB"pager"\fR (\fBless\fR, at its end) or \fB"editor"\fR (\fB$VISUAL\fR, else \fB$EDITOR\fR, else \fBvi\fR, on its last line), in a float. See The log\fR.
+.TP
 \fBhint_alphabet\fR
 Default: \fB"asdfghjklqwertyuiopzxcvbnm"\fR
 .br
@@ -592,6 +597,9 @@ Send the focused pane to the scratchpad.
 .TP
 \fBpane_switcher\fR
 Every pane in every session, filterable; picking one goes there.
+.TP
+\fBlogs\fR
+ranma's log in a float, in the pager or the editor (\fBlogs_open\fR), at its end. See The log\fR. A click on an error in the bar does the same.
 .TP
 \fBworkspace_switcher\fR
 The shown session's workspaces, filterable, the current one marked \fB●\fR, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers \fBnew workspace: NAME\fR, which opens an empty one by that name.
@@ -1799,6 +1807,43 @@ of them again to a terminal that attaches later.
 Closing a pane deletes its images. After \fBranma upgrade\fR the images on
 screen stay, but placeholders printed before it are drawn blank: the new
 build does not know which image they named.
+.SH "THE LOG"
+.PP
+ranma keeps a log at \fB~/.local/state/ranma/ranma.log\fR
+(\fB$XDG_STATE_HOME/ranma/ranma.log\fR), every server in the one file, each line
+with its server's name:
+.PP
+.RS 4
+.nf
+2026\-11\-05 13:40:12 ERROR [2] lua: runtime error: [string "init.lua"]:35: attempt to index a function value
+    stack traceback:
+    ...
+2026\-11\-05 13:41:02 INFO  [2] config reloaded, profile showcase
+.fi
+.RE
+.PP
+What goes in: every error in full, where the bar has room for its first
+line only: a Lua error with its traceback (a bind, a hook, a module's
+\fBrender\fR, a title piece), a module whose command failed or ran out of
+time, a plugin that did not load, a reload that failed and kept the old
+config. And what the servers did: started, upgraded in place, reloaded
+(with the profile), a terminal attached (its size, whether over ssh or
+inside another ranma) or left.
+.PP
+\fBSeeing it.\fR A click on an error in the bar (a module showing \fBname:
+error\fR, or a message that starts \fBlua:\fR or \fBconfig error\fR) opens the log in
+a float, as the \fBlogs\fR action does: in \fBless\fR at its end, or in your
+editor on its last line with \fBranma.set { logs_open = "editor" }\fR. \fBranma
+logs\fR prints its last 50 entries, an error whole with its traceback (\fB\-n
+200\fR for more, \fB\-\-path\fR for where it is), read off the file, so it works over ssh and with no server running.
+\fBranma health\fR names it too.
+.PP
+\fBWhat it costs.\fR Nothing on ranma's own thread but handing the line
+over: a thread of its own writes it, and sleeps in between, so an idle
+ranma still never wakes. The same message again within a minute (a module
+failing every tick) is counted, written once with \fB(the message before, N
+more times)\fR. Past 2 MB the log moves to \fBranma.log.1\fR, one older file
+kept, so the two stay under 4 MB.
 .SH "TOASTS AND \fBranma notify\fR"
 .PP
 Toasts are short notifications stacked at the top right (\fBtoasts.position\fR),

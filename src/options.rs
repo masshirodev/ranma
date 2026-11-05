@@ -386,6 +386,14 @@ pub fn builtin() -> Vec<Opt> {
             "Copies kept to paste again (choose_buffer, paste_buffer), in memory only.",
         ),
         opt(
+            "logs_open",
+            "general",
+            "Open logs in",
+            choices(&["pager", "editor"]),
+            Init,
+            "What the logs action (and a click on an error in the bar) opens ranma's log in: less at its end, or your editor ($VISUAL, $EDITOR) on its last line.",
+        ),
+        opt(
             "mouse_wheel_lines",
             "general",
             "Wheel lines",

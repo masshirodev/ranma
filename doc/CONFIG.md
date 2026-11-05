@@ -189,6 +189,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `mouse_double_click` | `400` | Milliseconds a second press on the same cell has to be a double one (100-2000): `double@` mouse binds, a double-click's word and a triple-click's line, and a double tap on a touch toolbar's latch. |
 | `buffers_kept` | `50` | Copies kept to paste again (`choose_buffer`, `paste_buffer`), 1-1000, in memory only; fewer at a reload drops the oldest. |
 | `mouse_wheel_lines` | `3` | Lines one notch of the wheel scrolls (1-50): through a pane's scrollback, in copy mode, and as that many arrow keys to a full-screen program that takes no mouse (less, man). A program that takes the mouse gets the wheel as it is. |
+| `logs_open` | `"pager"` | What the `logs` action, and a click on an error in the bar, opens ranma's log in: `"pager"` (`less`, at its end) or `"editor"` (`$VISUAL`, else `$EDITOR`, else `vi`, on its last line), in a float. See [The log](#the-log). |
 | `hint_alphabet` | `"asdfghjklqwertyuiopzxcvbnm"` | The letters hint labels (`hints`, `leader o`) are made of, easiest to reach first: Colemak's `"arstneiodh…"`, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open. |
 | `hint_urls` | `true` | Hints label URLs in the text. Links a program marks (OSC 8) are always labelled; `ranma.hint_pattern` adds your own targets. |
 | `word_separators` | ``",│`|:\"' ()[]{}<>\t"`` | What ends a word for copy mode's word motions (`w`, `b`, `e`) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload. |
@@ -352,6 +353,7 @@ sent them, which it is not asked to.
 | `scratchpad_toggle` | Show or hide the scratchpad. An empty one opens a shell. |
 | `move_to_scratchpad` | Send the focused pane to the scratchpad. |
 | `pane_switcher` | Every pane in every session, filterable; picking one goes there. |
+| `logs` | ranma's log in a float, in the pager or the editor (`logs_open`), at its end. See [The log](#the-log). A click on an error in the bar does the same. |
 | `workspace_switcher` | The shown session's workspaces, filterable, the current one marked `●`, each with how many panes it has (and the scratchpad, when it has any); picking one goes there. A name no workspace has offers `new workspace: NAME`, which opens an empty one by that name. |
 | `choose_theme` | Every theme (the built-in and `~/.config/ranma/themes/*.toml`), the one in use marked `●`. Each is shown as the selection reaches it (arrows, the wheel, the pointer, typing); `Enter` keeps it, writing `theme` to `settings.toml`, and `Esc` (or closing the picker any other way) puts the old one back. A theme that would not load says why on its row and is not shown. `leader y t`. |
 | `pane_menu` | The focused pane's menu (what a right click on it opens), with no pointer: for a toolbar button or a key (`leader x m`). Centred, or a sheet on a touch screen. |
@@ -1287,6 +1289,42 @@ What ranma does with an image:
 - Closing a pane deletes its images. After `ranma upgrade` the images on
   screen stay, but placeholders printed before it are drawn blank: the new
   build does not know which image they named.
+
+## The log
+
+ranma keeps a log at `~/.local/state/ranma/ranma.log`
+(`$XDG_STATE_HOME/ranma/ranma.log`), every server in the one file, each line
+with its server's name:
+
+```text
+2026-11-05 13:40:12 ERROR [2] lua: runtime error: [string "init.lua"]:35: attempt to index a function value
+    stack traceback:
+    ...
+2026-11-05 13:41:02 INFO  [2] config reloaded, profile showcase
+```
+
+What goes in: every error in full, where the bar has room for its first
+line only: a Lua error with its traceback (a bind, a hook, a module's
+`render`, a title piece), a module whose command failed or ran out of
+time, a plugin that did not load, a reload that failed and kept the old
+config. And what the servers did: started, upgraded in place, reloaded
+(with the profile), a terminal attached (its size, whether over ssh or
+inside another ranma) or left.
+
+**Seeing it.** A click on an error in the bar (a module showing `name:
+error`, or a message that starts `lua:` or `config error`) opens the log in
+a float, as the `logs` action does: in `less` at its end, or in your
+editor on its last line with `ranma.set { logs_open = "editor" }`. `ranma
+logs` prints its last 50 entries, an error whole with its traceback (`-n
+200` for more, `--path` for where it is), read off the file, so it works over ssh and with no server running.
+`ranma health` names it too.
+
+**What it costs.** Nothing on ranma's own thread but handing the line
+over: a thread of its own writes it, and sleeps in between, so an idle
+ranma still never wakes. The same message again within a minute (a module
+failing every tick) is counted, written once with `(the message before, N
+more times)`. Past 2 MB the log moves to `ranma.log.1`, one older file
+kept, so the two stay under 4 MB.
 
 ## Toasts and `ranma notify`
 

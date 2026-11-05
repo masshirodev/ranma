@@ -147,6 +147,8 @@ pub enum Click {
     },
     /// A plugin's module with an `on_click`: its place among them, by name.
     Module(u16),
+    /// An error shown in the bar: open ranma's log, where it is in full.
+    Logs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

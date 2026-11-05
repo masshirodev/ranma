@@ -68,6 +68,9 @@ Run COMMAND (your shell when left out) with a \fBtmux\fR on its PATH that answer
 ranma\-tmux(1)
 The tmux shim asked for by name: \fBranma tmux list\-panes \-F \*(Aq#{pane_id}\*(Aq\fR
 .TP
+ranma\-logs(1)
+Print the end of ranma\*(Aqs log (\fB~/.local/state/ranma/ranma.log\fR): errors in full, and what the servers did. Read off the file, so it works with no server running
+.TP
 ranma\-panes(1)
 List every pane in every session: id, where it is, what runs in it
 .TP
@@ -132,4 +135,4 @@ Set, the server never checks for updates.
 \fBRANMA\fR, \fBRANMA_PANE\fR, \fBRANMA_SOCKET\fR
 Set by ranma in every pane: the server's process id, the pane's id and the socket that commands like \fBranma notify\fR talk to.
 .SH "SEE ALSO"
-\fBranma\fR(5), \fBranma\-keys\fR(7), \fBranma\-ls\fR(1), \fBranma\-attach\fR(1), \fBranma\-kill\fR(1), \fBranma\-upgrade\fR(1), \fBranma\-notify\fR(1), \fBranma\-update\fR(1), \fBranma\-action\fR(1), \fBranma\-popup\fR(1), \fBranma\-tmux\-shim\fR(1), \fBranma\-tmux\fR(1), \fBranma\-panes\fR(1), \fBranma\-send\fR(1), \fBranma\-lua\fR(1), \fBranma\-health\fR(1), \fBranma\-dump\-layout\fR(1), \fBranma\-layout\-preview\fR(1), \fBranma\-capture\fR(1), \fBranma\-wait\fR(1), \fBranma\-open\fR(1)
+\fBranma\fR(5), \fBranma\-keys\fR(7), \fBranma\-ls\fR(1), \fBranma\-attach\fR(1), \fBranma\-kill\fR(1), \fBranma\-upgrade\fR(1), \fBranma\-notify\fR(1), \fBranma\-update\fR(1), \fBranma\-action\fR(1), \fBranma\-popup\fR(1), \fBranma\-tmux\-shim\fR(1), \fBranma\-tmux\fR(1), \fBranma\-logs\fR(1), \fBranma\-panes\fR(1), \fBranma\-send\fR(1), \fBranma\-lua\fR(1), \fBranma\-health\fR(1), \fBranma\-dump\-layout\fR(1), \fBranma\-layout\-preview\fR(1), \fBranma\-capture\fR(1), \fBranma\-wait\fR(1), \fBranma\-open\fR(1)

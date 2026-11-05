@@ -158,6 +158,17 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Print the end of ranma's log (`~/.local/state/ranma/ranma.log`):
+    /// errors in full, and what the servers did. Read off the file, so it
+    /// works with no server running.
+    Logs {
+        /// How many entries (an error with its traceback is one).
+        #[arg(long, short = 'n', default_value_t = 50)]
+        lines: usize,
+        /// Print the log's path instead.
+        #[arg(long)]
+        path: bool,
+    },
     /// List every pane in every session: id, where it is, what runs in it.
     Panes {
         /// As JSON, one object per pane, for scripts.
@@ -463,6 +474,19 @@ fn request(cmd: Command) -> anyhow::Result<ExitCode> {
             ipc::send(&format!("lua\n{code}"))?
         }
         Command::Health => ipc::send("health\n")?,
+        Command::Logs { lines, path } => {
+            let p =
+                ranma::journal::path().context("no state directory ($XDG_STATE_HOME, $HOME)")?;
+            if path {
+                format!("{}\n", p.display())
+            } else {
+                let mut out = ranma::journal::tail(lines).join("\n");
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                out
+            }
+        }
         Command::DumpLayout { name } => {
             ipc::send(&format!("dump-layout\n{}\n", name.unwrap_or_default()))?
         }

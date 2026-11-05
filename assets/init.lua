@@ -117,6 +117,12 @@ ranma.set {
   -- Lines one notch of the wheel scrolls: through scrollback, in copy mode, and
   -- as arrow keys in a full-screen program that takes no mouse (less, man).
   mouse_wheel_lines = 3,
+  -- What the logs action (and a click on an error in the bar) opens ranma's
+  -- log in, ~/.local/state/ranma/ranma.log: "pager" (less, at its end) or
+  -- "editor" ($VISUAL, else $EDITOR, else vi, on its last line). The log holds
+  -- errors in full, tracebacks too, and what the servers did; `ranma logs`
+  -- prints its end.
+  logs_open = "pager",
   -- Milliseconds a second press on the same cell has to count as a double
   -- click: double@ mouse binds, a word's selection, a touch double tap.
   mouse_double_click = 400,

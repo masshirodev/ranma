@@ -173,6 +173,9 @@ impl App {
         }
         .unwrap();
         writeln!(out, "hako     {}", crate::hako::describe(&c.hako)).unwrap();
+        if let Some(p) = crate::journal::path() {
+            writeln!(out, "log      {} (ranma logs)", p.display()).unwrap();
+        }
         if c.plugins.is_empty() {
             writeln!(out, "plugins  none").unwrap();
         }

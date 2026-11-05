@@ -45,6 +45,7 @@ ranma.config_dir = nil
 ---@field wm_mode? { sticky?: boolean, hint?: number|false, hint_at?: ranma.HintAt }
 ---@field paste? { upload?: boolean, image_command?: string }
 ---@field mouse? "click"|"hover"|"off"
+---@field logs_open? "pager"|"editor" What the logs action opens ranma's log in (the pager by default).
 ---@field updates? "remind"|"prompt"|"off"
 ---@field update_check_hours? number
 ---@field nested? "auto"|"off"

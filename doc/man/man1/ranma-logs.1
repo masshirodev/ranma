@@ -1,0 +1,21 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH RANMA-LOGS 1 "" "ranma 0.4.0" "ranma manual"
+.SH NAME
+ranma\-logs \- Print the end of ranma\*(Aqs log (\fB~/.local/state/ranma/ranma.log\fR): errors in full, and what the servers did. Read off the file, so it works with no server running
+.SH SYNOPSIS
+\fBranma logs\fR [\fB\-n\fR|\fB\-\-lines\fR] [\fB\-\-path\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Print the end of ranma\*(Aqs log (\fB~/.local/state/ranma/ranma.log\fR): errors in full, and what the servers did. Read off the file, so it works with no server running
+.SH OPTIONS
+.TP
+\fB\-n\fR, \fB\-\-lines\fR \fI<LINES>\fR [default: 50]
+How many entries (an error with its traceback is one)
+.TP
+\fB\-\-path\fR
+Print the log\*(Aqs path instead
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH "SEE ALSO"
+\fBranma\fR(1)

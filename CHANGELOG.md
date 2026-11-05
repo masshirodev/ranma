@@ -15,6 +15,14 @@ commit log has the detail.
 
 ### Added
 
+- A log, `~/.local/state/ranma/ranma.log`: every error in full (a Lua
+  error's traceback, a module's command failing, a plugin that did not
+  load, a failed reload) and what each server did (started, upgraded,
+  reloaded, terminals attaching and leaving). Written off ranma's own
+  thread, repeats folded, rotated at 2 MB. A click on an error in the bar
+  opens it in a float (`logs` action; `logs_open = "editor"` for your
+  editor instead of `less`), and `ranma logs` prints its end.
+
 - A profile can be another theme, `theme = { base = "latte", ... }`, and
   change anything `init.lua` can with `setup = function() ... end`, run
   last in a load made for it (binds, `ranma.set { theme = ... }`, plugin

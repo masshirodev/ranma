@@ -288,6 +288,9 @@ pub struct App {
     /// A one-line message for the bar; cleared by the next key in WM mode, or
     /// after `STATUS_FOR`.
     pub status: Option<String>,
+    /// The bar message an error put there, while it is the one shown: a
+    /// click on it opens the log, where it is in full (`journal`).
+    error_status: Option<String>,
     /// The message `run_timers` last saw and when: a new one starts the
     /// clock, wherever it was set from.
     status_seen: Option<(String, Instant)>,
@@ -584,6 +587,7 @@ impl App {
             scratch_shown: false,
             mode: Mode::Normal,
             status: None,
+            error_status: None,
             status_seen: None,
             screen: Rect::new(0, 0, cols, rows),
             next_id: 1,
@@ -792,6 +796,11 @@ impl App {
                 Some((name, p.error.as_ref()?.lines().next()?.to_string()))
             })
             .collect();
+        for p in &self.config.plugins {
+            if let Some(e) = &p.error {
+                crate::journal::error(format!("plugin {} not loaded: {e}", p.path.display()));
+            }
+        }
         for (name, why) in failed {
             self.toast(
                 format!("plugin {name} not loaded: {why}"),
@@ -800,6 +809,7 @@ impl App {
             );
         }
         for w in self.config.warnings.clone() {
+            crate::journal::warn(&w);
             self.toast(
                 w,
                 crate::toast::Level::Normal,
@@ -1762,7 +1772,13 @@ impl App {
                                 Style::Normal,
                             )]
                         }
-                        Err(e) => vec![Piece::new(format!("{name}: {e}"), Style::Urgent)],
+                        Err(e) => {
+                            crate::journal::error(format!("module {name}: {e}"));
+                            vec![
+                                Piece::new(format!("{name}: {e}"), Style::Urgent)
+                                    .on_click(Click::Logs),
+                            ]
+                        }
                     };
                     self.set_module_value(name, seg);
                 }
@@ -2469,6 +2485,7 @@ impl App {
                 Some(Click::SessionSwitcher) => self.open_session_switcher(),
                 Some(Click::Update) => self.run_action(Action::Update),
                 Some(Click::Panes) => self.run_action(Action::PaneSwitcher),
+                Some(Click::Logs) => self.run_action(Action::Logs),
                 Some(Click::Pane(id)) => {
                     self.active_mut().fullscreen = false;
                     self.focus(id);
@@ -3642,6 +3659,7 @@ impl App {
             Action::Quit { now: true } => self.quit = true,
             Action::Quit { now: false } => self.confirm_quit(),
             Action::PaneSwitcher => self.open_pane_switcher(),
+            Action::Logs => self.open_logs(),
             Action::SessionSwitcher => self.open_session_switcher(),
             Action::Help => self.open_palette(crate::picker::PaletteMode::Help),
             Action::CommandPalette => self.open_palette(crate::picker::PaletteMode::Command),
@@ -3782,6 +3800,10 @@ impl App {
         match loaded {
             Ok(cfg) => {
                 self.adopt_config(cfg, profile);
+                crate::journal::info(match self.config.profile.as_deref() {
+                    Some(p) => format!("config reloaded, profile {p}"),
+                    None => "config reloaded".to_string(),
+                });
                 if switching {
                     let text = match self.config.profile.as_deref() {
                         Some(p) => format!("profile {p} (reloaded)"),
@@ -3793,10 +3815,12 @@ impl App {
             // Keep running on the old config; a typo must never take the session down.
             Err(e) => {
                 let msg = format!("{e:#}");
-                self.status = Some(format!(
+                crate::journal::error(format!("config error, kept the old one: {msg}"));
+                self.error_status = Some(format!(
                     "config error, kept the old one: {}",
                     msg.lines().next().unwrap_or("")
                 ));
+                self.status = self.error_status.clone();
             }
         }
     }
@@ -4008,7 +4032,9 @@ impl App {
             Ok(v) => Some(v),
             Err(e) => {
                 let msg = e.to_string();
-                self.status = Some(format!("lua: {}", msg.lines().next().unwrap_or("")));
+                crate::journal::error(format!("lua: {msg}"));
+                self.error_status = Some(format!("lua: {}", msg.lines().next().unwrap_or("")));
+                self.status = self.error_status.clone();
                 None
             }
         };
@@ -4022,7 +4048,9 @@ impl App {
                         config::Op::Action(a) => self.run_action(a),
                         config::Op::Pane(id, req) => {
                             if let Err(e) = self.pane_request(id, req) {
-                                self.status = Some(format!("lua: {e}"));
+                                crate::journal::error(format!("lua: {e:#}"));
+                                self.error_status = Some(format!("lua: {e}"));
+                                self.status = self.error_status.clone();
                             }
                         }
                         config::Op::Spawn(id, mut spec) => {
@@ -5023,7 +5051,10 @@ impl App {
                 };
                 let seg = match self.call_lua(|_| f.call::<Value>(())) {
                     Some(v) => lua_segment(&v, &self.config.theme.roles),
-                    None => vec![Piece::new(format!("{name}: error"), Style::Urgent)],
+                    // The error itself is in the log (`call_lua`).
+                    None => vec![
+                        Piece::new(format!("{name}: error"), Style::Urgent).on_click(Click::Logs),
+                    ],
                 };
                 self.set_module_value(name.to_string(), seg);
             }
@@ -5130,7 +5161,7 @@ impl App {
                         .rev()
                         .find_map(|r| r.status.clone())
                 })
-                .map(|m| vec![Piece::new(m, Style::Accent)])
+                .map(|m| vec![self.message_piece(m)])
                 .unwrap_or_default(),
             "workspaces" => {
                 let compact = self.chrome().compact_workspaces;
@@ -5288,7 +5319,11 @@ impl App {
                 match self.click_modules().iter().position(|m| m == name) {
                     Some(i) => seg
                         .into_iter()
-                        .map(|p| p.on_click(Click::Module(i as u16)))
+                        // An error in it keeps its own: the log.
+                        .map(|p| match p.click {
+                            Some(Click::Logs) => p,
+                            _ => p.on_click(Click::Module(i as u16)),
+                        })
                         .collect(),
                     None => seg,
                 }
@@ -5602,7 +5637,7 @@ impl App {
         let placed = bar.all().any(|n| n == "message");
         let center_entries: Vec<Entry> = match &status {
             Some(msg) if !placed => {
-                vec![(wrap(vec![Piece::new(msg.clone(), Style::Accent)]), None)]
+                vec![(wrap(vec![self.message_piece(msg.clone())]), None)]
             }
             _ => entries_in(&bar.center, Side::Center),
         };
@@ -5747,6 +5782,38 @@ impl App {
             0,
             bar.center_min as usize,
         )
+    }
+
+    /// A bar message; one an error put there opens the log when clicked.
+    fn message_piece(&self, msg: String) -> Piece {
+        let error = self.error_status.as_deref() == Some(msg.as_str());
+        let p = Piece::new(msg, Style::Accent);
+        if error { p.on_click(Click::Logs) } else { p }
+    }
+
+    /// The `logs` action: ranma's log in a float, in the pager at its end or
+    /// in the editor on its last line (`logs_open`). Made empty first, so a
+    /// log nothing has written to yet still opens.
+    fn open_logs(&mut self) {
+        let Some(path) = crate::journal::path() else {
+            self.status = Some("logs: no state directory ($XDG_STATE_HOME, $HOME)".into());
+            return;
+        };
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path);
+        let quoted = format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+        let cmd = match self.config.settings.logs_open {
+            config::LogsOpen::Pager => format!("less -R +G -- {quoted}"),
+            config::LogsOpen::Editor => format!("\"${{VISUAL:-${{EDITOR:-vi}}}}\" + {quoted}"),
+        };
+        if let Err(e) = self.open_pane_with(Some(&cmd), None, None, &[], Some((80, 80))) {
+            self.status = Some(format!("logs: {e:#}"));
+        }
     }
 
     /// The folded strip's one chip: ` 2/4 nvim `, where the focused pane is
@@ -7562,6 +7629,38 @@ mod tests {
             .collect();
         assert!(row.contains("MIDDLE"), "{row}");
         assert!(row.contains('…'), "the left is cut instead: {row}");
+    }
+
+    /// An error in the bar opens the log, where it is in full: a module
+    /// that failed, and a message an error put there. Other messages do not.
+    #[test]
+    fn an_error_in_the_bar_opens_the_log_when_clicked() {
+        let mut a = app(Some(
+            r#"
+            ranma.module("bad", { render = function() error("boom") end })
+            ranma.bar { left = { "bad" }, center = { "message" }, right = {} }
+            "#,
+        ));
+        a.render_state_modules();
+        let pieces = a.bar_pieces(80);
+        let bad = pieces.iter().find(|(_, p)| p.text == "bad: error").unwrap();
+        assert_eq!(bad.1.click, Some(Click::Logs));
+        let msg = pieces
+            .iter()
+            .find(|(_, p)| p.text.starts_with("lua: "))
+            .expect("the error's message");
+        assert_eq!(msg.1.click, Some(Click::Logs));
+        assert!(msg.1.text.contains("boom"), "{}", msg.1.text);
+        // A message of another kind is not a way into the log.
+        a.status = Some("hello".into());
+        let hello = a
+            .bar_pieces(80)
+            .into_iter()
+            .find(|(_, p)| p.text == "hello")
+            .unwrap();
+        assert_eq!(hello.1.click, None);
+        assert_eq!("logs".parse::<Action>().unwrap(), Action::Logs);
+        assert_eq!(Action::Logs.to_string(), "logs");
     }
 
     #[test]

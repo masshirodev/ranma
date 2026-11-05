@@ -19,6 +19,7 @@ pub mod hostcolors;
 pub mod input;
 pub mod ipc;
 pub mod jobs;
+pub mod journal;
 pub mod keys;
 pub mod layout;
 pub mod layouts;
