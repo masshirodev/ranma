@@ -27,8 +27,103 @@ type PlaceFn = fn(&Report, &str, u16, PaneId) -> Option<(u16, usize, Segment)>;
 fn nest_copy(r: &Report) -> Box<Report> {
     Box::new(Report {
         colors: None,
+        bar: None,
         ..r.clone()
     })
+}
+
+/// This ranma's own bar while another's is drawn (`follow_inner_bar`).
+pub(super) struct OwnBar {
+    layout: crate::config::BarLayout,
+    fits: std::collections::HashMap<String, crate::config::ModuleFit>,
+    styles: std::collections::HashMap<String, String>,
+    look: Option<(
+        crate::theme::Bar,
+        std::collections::BTreeMap<String, crate::theme::RoleDef>,
+        Option<toml::Table>,
+    )>,
+}
+
+impl OwnBar {
+    /// Put `w` in use in `config`, returning what it replaced.
+    fn lend(config: &mut crate::config::Config, w: &nestbar::WireBar) -> OwnBar {
+        use crate::config::{BarWidth, ModuleFit, TitleEntry};
+        use nestbar::{WireEntry, WireWidth};
+        let side = |e: &[WireEntry]| -> Vec<TitleEntry> {
+            e.iter()
+                .map(|e| match e {
+                    WireEntry::Name(n) => TitleEntry::Piece(n.clone()),
+                    WireEntry::Group {
+                        pieces,
+                        style,
+                        priority,
+                    } => TitleEntry::Group {
+                        pieces: pieces.clone(),
+                        style: style.clone(),
+                        priority: *priority,
+                    },
+                })
+                .collect()
+        };
+        let width = |w: WireWidth| match w {
+            WireWidth::Cells(n) => BarWidth::Cells(n),
+            WireWidth::Percent(p) => BarWidth::Percent(p),
+        };
+        let layout = crate::config::BarLayout {
+            left: side(&w.left),
+            center: side(&w.center),
+            right: side(&w.right),
+            // The bar's size is this screen's, as its position is.
+            size: config.bar.size,
+            center_min: w.center_min,
+        };
+        let mut fits = config.module_fits.clone();
+        for (n, f) in &w.fits {
+            fits.insert(
+                n.clone(),
+                ModuleFit {
+                    priority: f.priority,
+                    min_width: f.min.map(width),
+                    max_width: f.max.map(width),
+                },
+            );
+        }
+        let mut styles = config.module_styles.clone();
+        styles.extend(w.styles.iter().map(|(n, s)| (n.clone(), s.clone())));
+        // The look, when this build reads it: else this ranma's own.
+        let theirs = w
+            .look
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<toml::Table>(v.clone()).ok())
+            .and_then(|t| crate::theme::bar_look(&t).map(|l| (l, t)));
+        let look = theirs.map(|((mut bar, roles), source)| {
+            bar.position = config.theme.bar.position;
+            let mut merged = config.theme.roles.clone();
+            merged.extend(roles);
+            (
+                std::mem::replace(&mut config.theme.bar, bar),
+                std::mem::replace(&mut config.theme.roles, merged),
+                config.theme.bar_source.replace(source),
+            )
+        });
+        OwnBar {
+            layout: std::mem::replace(&mut config.bar, layout),
+            fits: std::mem::replace(&mut config.module_fits, fits),
+            styles: std::mem::replace(&mut config.module_styles, styles),
+            look,
+        }
+    }
+
+    fn put_back(self, config: &mut crate::config::Config) {
+        config.bar = self.layout;
+        config.module_fits = self.fits;
+        config.module_styles = self.styles;
+        if let Some((bar, roles, source)) = self.look {
+            config.theme.bar = bar;
+            config.theme.roles = roles;
+            config.theme.bar_source = source;
+        }
+    }
 }
 
 /// A pane's compact label, placed (see `App::nest_labels`).
@@ -188,6 +283,7 @@ impl App {
             },
             status: self.status.clone(),
             status_error: self.status.is_some() && self.status == self.error_status,
+            bar: Some(self.wire_bar()),
             outer_leader: Some(self.config.settings.outer_leader.to_string()),
             sticky: self.config.settings.wm_mode_sticky,
             ws,
@@ -235,6 +331,100 @@ impl App {
                     serde_json::to_value(own).ok()?.as_object().cloned()
                 }),
         }
+    }
+
+    /// This ranma's bar as it travels outward (card c464). What is in use
+    /// is what goes: a ranma drawing the bar of one inside it passes that
+    /// one's on, so a chain carries the innermost's.
+    fn wire_bar(&self) -> nestbar::WireBar {
+        use crate::config::{BarWidth, TitleEntry};
+        use nestbar::{WireEntry, WireFit, WireWidth};
+        let side = |entries: &[TitleEntry]| -> Vec<WireEntry> {
+            entries
+                .iter()
+                .map(|e| match e {
+                    TitleEntry::Piece(n) => WireEntry::Name(n.clone()),
+                    TitleEntry::Group {
+                        pieces,
+                        style,
+                        priority,
+                    } => WireEntry::Group {
+                        pieces: pieces.clone(),
+                        style: style.clone(),
+                        priority: *priority,
+                    },
+                })
+                .collect()
+        };
+        let width = |w: BarWidth| match w {
+            BarWidth::Cells(n) => WireWidth::Cells(n),
+            BarWidth::Percent(p) => WireWidth::Percent(p),
+        };
+        let bar = &self.config.bar;
+        nestbar::WireBar {
+            left: side(&bar.left),
+            center: side(&bar.center),
+            right: side(&bar.right),
+            center_min: bar.center_min,
+            fits: self
+                .config
+                .module_fits
+                .iter()
+                .map(|(n, f)| {
+                    let fit = WireFit {
+                        priority: f.priority,
+                        min: f.min_width.map(width),
+                        max: f.max_width.map(width),
+                    };
+                    (n.clone(), fit)
+                })
+                .collect(),
+            styles: self
+                .config
+                .module_styles
+                .iter()
+                .map(|(n, s)| (n.clone(), s.clone()))
+                .collect(),
+            look: self
+                .config
+                .theme
+                .bar_source
+                .as_ref()
+                .and_then(|t| serde_json::to_value(t).ok()),
+        }
+    }
+
+    /// Put this ranma's own bar back before its theme or settings are
+    /// replaced, so nothing is restored over the new ones later; the next
+    /// round lends the inner's again if it is still asked for.
+    pub(super) fn return_bar(&mut self) {
+        if let Some(own) = self.own_bar.take() {
+            own.put_back(&mut self.config);
+        }
+        self.inner_bar = None;
+    }
+
+    /// Under `nested_bar = "inner"`, draw the bar of the ranma the focus is
+    /// in (the innermost on the focus path that sends one), this one's own
+    /// again once the focus leaves it (card c464). Kept: this ranma's bar
+    /// position and size, its workspaces (that ranma's in brackets), its
+    /// mode chip, and its modules' values where they are `nested = "own"`.
+    /// Called once per round of events, beside `follow_inner_colors`.
+    pub fn follow_inner_bar(&mut self) {
+        let want = (self.config.settings.nested_bar == crate::config::NestedBar::Inner)
+            .then(|| self.nested_path().iter().rev().find_map(|r| r.bar.clone()))
+            .flatten();
+        if want == self.inner_bar {
+            return;
+        }
+        if let Some(own) = self.own_bar.take() {
+            own.put_back(&mut self.config);
+        }
+        if let Some(w) = &want {
+            self.own_bar = Some(OwnBar::lend(&mut self.config, w));
+        }
+        self.inner_bar = want;
+        self.dirty = true;
     }
 
     /// The report of the ranma a toolbar button acts on instead of this one:
@@ -420,6 +610,15 @@ impl App {
         }
         if nestbar::report_osc(&r).len() > crate::osc::MAX {
             r.colors = None;
+        }
+        // Then the bar's look, then the bar: the outer draws its own.
+        if nestbar::report_osc(&r).len() > crate::osc::MAX
+            && let Some(b) = r.bar.as_mut()
+        {
+            b.look = None;
+        }
+        if nestbar::report_osc(&r).len() > crate::osc::MAX {
+            r.bar = None;
         }
         if self.last_report.as_ref() != Some(&r) {
             // The title goes again with every report: the outer takes a

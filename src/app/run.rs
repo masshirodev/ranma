@@ -760,6 +760,7 @@ fn event_loop(
         app.run_timers(Instant::now());
         app.after_event();
         app.follow_inner_colors();
+        app.follow_inner_bar();
         app.report_outward();
         if !app.host_out.is_empty() {
             let out = term.backend_mut();

@@ -173,6 +173,7 @@ impl App {
                     })
                     .unwrap_or_default();
                 if let Some(st) = self.settings.take() {
+                    self.return_bar();
                     self.config.settings = st.settings;
                     self.own_colors = None;
                     self.config.theme = st.theme;
@@ -239,6 +240,7 @@ impl App {
         let (new_theme, _) =
             crate::theme::load_over_unset(&settings.theme, &dirs, Some(&theme), &unset_theme)
                 .map_err(|e| format!("{e:#}"))?;
+        self.return_bar();
         self.config.settings = settings;
         self.own_colors = None;
         self.config.theme = new_theme;

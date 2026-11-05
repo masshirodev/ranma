@@ -559,6 +559,10 @@ pub struct App {
     inner_colors: Option<serde_json::Map<String, serde_json::Value>>,
     /// The theme's own colours while another ranma's are drawn instead.
     own_colors: Option<crate::theme::Colors>,
+    /// This ranma's own bar while an inner one's is drawn, and that one
+    /// (`follow_inner_bar`, card c464).
+    own_bar: Option<nested::OwnBar>,
+    inner_bar: Option<crate::nestbar::WireBar>,
     /// The pane drawn without a border last time (see `frameless`).
     frameless_was: Option<PaneId>,
     /// Where `save_layout` writes and `load_layout` reads (see `layouts`).
@@ -726,6 +730,8 @@ impl App {
             outer_colors: None,
             inner_colors: None,
             own_colors: None,
+            own_bar: None,
+            inner_bar: None,
             frameless_was: None,
             hako_clone: None,
         };
@@ -3854,6 +3860,10 @@ impl App {
                 None,
             );
         }
+        // The bar lent to an inner ranma's went with the old configuration:
+        // the new one is lent again on the next round, if still asked for.
+        self.own_bar = None;
+        self.inner_bar = None;
         self.config = cfg;
         // The new configuration's hooks hear what is on screen.
         self.modules_shown.clear();
@@ -10615,6 +10625,101 @@ mod tests {
             .unwrap()
             .1;
         assert_eq!(msg.click, None);
+    }
+
+    /// `nested_bar = "inner"`: the bar of the ranma the focus is in, its
+    /// modules, groups and look, with this one's workspaces (that one's in
+    /// brackets) and its `nested = "own"` modules; this one's own bar again
+    /// once the focus leaves; this one's look kept when that one's does not
+    /// parse here (card c464).
+    #[test]
+    fn the_inner_ranmas_own_bar_is_drawn_while_the_focus_is_in_it() {
+        // The inner sends its bar: layout, fits, styles and look.
+        let inner = app(Some(
+            r#"
+            ranma.module("ports", { priority = 20, render = function() return "PORTS" end })
+            ranma.bar { left = { "workspaces", "ports" }, center = {}, right = {} }
+            "#,
+        ));
+        let b = inner.own_report().bar.expect("its bar");
+        assert_eq!(b.left.len(), 2);
+        assert_eq!(b.fits["ports"].priority, Some(20));
+        let look = b.look.expect("its look");
+        assert!(
+            look.get("bar").and_then(|v| v.get("separator")).is_some(),
+            "{look}"
+        );
+
+        // The outer.
+        let (mut a, id) = with_ranma_inside(
+            r#"
+            ranma.set { nested_bar = "inner" }
+            ranma.module("mine", { render = function() return "MINE" end })
+            ranma.module("desk", { nested = "own", render = function() return "DESKTIME" end })
+            ranma.bar { left = { "workspaces", "mine" }, center = {}, right = { "desk" } }
+            "#,
+        );
+        a.render_state_modules();
+        let mut look = serde_json::json!({ "bar": a.config.theme.bar_source.as_ref().unwrap()["bar"].clone() });
+        look["bar"]["join"] = serde_json::json!("arrows");
+        let report = |look: serde_json::Value| {
+            crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{p},"current":1,"ws":[{{"n":1,"name":"in","occ":true}}],
+                    "modules":{{"agents":[{{"text":"AGENTS"}}],"desk":[{{"text":"FARTIME"}}]}},
+                    "bar":{{"left":["workspaces","agents"],"right":["desk"],"look":{look}}}}}"#,
+                p = crate::nestbar::PROTOCOL
+            ))
+            .unwrap()
+        };
+        a.reports.insert(id, report(look.clone()));
+        a.follow_inner_bar();
+        let row = |a: &App| -> String {
+            a.bar_pieces(100)
+                .iter()
+                .map(|(_, p)| p.text.clone())
+                .collect()
+        };
+        let r = row(&a);
+        assert!(r.contains("AGENTS"), "the inner's module: {r}");
+        assert!(
+            !r.contains("MINE"),
+            "the outer's own module is not in the inner's bar: {r}"
+        );
+        assert!(
+            r.contains("[1:in]"),
+            "this ranma's workspaces, the inner's in brackets: {r}"
+        );
+        assert!(
+            r.contains("DESKTIME") && !r.contains("FARTIME"),
+            "nested = own: {r}"
+        );
+        assert_eq!(
+            a.config.theme.bar.join,
+            crate::theme::Join::Arrows,
+            "its look"
+        );
+        assert!(
+            a.bar_pieces(100)
+                .iter()
+                .any(|(_, p)| matches!(p.style, Style::Arrow(..))),
+            "{r}"
+        );
+        // A look this build cannot read: its bar, in this one's look.
+        look["bar"]["no_such_key"] = serde_json::json!(1);
+        a.reports.insert(id, report(look));
+        a.follow_inner_bar();
+        assert_eq!(a.config.theme.bar.join, crate::theme::Join::Pills);
+        assert!(row(&a).contains("AGENTS"));
+        // The focus out of it: this ranma's own bar again.
+        a.reports.remove(&id);
+        a.follow_inner_bar();
+        let r = row(&a);
+        assert!(r.contains("MINE") && !r.contains("AGENTS"), "{r}");
+        // "outer" (the default) never takes it.
+        a.config.settings.nested_bar = crate::config::NestedBar::Outer;
+        a.reports.insert(id, report(serde_json::json!({})));
+        a.follow_inner_bar();
+        assert!(row(&a).contains("MINE"));
     }
 
     #[test]

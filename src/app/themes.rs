@@ -67,6 +67,7 @@ impl App {
     }
 
     fn show_theme(&mut self, theme: Theme) {
+        self.return_bar();
         self.own_colors = None;
         self.config.theme = theme;
         self.adopt_colors();

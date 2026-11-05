@@ -42,6 +42,61 @@ pub const OSC: &str = "51377";
 /// A centre (the title) that would be cut below this many cells is left out.
 pub const TITLE_FLOOR: usize = 12;
 
+/// A ranma's bar as it travels to the ranma around it (card c464): its
+/// sides, as `ranma.bar` declared them, what each module was told about
+/// fitting and standing (`priority`, the widths, `style`), and the look,
+/// its theme's `[bar]` and `[roles]` as the merged theme spells them. The
+/// look is read by the outer's own strict parser: keys it does not know (a
+/// newer inner) leave it drawing in its own look.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WireBar {
+    #[serde(default)]
+    pub left: Vec<WireEntry>,
+    #[serde(default)]
+    pub center: Vec<WireEntry>,
+    #[serde(default)]
+    pub right: Vec<WireEntry>,
+    #[serde(default)]
+    pub center_min: u16,
+    #[serde(default)]
+    pub fits: BTreeMap<String, WireFit>,
+    #[serde(default)]
+    pub styles: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<serde_json::Value>,
+}
+
+/// A module's name, or a group of them in one pill.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WireEntry {
+    Name(String),
+    Group {
+        pieces: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        style: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        priority: Option<u8>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WireFit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<WireWidth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<WireWidth>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WireWidth {
+    Cells(u16),
+    Percent(u8),
+}
+
 /// What a ranma says about itself to the ranma around it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Report {
@@ -86,6 +141,11 @@ pub struct Report {
     /// ranma sends none, and its message is not a way into anything.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub status_error: bool,
+    /// Its bar: what it shows and how it looks, for an outer ranma with
+    /// `nested_bar = "inner"` to draw while the focus is here (card c464).
+    /// An older ranma sends none, and the outer's own bar is drawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bar: Option<WireBar>,
     /// Its outer leader: the key a click sends to reach past it.
     #[serde(default)]
     pub outer_leader: Option<String>,
@@ -979,6 +1039,7 @@ mod tests {
             mode_label: None,
             status: None,
             status_error: false,
+            bar: None,
             outer_leader: Some("ctrl+alt+b".into()),
             sticky: true,
             ws,

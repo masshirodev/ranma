@@ -190,6 +190,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `buffers_kept` | `50` | Copies kept to paste again (`choose_buffer`, `paste_buffer`), 1-1000, in memory only; fewer at a reload drops the oldest. |
 | `mouse_wheel_lines` | `3` | Lines one notch of the wheel scrolls (1-50): through a pane's scrollback, in copy mode, and as that many arrow keys to a full-screen program that takes no mouse (less, man). A program that takes the mouse gets the wheel as it is. |
 | `logs_open` | `"pager"` | What the `logs` action, and a click on an error in the bar, opens ranma's log in: `"pager"` (`less`, at its end) or `"editor"` (`$VISUAL`, else `$EDITOR`, else `vi`, on its last line), in a float. See [The log](#the-log). |
+| `nested_bar` | `"outer"` | While the focus is in a ranma inside this one (over ssh): `"outer"` draws this bar, its modules showing that ranma's values by name; `"inner"` draws that ranma's own bar, its modules and look, keeping this one's workspaces (that one's in brackets), mode chip and position. See [ranma inside ranma](#ranma-inside-ranma). |
 | `hint_alphabet` | `"asdfghjklqwertyuiopzxcvbnm"` | The letters hint labels (`hints`, `leader o`) are made of, easiest to reach first: Colemak's `"arstneiodh…"`, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open. |
 | `hint_urls` | `true` | Hints label URLs in the text. Links a program marks (OSC 8) are always labelled; `ranma.hint_pattern` adds your own targets. |
 | `word_separators` | ``",│`|:\"' ()[]{}<>\t"`` | What ends a word for copy mode's word motions (`w`, `b`, `e`) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload. |
@@ -844,6 +845,21 @@ Over SSH, three levels deep, each machine starting ranma: with
   only `[colors]` move, a role the inner does not send keeps this theme's
   colour, and a pane's own colours (`ranma.rule`) still win. An inner older
   than this setting sends none, and this theme's colours stay.
+- `nested_bar = "inner"` draws the bar of the ranma the focus is in, while it
+  is: its modules where its `ranma.bar` puts them, its groups, priorities
+  and widths, and its look (`join`, arrows, caps, workspace formats, its
+  `[roles]`), so each host says what its own bar shows over ssh, in its own
+  `init.lua` and theme, and the machine you sit at says nothing about it.
+  This ranma keeps what only it can show: its workspaces with that ranma's
+  in brackets (where that bar puts `workspaces`; on its left side, as here,
+  for the brackets), the mode chip, the bar's position and size, and the
+  values of its own modules marked `nested = "own"` (a desk clock named in
+  that bar shows this machine's time). Its own bar comes back as soon as
+  the focus leaves. Colours stay `theme_colors`' to choose. A look this
+  build cannot read (a key a newer ranma knows) leaves this one's look, the
+  modules still that ranma's; an inner older than the setting sends no bar,
+  and this one's is drawn. `"outer"`, the default, is the bar as above: this
+  ranma's, its modules showing that ranma's values by name.
 
 ## Mouse
 

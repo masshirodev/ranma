@@ -147,6 +147,45 @@ server from a tablet closed it on the PC. Now `ranma attach NAME` **shares**:
 - Upgrading hands over every client: the driver as before (`client`), the rest
   in `others`, defaulted so a handover from a one-client build still reads.
 
+### A host's own bar, over ssh (2026-11-05)
+
+With ranma over ssh in ranma, the outer's bar was drawn: its own layout
+and look, with the inner's workspaces in brackets and a module showing the
+inner's value where both had one by the same name. The owner wanted each
+machine's bar its own: workspaces, title, agents and time at work, plus
+ports on one host, plus docker but not ports or title on another, "and
+these settings to stay inside the sshed machine and not inside the outer
+one", but "not the host bar exactly, but mostly it, cause it needs to show
+workspaces with inner workspaces and whatnot still". They also expected
+`theme_colors = "inner"` to bring the host's arrows, which it does not
+(colours only).
+
+Two narrower fixes were filed first and set aside: per-module switches on
+the outer (`nested` on any module, `nested = "inner"`), which leave every
+host's bar to the outer's config and need a switch per module per host;
+and `theme_bar` for the look alone, which moves the arrows but not the
+modules. Both are what one move gives: **the inner sends its bar, and the
+outer draws it** (`nested_bar = "inner"`, card c464).
+
+- The report carries `bar` (`WireBar`): the sides as `ranma.bar` declared
+  them, each module's fit and style, and the look as the merged theme's
+  `[bar]` and `[roles]` tables. Tables, not a struct: the outer reads them
+  with its own strict theme parser, so a key only a newer build knows
+  leaves the outer's look rather than a look half understood.
+- The outer lends it into its config while the focus is in that ranma
+  (`follow_inner_bar`, as `follow_inner_colors` lends colours), and puts
+  its own back when the focus leaves, before a theme or settings change,
+  and drops it on a reload. Every reader of the bar (`bar_pieces`, the
+  modules shown and ticked, the report this ranma sends outward, so a
+  chain carries the innermost's) sees one config, rather than each asking
+  whose bar is up.
+- The outer keeps what is the outer's: the bar's position and size (the
+  screen's, not the host's), its workspaces with the inner's in brackets
+  in the place the host's bar gives `workspaces`, the mode chip, and its
+  `nested = "own"` modules' values. That last is the existing rule for a
+  desk fact (a clock), now meeting a layout from elsewhere.
+- Off by default (`"outer"`): today's bar is unchanged until asked.
+
 ### A log of what happened (2026-11-05)
 
 An error showed in the bar as its first line (`lua: runtime error:

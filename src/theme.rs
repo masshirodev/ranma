@@ -873,6 +873,21 @@ pub enum BarPosition {
     Hidden,
 }
 
+/// A bar's look from another ranma's theme (`Theme::bar_source`), read by
+/// this build's parser: its `[bar]` and its roles. `None` when it does not
+/// parse here, a key a newer build knows among them, so the caller keeps
+/// its own look rather than half of another's.
+pub fn bar_look(
+    source: &toml::Table,
+) -> Option<(Bar, std::collections::BTreeMap<String, RoleDef>)> {
+    let bar: Bar = source.get("bar")?.clone().try_into().ok()?;
+    let roles = match source.get("roles") {
+        Some(r) => r.clone().try_into().ok()?,
+        None => Default::default(),
+    };
+    Some((bar, roles))
+}
+
 /// Whether `key` is one of a theme's `[bar]` keys: asked of `Bar` itself,
 /// whose strict parse reports an unknown field only for a name it lacks,
 /// so this never drifts from the theme. For `ranma.bar` to say where a
@@ -1060,6 +1075,11 @@ pub struct Theme {
     /// `background.art`, read and parsed as the theme loads.
     #[serde(skip)]
     pub art: Option<std::sync::Arc<crate::art::Art>>,
+    /// The merged theme's `[bar]` and `[roles]` as tables, what an inner
+    /// ranma sends of its look (card c464): read back by the outer's own
+    /// parser with `Theme::bar_look`.
+    #[serde(skip)]
+    pub bar_source: Option<toml::Table>,
 }
 
 impl Panes {
@@ -1770,9 +1790,14 @@ pub fn load_over_unset(
     if let Some(toml::Value::Table(colors)) = table.get_mut("colors") {
         resolve_color_names(colors).map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
     }
+    let bar_source: toml::Table = ["bar", "roles"]
+        .into_iter()
+        .filter_map(|k| Some((k.to_string(), table.get(k)?.clone())))
+        .collect();
     let mut theme: Theme = toml::Value::Table(table)
         .try_into()
         .with_context(|| what.clone())?;
+    theme.bar_source = Some(bar_source);
     theme.name = name.to_string();
     let dim = theme.panes.dim_unfocused;
     if !(0.0..=1.0).contains(&dim) {

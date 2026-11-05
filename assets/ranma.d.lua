@@ -46,6 +46,7 @@ ranma.config_dir = nil
 ---@field paste? { upload?: boolean, image_command?: string }
 ---@field mouse? "click"|"hover"|"off"
 ---@field logs_open? "pager"|"editor" What the logs action opens ranma's log in (the pager by default).
+---@field nested_bar? "outer"|"inner" Over ssh into a ranma: this bar ("outer") or that ranma's own ("inner").
 ---@field updates? "remind"|"prompt"|"off"
 ---@field update_check_hours? number
 ---@field nested? "auto"|"off"

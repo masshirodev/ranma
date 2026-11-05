@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- `nested_bar = "inner"`: over ssh into a ranma, this ranma draws that one's
+  own bar, its modules, groups, priorities and look (arrows, caps, roles),
+  so each host's bar is set on that host. This ranma's workspaces (that
+  one's in brackets), mode chip, bar position and `nested = "own"` modules
+  are kept. `"outer"`, the default, is the bar as before.
+
 - A log, `~/.local/state/ranma/ranma.log`: every error in full (a Lua
   error's traceback, a module's command failing, a plugin that did not
   load, a failed reload) and what each server did (started, upgraded,

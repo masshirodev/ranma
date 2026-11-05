@@ -123,6 +123,13 @@ ranma.set {
   -- errors in full, tracebacks too, and what the servers did; `ranma logs`
   -- prints its end.
   logs_open = "pager",
+  -- While the focus is in a ranma inside this one (ranma over ssh): "outer"
+  -- draws this bar, its modules showing that ranma's values where it has a
+  -- module of the same name; "inner" draws that ranma's own bar, its modules,
+  -- groups, priorities and look, so each host says what its bar shows. This
+  -- one's workspaces (with that ranma's in brackets), mode chip, bar position
+  -- and its nested = "own" modules' values are kept either way.
+  nested_bar = "outer",
   -- Milliseconds a second press on the same cell has to count as a double
   -- click: double@ mouse binds, a word's selection, a touch double tap.
   mouse_double_click = 400,

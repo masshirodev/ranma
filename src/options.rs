@@ -386,6 +386,14 @@ pub fn builtin() -> Vec<Opt> {
             "Copies kept to paste again (choose_buffer, paste_buffer), in memory only.",
         ),
         opt(
+            "nested_bar",
+            "general",
+            "Bar over ssh",
+            choices(&["outer", "inner"]),
+            Init,
+            "While the focus is in a ranma inside this one (over ssh): outer draws this bar, with that ranma's module values by name; inner draws that ranma's own bar (its modules and look), keeping this one's workspaces and mode.",
+        ),
+        opt(
             "logs_open",
             "general",
             "Open logs in",

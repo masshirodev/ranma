@@ -281,6 +281,11 @@ Default: \fB"pager"\fR
 .br
 What the \fBlogs\fR action, and a click on an error in the bar, opens ranma's log in: \fB"pager"\fR (\fBless\fR, at its end) or \fB"editor"\fR (\fB$VISUAL\fR, else \fB$EDITOR\fR, else \fBvi\fR, on its last line), in a float. See The log\fR.
 .TP
+\fBnested_bar\fR
+Default: \fB"outer"\fR
+.br
+While the focus is in a ranma inside this one (over ssh): \fB"outer"\fR draws this bar, its modules showing that ranma's values by name; \fB"inner"\fR draws that ranma's own bar, its modules and look, keeping this one's workspaces (that one's in brackets), mode chip and position. See ranma inside ranma\fR.
+.TP
 \fBhint_alphabet\fR
 Default: \fB"asdfghjklqwertyuiopzxcvbnm"\fR
 .br
@@ -1271,6 +1276,22 @@ on the colours from further in, or its own theme's). As with \fB"outer"\fR,
 only \fB[colors]\fR move, a role the inner does not send keeps this theme's
 colour, and a pane's own colours (\fBranma.rule\fR) still win. An inner older
 than this setting sends none, and this theme's colours stay.
+.IP \(bu 2
+\fBnested_bar = "inner"\fR draws the bar of the ranma the focus is in, while it
+is: its modules where its \fBranma.bar\fR puts them, its groups, priorities
+and widths, and its look (\fBjoin\fR, arrows, caps, workspace formats, its
+\fB[roles]\fR), so each host says what its own bar shows over ssh, in its own
+\fBinit.lua\fR and theme, and the machine you sit at says nothing about it.
+This ranma keeps what only it can show: its workspaces with that ranma's
+in brackets (where that bar puts \fBworkspaces\fR; on its left side, as here,
+for the brackets), the mode chip, the bar's position and size, and the
+values of its own modules marked \fBnested = "own"\fR (a desk clock named in
+that bar shows this machine's time). Its own bar comes back as soon as
+the focus leaves. Colours stay \fBtheme_colors\fR' to choose. A look this
+build cannot read (a key a newer ranma knows) leaves this one's look, the
+modules still that ranma's; an inner older than the setting sends no bar,
+and this one's is drawn. \fB"outer"\fR, the default, is the bar as above: this
+ranma's, its modules showing that ranma's values by name.
 .SH "MOUSE"
 .PP
 With \fBmouse = "click"\fR (the default) or \fB"hover"\fR, ranma takes the mouse from your

@@ -273,6 +273,9 @@ pub struct Settings {
     pub mouse_wheel_lines: u8,
     /// What the `logs` action opens the log in.
     pub logs_open: LogsOpen,
+    /// Whose bar is drawn while the focus is in a ranma inside this one:
+    /// this one's, or that ranma's own (card c464).
+    pub nested_bar: NestedBar,
     /// Where toasts stack, and how long one lasts unless it says (c430).
     pub toast_position: crate::toast::Corner,
     pub toast_timeout: std::time::Duration,
@@ -335,6 +338,7 @@ impl Default for Settings {
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
             logs_open: LogsOpen::Pager,
+            nested_bar: NestedBar::Outer,
             buffers_kept: crate::app::buffers_kept_default(),
             mouse_double_click: std::time::Duration::from_millis(400),
             toast_position: crate::toast::Corner::TopRight,
@@ -384,6 +388,7 @@ struct SettingsPatch {
     hint_alphabet: Option<String>,
     mouse_wheel_lines: Option<u8>,
     logs_open: Option<LogsOpen>,
+    nested_bar: Option<NestedBar>,
     buffers_kept: Option<usize>,
     mouse_double_click: Option<u64>,
     hint_urls: Option<bool>,
@@ -844,6 +849,18 @@ impl TitleLayout {
             .chain(&self.right)
             .flat_map(TitleEntry::names)
     }
+}
+
+/// Whose bar this ranma draws while the focus is in a ranma inside it
+/// (DESIGN.md, "A host's own bar, over ssh"): `outer`, its own, with that
+/// ranma's module values by name; `inner`, that ranma's (its modules,
+/// groups, priorities and look), keeping this one's workspaces, mode and
+/// position, and its `nested = "own"` modules' values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NestedBar {
+    Outer,
+    Inner,
 }
 
 /// What the `logs` action opens ranma's log in: `less` at its end, or the
@@ -2449,6 +2466,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(o) = patch.logs_open {
         s.logs_open = o;
+    }
+    if let Some(b) = patch.nested_bar {
+        s.nested_bar = b;
     }
     if let Some(n) = patch.mouse_wheel_lines {
         if !(1..=50).contains(&n) {
