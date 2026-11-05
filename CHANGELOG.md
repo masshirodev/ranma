@@ -15,6 +15,8 @@ commit log has the detail.
 
 ### Added
 
+- `mouse_wheel_lines`: how far one notch of the wheel scrolls (3 as before).
+
 - Hints take `hint_alphabet` (labels for any layout), `hint_urls`, and
   `ranma.hint_pattern(regex, { action })`: paths, hashes or card ids labelled
   beside links, picked to copy, open, paste or call a function.

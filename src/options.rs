@@ -370,6 +370,14 @@ pub fn builtin() -> Vec<Opt> {
             "Lines of scrollback kept per pane.",
         ),
         opt(
+            "mouse_wheel_lines",
+            "general",
+            "Wheel lines",
+            int(1, 50, 1, false),
+            Init,
+            "Lines one notch of the wheel scrolls.",
+        ),
+        opt(
             "hint_alphabet",
             "general",
             "Hint letters",

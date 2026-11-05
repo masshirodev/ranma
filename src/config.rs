@@ -265,6 +265,8 @@ pub struct Settings {
     /// What ends a word for copy mode's word motions and a double click
     /// (alacritty's semantic escape characters; card c427).
     pub word_separators: String,
+    /// Lines one notch of the wheel scrolls (card c429).
+    pub mouse_wheel_lines: u8,
     /// The letters hint labels are made of, easiest first (card c428).
     pub hint_alphabet: String,
     /// Hints label URLs in the text (OSC 8 links always).
@@ -322,6 +324,7 @@ impl Default for Settings {
             scrollback_lines: 10_000,
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
+            mouse_wheel_lines: 3,
             hint_urls: true,
             wm_mode_sticky: true,
             wm_mode_hint: Some(std::time::Duration::from_millis(500)),
@@ -365,6 +368,7 @@ struct SettingsPatch {
     scrollback_lines: Option<usize>,
     word_separators: Option<String>,
     hint_alphabet: Option<String>,
+    mouse_wheel_lines: Option<u8>,
     hint_urls: Option<bool>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
@@ -2192,6 +2196,12 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(u) = patch.hint_urls {
         s.hint_urls = u;
+    }
+    if let Some(n) = patch.mouse_wheel_lines {
+        if !(1..=50).contains(&n) {
+            return Err(format!("{who}: mouse_wheel_lines must be 1 to 50, not {n}"));
+        }
+        s.mouse_wheel_lines = n;
     }
     if let Some(w) = patch.wm_mode {
         if let Some(sticky) = w.sticky {
@@ -4620,6 +4630,20 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn the_wheel_scrolls_as_many_lines_as_set() {
+        assert_eq!(with_user("").unwrap().settings.mouse_wheel_lines, 3);
+        assert_eq!(
+            with_user("ranma.set { mouse_wheel_lines = 7 }")
+                .unwrap()
+                .settings
+                .mouse_wheel_lines,
+            7
+        );
+        assert!(with_user("ranma.set { mouse_wheel_lines = 0 }").is_err());
+        assert!(with_user("ranma.set { mouse_wheel_lines = 51 }").is_err());
     }
 
     #[test]

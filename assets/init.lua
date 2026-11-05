@@ -114,6 +114,9 @@ ranma.set {
   -- With "click" or "hover", hold Shift while dragging to select text with your
   -- terminal instead (kitty, foot, alacritty, wezterm and xterm all do this).
   mouse = "click",
+  -- Lines one notch of the wheel scrolls: through scrollback, in copy mode, and
+  -- as arrow keys in a full-screen program that takes no mouse (less, man).
+  mouse_wheel_lines = 3,
 
   -- When ranma's source (its own clone, ~/.local/share/ranma/repo) has new commits:
   --   "remind": a toast and a marker in the bar; leader U installs.

@@ -1005,6 +1005,13 @@ impl App {
         self.workspace_area().centered(80, 80)
     }
 
+    /// Lines one notch of the wheel scrolls (`mouse_wheel_lines`, card
+    /// c429): through scrollback, in copy mode, and as arrow keys in a
+    /// full-screen program that takes none.
+    fn wheel_lines(&self) -> i32 {
+        i32::from(self.config.settings.mouse_wheel_lines)
+    }
+
     /// The cells a border takes off each side of a tile or a float,
     /// `[top, right, bottom, left]` (`border.edges`, `floating_edges`).
     pub fn insets(&self, floating: bool) -> [u16; 4] {
@@ -2258,8 +2265,8 @@ impl App {
                     return self.copy_key(&key);
                 }
                 Event::Mouse(m) => match m.kind {
-                    MouseEventKind::ScrollUp => return self.copy_scroll(3),
-                    MouseEventKind::ScrollDown => return self.copy_scroll(-3),
+                    MouseEventKind::ScrollUp => return self.copy_scroll(self.wheel_lines()),
+                    MouseEventKind::ScrollDown => return self.copy_scroll(-self.wheel_lines()),
                     // A click anywhere leaves copy mode and then acts as usual.
                     MouseEventKind::Down(_) => self.exit_copy_mode(),
                     _ => return,
@@ -2656,8 +2663,8 @@ impl App {
         }
 
         let scroll = match m.kind {
-            MouseEventKind::ScrollUp => Some(3i32),
-            MouseEventKind::ScrollDown => Some(-3),
+            MouseEventKind::ScrollUp => Some(self.wheel_lines()),
+            MouseEventKind::ScrollDown => Some(-self.wheel_lines()),
             _ => None,
         };
         // The wheel goes to the pane under the pointer. A press goes to the
