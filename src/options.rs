@@ -744,6 +744,29 @@ pub fn builtin() -> Vec<Opt> {
             desc,
         ));
     }
+    r.push(opt(
+        "toasts.position",
+        "general",
+        "Toast corner",
+        choices(&[
+            "top_right",
+            "top_left",
+            "bottom_right",
+            "bottom_left",
+            "top",
+            "bottom",
+        ]),
+        Init,
+        "Where toasts stack: a corner, or the middle of the top or bottom edge.",
+    ));
+    r.push(opt(
+        "toasts.timeout",
+        "general",
+        "Toast time",
+        float(0.5, 3600.0, 0.5, Unit::Seconds),
+        Init,
+        "Seconds a toast stays, unless it says otherwise.",
+    ));
     r.push(opt("paste.upload", "paste", "Upload over ssh", Kind::Bool, Init, "A paste of local file paths into a pane running ssh uploads the files and types the far paths."));
     r.push(opt("windows_clipboard", "paste", "Windows clipboard", Kind::Bool, Init, "Under WSL, copies are also set on Windows' clipboard directly, not only through the terminal."));
     r.push(Opt { unset: Some("auto".into()), ..opt("paste.image_command", "paste", "Image command", Kind::Text, Init, "A shell command that writes the clipboard's image as PNG to stdout. Unset: chosen for your system.") });

@@ -2152,7 +2152,7 @@ impl App {
                     source,
                     text,
                     crate::toast::Level::Normal,
-                    crate::toast::DEFAULT_TIMEOUT,
+                    self.config.settings.toast_timeout,
                     Instant::now(),
                 );
                 self.dirty = true;
@@ -3909,7 +3909,7 @@ impl App {
             };
             let timeout = t
                 .timeout
-                .map_or(crate::toast::DEFAULT_TIMEOUT, Duration::from_secs_f64);
+                .map_or(self.config.settings.toast_timeout, Duration::from_secs_f64);
             let id = self.toasts.push(t.text, level, timeout, Instant::now());
             self.dirty = true;
             if let (Some(id), Some(f)) = (id, t.on_click) {
@@ -4602,7 +4602,7 @@ impl App {
         self.toasts.push(
             text,
             level,
-            timeout.unwrap_or(crate::toast::DEFAULT_TIMEOUT),
+            timeout.unwrap_or(self.config.settings.toast_timeout),
             Instant::now(),
         );
         self.dirty = true;
@@ -4818,13 +4818,19 @@ impl App {
         self.dirty = true;
     }
 
-    /// Where toasts go: down the right edge, below a top bar.
+    /// Where toasts go: in `toasts.position`'s corner, clear of the bar on
+    /// whichever edge it is.
     pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<String>)> {
-        let top = match self.config.theme.bar.position {
-            BarPosition::Top => self.screen.y + 1,
-            _ => self.screen.y,
+        let (top, bottom) = match self.config.theme.bar.position {
+            BarPosition::Top => (self.screen.y + 1, self.screen.bottom()),
+            BarPosition::Bottom => (self.screen.y, self.screen.bottom().saturating_sub(1)),
+            _ => (self.screen.y, self.screen.bottom()),
         };
-        self.toasts.layout(self.screen, top)
+        self.toasts.layout_at(
+            self.screen,
+            (top, bottom),
+            self.config.settings.toast_position,
+        )
     }
 
     fn run_timers(&mut self, now: Instant) {

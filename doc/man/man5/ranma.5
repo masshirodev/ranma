@@ -291,6 +291,16 @@ Default: \fB"bar"\fR
 .br
 Where the which\-key hint stands: \fB"bar"\fR (on the bar from its left end, by the mode), or \fB"top_left"\fR, \fB"top_right"\fR, \fB"bottom_left"\fR, \fB"bottom_right"\fR, \fB"center"\fR of the space the panes use, clear of the bar. A user mode may set its own.
 .TP
+\fBtoasts.position\fR
+Default: \fB"top_right"\fR
+.br
+Where toasts stack: \fBtop_right\fR, \fBtop_left\fR, \fBbottom_right\fR, \fBbottom_left\fR, or \fBtop\fR and \fBbottom\fR (centred), the newest nearest the corner, clear of the bar.
+.TP
+\fBtoasts.timeout\fR
+Default: \fB5\fR
+.br
+Seconds a toast stays (0.5\-3600) unless it says how long (\fBranma notify \-t\fR, \fBranma.toast\fR's \fBtimeout\fR).
+.TP
 \fBpaste.upload\fR
 Default: \fBtrue\fR
 .br
@@ -1737,8 +1747,8 @@ screen stay, but placeholders printed before it are drawn blank: the new
 build does not know which image they named.
 .SH "TOASTS AND \fBranma notify\fR"
 .PP
-Toasts are short notifications stacked at the top right, gone after five seconds
-or when clicked. A click on a plugin's toast also runs its \fBon_click\fR, if it gave
+Toasts are short notifications stacked at the top right (\fBtoasts.position\fR),
+gone after five seconds (\fBtoasts.timeout\fR) or when clicked. A click on a plugin's toast also runs its \fBon_click\fR, if it gave
 one (a jump to the pane a message is about). They come from three places:
 .IP \(bu 2
 \fBAny pane:\fR \fBranma notify "build done"\fR, \fBranma notify \-u "tests failed"\fR

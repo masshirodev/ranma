@@ -190,6 +190,8 @@ Each call changes only the fields it names; call it as often as you like.
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot, except one bound with `{ exit = false }`). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `wm_mode.hint_at` | `"bar"` | Where the which-key hint stands: `"bar"` (on the bar from its left end, by the mode), or `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` of the space the panes use, clear of the bar. A user mode may set its own. |
+| `toasts.position` | `"top_right"` | Where toasts stack: `top_right`, `top_left`, `bottom_right`, `bottom_left`, or `top` and `bottom` (centred), the newest nearest the corner, clear of the bar. |
+| `toasts.timeout` | `5` | Seconds a toast stays (0.5-3600) unless it says how long (`ranma notify -t`, `ranma.toast`'s `timeout`). |
 | `paste.upload` | `true` | A paste that is nothing but paths of files on this machine (a dragged file, say), into a pane running `ssh`, is uploaded and the far paths typed instead. See [Pasting files over ssh](#pasting-files-over-ssh). |
 | `paste.image_command` | unset | What `paste_image` reads an image off the clipboard with: a shell command writing PNG to stdout. It reads images only. Unset: `powershell.exe` under WSL, the pasteboard through `osascript` on macOS (nothing to install), `wl-paste` on Wayland, `xclip` on X11, which read copied files first. |
 | `windows_clipboard` | `true` | Under WSL, every copy is also set on Windows' clipboard with `powershell.exe`, besides going to the terminal as OSC 52: ConPTY (between `wsl.exe` and the terminal) and a Windows clipboard another program holds open can each lose an OSC 52 copy. Not for a terminal attached over ssh, whose clipboard is on another machine. A write that fails says so in a toast. Does nothing outside WSL. |
@@ -1250,8 +1252,8 @@ What ranma does with an image:
 
 ## Toasts and `ranma notify`
 
-Toasts are short notifications stacked at the top right, gone after five seconds
-or when clicked. A click on a plugin's toast also runs its `on_click`, if it gave
+Toasts are short notifications stacked at the top right (`toasts.position`),
+gone after five seconds (`toasts.timeout`) or when clicked. A click on a plugin's toast also runs its `on_click`, if it gave
 one (a jump to the pane a message is about). They come from three places:
 
 - **Any pane:** `ranma notify "build done"`, `ranma notify -u "tests failed"`

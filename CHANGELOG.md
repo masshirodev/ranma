@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `toasts.position` (any corner, or the top or bottom middle) and
+  `toasts.timeout` (the default seconds a toast stays).
+
 - `mouse_wheel_lines`: how far one notch of the wheel scrolls (3 as before).
 
 - Hints take `hint_alphabet` (labels for any layout), `hint_urls`, and

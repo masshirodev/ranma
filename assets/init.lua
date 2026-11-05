@@ -175,6 +175,14 @@ ranma.set {
   -- the clipboard with, a shell command writing PNG to stdout, instead of
   -- the platform's: powershell.exe under WSL, osascript on macOS, wl-paste
   -- on Wayland, xclip on X11, which read copied files first.
+  -- Toasts (ranma notify, a bell elsewhere): where they stack, top_right,
+  -- top_left, bottom_right, bottom_left, top or bottom, and the seconds one
+  -- stays unless it says (ranma.toast's timeout).
+  toasts = {
+    position = "top_right",
+    timeout = 5,
+  },
+
   paste = {
     upload = true,
   },

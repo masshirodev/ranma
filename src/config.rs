@@ -267,6 +267,9 @@ pub struct Settings {
     pub word_separators: String,
     /// Lines one notch of the wheel scrolls (card c429).
     pub mouse_wheel_lines: u8,
+    /// Where toasts stack, and how long one lasts unless it says (c430).
+    pub toast_position: crate::toast::Corner,
+    pub toast_timeout: std::time::Duration,
     /// The letters hint labels are made of, easiest first (card c428).
     pub hint_alphabet: String,
     /// Hints label URLs in the text (OSC 8 links always).
@@ -325,6 +328,8 @@ impl Default for Settings {
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
+            toast_position: crate::toast::Corner::TopRight,
+            toast_timeout: crate::toast::DEFAULT_TIMEOUT,
             hint_urls: true,
             wm_mode_sticky: true,
             wm_mode_hint: Some(std::time::Duration::from_millis(500)),
@@ -380,12 +385,20 @@ struct SettingsPatch {
     theme_colors: Option<ThemeColors>,
     restore: Option<RestoreMode>,
     paste: Option<PastePatch>,
+    toasts: Option<ToastsPatch>,
     windows_clipboard: Option<bool>,
     splash: Option<bool>,
     pane_idle: Option<f64>,
     monitor_activity: Option<bool>,
     monitor_silence: Option<f64>,
     remain_on_exit: Option<RemainOnExit>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ToastsPatch {
+    position: Option<crate::toast::Corner>,
+    timeout: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -2249,6 +2262,19 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(on) = patch.windows_clipboard {
         s.windows_clipboard = on;
+    }
+    if let Some(t) = patch.toasts {
+        if let Some(p) = t.position {
+            s.toast_position = p;
+        }
+        if let Some(secs) = t.timeout {
+            if !(0.5..=3600.0).contains(&secs) {
+                return Err(format!(
+                    "{who}: toasts.timeout must be 0.5 to 3600 seconds, not {secs}"
+                ));
+            }
+            s.toast_timeout = std::time::Duration::from_secs_f64(secs);
+        }
     }
     if let Some(p) = patch.paste {
         if let Some(u) = p.upload {
@@ -4630,6 +4656,23 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn toasts_take_a_corner_and_a_default_time() {
+        let cfg = with_user("ranma.set { toasts = { position = 'bottom_left', timeout = 2.5 } }")
+            .unwrap();
+        assert_eq!(
+            cfg.settings.toast_position,
+            crate::toast::Corner::BottomLeft
+        );
+        assert_eq!(
+            cfg.settings.toast_timeout,
+            std::time::Duration::from_millis(2500)
+        );
+        assert!(with_user("ranma.set { toasts = { position = 'middle' } }").is_err());
+        assert!(with_user("ranma.set { toasts = { timeout = 0 } }").is_err());
+        assert!(with_user("ranma.set { toasts = { size = 3 } }").is_err());
     }
 
     #[test]

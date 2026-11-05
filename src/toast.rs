@@ -154,26 +154,64 @@ impl Toasts {
     /// Where each toast goes on a screen of `screen`, newest on top, stacked down
     /// the right edge from `top`. Returns each toast with its box and its lines.
     pub fn layout(&self, screen: Rect, top: u16) -> Vec<(&Toast, Rect, Vec<String>)> {
+        self.layout_at(screen, (top, screen.bottom()), Corner::TopRight)
+    }
+
+    /// [`layout`] in a corner of the area between rows `top` and `bottom`
+    /// (card c430): the newest nearest the corner, the rest stacked away
+    /// from it, toward the middle for `Top` and `Bottom`.
+    pub fn layout_at(
+        &self,
+        screen: Rect,
+        (top, bottom): (u16, u16),
+        corner: Corner,
+    ) -> Vec<(&Toast, Rect, Vec<String>)> {
         let max_w = (screen.w * 2 / 5)
             .clamp(20, 60)
             .min(screen.w.saturating_sub(2));
         let inner_max = max_w.saturating_sub(4) as usize;
-        let mut y = top;
+        let down = matches!(corner, Corner::TopLeft | Corner::TopRight | Corner::Top);
+        let mut y = if down { top } else { bottom };
         let mut out = Vec::new();
         for t in self.list.iter().rev() {
             let lines = lines(t.source.as_deref(), &t.text, inner_max.max(1));
             let text_w = lines.iter().map(|l| width(l)).max().unwrap_or(0) as u16;
             let w = (text_w + 4).max(20).min(max_w);
             let h = lines.len() as u16 + 2;
-            if y + h > screen.bottom() {
-                break;
-            }
-            let x = screen.right().saturating_sub(w + 1);
-            out.push((t, Rect::new(x, y, w, h), lines));
-            y += h;
+            let ty = if down {
+                if y + h > bottom {
+                    break;
+                }
+                y
+            } else {
+                if y < top + h {
+                    break;
+                }
+                y - h
+            };
+            let x = match corner {
+                Corner::TopLeft | Corner::BottomLeft => screen.x + 1,
+                Corner::Top | Corner::Bottom => screen.x + screen.w.saturating_sub(w) / 2,
+                _ => screen.right().saturating_sub(w + 1),
+            };
+            out.push((t, Rect::new(x, ty, w, h), lines));
+            y = if down { y + h } else { y - h };
         }
         out
     }
+}
+
+/// Where toasts stack (`toasts.position`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Corner {
+    #[default]
+    TopRight,
+    TopLeft,
+    BottomRight,
+    BottomLeft,
+    Top,
+    Bottom,
 }
 
 /// A toast's lines: `source: text` wrapped to three, if that fits whole;
@@ -328,6 +366,26 @@ mod tests {
         let id = l[1].0.id;
         assert!(t.dismiss(id));
         assert_eq!(t.layout(SCREEN, 1).len(), 1);
+    }
+
+    #[test]
+    fn toasts_stack_from_any_corner() {
+        let now = Instant::now();
+        let mut t = Toasts::default();
+        t.push("first", Level::Normal, DEFAULT_TIMEOUT, now);
+        t.push("second", Level::Normal, DEFAULT_TIMEOUT, now);
+        let bottom = SCREEN.bottom() - 1;
+        // Bottom left: the newest on the bottom row, the next above it.
+        let l = t.layout_at(SCREEN, (0, bottom), Corner::BottomLeft);
+        assert_eq!(l[0].0.text, "second");
+        assert_eq!(l[0].1.bottom(), bottom);
+        assert_eq!(l[1].1.bottom(), l[0].1.y);
+        assert_eq!(l[0].1.x, SCREEN.x + 1);
+        // Top: centred, stacking down.
+        let l = t.layout_at(SCREEN, (0, bottom), Corner::Top);
+        assert_eq!(l[0].1.y, 0);
+        let mid = l[0].1.x + l[0].1.w / 2;
+        assert!(mid.abs_diff(SCREEN.w / 2) <= 1);
     }
 
     #[test]
