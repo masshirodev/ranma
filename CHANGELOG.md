@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.toast(text, { icon = "✓", icon_style = "ok", detail = "..." })`: a
+  mark before a toast's text in a style of its own (a theme role), and a
+  second, dim line under it. `ranma.has("toast.icon")`, `"toast.detail"`.
+
 - `ranma.set { profile = "main" }`: the profile in use when ranma starts. A
   reload and an upgrade keep the one in use.
 

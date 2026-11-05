@@ -4061,7 +4061,22 @@ impl App {
             let timeout = t
                 .timeout
                 .map_or(self.config.settings.toast_timeout, Duration::from_secs_f64);
-            let id = self.toasts.push(t.text, level, timeout, Instant::now());
+            // The icon's style by name, as a module's: a name the theme does
+            // not have draws it urgent, and the log says which.
+            let icon = t.icon.map(|text| {
+                let name = t.icon_style.as_deref().unwrap_or("accent");
+                let style = crate::bar::Style::from_name(name, &self.config.theme.roles)
+                    .unwrap_or_else(|| {
+                        crate::journal::error(format!(
+                            "ranma.toast: unknown style `{name}` for its icon"
+                        ));
+                        crate::bar::Style::Urgent
+                    });
+                crate::toast::Icon { text, style }
+            });
+            let id = self
+                .toasts
+                .push_rich(t.text, icon, t.detail, level, timeout, Instant::now());
             self.dirty = true;
             if let (Some(id), Some(f)) = (id, t.on_click) {
                 // Only the shown toasts keep theirs: at most MAX_SHOWN.
@@ -4975,7 +4990,7 @@ impl App {
 
     /// Where toasts go: in `toasts.position`'s corner, clear of the bar on
     /// whichever edge it is.
-    pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<String>)> {
+    pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<crate::toast::Line>)> {
         let (top, bottom) = match self.config.theme.bar.position {
             BarPosition::Top => (self.screen.y + 1, self.screen.bottom()),
             BarPosition::Bottom => (self.screen.y, self.screen.bottom().saturating_sub(1)),
@@ -7813,7 +7828,13 @@ mod tests {
             a.toasts
                 .layout(crate::layout::Rect::new(0, 0, 200, 50), 0)
                 .iter()
-                .any(|(_, _, lines)| lines.concat().contains("built-in defaults"))
+                .any(|(_, _, lines)| {
+                    lines
+                        .iter()
+                        .map(|l| l.text.as_str())
+                        .collect::<String>()
+                        .contains("built-in defaults")
+                })
         };
         assert!(said(&a));
         a.config.load_error = None;
@@ -9626,6 +9647,52 @@ mod tests {
             row: y,
             modifiers: crossterm::event::KeyModifiers::NONE,
         })));
+    }
+
+    #[test]
+    fn a_lua_toast_takes_an_icon_in_a_style_and_a_detail() {
+        let mut a = app(None);
+        lua(
+            &mut a,
+            r#"
+            ranma.toast("built", { icon = "✓", icon_style = "dim", detail = "workspace 3 · vps" })
+            ranma.toast("plain icon", { icon = "!" })
+            ranma.toast("odd", { icon = "?", icon_style = "no-such-role" })
+            "#,
+        );
+        let shown = a.toast_layout();
+        let find = |text: &str| shown.iter().find(|(t, _, _)| t.text == text).unwrap().0;
+        let built = find("built");
+        assert_eq!(built.detail.as_deref(), Some("workspace 3 · vps"));
+        assert_eq!(
+            built.icon,
+            Some(crate::toast::Icon {
+                text: "✓".into(),
+                style: crate::bar::Style::Dim
+            })
+        );
+        assert_eq!(
+            find("plain icon").icon.as_ref().unwrap().style,
+            crate::bar::Style::Accent,
+            "accent unless it says"
+        );
+        assert_eq!(
+            find("odd").icon.as_ref().unwrap().style,
+            crate::bar::Style::Urgent,
+            "a style the theme does not have draws urgent, as a module's"
+        );
+        let err = |src: &str| {
+            a.config.lua.set_app_data(crate::config::Runtime::default());
+            let e = a.config.lua.load(src).exec().unwrap_err().to_string();
+            a.config.lua.remove_app_data::<crate::config::Runtime>();
+            e
+        };
+        assert!(
+            err(r#"ranma.toast("x", { icon_style = "dim" })"#)
+                .contains("icon_style without an icon"),
+        );
+        assert!(err(r#"ranma.toast("x", { detail = 3 })"#).contains("bad `detail` (integer)"));
+        assert!(err(r#"ranma.toast("x", { detial = "y" })"#).contains("unknown option `detial`"));
     }
 
     #[test]

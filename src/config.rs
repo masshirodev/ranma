@@ -1712,6 +1712,12 @@ pub struct LuaToast {
     pub timeout: Option<f64>,
     /// Called when the toast is clicked, after it is dismissed.
     pub on_click: Option<Rc<RegistryKey>>,
+    /// A mark before the text, and the style it takes by name (a role the
+    /// theme declares, or normal, dim, accent, urgent; accent when unset).
+    pub icon: Option<String>,
+    pub icon_style: Option<String>,
+    /// A second, dim line.
+    pub detail: Option<String>,
 }
 
 /// One thing a Lua call asked for, done after it returns.
@@ -2640,6 +2646,8 @@ pub const CAPABILITIES: &[&str] = &[
     "theme.palette",
     "theme.roles",
     "titlebar",
+    "toast.detail",
+    "toast.icon",
     "toast.on_click",
 ];
 
@@ -3839,6 +3847,7 @@ fn install_api(
             let mut urgent = false;
             let mut timeout = None;
             let mut on_click = None;
+            let (mut icon, mut icon_style, mut detail) = (None, None, None);
             if let Some(t) = &opts {
                 for pair in t.pairs::<String, Value>() {
                     let (k, v) = pair?;
@@ -3849,15 +3858,20 @@ fn install_api(
                         ("on_click", Value::Function(f)) => {
                             on_click = Some(Rc::new(lua.create_registry_value(f)?));
                         }
-                        ("urgent" | "timeout" | "on_click", other) => {
+                        ("icon", Value::String(v)) => icon = Some(v.to_str()?.to_string()),
+                        ("icon_style", Value::String(v)) => {
+                            icon_style = Some(v.to_str()?.to_string());
+                        }
+                        ("detail", Value::String(v)) => detail = Some(v.to_str()?.to_string()),
+                        ("urgent" | "timeout" | "on_click" | "icon" | "icon_style" | "detail", other) => {
                             return Err(rt_err(format!(
-                                "ranma.toast: bad `{k}` ({}); urgent is true/false, timeout positive seconds, on_click a function",
+                                "ranma.toast: bad `{k}` ({}); urgent is true/false, timeout positive seconds, on_click a function, icon, icon_style and detail strings",
                                 other.type_name()
                             )));
                         }
                         _ => {
                             return Err(rt_err(format!(
-                                "ranma.toast: unknown option `{k}` (expected urgent, timeout, on_click)"
+                                "ranma.toast: unknown option `{k}` (expected urgent, timeout, on_click, icon, icon_style, detail)"
                             )));
                         }
                     }
@@ -3866,11 +3880,19 @@ fn install_api(
             let mut rt = lua.app_data_mut::<Runtime>().ok_or_else(|| {
                 rt_err("ranma.toast only works inside binds, hooks and modules, not at config load")
             })?;
+            if icon_style.is_some() && icon.is_none() {
+                return Err(rt_err(
+                    "ranma.toast: icon_style without an icon has nothing to style",
+                ));
+            }
             rt.toasts.push(LuaToast {
                 text,
                 urgent,
                 timeout,
                 on_click,
+                icon,
+                icon_style,
+                detail,
             });
             Ok(())
         })?,

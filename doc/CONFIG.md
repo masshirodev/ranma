@@ -1363,6 +1363,21 @@ one (a jump to the pane a message is about). They come from three places:
   `on_click` is called with no arguments when the toast is clicked, after it
   is dismissed, and only then: a toast that times out or is pushed out by
   newer ones never calls it. `ranma.has("toast.on_click")`.
+
+  `icon = "✓"` goes before the text, in the style `icon_style` names: a
+  role the theme declares (`[roles.ok]`), or `normal`, `dim`, `accent`,
+  `urgent`; `accent` when unset. A name the theme does not have draws it in
+  `urgent`, and the log says which, as for a module. `detail` is a second,
+  quieter line under the text, in the bar's dim colour, two rows at most: where
+  it happened rather than what. A command that finished out of sight, say:
+
+  ```lua
+  ranma.toast("cargo build --release 38s", {
+    icon = "✓", icon_style = "ok", detail = "workspace 3 · vps",
+  })
+  ```
+
+  `ranma.has("toast.icon")`, `ranma.has("toast.detail")`.
 - **ranma:** a bell in a pane you cannot see says where it rang.
 
 `ranma action "<action>"` runs any action from a pane the same way, e.g.
@@ -2617,6 +2632,8 @@ the spelling against this table:
 | `hint_pattern` | `ranma.hint_pattern`, `hint_alphabet` and `hint_urls` |
 | `pane.state` | a pane handle's `index`, `zoomed`, `synced` and `urgent` |
 | `titlebar` | `ranma.titlebar`, `ranma.title_piece`, and a profile's `titlebar` |
+| `toast.detail` | `ranma.toast`'s `detail` |
+| `toast.icon` | `ranma.toast`'s `icon` and `icon_style` |
 | `toast.on_click` | `ranma.toast`'s `on_click` |
 
 ## Themes

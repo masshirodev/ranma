@@ -86,3 +86,8 @@ title = ["dim"]
 title_active = ["bold"]
 accent = ["bold"]
 toast = []
+
+# The toast's tick (init.lua's command_finished hook): matcha, as an occupied
+# workspace.
+[roles.ok]
+fg = "#9db37a"

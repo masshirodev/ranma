@@ -1891,6 +1891,21 @@ one (a jump to the pane a message is about). They come from three places:
 \fBon_click\fR is called with no arguments when the toast is clicked, after it
 is dismissed, and only then: a toast that times out or is pushed out by
 newer ones never calls it. \fBranma.has("toast.on_click")\fR.
+.PP
+  \fBicon = "✓"\fR goes before the text, in the style \fBicon_style\fR names: a
+  role the theme declares (\fB[roles.ok]\fR), or \fBnormal\fR, \fBdim\fR, \fBaccent\fR,
+  \fBurgent\fR; \fBaccent\fR when unset. A name the theme does not have draws it in
+  \fBurgent\fR, and the log says which, as for a module. \fBdetail\fR is a second,
+  quieter line under the text, in the bar's dim colour, two rows at most: where
+  it happened rather than what. A command that finished out of sight, say:
+.PP
+  \fBlua
+  ranma.toast("cargo build \-\-release 38s", {
+    icon = "✓", icon_style = "ok", detail = "workspace 3 · vps",
+  })
+\fR
+.PP
+  \fBranma.has("toast.icon")\fR, \fBranma.has("toast.detail")\fR.
 .IP \(bu 2
 \fBranma:\fR a bell in a pane you cannot see says where it rang.
 .PP
@@ -3487,6 +3502,12 @@ a pane handle's \fBindex\fR, \fBzoomed\fR, \fBsynced\fR and \fBurgent\fR
 .TP
 \fBtitlebar\fR
 \fBranma.titlebar\fR, \fBranma.title_piece\fR, and a profile's \fBtitlebar\fR
+.TP
+\fBtoast.detail\fR
+\fBranma.toast\fR's \fBdetail\fR
+.TP
+\fBtoast.icon\fR
+\fBranma.toast\fR's \fBicon\fR and \fBicon_style\fR
 .TP
 \fBtoast.on_click\fR
 \fBranma.toast\fR's \fBon_click\fR

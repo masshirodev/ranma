@@ -30,9 +30,40 @@ pub struct Toast {
     /// must never push the message itself out of the box.
     pub source: Option<String>,
     pub text: String,
+    /// A mark before the text in a style of its own (`ranma.toast`'s `icon`
+    /// and `icon_style`): a green tick on a build that passed.
+    pub icon: Option<Icon>,
+    /// A second, quieter line under the text (`detail`): where it happened,
+    /// in the theme's dim colour.
+    pub detail: Option<String>,
     pub level: Level,
     pub expires: Instant,
 }
+
+/// A toast's mark, and the style it is drawn in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Icon {
+    pub text: String,
+    pub style: crate::bar::Style,
+}
+
+/// Which part of a toast a laid-out line is: its text (the icon starts the
+/// first) or its detail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    Text,
+    Detail,
+}
+
+/// One row of a toast, as [`Toasts::layout`] lays it out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Line {
+    pub text: String,
+    pub part: Part,
+}
+
+/// The most rows a detail takes: it says where, not what.
+const DETAIL_LINES: usize = 2;
 
 #[derive(Debug, Default)]
 pub struct Toasts {
@@ -74,6 +105,8 @@ impl Toasts {
             id: self.next_id,
             source,
             text: text.to_string(),
+            icon: None,
+            detail: None,
             level,
             expires: now + timeout,
         });
@@ -81,6 +114,26 @@ impl Toasts {
             self.list.remove(0);
         }
         Some(self.next_id)
+    }
+
+    /// A toast with a mark before its text and a detail under it; either may
+    /// be absent, and a blank one is.
+    pub fn push_rich(
+        &mut self,
+        text: impl Into<String>,
+        icon: Option<Icon>,
+        detail: Option<String>,
+        level: Level,
+        timeout: Duration,
+        now: Instant,
+    ) -> Option<u64> {
+        let id = self.push(text, level, timeout, now)?;
+        let t = self.list.last_mut().expect("just pushed");
+        t.icon = icon.filter(|i| !i.text.trim().is_empty());
+        t.detail = detail
+            .map(|d| d.trim().to_string())
+            .filter(|d| !d.is_empty());
+        Some(id)
     }
 
     /// A toast that stays until it is changed or dismissed (a job's
@@ -153,7 +206,7 @@ impl Toasts {
 
     /// Where each toast goes on a screen of `screen`, newest on top, stacked down
     /// the right edge from `top`. Returns each toast with its box and its lines.
-    pub fn layout(&self, screen: Rect, top: u16) -> Vec<(&Toast, Rect, Vec<String>)> {
+    pub fn layout(&self, screen: Rect, top: u16) -> Vec<(&Toast, Rect, Vec<Line>)> {
         self.layout_at(screen, (top, screen.bottom()), Corner::TopRight)
     }
 
@@ -165,7 +218,7 @@ impl Toasts {
         screen: Rect,
         (top, bottom): (u16, u16),
         corner: Corner,
-    ) -> Vec<(&Toast, Rect, Vec<String>)> {
+    ) -> Vec<(&Toast, Rect, Vec<Line>)> {
         let max_w = (screen.w * 2 / 5)
             .clamp(20, 60)
             .min(screen.w.saturating_sub(2));
@@ -174,8 +227,8 @@ impl Toasts {
         let mut y = if down { top } else { bottom };
         let mut out = Vec::new();
         for t in self.list.iter().rev() {
-            let lines = lines(t.source.as_deref(), &t.text, inner_max.max(1));
-            let text_w = lines.iter().map(|l| width(l)).max().unwrap_or(0) as u16;
+            let lines = toast_lines(t, inner_max.max(1));
+            let text_w = lines.iter().map(|l| width(&l.text)).max().unwrap_or(0) as u16;
             let w = (text_w + 4).max(20).min(max_w);
             let h = lines.len() as u16 + 2;
             let ty = if down {
@@ -212,6 +265,37 @@ pub enum Corner {
     BottomLeft,
     Top,
     Bottom,
+}
+
+/// Every row of a toast: its text after its icon, the text's later rows
+/// lined up under the first's text rather than under the icon, then its
+/// detail.
+fn toast_lines(t: &Toast, cols: usize) -> Vec<Line> {
+    let icon_w = t.icon.as_ref().map_or(0, |i| width(&i.text) + 1);
+    let body = lines(
+        t.source.as_deref(),
+        &t.text,
+        cols.saturating_sub(icon_w).max(1),
+    );
+    let mut out: Vec<Line> = body
+        .into_iter()
+        .enumerate()
+        .map(|(i, l)| Line {
+            text: match (&t.icon, i) {
+                (Some(icon), 0) => format!("{} {l}", icon.text),
+                (Some(_), _) => format!("{}{l}", " ".repeat(icon_w)),
+                (None, _) => l,
+            },
+            part: Part::Text,
+        })
+        .collect();
+    if let Some(d) = &t.detail {
+        out.extend(wrap(d, cols, DETAIL_LINES).into_iter().map(|text| Line {
+            text,
+            part: Part::Detail,
+        }));
+    }
+    out
 }
 
 /// A toast's lines: `source: text` wrapped to three, if that fits whole;
@@ -386,6 +470,84 @@ mod tests {
         assert_eq!(l[0].1.y, 0);
         let mid = l[0].1.x + l[0].1.w / 2;
         assert!(mid.abs_diff(SCREEN.w / 2) <= 1);
+    }
+
+    #[test]
+    fn an_icon_leads_the_text_and_a_detail_follows_it() {
+        let now = Instant::now();
+        let mut t = Toasts::default();
+        let tick = Icon {
+            text: "✓".into(),
+            style: crate::bar::Style::Accent,
+        };
+        t.push_rich(
+            "cargo build --release 38s",
+            Some(tick.clone()),
+            Some("  workspace 3 · vps ".into()),
+            Level::Normal,
+            DEFAULT_TIMEOUT,
+            now,
+        );
+        let l = t.layout(SCREEN, 0);
+        let (toast, r, lines) = &l[0];
+        assert_eq!(toast.icon.as_ref(), Some(&tick));
+        assert_eq!(
+            lines,
+            &[
+                Line {
+                    text: "✓ cargo build --release 38s".into(),
+                    part: Part::Text
+                },
+                Line {
+                    text: "workspace 3 · vps".into(),
+                    part: Part::Detail
+                },
+            ]
+        );
+        assert_eq!(r.h, 4, "two rows between the borders");
+    }
+
+    #[test]
+    fn a_wrapped_text_lines_up_under_itself_not_under_the_icon() {
+        let now = Instant::now();
+        let mut t = Toasts::default();
+        let icon = Icon {
+            text: "✓".into(),
+            style: crate::bar::Style::Accent,
+        };
+        // 20 columns of screen: an 18-wide toast, 14 inside, 12 after the icon.
+        let narrow = Rect::new(0, 0, 20, 10);
+        t.push_rich(
+            "aaaa bbbb cccc dddd",
+            Some(icon),
+            Some(" ".into()),
+            Level::Normal,
+            DEFAULT_TIMEOUT,
+            now,
+        );
+        let l = t.layout(narrow, 0);
+        let texts: Vec<&str> = l[0].2.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts, ["✓ aaaa bbbb", "  cccc dddd"]);
+        assert!(l[0].0.detail.is_none(), "a blank detail is none");
+    }
+
+    #[test]
+    fn a_long_detail_takes_two_rows_at_most() {
+        let now = Instant::now();
+        let mut t = Toasts::default();
+        t.push_rich(
+            "done",
+            None,
+            Some("one two three four five six seven eight nine ten ".repeat(4)),
+            Level::Normal,
+            DEFAULT_TIMEOUT,
+            now,
+        );
+        let lines = &t.layout(Rect::new(0, 0, 40, 10), 0)[0].2;
+        let detail: Vec<&Line> = lines.iter().filter(|l| l.part == Part::Detail).collect();
+        assert_eq!(detail.len(), DETAIL_LINES);
+        assert!(detail[1].text.ends_with('…'));
+        assert_eq!(lines[0].text, "done", "no icon, no indent");
     }
 
     #[test]

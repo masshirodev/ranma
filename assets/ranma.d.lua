@@ -403,9 +403,12 @@ function ranma.refresh_module(name) end
 function ranma.module_shown(name) end
 
 ---A toast. `on_click` runs when it is clicked (after it is dismissed);
----`ranma.has("toast.on_click")`.
+---`ranma.has("toast.on_click")`. `icon` goes before the text in the style
+---`icon_style` names (a role of the theme, or normal, dim, accent, urgent;
+---accent unset), `detail` under it in the dim colour; `ranma.has("toast.icon")`,
+---`ranma.has("toast.detail")`.
 ---@param text string
----@param opts? { urgent?: boolean, timeout?: number, on_click?: fun() }
+---@param opts? { urgent?: boolean, timeout?: number, on_click?: fun(), icon?: string, icon_style?: string, detail?: string }
 function ranma.toast(text, opts) end
 
 ---@class ranma.State

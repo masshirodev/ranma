@@ -2231,14 +2231,26 @@ fn draw_toasts(f: &mut Frame, app: &App) {
             .style(body);
         f.render_widget(block, rrect(r));
         let buf = f.buffer_mut();
+        let cols = r.w.saturating_sub(4) as usize;
+        // The detail says where, not what: the bar's dim colour on the toast.
+        let detail = body
+            .fg(color(c.bar_dim))
+            .add_modifier(modifier(theme.styles.dim));
         for (i, line) in lines.iter().enumerate() {
-            buf.set_stringn(
-                r.x + 2,
-                r.y + 1 + i as u16,
-                line,
-                r.w.saturating_sub(4) as usize,
-                text,
-            );
+            let (x, y) = (r.x + 2, r.y + 1 + i as u16);
+            let style = match line.part {
+                crate::toast::Part::Text => text,
+                crate::toast::Part::Detail => detail,
+            };
+            buf.set_stringn(x, y, &line.text, cols, style);
+            // The icon starts the first row, in its own style over the toast's
+            // ground (a role with a ground of its own keeps it).
+            if i == 0
+                && let Some(icon) = &toast.icon
+            {
+                let st = body.patch(piece_style(c, &theme.styles, icon.style));
+                buf.set_stringn(x, y, &icon.text, cols, st);
+            }
         }
     }
 }
@@ -2783,6 +2795,47 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    /// A toast's icon takes its role's colour on the toast's ground, its
+    /// detail the bar's dim colour, its text the toast's own.
+    #[test]
+    fn a_toast_draws_its_icon_in_its_role_and_its_detail_dim() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app_with(
+            "toasticon",
+            "[colors]\ntoast_fg = \"#ffffff\"\ntoast_bg = \"#101010\"\nbar_dim = \"#777777\"\n\
+             [roles.ok]\nfg = \"#00ff00\"\n",
+            "",
+        );
+        let _ = std::fs::remove_dir_all(dir);
+        let ok = *app.config.theme.roles.get("ok").unwrap();
+        app.toasts.push_rich(
+            "built",
+            Some(crate::toast::Icon {
+                text: "✓".into(),
+                style: bar::Style::Role(ok),
+            }),
+            Some("workspace 3".into()),
+            crate::toast::Level::Normal,
+            crate::toast::DEFAULT_TIMEOUT,
+            std::time::Instant::now(),
+        );
+        let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+        t.draw(|f| draw_toasts(f, &app)).unwrap();
+        let buf = t.backend().buffer();
+        let (r, _) = (app.toast_layout()[0].1, ());
+        let at = |x: u16, y: u16| &buf[(x, y)];
+        let tick = at(r.x + 2, r.y + 1);
+        assert_eq!(tick.symbol(), "✓");
+        assert_eq!(tick.fg, Color::Rgb(0, 255, 0));
+        assert_eq!(tick.bg, Color::Rgb(16, 16, 16), "on the toast's ground");
+        let text = at(r.x + 4, r.y + 1);
+        assert_eq!(text.symbol(), "b");
+        assert_eq!(text.fg, Color::Rgb(255, 255, 255));
+        let detail = at(r.x + 2, r.y + 2);
+        assert_eq!(detail.symbol(), "w");
+        assert_eq!(detail.fg, Color::Rgb(119, 119, 119));
     }
 
     /// A cap with no ground to draw (no `module_bg`, the bar on the

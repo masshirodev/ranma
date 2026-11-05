@@ -35,7 +35,7 @@ ranma.module("mem", { format = "\u{f035b} %s" }) -- nf-md-memory
 ranma.module("clock", {
   interval = 60,
   render = function()
-    return "\u{f43a} " .. os.date("%H:%M") -- nf-oct-clock
+    return { text = "\u{f43a} " .. os.date("%H:%M"), style = "accent" } -- nf-oct-clock
   end,
 })
 
@@ -44,3 +44,23 @@ ranma.bar {
   center = { "pane_strip" },
   right = { "cpu", "mem", "host", "clock" },
 }
+
+-- The toast: a command that ran a while where you were not looking says how
+-- it ended, and where. Needs the shell's OSC 133 marks with the command line
+-- in them (doc/CONFIG.md, "Hooks": the zsh lines under command_finished).
+local commands = {}
+ranma.on("command_started", function(ev)
+  commands[ev.pane] = ev.command
+end)
+ranma.on("command_finished", function(ev)
+  local command = commands[ev.pane] or ev.title
+  commands[ev.pane] = nil
+  if ev.visible or ev.duration < 5 or not ev.workspace then return end
+  local ok = ev.exit == 0
+  local name = ranma.state().names[ev.workspace]
+  ranma.toast(("%s %ds"):format(command, math.floor(ev.duration)), {
+    icon = ok and "\u{2713}" or "\u{2717}", -- ✓ ✗
+    icon_style = ok and "ok" or "urgent",
+    detail = "workspace " .. ev.workspace .. (name and " \u{b7} " .. name or ""),
+  })
+end)
