@@ -930,7 +930,23 @@ ranma.bar {
 A call changes only the sides it names. Space is shared out in order: the right
 side first (it holds what you glance at), then the left, and the centre gets the
 gap between them, centred on the bar when it fits. Whatever does not fit is cut
-with `…`. A message from ranma or `ranma.notify` takes the centre while it is up.
+with `…`, inside a pill's caps, so a cut pill is still a pill. `center_min = N`
+holds N cells for the centre before the sides share the rest, so what you moved
+there is not the first thing cut. A message from ranma or `ranma.notify` takes
+the centre while it is up.
+
+**Groups.** A table inside a side is one pill:
+`right = { "load", { "cpu", "mem", "clock", style = "sys" } }`. Its modules
+keep their own text styles and clicks, with `bar.group_separator` between them
+on the pill's ground; the pill stands on the ground of the role `style` names,
+between that role's caps (`[roles.sys]` `left`, `right`), else the bar's. A
+whole side in one pill is a side holding one group. Groups do not nest. The
+large bar keeps each module's own chip and ignores the grouping.
+
+**A module's ground.** `ranma.module(name, { style = "role" })`, for any
+module, built-in ones included (`ranma.module("cpu", { style = "cpu" })`),
+stands it on that role's ground, between the role's caps: a pill of its own
+colour. A role the theme does not have is an error at load.
 
 `size = "large"` makes the bar three rows, for a touch screen: the text sits on
 the middle row, and the mode, workspace and strip chips are at least five
@@ -985,6 +1001,7 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 | `exec` | A command run by `/bin/sh -c`, off ranma's own thread, killed (with anything it started) after 5 seconds. A slow command skips ticks instead of piling up. |
 | `format` | For `exec`: the text, with `%s` replaced by the output line. |
 | `interval` | Seconds between runs; required for `exec`. Aligned to the wall clock: `60` runs on the minute, not 60 s after ranma started. |
+| `style` | A role the module stands on: its ground and caps (see [The bar](#the-bar)). Every module takes it, built-in ones too. |
 | `on_click` | A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable. |
 | `nested` | Whose value it shows while the focused pane runs a ranma inside this one (over ssh): `"follow"` (default) shows that ranma's module of the same name when it has one, and this one's otherwise; `"own"` always shows this one's (a clock); `"hide"` follows, but shows nothing when the ranma inside has no module of that name (something about the focused pane, which is wrong about a pane running ssh). See [ranma inside ranma](#ranma-inside-ranma). |
 
@@ -2507,6 +2524,8 @@ colours only; a key set to a name shows the name there.
 | `bar.position` | `top`, `bottom`, `hidden` |
 | `bar.separator` | text drawn between two modules on the same side |
 | `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's, `{icon}` that program's glyph from `[icons]`. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |
+| `bar.group_separator` | drawn between the modules of a group, on its ground, in its role's `separator` colour (else `colors.separator`, else `bar_dim`). Empty by default. |
+| `colors.separator` | `bar.separator`'s colour (and a group's separator's where its role gives none); unset, `bar_dim`. Its attributes are `styles.separator` (unset, `dim`'s). |
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `bar.module_padding_left`, `module_padding_right` | `0`-`4`: blank cells inside the left cap and the right one, on the module's ground. `0` by default. On a side with none, a filled chip that ends the module (the current workspace first in the list, with `chip_left`/`chip_right` set) has its own cap as the module's end, on the bar's ground, rather than the module's cap drawing a ring around it; a workspace there that is not current gives the blank its format starts or ends with to the module's cap, so the workspace hugs the edge either way and the module keeps its width. |
 | `bar.chip_left`, `chip_right` | drawn before and after every filled chip (the current workspace, a `pane_strip` tab, ` WM `), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a `workspace_current_format` without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default. |
@@ -2531,7 +2550,7 @@ colours only; a key set to a name shows the name there.
 | `panes.scrollbar` | `off`, `scrolled` (the default), `on`: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's `pane-scrollbars`). `scrolled` only while the view is scrolled back (the wheel, copy mode); `on` whenever the pane has history. Drawn as the heavy line in the border's colour (`#` with `ascii`); a pane with no border has none. |
 | `palette.color0` - `color15`, `palette.foreground`, `palette.background` | `#rrggbb`: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and `ls` alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256-colour cube (16-255) and truecolor text are left as the program sent them. `background` is the pane's ground where the program leaves the default, and `panes.active_bg` / `inactive_bg` win over it. Needs a truecolor host terminal. |
 | `roles.<name>` | a style of the theme's own a module can ask for by name (`style = "git"`): `fg` (a colour), `bg` (optional; unset, the module's own ground), `styles` (attributes, as `[styles]`), `left` and `right` (one character each, its own caps, drawn in `bg`) and `padding_left` / `padding_right` (`0`-`4` blanks inside them). A bar module (or a title piece or group) in a role with a `bg` is a pill of that ground: its caps, the role's own or else `bar.module_left` / `module_right`, are drawn in it, and so are the blanks, so each module can be a pill of its own colour. Not one of `normal`, `dim`, `accent`, `urgent`, which are `[colors]`'; a name is letters, digits, `_` and `-`. A theme that inherits has its parent's roles. |
-| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected` (a picker's selected label; bold by default), `picker_title`, `picker_query`, `picker_current`, `picker_error` (a picker's title, typed query, mark of where you are, and the palette's error row; all but `picker_current` bold by default), `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
+| `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `separator` (`bar.separator` and a group's; unset, `dim`'s), `picker_selected` (a picker's selected label; bold by default), `picker_title`, `picker_query`, `picker_current`, `picker_error` (a picker's title, typed query, mark of where you are, and the palette's error row; all but `picker_current` bold by default), `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
 
 The toolbar and picker keys are optional: each follows the role it names when
 unset, so a theme that only sets the older roles (one rendered from the

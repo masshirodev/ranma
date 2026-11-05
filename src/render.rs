@@ -1868,7 +1868,7 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
         // (between its caps) or the bar's.
         let own_ground = matches!(piece.style, bar::Style::Role(r) if r.bg.is_some());
         if !filled && !own_ground {
-            match (piece.boxed, c.module_bg) {
+            match (piece.boxed, piece.ground.or(c.module_bg)) {
                 (true, Some(ground)) => {
                     style = style.bg(color(ground));
                     if piece.style == bar::Style::Normal
@@ -2428,6 +2428,14 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
             None => fg(c.ws_active_bg, st.ws_active),
         },
         // A module's edge: its ground's colour on the bar's.
+        bar::Style::Separator => fg(
+            c.separator.unwrap_or(c.bar_dim),
+            st.separator.unwrap_or(st.dim),
+        ),
+        bar::Style::GroupSep(own) => fg(
+            own.or(c.separator).unwrap_or(c.bar_dim),
+            st.separator.unwrap_or(st.dim),
+        ),
         bar::Style::RoleCap(r) => Style::default()
             .fg(color(r.bg.unwrap_or(c.bar_bg)))
             .bg(color(c.bar_bg)),

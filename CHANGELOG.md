@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- Bar groups: a table in a `ranma.bar` side is one pill, its modules joined
+  by `bar.group_separator` on the ground of the role it names. Any module,
+  built-in ones too, takes a `style`: a role it stands on as a pill.
+  `center_min` holds cells for the centre; a cut pill keeps its closing cap;
+  `colors.separator` and `styles.separator` colour the separators.
+
 - A bar module in a role with a `bg` is a pill of that ground: its caps (the
   role's own `left` / `right`, else the bar's) and padding are drawn in it,
   so each module can be a pill of its own colour.

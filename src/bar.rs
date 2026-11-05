@@ -44,6 +44,11 @@ pub enum Style {
     Cap,
     /// A module's edge in its role's own ground (card c444).
     RoleCap(crate::theme::RoleDef),
+    /// `bar.separator`, between modules: `colors.separator`, else dim.
+    Separator,
+    /// A group's separator, on its ground: the role's colour, else
+    /// `colors.separator`, else dim.
+    GroupSep(Option<crate::theme::Color>),
     /// `bar.chip_left` or `chip_right`: the edge of a filled chip, in that
     /// chip's ground on whatever it sits on.
     ChipCap(Chip),
@@ -146,8 +151,10 @@ pub struct Piece {
     pub text: String,
     pub style: Style,
     pub click: Option<Click>,
-    /// Inside a module's caps: drawn on `colors.module_bg`.
+    /// Inside a module's caps: drawn on `colors.module_bg`, or `ground`.
     pub boxed: bool,
+    /// A ground of its own inside the caps: its role's (card c445).
+    pub ground: Option<crate::theme::Color>,
 }
 
 impl Piece {
@@ -157,6 +164,7 @@ impl Piece {
             style,
             click: None,
             boxed: false,
+            ground: None,
         }
     }
     pub fn on_click(mut self, click: Click) -> Piece {
@@ -168,7 +176,7 @@ impl Piece {
 /// One module's output. Empty modules take no room and get no separator.
 pub type Segment = Vec<Piece>;
 
-fn width(pieces: &[Piece]) -> usize {
+pub fn width(pieces: &[Piece]) -> usize {
     pieces.iter().map(|p| p.text.width()).sum()
 }
 
@@ -348,19 +356,33 @@ fn join(segments: &[Segment], sep: &str) -> Vec<Piece> {
     let mut out = Vec::new();
     for seg in segments.iter().filter(|s| width(s) > 0) {
         if !out.is_empty() && !sep.is_empty() {
-            out.push(Piece::new(sep, Style::Dim));
+            out.push(Piece::new(sep, Style::Separator));
         }
         out.extend(seg.iter().cloned());
     }
     out
 }
 
-/// Cut pieces down to `max` columns, marking the cut with an ellipsis.
-fn truncate(pieces: Vec<Piece>, max: usize) -> Vec<Piece> {
+/// Cut pieces down to `max` columns, marking the cut with an ellipsis. A
+/// closing cap is kept, so a cut pill is still a pill (card c445).
+fn truncate(mut pieces: Vec<Piece>, max: usize) -> Vec<Piece> {
     if width(&pieces) <= max {
         return pieces;
     }
     if max == 0 {
+        return Vec::new();
+    }
+    let is_cap = |p: &Piece| matches!(p.style, Style::Cap | Style::RoleCap(_));
+    if pieces.last().is_some_and(is_cap) {
+        let cap = pieces.pop().expect("checked");
+        let w = cap.text.width();
+        if w < max {
+            let mut out = truncate(pieces, max - w);
+            if !out.is_empty() {
+                out.push(cap);
+            }
+            return out;
+        }
         return Vec::new();
     }
     let mut out = Vec::new();
@@ -420,12 +442,31 @@ pub fn fit_floor(
     cols: u16,
     floor: usize,
 ) -> Vec<(u16, Piece)> {
+    fit_keep(left, center, right, sep, cols, floor, 0)
+}
+
+/// [`fit_floor`], with `keep` cells held for the centre before the sides are
+/// shared out (`ranma.bar { center_min = N }`): what is moved there is not
+/// the first thing cut.
+pub fn fit_keep(
+    left: &[Segment],
+    center: &[Segment],
+    right: &[Segment],
+    sep: &str,
+    cols: u16,
+    floor: usize,
+    keep: usize,
+) -> Vec<(u16, Piece)> {
     let cols = cols as usize;
-    let right = truncate(join(right, sep), cols);
+    let held = match keep.min(joined_width(center, sep)) {
+        0 => 0,
+        k => k + 2,
+    };
+    let right = truncate(join(right, sep), cols.saturating_sub(held));
     let rw = width(&right);
     let left = truncate(
         join(left, sep),
-        cols.saturating_sub(rw + usize::from(rw > 0)),
+        cols.saturating_sub(rw + usize::from(rw > 0) + held),
     );
     let lw = width(&left);
 
@@ -589,6 +630,15 @@ mod tests {
     fn sides_land_where_they_belong() {
         let placed = fit(&[seg("L")], &[seg("mid")], &[seg("R")], " | ", 21);
         assert_eq!(text_at(&placed, 21), "L        mid        R");
+    }
+
+    #[test]
+    fn a_cut_pill_keeps_its_closing_cap() {
+        let pill = boxed(seg("abcdefgh"), "(", ")", 0, 0);
+        let cut = truncate(pill, 6);
+        let text: String = cut.iter().map(|p| p.text.as_str()).collect();
+        assert_eq!(text, "(abc…)");
+        assert_eq!(cut.last().unwrap().style, Style::Cap);
     }
 
     #[test]

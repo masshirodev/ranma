@@ -216,6 +216,10 @@ pub struct Colors {
     pub scrollbar_thumb: Option<Color>,
     #[serde(default)]
     pub scrollbar_track: Option<Color>,
+    /// `bar.separator`'s colour, and a group's separator's where its role
+    /// gives none; unset, `bar_dim`.
+    #[serde(default)]
+    pub separator: Option<Color>,
     /// A float's shadow's colour (`floating.shadow`); unset, cells are made
     /// faint (`shade`) or drawn in `bar_dim` (`char`).
     #[serde(default)]
@@ -676,6 +680,9 @@ pub struct Styles {
     pub picker_current: Attrs,
     #[serde(default = "Attrs::bold")]
     pub picker_error: Attrs,
+    /// `bar.separator` and a group's; unset, the `dim` role's.
+    #[serde(default)]
+    pub separator: Option<Attrs>,
 }
 
 /// A format with `{placeholders}` and optional `[groups]`: a group shows only
@@ -879,6 +886,9 @@ pub struct Bar {
     /// `pane_strip` tab, the mode) in the chip's own ground: rounded chips.
     pub chip_left: String,
     pub chip_right: String,
+    /// Between the modules of a group (card c445), on its ground.
+    #[serde(default)]
+    pub group_separator: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -1222,6 +1232,9 @@ pub struct RoleDef {
     pub padding_left: u8,
     #[serde(default)]
     pub padding_right: u8,
+    /// A group's separator on this role's ground; unset, `colors.separator`.
+    #[serde(default)]
+    pub separator: Option<Color>,
 }
 
 /// The styles every theme has, which `[roles]` may not name.
@@ -2029,6 +2042,7 @@ mod tests {
                 right: None,
                 padding_left: 0,
                 padding_right: 0,
+                separator: None,
             },
             "inherited"
         );

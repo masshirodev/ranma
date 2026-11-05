@@ -1310,7 +1310,23 @@ ranma.bar {
 A call changes only the sides it names. Space is shared out in order: the right
 side first (it holds what you glance at), then the left, and the centre gets the
 gap between them, centred on the bar when it fits. Whatever does not fit is cut
-with \fB…\fR. A message from ranma or \fBranma.notify\fR takes the centre while it is up.
+with \fB…\fR, inside a pill's caps, so a cut pill is still a pill. \fBcenter_min = N\fR
+holds N cells for the centre before the sides share the rest, so what you moved
+there is not the first thing cut. A message from ranma or \fBranma.notify\fR takes
+the centre while it is up.
+.PP
+\fBGroups.\fR A table inside a side is one pill:
+\fBright = { "load", { "cpu", "mem", "clock", style = "sys" } }\fR. Its modules
+keep their own text styles and clicks, with \fBbar.group_separator\fR between them
+on the pill's ground; the pill stands on the ground of the role \fBstyle\fR names,
+between that role's caps (\fB[roles.sys]\fR \fBleft\fR, \fBright\fR), else the bar's. A
+whole side in one pill is a side holding one group. Groups do not nest. The
+large bar keeps each module's own chip and ignores the grouping.
+.PP
+\fBA module's ground.\fR \fBranma.module(name, { style = "role" })\fR, for any
+module, built\-in ones included (\fBranma.module("cpu", { style = "cpu" })\fR),
+stands it on that role's ground, between the role's caps: a pill of its own
+colour. A role the theme does not have is an error at load.
 .PP
 \fBsize = "large"\fR makes the bar three rows, for a touch screen: the text sits on
 the middle row, and the mode, workspace and strip chips are at least five
@@ -1399,6 +1415,9 @@ For \fBexec\fR: the text, with \fB%s\fR replaced by the output line.
 .TP
 \fBinterval\fR
 Seconds between runs; required for \fBexec\fR. Aligned to the wall clock: \fB60\fR runs on the minute, not 60 s after ranma started.
+.TP
+\fBstyle\fR
+A role the module stands on: its ground and caps (see The bar\fR). Every module takes it, built\-in ones too.
 .TP
 \fBon_click\fR
 A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable.
@@ -3373,6 +3392,12 @@ text drawn between two modules on the same side
 \fBbar.workspace_format\fR, \fBworkspace_current_format\fR
 a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's, \fB{icon}\fR that program's glyph from \fB[icons]\fR. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.
 .TP
+\fBbar.group_separator\fR
+drawn between the modules of a group, on its ground, in its role's \fBseparator\fR colour (else \fBcolors.separator\fR, else \fBbar_dim\fR). Empty by default.
+.TP
+\fBcolors.separator\fR
+\fBbar.separator\fR's colour (and a group's separator's where its role gives none); unset, \fBbar_dim\fR. Its attributes are \fBstyles.separator\fR (unset, \fBdim\fR's).
+.TP
 \fBbar.module_left\fR, \fBmodule_right\fR
 drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
 .TP
@@ -3446,7 +3471,7 @@ the art's colours where it sets none: its text (unset, \fBbar_dim\fR) and the gr
 a style of the theme's own a module can ask for by name (\fBstyle = "git"\fR): \fBfg\fR (a colour), \fBbg\fR (optional; unset, the module's own ground), \fBstyles\fR (attributes, as \fB[styles]\fR), \fBleft\fR and \fBright\fR (one character each, its own caps, drawn in \fBbg\fR) and \fBpadding_left\fR / \fBpadding_right\fR (\fB0\fR\-\fB4\fR blanks inside them). A bar module (or a title piece or group) in a role with a \fBbg\fR is a pill of that ground: its caps, the role's own or else \fBbar.module_left\fR / \fBmodule_right\fR, are drawn in it, and so are the blanks, so each module can be a pill of its own colour. Not one of \fBnormal\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR, which are \fB[colors]\fR'; a name is letters, digits, \fB_\fR and \fB\-\fR. A theme that inherits has its parent's roles.
 .TP
 \fBstyles.<role>\fR
-text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBpicker_selected\fR (a picker's selected label; bold by default), \fBpicker_title\fR, \fBpicker_query\fR, \fBpicker_current\fR, \fBpicker_error\fR (a picker's title, typed query, mark of where you are, and the palette's error row; all but \fBpicker_current\fR bold by default), \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
+text attributes, a list of \fBbold\fR, \fBdim\fR, \fBitalic\fR, \fBunderline\fR, \fBreverse\fR, \fBstrikethrough\fR. Roles: \fBbar\fR, \fBdim\fR, \fBaccent\fR, \fBurgent\fR (the module styles), \fBmode\fR, \fBws_active\fR, \fBws_occupied\fR, \fBws_empty\fR, \fBws_urgent\fR, \fBws_activity\fR, \fBtab_active\fR, \fBtab_inactive\fR, \fBtitle\fR, \fBtitle_active\fR (a pane's border title, and the focused one's), \fBseparator\fR (\fBbar.separator\fR and a group's; unset, \fBdim\fR's), \fBpicker_selected\fR (a picker's selected label; bold by default), \fBpicker_title\fR, \fBpicker_query\fR, \fBpicker_current\fR, \fBpicker_error\fR (a picker's title, typed query, mark of where you are, and the palette's error row; all but \fBpicker_current\fR bold by default), \fBtoast\fR. A list replaces the inherited one: \fBmode = []\fR takes the default bold away.
 .PP
 The toolbar and picker keys are optional: each follows the role it names when
 unset, so a theme that only sets the older roles (one rendered from the

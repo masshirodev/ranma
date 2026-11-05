@@ -652,20 +652,42 @@ pub const BUILTIN_MODULES: [&str; 7] = [
 /// these defaults; `ranma.module` changes only `interval` and `format`.
 pub const SYSTEM_MODULES: [(&str, f64); 2] = [("cpu", 2.0), ("mem", 5.0)];
 
-/// Which modules the bar shows, in order, on each side.
+/// Which modules the bar shows, in order, on each side: a module, or a
+/// group of modules in one pill (`{ "cpu", "mem", style = "sys" }`, card
+/// c445), the same entries a titlebar's sides hold.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BarLayout {
-    pub left: Vec<String>,
-    pub center: Vec<String>,
-    pub right: Vec<String>,
+    pub left: Vec<TitleEntry>,
+    pub center: Vec<TitleEntry>,
+    pub right: Vec<TitleEntry>,
     /// `large`: three rows, chips on the middle one (DESIGN.md, "A mobile view").
     pub size: crate::toolbar::Size,
+    /// Cells the centre keeps before the sides are shared out.
+    pub center_min: u16,
 }
 
 impl BarLayout {
+    /// Every module named, groups' members in place.
     pub fn all(&self) -> impl Iterator<Item = &String> {
-        self.left.iter().chain(&self.center).chain(&self.right)
+        self.left
+            .iter()
+            .chain(&self.center)
+            .chain(&self.right)
+            .flat_map(TitleEntry::names)
     }
+}
+
+/// The names in a side, groups' members in place.
+pub fn names(side: &[TitleEntry]) -> Vec<String> {
+    side.iter().flat_map(TitleEntry::names).cloned().collect()
+}
+
+/// A side of plain names, as a test or a built-in default writes it.
+pub fn modules<S: AsRef<str>>(names: &[S]) -> Vec<TitleEntry> {
+    names
+        .iter()
+        .map(|n| TitleEntry::Piece(n.as_ref().to_string()))
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -926,10 +948,11 @@ pub struct TitlePieceDef {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BarPatch {
-    left: Option<Vec<String>>,
-    center: Option<Vec<String>>,
-    right: Option<Vec<String>>,
+    left: Option<Vec<TitleEntry>>,
+    center: Option<Vec<TitleEntry>>,
+    right: Option<Vec<TitleEntry>>,
     size: Option<crate::toolbar::Size>,
+    center_min: Option<u16>,
 }
 
 /// `ranma.profile(name, def)`: overrides applied over the base configuration
@@ -973,6 +996,7 @@ impl Profile {
             .into_iter()
             .flatten()
             .flatten()
+            .flat_map(TitleEntry::names)
     }
 }
 
@@ -1441,6 +1465,7 @@ struct Builder {
     titlebar: Option<TitleLayout>,
     title_pieces: HashMap<String, TitlePieceDef>,
     modules: HashMap<String, ModuleDef>,
+    module_styles: HashMap<String, String>,
     workspaces_show_all: bool,
     workspaces_numbers_only: bool,
     workspaces_nested: NestedWorkspaces,
@@ -1496,6 +1521,8 @@ pub struct Config {
     base_titlebar: Option<TitleLayout>,
     pub title_pieces: HashMap<String, TitlePieceDef>,
     pub modules: HashMap<String, ModuleDef>,
+    /// A module's `style`: the role it stands on, a pill of its ground.
+    pub module_styles: HashMap<String, String>,
     /// The workspaces module shows 1-10 even when empty.
     pub workspaces_show_all: bool,
     /// The workspaces module shows ` 3 ` for an unnamed workspace, not
@@ -2159,6 +2186,9 @@ fn apply_bar(bar: &mut BarLayout, patch: BarPatch) {
     if let Some(s) = patch.size {
         bar.size = s;
     }
+    if let Some(n) = patch.center_min {
+        bar.center_min = n;
+    }
 }
 
 /// What `ranma.has` answers true for: features a plugin may need to test
@@ -2535,6 +2565,7 @@ fn install_api(
     ranma.set(
         "bar",
         lua.create_function(|lua, value: Value| {
+            normalize_titlebar(lua, "ranma.bar", &value)?;
             let patch: BarPatch = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
@@ -2577,6 +2608,7 @@ fn install_api(
                     &format!("{who} titlebar"),
                     &t.get::<Value>("titlebar")?,
                 )?;
+                normalize_titlebar(lua, &format!("{who} bar"), &t.get::<Value>("bar")?)?;
             }
             let def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
@@ -2636,13 +2668,21 @@ fn install_api(
             for pair in opts.pairs::<String, Value>() {
                 keys.push(pair?.0);
             }
+            // Any module's ground: the role it stands on, as a pill of its
+            // own (card c445). Checked against the theme once it is read.
+            if let Some(style) = opts.get::<Option<String>>("style")? {
+                lua.app_data_mut::<Builder>()
+                    .ok_or_else(loading_only)?
+                    .module_styles
+                    .insert(name.clone(), style);
+            }
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
                 let allowed: &[&str] = match name.as_str() {
-                    "workspaces" => &["show", "label", "nested"],
-                    "title" => &["nested"],
-                    _ => &[],
+                    "workspaces" => &["show", "label", "nested", "style"],
+                    "title" => &["nested", "style"],
+                    _ => &["style"],
                 };
                 if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
                     return Err(rt_err(format!(
@@ -2720,10 +2760,10 @@ fn install_api(
             if SYSTEM_MODULES.iter().any(|(n, _)| *n == name) {
                 if let Some(k) = keys
                     .iter()
-                    .find(|k| !["interval", "format", "nested"].contains(&k.as_str()))
+                    .find(|k| !["interval", "format", "nested", "style"].contains(&k.as_str()))
                 {
                     return Err(rt_err(format!(
-                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format, nested; `{k}` is not one"
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format, nested, style; `{k}` is not one"
                     )));
                 }
                 let interval = opts.get::<Option<f64>>("interval")?;
@@ -2744,12 +2784,12 @@ fn install_api(
             if let Some(k) = keys
                 .iter()
                 .find(|k| {
-                    !["render", "exec", "format", "interval", "on_click", "nested"]
+                    !["render", "exec", "format", "interval", "on_click", "nested", "style"]
                         .contains(&k.as_str())
                 })
             {
                 return Err(rt_err(format!(
-                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click, nested)"
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click, nested, style)"
                 )));
             }
             let nested = ModuleNested::parse(&name, &opts)?;
@@ -3627,6 +3667,41 @@ pub fn load_full(
         &theme::theme_dirs(config_dir),
         Some(&panel.theme),
     )?;
+    // A module's style, and a group's, name roles: the theme must have them.
+    {
+        let known = |st: &str| crate::bar::Style::from_name(st, &theme.roles).is_some();
+        for (m, st) in &builder.module_styles {
+            if !known(st) {
+                anyhow::bail!(
+                    "ranma.module(\"{m}\"): style `{st}` is not a role of theme `{}` (normal, dim, accent, urgent, or its [roles])",
+                    builder.settings.theme
+                );
+            }
+        }
+        let groups = [&builder.bar.left, &builder.bar.center, &builder.bar.right]
+            .into_iter()
+            .chain(
+                builder
+                    .titlebar
+                    .iter()
+                    .flat_map(|t| [&t.left, &t.center, &t.right]),
+            )
+            .flatten()
+            .filter_map(|e| match e {
+                TitleEntry::Group {
+                    style: Some(st), ..
+                } => Some(st),
+                _ => None,
+            });
+        for st in groups {
+            if !known(st) {
+                anyhow::bail!(
+                    "a group's style `{st}` is not a role of theme `{}` (normal, dim, accent, urgent, or its [roles])",
+                    builder.settings.theme
+                );
+            }
+        }
+    }
     // A profile's theme keys go over settings.toml's [theme], over the
     // theme: checked now, so a typo is a config error and not a surprise
     // the first time the profile is used.
@@ -3722,6 +3797,7 @@ pub fn load_full(
         hooks: builder.hooks,
         bar: builder.bar,
         modules: builder.modules,
+        module_styles: builder.module_styles,
         workspaces_show_all: builder.workspaces_show_all,
         workspaces_numbers_only: builder.workspaces_numbers_only,
         workspaces_nested: builder.workspaces_nested,
@@ -4497,7 +4573,7 @@ mod tests {
             "what it does not name stays"
         );
         assert!(cfg.bar.center.is_empty());
-        assert_eq!(cfg.bar.right, vec!["mode".to_string()]);
+        assert_eq!(names(&cfg.bar.right), vec!["mode".to_string()]);
         assert_eq!(cfg.bar.left, bar.left, "a side it does not name stays");
         assert_eq!(cfg.profile.as_deref(), Some("mobile"));
         cfg.use_profile(None).unwrap();
@@ -4959,7 +5035,7 @@ mod tests {
     #[test]
     fn bar_and_modules() {
         let cfg = load_from(None, None, None).unwrap();
-        assert_eq!(cfg.bar.left, vec!["mode", "session", "workspaces"]);
+        assert_eq!(names(&cfg.bar.left), vec!["mode", "session", "workspaces"]);
         assert!(matches!(cfg.modules["clock"].kind, ModuleKind::Lua(_)));
 
         let cfg = with_user(
@@ -4970,9 +5046,9 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(cfg.bar.right, vec!["load", "clock"]);
+        assert_eq!(names(&cfg.bar.right), vec!["load", "clock"]);
         // Only the side given changes.
-        assert_eq!(cfg.bar.left, vec!["mode", "session", "workspaces"]);
+        assert_eq!(names(&cfg.bar.left), vec!["mode", "session", "workspaces"]);
         assert!(cfg.workspaces_show_all);
         assert!(
             !cfg.workspaces_numbers_only,
@@ -5495,7 +5571,7 @@ mod tests {
         let shot = load(Some(&root.join("screenshot"))).unwrap();
         assert_eq!(shot.theme.name, "sumi");
         assert_eq!(shot.theme.bar.position, crate::theme::BarPosition::Top);
-        assert_eq!(shot.bar.center, ["pane_strip"]);
+        assert_eq!(names(&shot.bar.center), ["pane_strip"]);
         assert!(
             !shot.theme.bar.chip_left.is_empty(),
             "the round current workspace"

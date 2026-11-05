@@ -1654,6 +1654,7 @@ mod tests {
             right: None,
             padding_left: 0,
             padding_right: 0,
+            separator: None,
         };
         let roles = BTreeMap::from([("git".to_string(), git)]);
         let seg = vec![

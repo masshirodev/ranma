@@ -5165,21 +5165,26 @@ impl App {
         // Chips a thumb can hit: padded to five columns and a column apart.
         let theme_bar = &self.config.theme.bar;
         // The large bar pads its chips itself (`bar::enlarge`), full height.
-        let wrap = |s: Segment| {
-            let s = if large {
+        let roles = &self.config.theme.roles;
+        let chips = |s: Segment| {
+            if large {
                 s
             } else {
                 bar::rounded(s, &theme_bar.chip_left, &theme_bar.chip_right)
-            };
-            // A module in a role with a ground of its own is a pill of that
-            // ground, between the role's caps (else the bar's).
-            let role = s
-                .iter()
-                .find(|p| !p.text.is_empty())
-                .and_then(|p| match p.style {
-                    Style::Role(r) if r.bg.is_some() => Some(r),
-                    _ => None,
-                });
+            }
+        };
+        // Between the caps: on `role`'s ground when it has one (a module's
+        // `style`, else the role its text is in), a pill of that colour
+        // between the role's caps, else the bar's (cards c444, c445).
+        let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>| {
+            let role = role.filter(|r| r.bg.is_some()).or_else(|| {
+                s.iter()
+                    .find(|p| !p.text.is_empty())
+                    .and_then(|p| match p.style {
+                        Style::Role(r) if r.bg.is_some() => Some(r),
+                        _ => None,
+                    })
+            });
             match role {
                 Some(r) => {
                     let own = r.left.is_some() || r.right.is_some();
@@ -5202,7 +5207,12 @@ impl App {
                             theme_bar.module_padding_right,
                         )
                     };
-                    bar::boxed_in(s, (&l, &rt), pads, Style::RoleCap(r), Style::Role(r))
+                    let mut out =
+                        bar::boxed_in(s, (&l, &rt), pads, Style::RoleCap(r), Style::Role(r));
+                    for p in &mut out {
+                        p.ground = r.bg;
+                    }
+                    out
                 }
                 None => bar::boxed(
                     s,
@@ -5213,17 +5223,62 @@ impl App {
                 ),
             }
         };
-        let seg = |n: &String| {
-            let s = self.segment(n);
-            wrap(
-                if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
-                    bar::enlarge(s)
-                } else {
-                    s
-                },
-            )
+        let wrap = |s: Segment| wrap_in(chips(s), None);
+        let role_of = |n: &str| match self
+            .config
+            .module_styles
+            .get(n)
+            .and_then(|st| Style::from_name(st, roles))
+        {
+            Some(Style::Role(r)) => Some(r),
+            _ => None,
         };
-        let side = |names: &[String]| -> Vec<Segment> { names.iter().map(seg).collect() };
+        let raw = |n: &String| {
+            let s = self.segment(n);
+            if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
+                bar::enlarge(s)
+            } else {
+                s
+            }
+        };
+        let seg = |n: &String| wrap_in(chips(raw(n)), role_of(n));
+        // A group: its modules in one pill, `bar.group_separator` between
+        // them on its ground. The large bar keeps each module's own square
+        // chip, and so the order without the grouping (B8).
+        let group = |names: &[String], style: &Option<String>| -> Vec<Segment> {
+            if large {
+                return names.iter().map(seg).collect();
+            }
+            let role = match style.as_deref().and_then(|st| Style::from_name(st, roles)) {
+                Some(Style::Role(r)) => Some(r),
+                _ => None,
+            };
+            let sep = role.and_then(|r| r.separator);
+            let mut inner: Segment = Vec::new();
+            for n in names {
+                let s = chips(self.segment(n));
+                if bar::width(&s) == 0 {
+                    continue;
+                }
+                if !inner.is_empty() && !theme_bar.group_separator.is_empty() {
+                    inner.push(Piece::new(
+                        theme_bar.group_separator.clone(),
+                        Style::GroupSep(sep),
+                    ));
+                }
+                inner.extend(s);
+            }
+            vec![wrap_in(inner, role)]
+        };
+        let side = |entries: &[config::TitleEntry]| -> Vec<Segment> {
+            entries
+                .iter()
+                .flat_map(|e| match e {
+                    config::TitleEntry::Piece(n) => vec![seg(n)],
+                    config::TitleEntry::Group { pieces, style } => group(pieces, style),
+                })
+                .collect()
+        };
         let bar = &self.config.bar;
         let cols = cols.min(chrome.bar_room);
         // A message of this ranma's, else one from a nested ranma that draws
@@ -5249,7 +5304,10 @@ impl App {
         // The workspaces module, with the workspaces of the ranmas inside
         // them (see `nestbar`), when there are any to show.
         if self.config.workspaces_nested != config::NestedWorkspaces::Off
-            && let Some(at) = bar.left.iter().position(|m| m == "workspaces")
+            && let Some(at) = bar
+                .left
+                .iter()
+                .position(|e| *e == config::TitleEntry::Piece("workspaces".into()))
         {
             let set = self.own_report();
             let expand_all = self.config.workspaces_nested == config::NestedWorkspaces::All;
@@ -5302,7 +5360,15 @@ impl App {
                 ]);
             }
         }
-        bar::fit(&left, &center, &right, sep, cols)
+        bar::fit_keep(
+            &left,
+            &center,
+            &right,
+            sep,
+            cols,
+            0,
+            bar.center_min as usize,
+        )
     }
 
     /// The folded strip's one chip: ` 2/4 nvim `, where the focused pane is
@@ -6591,6 +6657,78 @@ mod tests {
     }
 
     #[test]
+    fn a_group_is_one_pill_and_a_built_in_takes_a_style() {
+        let mut a = themed(
+            "groups",
+            r##"
+            [colors]
+            separator = "#123456"
+            [bar]
+            module_left = "("
+            module_right = ")"
+            separator = " "
+            group_separator = "|"
+            [roles.sys]
+            fg = "#eeeeee"
+            bg = "#222222"
+            separator = "#654321"
+            "##,
+            r#"
+            ranma.module("a", { render = function() return "A" end })
+            ranma.module("b", { render = function() return "B" end })
+            ranma.module("session", { style = "sys" })
+            ranma.bar { left = { { "a", "b", style = "sys" } }, center = {}, right = { "a" } }
+            "#,
+        );
+        a.render_state_modules();
+        let pieces = a.bar_pieces(40);
+        let texts: Vec<&str> = pieces.iter().map(|(_, p)| p.text.as_str()).collect();
+        // One pill round both, the group's separator inside, on its ground.
+        assert!(texts.starts_with(&["(", "A", "|", "B", ")"]), "{texts:?}");
+        let ground = Some(crate::theme::Color::Rgb(0x22, 0x22, 0x22));
+        assert!(pieces[1..4].iter().all(|(_, p)| p.ground == ground));
+        assert!(matches!(
+            pieces[2].1.style,
+            Style::GroupSep(Some(crate::theme::Color::Rgb(0x65, 0x43, 0x21)))
+        ));
+        assert_eq!(a.config.module_styles["session"], "sys");
+        // An unknown role is an error at load, for a module and a group.
+        let dir = std::env::temp_dir().join(format!("ranma-groups-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for src in [
+            r#"ranma.module("cpu", { style = "nope" })"#,
+            r#"ranma.bar { left = { { "mode", style = "nope" } } }"#,
+        ] {
+            let err = format!(
+                "{:#}",
+                crate::config::load_from(Some(&dir), None, Some(src)).unwrap_err()
+            );
+            assert!(err.contains("`nope`"), "{err}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_centre_keeps_its_floor_before_the_sides_share() {
+        let mut a = app(Some(
+            r#"
+            ranma.module("long", { render = function() return string.rep("x", 70) end })
+            ranma.module("mid", { render = function() return "MIDDLE" end })
+            ranma.bar { left = { "long" }, center = { "mid" }, right = {}, center_min = 6 }
+            "#,
+        ));
+        a.render_state_modules();
+        let row: String = a
+            .bar_pieces(40)
+            .iter()
+            .map(|(_, p)| p.text.clone())
+            .collect();
+        assert!(row.contains("MIDDLE"), "{row}");
+        assert!(row.contains('…'), "the left is cut instead: {row}");
+    }
+
+    #[test]
     fn a_module_in_a_role_with_a_ground_is_a_pill_of_that_ground() {
         let a = themed(
             "role-pill",
@@ -7364,6 +7502,7 @@ mod tests {
             right: None,
             padding_left: 0,
             padding_right: 0,
+            separator: None,
         };
         roles.insert("git".to_string(), git);
         let seg = |code: &str| {
