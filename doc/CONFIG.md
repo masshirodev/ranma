@@ -1319,6 +1319,12 @@ logs` prints its last 50 entries, an error whole with its traceback (`-n
 200` for more, `--path` for where it is), read off the file, so it works over ssh and with no server running.
 `ranma health` names it too.
 
+An error of a ranma inside this one (over ssh), shown in this bar, is that
+ranma's: a click on it opens *its* log, in a float inside the pane it runs
+in, since that is the machine it happened on. Both ranmas need this build;
+with an older one inside, its message is not clickable. One level down: a
+click reaches the ranma in the focused pane, which opens its own log.
+
 **What it costs.** Nothing on ranma's own thread but handing the line
 over: a thread of its own writes it, and sleeps in between, so an idle
 ranma still never wakes. The same message again within a minute (a module

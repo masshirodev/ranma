@@ -209,6 +209,10 @@ commit log has the detail.
 
 ### Fixed
 
+- A click on an error of a ranma inside another (over ssh), shown in the
+  outer bar, did nothing: it now opens that ranma's own log, inside its
+  pane. Both ranmas need this build.
+
 - A theme key given to `ranma.bar` (or a profile's `bar`), such as `join =
   "arrows"`, now says it is the theme's and where it goes (`[bar]` in the
   theme, or a profile's `theme = { bar = { ... } }`) instead of only listing

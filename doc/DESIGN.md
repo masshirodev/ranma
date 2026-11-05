@@ -187,6 +187,19 @@ the editor's own keys come with it. `ranma logs` prints the end of the
 file, with no server needed, for the case it is most wanted in: ranma
 itself misbehaving.
 
+**An inner ranma's error is clicked through to it** (card c461). Over
+ssh the error in the outer bar is usually the inner's, whose log is on
+the other machine: the outer opening its own showed nothing of it, and
+the first try at the feature did nothing at all on a click. So an inner's
+report says when its message is an error's (`status_error`), and lists a
+module showing an error among the modules that take a click. The outer
+sends the inner the `logs` action for its message (`logs` is a forwarded
+action), and the module's click for a module, and the inner opens its own
+log in a float, inside the ssh pane. `Click::Module` now carries a
+module's place among all of them, sorted, rather than among those with an
+`on_click`: which modules take a click changes as errors come and go, and
+a place in that list would move between a frame and the click on it.
+
 ### Upgrading a server in place
 
 **Decided 2026-09-29.** A server kept the binary it started with,

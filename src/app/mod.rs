@@ -291,6 +291,10 @@ pub struct App {
     /// The bar message an error put there, while it is the one shown: a
     /// click on it opens the log, where it is in full (`journal`).
     error_status: Option<String>,
+    /// Times `open_logs` was asked for, in tests, which never open the
+    /// user's real log.
+    #[cfg(test)]
+    logs_opened: usize,
     /// The message `run_timers` last saw and when: a new one starts the
     /// clock, wherever it was set from.
     status_seen: Option<(String, Instant)>,
@@ -588,6 +592,8 @@ impl App {
             mode: Mode::Normal,
             status: None,
             error_status: None,
+            #[cfg(test)]
+            logs_opened: 0,
             status_seen: None,
             screen: Rect::new(0, 0, cols, rows),
             next_id: 1,
@@ -2486,6 +2492,14 @@ impl App {
                 Some(Click::Update) => self.run_action(Action::Update),
                 Some(Click::Panes) => self.run_action(Action::PaneSwitcher),
                 Some(Click::Logs) => self.run_action(Action::Logs),
+                Some(Click::InnerLogs) => match self.inner_action_bytes(&Action::Logs) {
+                    Some(bytes) => {
+                        if let Some(p) = self.focused().and_then(|f| self.panes.get(&f)) {
+                            p.write(bytes);
+                        }
+                    }
+                    None => self.run_action(Action::Logs),
+                },
                 Some(Click::Pane(id)) => {
                     self.active_mut().fullscreen = false;
                     self.focus(id);
@@ -2498,7 +2512,7 @@ impl App {
                 }) => self.click_nested(holder, &path[..depth as usize]),
                 Some(Click::InPane { pane, n }) => self.click_in_pane(pane, Some(n)),
                 Some(Click::Module(i)) => {
-                    if let Some(name) = self.click_modules().get(i as usize).cloned() {
+                    if let Some(name) = self.module_at(i) {
                         self.click_module(&name);
                     }
                 }
@@ -5316,13 +5330,17 @@ impl App {
             },
             _ => {
                 let seg = self.module_value(name);
-                match self.click_modules().iter().position(|m| m == name) {
+                match self
+                    .module_clickable(name)
+                    .then(|| self.module_index(name))
+                    .flatten()
+                {
                     Some(i) => seg
                         .into_iter()
                         // An error in it keeps its own: the log.
                         .map(|p| match p.click {
                             Some(Click::Logs) => p,
-                            _ => p.on_click(Click::Module(i as u16)),
+                            _ => p.on_click(Click::Module(i)),
                         })
                         .collect(),
                     None => seg,
@@ -5363,6 +5381,30 @@ impl App {
 
     /// Plugins' modules that take a click, by name: `Click::Module` is a
     /// place in this list, which stays put until the config reloads.
+    /// A module's place among all the modules, sorted by name: what
+    /// `Click::Module` carries. It does not move while ranma runs (an error
+    /// coming or going changes which take a click, not where they are), so
+    /// a click resolves to the module that was drawn.
+    pub(super) fn module_index(&self, name: &str) -> Option<u16> {
+        let mut names: Vec<&String> = self.config.modules.keys().collect();
+        names.sort();
+        names.iter().position(|n| *n == name).map(|i| i as u16)
+    }
+
+    pub(super) fn module_at(&self, i: u16) -> Option<String> {
+        let mut names: Vec<&String> = self.config.modules.keys().collect();
+        names.sort();
+        names.get(i as usize).map(|n| n.to_string())
+    }
+
+    /// A click on the module does something: its `on_click`, the log for
+    /// one showing an error, or the module of a ranma inside that takes it.
+    pub(super) fn module_clickable(&self, name: &str) -> bool {
+        self.click_modules().iter().any(|m| m == name)
+            || self.erred_modules().iter().any(|m| m == name)
+            || self.module_click_bytes(name).is_some()
+    }
+
     pub(super) fn click_modules(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .config
@@ -5784,17 +5826,38 @@ impl App {
         )
     }
 
-    /// A bar message; one an error put there opens the log when clicked.
+    /// A bar message; one an error put there opens the log when clicked:
+    /// this ranma's, or, for a message a ranma inside reported as an
+    /// error's, that ranma's own, inside its pane.
     fn message_piece(&self, msg: String) -> Piece {
-        let error = self.error_status.as_deref() == Some(msg.as_str());
+        let own = self.status.as_deref() == Some(msg.as_str());
+        let click = if own {
+            (self.error_status.as_deref() == Some(msg.as_str())).then_some(Click::Logs)
+        } else {
+            self.nested_path()
+                .iter()
+                .rev()
+                .find(|r| r.status.as_deref() == Some(msg.as_str()))
+                .filter(|r| r.status_error)
+                .map(|_| Click::InnerLogs)
+        };
         let p = Piece::new(msg, Style::Accent);
-        if error { p.on_click(Click::Logs) } else { p }
+        match click {
+            Some(c) => p.on_click(c),
+            None => p,
+        }
     }
 
     /// The `logs` action: ranma's log in a float, in the pager at its end or
     /// in the editor on its last line (`logs_open`). Made empty first, so a
     /// log nothing has written to yet still opens.
     fn open_logs(&mut self) {
+        #[cfg(test)]
+        {
+            self.logs_opened += 1;
+            return;
+        }
+        #[allow(unreachable_code)]
         let Some(path) = crate::journal::path() else {
             self.status = Some("logs: no state directory ($XDG_STATE_HOME, $HOME)".into());
             return;
@@ -9289,7 +9352,9 @@ mod tests {
         let mut a = App::new(config, tx, 100, 30);
         a.set_module_value("hako".into(), vec![Piece::new("hako ↑3", Style::Normal)]);
         a.set_module_value("plain".into(), vec![Piece::new("plain", Style::Normal)]);
-        assert_eq!(a.segment("hako")[0].click, Some(Click::Module(0)));
+        let at = a.module_index("hako").unwrap();
+        assert_eq!(a.segment("hako")[0].click, Some(Click::Module(at)));
+        assert_eq!(a.module_at(at).as_deref(), Some("hako"));
         assert_eq!(
             a.segment("plain")[0].click,
             None,
@@ -10497,6 +10562,61 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// An error of a ranma inside, shown in the outer bar, opens that
+    /// ranma's log: its report marks an error's message and lists a module
+    /// showing an error among those that take a click; the outer sends it
+    /// the `logs` action, or the module's click (card c461).
+    #[test]
+    fn an_inner_ranmas_error_clicked_in_the_outer_bar_opens_its_log() {
+        // The inner: its report says what is an error.
+        let mut inner = app(Some(
+            r#"
+            ranma.module("bad", { render = function() error("boom") end })
+            ranma.bar { left = { "bad" }, center = {}, right = {} }
+            "#,
+        ));
+        inner.render_state_modules();
+        let r = inner.own_report();
+        assert!(r.status_error, "{:?}", r.status);
+        assert!(r.clicks.iter().any(|c| c == "bad"), "{:?}", r.clicks);
+        assert!(r.actions.iter().any(|a| a == "logs"));
+        // A click it is sent for that module opens its log.
+        inner.click_module("bad");
+        assert_eq!(inner.logs_opened, 1);
+        inner.status = Some("hello".into());
+        assert!(!inner.own_report().status_error, "not an error's message");
+
+        // The outer: the inner's error message forwards `logs` to it.
+        let (mut a, id) = with_ranma_inside("ranma.bar { left = {}, center = {}, right = {} }");
+        let mut rep = crate::nestbar::Report::parse(&format!(
+            r#"{{"v":{},"ws":[{{"n":1}}],"status":"lua: boom","status_error":true,"click_token":"t0k","actions":["logs"]}}"#,
+            crate::nestbar::PROTOCOL
+        ))
+        .unwrap();
+        a.reports.insert(id, rep.clone());
+        let msg = a
+            .bar_pieces(80)
+            .into_iter()
+            .find(|(_, p)| p.text == "lua: boom")
+            .unwrap()
+            .1;
+        assert_eq!(msg.click, Some(Click::InnerLogs));
+        let bytes = a
+            .inner_action_bytes(&Action::Logs)
+            .expect("sent to the inner");
+        assert!(String::from_utf8_lossy(&bytes).contains("logs"));
+        // A message that is not an error's is not a way in.
+        rep.status_error = false;
+        a.reports.insert(id, rep);
+        let msg = a
+            .bar_pieces(80)
+            .into_iter()
+            .find(|(_, p)| p.text == "lua: boom")
+            .unwrap()
+            .1;
+        assert_eq!(msg.click, None);
+    }
+
     #[test]
     fn the_pointer_in_an_inner_ranmas_text_is_the_inners() {
         use crossterm::event::{
@@ -10574,7 +10694,8 @@ mod tests {
         let song = a.segment("song");
         assert_eq!(text(&song), "far");
         assert_eq!(song[0].style, Style::Normal, "a role this theme lacks");
-        assert_eq!(song[0].click, Some(Click::Module(0)), "clicks stay local");
+        let at = a.module_index("song").unwrap();
+        assert_eq!(song[0].click, Some(Click::Module(at)), "clicks stay local");
 
         // Focus off the ranma: every module is this one's again.
         a.reports.clear();

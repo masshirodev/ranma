@@ -81,6 +81,11 @@ pub struct Report {
     /// A message it would have put in its bar.
     #[serde(default)]
     pub status: Option<String>,
+    /// `status` is an error's, whose whole text is in its log: a click on
+    /// it in the outer bar sends it the `logs` action (card c461). An older
+    /// ranma sends none, and its message is not a way into anything.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub status_error: bool,
     /// Its outer leader: the key a click sends to reach past it.
     #[serde(default)]
     pub outer_leader: Option<String>,
@@ -973,6 +978,7 @@ mod tests {
             mode: "normal".into(),
             mode_label: None,
             status: None,
+            status_error: false,
             outer_leader: Some("ctrl+alt+b".into()),
             sticky: true,
             ws,

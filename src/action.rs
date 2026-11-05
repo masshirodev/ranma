@@ -591,6 +591,7 @@ pub const FORWARDED: &[&str] = &[
     "help",
     "leader",
     "exit_mode",
+    "logs",
 ];
 
 impl Action {

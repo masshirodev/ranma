@@ -149,6 +149,9 @@ pub enum Click {
     Module(u16),
     /// An error shown in the bar: open ranma's log, where it is in full.
     Logs,
+    /// An error a ranma inside this one reported (its bar message): it opens
+    /// its own log, inside the pane it runs in.
+    InnerLogs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

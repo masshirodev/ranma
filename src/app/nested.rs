@@ -187,6 +187,7 @@ impl App {
                 _ => None,
             },
             status: self.status.clone(),
+            status_error: self.status.is_some() && self.status == self.error_status,
             outer_leader: Some(self.config.settings.outer_leader.to_string()),
             sticky: self.config.settings.wm_mode_sticky,
             ws,
@@ -205,11 +206,18 @@ impl App {
                     (n.clone(), nestbar::to_wire(&seg, &self.config.theme.roles))
                 })
                 .collect(),
-            clicks: self
-                .click_modules()
-                .into_iter()
-                .filter(|n| self.config.bar.all().any(|b| b == n))
-                .collect(),
+            // A module showing an error takes a click too: it opens the log.
+            clicks: {
+                let mut c: Vec<String> = self
+                    .click_modules()
+                    .into_iter()
+                    .chain(self.erred_modules())
+                    .filter(|n| self.config.bar.all().any(|b| b == n))
+                    .collect();
+                c.sort();
+                c.dedup();
+                c
+            },
             click_token: self.click_token.clone(),
             actions: crate::action::FORWARDED
                 .iter()
@@ -280,6 +288,12 @@ impl App {
             p.write(bytes);
             return;
         }
+        // Showing an error: the click opens the log, where it is in full,
+        // as it would on this ranma's own bar (a click from an outer one).
+        if self.erred_modules().iter().any(|m| m == name) {
+            self.run_action(Action::Logs);
+            return;
+        }
         let hook = self
             .config
             .modules
@@ -290,6 +304,26 @@ impl App {
         {
             self.call_lua(|_| f.call::<()>(()));
         }
+    }
+
+    /// The modules whose value here is an error (`Click::Logs` on it).
+    pub(super) fn erred_modules(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .module_values
+            .iter()
+            .filter(|(_, seg)| seg.iter().any(|p| p.click == Some(crate::bar::Click::Logs)))
+            .map(|(n, _)| n.clone())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// What to write into the focused pane so the ranma there runs `action`,
+    /// when it reports one that takes it; else `None`.
+    pub(super) fn inner_action_bytes(&self, action: &Action) -> Option<Vec<u8>> {
+        let r = self.report_of(self.focused()?)?;
+        (!r.click_token.is_empty() && r.actions.contains(&action.name()))
+            .then(|| nestbar::action_paste(&r.click_token, &action.to_string()))
     }
 
     /// What to write into the focused pane so the ranma there clicks `name`,
