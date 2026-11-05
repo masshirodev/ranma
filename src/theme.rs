@@ -210,6 +210,26 @@ pub struct Colors {
     pub title_fg_inactive: Option<Color>,
     #[serde(default)]
     pub title_fg_floating: Option<Color>,
+    // A pane's state (DESIGN.md, "Title bars a theme can build", F2, F3):
+    // the colour of its edges' lines and of a filled title row's ground,
+    // and that row's text on it. Each optional; unset, the plain state's
+    // colour. One precedence: WM mode, urgent, synced, zoomed, scrolled.
+    #[serde(default)]
+    pub state_urgent: Option<Color>,
+    #[serde(default)]
+    pub state_urgent_fg: Option<Color>,
+    #[serde(default)]
+    pub state_synced: Option<Color>,
+    #[serde(default)]
+    pub state_synced_fg: Option<Color>,
+    #[serde(default)]
+    pub state_zoomed: Option<Color>,
+    #[serde(default)]
+    pub state_zoomed_fg: Option<Color>,
+    #[serde(default)]
+    pub state_scrolled: Option<Color>,
+    #[serde(default)]
+    pub state_scrolled_fg: Option<Color>,
 }
 
 impl Colors {
@@ -903,6 +923,14 @@ pub struct PaneLooks {
     pub title_fg_floating: Option<Color>,
     pub title_corner_left: Option<String>,
     pub title_corner_right: Option<String>,
+    pub state_urgent: Option<Color>,
+    pub state_urgent_fg: Option<Color>,
+    pub state_synced: Option<Color>,
+    pub state_synced_fg: Option<Color>,
+    pub state_zoomed: Option<Color>,
+    pub state_zoomed_fg: Option<Color>,
+    pub state_scrolled: Option<Color>,
+    pub state_scrolled_fg: Option<Color>,
 }
 
 impl PaneLooks {
@@ -1006,6 +1034,14 @@ impl PaneLooks {
             title_fg_active => colors.title_fg_active,
             title_fg_inactive => colors.title_fg_inactive,
             title_fg_floating => colors.title_fg_floating,
+            state_urgent => colors.state_urgent,
+            state_urgent_fg => colors.state_urgent_fg,
+            state_synced => colors.state_synced,
+            state_synced_fg => colors.state_synced_fg,
+            state_zoomed => colors.state_zoomed,
+            state_zoomed_fg => colors.state_zoomed_fg,
+            state_scrolled => colors.state_scrolled,
+            state_scrolled_fg => colors.state_scrolled_fg,
         }
         if let Some(c) = &self.border_chars {
             t.border.chars = Some(Chars::Six(c.clone()));

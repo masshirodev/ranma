@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- State colours: `colors.state_urgent`, `state_synced`, `state_zoomed` and
+  `state_scrolled` (with `_fg`) colour a pane's edges and filled title row
+  while it is in that state, in that order, after WM mode. The default theme
+  sets `state_urgent`, so a pane that rang the bell while you were elsewhere
+  now shows peach until you focus it.
+
 - A `title` target for mouse binds: the title row but its buttons, heard
   before `border`, which hears it when no title bind does
   (`ranma.mouse("double@title", "toggle_floating")`).

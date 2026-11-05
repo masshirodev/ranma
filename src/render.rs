@@ -942,7 +942,8 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     }
     let r = view.outer;
     let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
-    let row = title_row(view, c, b, &set, border, mode_edge);
+    let state = state_colours(app, view, c);
+    let row = title_row(view, c, b, &set, border, mode_edge, state);
     let (cut_left, cut_right) = match &row {
         Some(_) => corner_cells(view, b),
         None => (0, 0),
@@ -974,6 +975,8 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     // A gradient: the edge's cells, recoloured one by one. Not in WM mode,
     // whose one colour is the point.
     let stops = match (view.focused, mode_edge, view.floating) {
+        // A state's one colour says what it says, as WM mode's does.
+        _ if state.is_some() => None,
         (_, true, _) => None,
         (true, false, _) => c.border_active_gradient.as_deref(),
         (false, _, true) => c.border_floating_gradient.as_deref(),
@@ -1002,7 +1005,8 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         };
         let grounds = Grounds {
             row: row.as_ref().map(|r| (r.ground, r.ink)),
-            title: title_pill_colours(view, c, border, mode_edge),
+            title: title_pill_colours(view, c, border, mode_edge, state),
+            state: state.is_some(),
         };
         paint_pieces(f, c, &theme.styles, edge, attrs, &grounds, (x0, y), &placed);
     }
@@ -1041,6 +1045,10 @@ struct TitleRow {
     ink: Color,
 }
 
+/// A state's colours: the line's (and a filled row's ground), and the text
+/// on that ground.
+type State = Option<(theme::Color, Option<theme::Color>)>;
+
 fn title_row(
     view: &PaneView,
     c: &Colors,
@@ -1048,6 +1056,7 @@ fn title_row(
     set: &border::Set<'_>,
     border: theme::Color,
     mode_edge: bool,
+    state: State,
 ) -> Option<TitleRow> {
     // With pieces as the ground, the row itself is the line.
     if b.title_ground == theme::TitleGround::Pieces {
@@ -1060,6 +1069,11 @@ fn title_row(
         _ => return None,
     };
     let (bg, fg) = title_state_colours(view, c);
+    // A filled row takes a state's ground and text (F2).
+    let (bg, fg) = match (bg, state) {
+        (Some(_), Some((sbg, sfg))) => (Some(sbg), sfg.or(fg)),
+        _ => (bg, fg),
+    };
     let (bg, fg) = match (mode_edge, bg) {
         (true, Some(_)) => (c.mode_bg, c.mode_fg),
         (true, None) if fill.trim().is_empty() => (c.mode_bg, c.mode_fg),
@@ -1098,9 +1112,14 @@ fn title_pill_colours(
     c: &Colors,
     border: theme::Color,
     mode_edge: bool,
+    state: State,
 ) -> Option<(Color, Color)> {
     let (bg, fg) = title_state_colours(view, c);
     let bg = bg?;
+    let (bg, fg) = match state {
+        Some((sbg, sfg)) => (sbg, sfg.or(fg)),
+        None => (bg, fg),
+    };
     Some(if mode_edge {
         (color(c.mode_bg), color(c.mode_fg))
     } else {
@@ -1112,6 +1131,9 @@ fn title_pill_colours(
 /// modifier) the focused border takes the mode colour, so it is obvious which
 /// pane the next action applies to.
 fn border_colour(app: &App, view: &PaneView, c: &Colors) -> theme::Color {
+    if let Some((line, _)) = state_colours(app, view, c) {
+        return line;
+    }
     match (view.focused, app.mode, view.floating) {
         (true, Mode::Wm | Mode::Copy, _) => c.mode_bg,
         (true, Mode::Normal, _) if app.latched() => c.mode_bg,
@@ -1119,6 +1141,36 @@ fn border_colour(app: &App, view: &PaneView, c: &Colors) -> theme::Color {
         (false, _, true) => c.border_floating,
         (false, _, false) => c.border_inactive,
     }
+}
+
+/// The colours of the first state that applies to the pane and that the
+/// theme colours (DESIGN.md, F3): urgent, synced, zoomed, scrolled back.
+/// None in WM mode on the focused pane, whose one colour comes first.
+fn state_colours(
+    app: &App,
+    view: &PaneView,
+    c: &Colors,
+) -> Option<(theme::Color, Option<theme::Color>)> {
+    if view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched()) {
+        return None;
+    }
+    let scrolled = || {
+        app.panes
+            .get(&view.id)
+            .is_some_and(|p| p.term.lock().grid().display_offset() > 0)
+    };
+    [
+        (c.state_urgent, c.state_urgent_fg, app.is_urgent(view.id)),
+        (c.state_synced, c.state_synced_fg, app.is_synced(view.id)),
+        (c.state_zoomed, c.state_zoomed_fg, app.is_zoomed(view.id)),
+    ]
+    .into_iter()
+    .find_map(|(bg, fg, on)| bg.filter(|_| on).map(|bg| (bg, fg)))
+    .or_else(|| {
+        c.state_scrolled
+            .filter(|_| scrolled())
+            .map(|bg| (bg, c.state_scrolled_fg))
+    })
 }
 
 /// Where a pane's title row is and how much of it the title may use: its
@@ -1143,7 +1195,8 @@ pub(crate) fn title_span(app: &App, view: &PaneView) -> Option<(u16, u16, u16)> 
     };
     let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
     let border = border_colour(app, view, c);
-    let (cl, cr) = match title_row(view, c, b, &set, border, mode_edge) {
+    let state = state_colours(app, view, c);
+    let (cl, cr) = match title_row(view, c, b, &set, border, mode_edge, state) {
         Some(_) => corner_cells(view, b),
         None => (0, 0),
     };
@@ -1174,6 +1227,9 @@ fn badge_style(c: &Colors, role: crate::screen::Role) -> Style {
 struct Grounds {
     row: Option<(Color, Color)>,
     title: Option<(Color, Color)>,
+    /// The ground is a state's: badges take its ink, since a badge in its
+    /// role's colour (urgent on an urgent ground) would vanish.
+    state: bool,
 }
 
 /// `ranma.titlebar`'s pieces, placed, over the row. A span on the line takes
@@ -1220,6 +1276,9 @@ fn paint_pieces(
             Ink::Badge(role) => badge_style(c, role),
             Ink::Cap => Style::default(),
         };
+        let badge_on_state = grounds.state
+            && matches!(p.span.ink, Ink::Badge(_))
+            && matches!(p.span.ground, Ground::Line | Ground::Title);
         if p.span.ink == Ink::Cap {
             // Its ground as ink, on the line's (or the row's) ground.
             if let Some(g) = ground {
@@ -1229,7 +1288,7 @@ fn paint_pieces(
                 st = st.bg(r.0);
             }
         } else {
-            if matches!(p.span.ink, Ink::Title | Ink::Line)
+            if (matches!(p.span.ink, Ink::Title | Ink::Line) || badge_on_state)
                 && let Some(i) = ink
             {
                 st = st.fg(i);
@@ -2669,6 +2728,49 @@ mod tests {
         assert_eq!(b[(9, 0)].bg, Color::Rgb(0x22, 0x22, 0x22));
         // The row is not filled: the line keeps the border's colour.
         assert_eq!(b[(3, 0)].fg, Color::Rgb(0, 0, 0x11));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_states_colours_go_in_their_order_and_wm_mode_first() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app(
+            "states",
+            r##"
+            [colors]
+            border_inactive = "#000011"
+            mode_bg = "#ff0000"
+            state_synced = "#00ff00"
+            title_bg_inactive = "#111111"
+            "##,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let inner = outer.inset_sides(app.insets(false));
+        let view = |focused| PaneView {
+            id: 1,
+            outer,
+            inner,
+            focused,
+            floating: false,
+        };
+        let draw = |app: &crate::app::App, v: &PaneView| {
+            let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+            t.draw(|f| draw_border(f, app, v, " t ")).unwrap();
+            t.backend().buffer().clone()
+        };
+        // Plain: the inactive line under the inactive title ground.
+        let b = draw(&app, &view(false));
+        assert_eq!(b[(0, 1)].fg, Color::Rgb(0, 0, 0x11));
+        // Synced and urgent: urgent first, the default peach on the edges
+        // and the filled row; synced loses.
+        app.set_states(1, true, true);
+        let b = draw(&app, &view(false));
+        assert_eq!(b[(0, 1)].fg, Color::Rgb(0xfa, 0xb3, 0x87));
+        assert_eq!(b[(5, 0)].bg, Color::Rgb(0xfa, 0xb3, 0x87));
+        // WM mode on the focused pane: the mode's colour over any state.
+        app.mode = crate::app::Mode::Wm;
+        let b = draw(&app, &view(true));
+        assert_eq!(b[(0, 1)].fg, Color::Rgb(0xff, 0, 0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

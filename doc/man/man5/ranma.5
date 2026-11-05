@@ -3322,6 +3322,12 @@ the same, for floats and popups; unset, \fBedges\fR
 \fBcolors.title_bg_active\fR, \fBtitle_bg_inactive\fR, \fBtitle_bg_floating\fR
 a ground for the row the title is on (the focused pane's, the others', an unfocused float's), filling the whole row, corners included: a title bar rather than a line with words in it. Each is its own; unset, that row is the border line as before. An unfocused float's falls back to \fBtitle_bg_inactive\fR. In WM mode the focused pane's filled row takes \fBmode_bg\fR and \fBmode_fg\fR; so does a row with no ground whose line is blanks (\fB[border.chars]\fR \fBtop = "   "\fR), or the mode would show on the title's letters only.
 .TP
+\fBcolors.state_urgent\fR, \fBstate_synced\fR, \fBstate_zoomed\fR, \fBstate_scrolled\fR
+a pane's state, as a colour: its edges' lines, and a filled title row's ground (or the title's pill). Urgent is a pane that rang the bell or went quiet while you were in another one, until you focus it; synced takes synchronized input; zoomed fills its workspace; scrolled is looking back through its history. The first that applies wins, in that order, after WM mode's colour on the focused pane. Only \fBstate_urgent\fR is set by the default theme (a peach, so an urgent pane never looks like the pane in WM mode); unset, a state shows as the plain colour. A state's colour takes the place of a gradient.
+.TP
+\fBcolors.state_urgent_fg\fR, \fBstate_synced_fg\fR, \fBstate_zoomed_fg\fR, \fBstate_scrolled_fg\fR
+the text of a filled title row (or pill) on that state's ground; unset, the row's own text colour. Badges there take it too, so an urgent badge on an urgent ground still shows.
+.TP
 \fBcolors.title_fg_active\fR, \fBtitle_fg_inactive\fR, \fBtitle_fg_floating\fR
 a filled row's text and fill; unset, the border's colour. Badges keep their own colours on the row's ground.
 .TP

@@ -3000,6 +3000,17 @@ impl App {
         self.synced.iter().filter(|p| ws.contains(**p)).count()
     }
 
+    /// For tests outside this module: mark a pane urgent, or synced.
+    #[cfg(test)]
+    pub(crate) fn set_states(&mut self, id: PaneId, urgent: bool, synced: bool) {
+        if urgent {
+            self.urgent_panes.insert(id);
+        }
+        if synced {
+            self.synced.insert(id);
+        }
+    }
+
     /// It rang the bell (or went quiet) since it was last focused.
     pub fn is_urgent(&self, id: PaneId) -> bool {
         self.urgent_panes.contains(&id)

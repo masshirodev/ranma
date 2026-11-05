@@ -373,7 +373,7 @@ not listed here.
 - [x] Pane handles: `index`, `zoomed`, `synced`, `urgent`
 - [x] `title_ground = "pieces"`: pills on the row, from roles
 - [x] The `title` mouse target
-- [ ] State colours: `state_*` and `state_*_fg`, one precedence, `state_urgent`
+- [x] State colours: `state_*` and `state_*_fg`, one precedence, `state_urgent`
   never `mode_bg` (c437)
 - [ ] Group tab bars: formats, separators, caps (c436)
 - [ ] `[icons]` and `{icon}` (c438)
