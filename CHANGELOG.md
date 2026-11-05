@@ -229,7 +229,9 @@ commit log has the detail.
 ### Fixed
 
 - A pill with no caps (arrows, or a side with none) kept no padding: its
-  text ran into the arrows and its neighbours. Its blanks are kept now.
+  text ran into the arrows and its neighbours. Its blanks are kept now. With
+  arrows they are in the colour the arrows are drawn in, the mode chip's
+  for the mode, so no cell of another colour sits between them.
 
 - With `nested_bar = "inner"`, whose value a module shows (the host's or
   the desk's) is the host's `nested` choice, not this ranma's: a host

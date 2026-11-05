@@ -2907,6 +2907,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// The blanks of a pill that is one filled chip (the mode) are in the
+    /// chip's colour, as its arrow is, not the module ground's (card c474).
+    #[test]
+    fn a_chip_pills_blanks_take_the_chips_ground() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app_with(
+            "chipblank",
+            "[colors]\nbar_bg = \"default\"\nmodule_bg = \"#224466\"\nmode_bg = \"#e2e2e2\"\n[bar]\njoin = \"arrows\"\nmodule_padding_left = 1\nmodule_padding_right = 1\n",
+            r#"ranma.bar { left = { "mode" }, center = {}, right = {} }"#,
+        );
+        app.mode = crate::app::Mode::Wm;
+        let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+        t.draw(|f| {
+            let area = f.area();
+            draw_bar(f, &app, Rect::new(0, area.height - 1, area.width, 1));
+        })
+        .unwrap();
+        let buf = t.backend().buffer();
+        let row = rows(buf).last().unwrap().clone();
+        let end = row[..row.find("WM").expect("the WM chip") + 2]
+            .chars()
+            .count() as u16;
+        // The chip ends with its own blank; the cell after it is the pill's.
+        let chip = Color::Rgb(0xe2, 0xe2, 0xe2);
+        for x in end..end + 2 {
+            if buf[(x, 9)].symbol() == " " {
+                assert_eq!(buf[(x, 9)].bg, chip, "cell {x} of {row:?}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// With arrows the pills abut and have no caps: a module still stands
     /// on its ground (`module_bg`), its text and workspaces as much as its
     /// padding, as the arrows between them are drawn in that ground.

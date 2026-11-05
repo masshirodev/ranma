@@ -5654,7 +5654,16 @@ impl App {
             }
             let grounds: Vec<_> = segs.iter().map(&ground_of).collect();
             let mut out: Segment = Vec::new();
-            for (i, s) in segs.into_iter().enumerate() {
+            for (i, mut s) in segs.into_iter().enumerate() {
+                // A pill's blanks in the ground its arrows are drawn in: a
+                // module that is one filled chip (the mode's ` NORMAL `) has
+                // that chip's, not the module ground's, or a cell of another
+                // colour sat between the chip and its arrow (card c474).
+                if let Some(g) = grounds[i] {
+                    for p in s.iter_mut().filter(|p| p.boxed && p.text.trim().is_empty()) {
+                        p.ground = Some(g);
+                    }
+                }
                 if side == Side::Right {
                     let to = if i == 0 { None } else { grounds[i - 1] };
                     out.push(Piece::new(glyph, Style::Arrow(grounds[i], to)));
