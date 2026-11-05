@@ -352,3 +352,26 @@ macOS, not native Windows" records what differs.
   (`toolbar_target`, c369)
 - [x] Release binaries for Termux (`aarch64-linux-android`): cross-built with
   the NDK (`packaging/android.sh`), installed by `install.sh` into `$PREFIX`
+
+## 17. Looks you build, not looks you pick
+
+The 2026-11-04 survey: a theme should be able to build a look (a GUI title
+bar, say), not only recolour ranma's. DESIGN.md, "Title bars a theme can
+build" (proposed). Cards c435 to c444 on the board; c426 to c434 are the
+behaviour half of the same survey and are not listed here.
+
+- [ ] Design: `doc/briefs/TITLE_BARS.md`, handoff in `doc/handoffs/`; the
+  proposal settled from it
+- [ ] `border.edges`, `floating_edges`, `top_chars`, `bottom_chars`
+- [ ] A filled title row: `title_bg_*`, `title_fg_*`, `title_cap_left` / `right`
+- [ ] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`
+- [ ] The `title` mouse target
+- [ ] Group tab bars: formats, separators, caps (c436)
+- [ ] Border and title colours for states (c437)
+- [ ] `[icons]` and `{icon}` (c438)
+- [ ] Pane padding (c439)
+- [ ] Shadows under floats (c440)
+- [ ] Pickers and toasts follow `border.style` (c441)
+- [ ] Scrollbar looks (c442)
+- [ ] Splash art from a file (c443)
+- [ ] Caps per role (c444)

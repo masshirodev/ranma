@@ -2300,6 +2300,129 @@ Decided:
 - Under `theme_colors = "outer"`, a pane's own colours still win over the
   outer's: they were asked for about that pane.
 
+### Title bars a theme can build (2026-11-04, proposed)
+
+The question was whether a theme could make a pane's top edge look like a
+GUI window's title bar: a filled row, an icon and the title on the left, a
+few buttons on the right, thin side edges or none. ranma should not ship
+such a look; a theme and an `init.lua` should be able to build one. Today
+they cannot, for reasons that are each small:
+
+- the border is all four edges or none (`border.style = "none"` takes the
+  title away too);
+- one set of six characters serves every edge, so the top cannot differ
+  from the bottom;
+- the title sits in the border line, in the border's colour; the row has no
+  ground of its own;
+- there is one title at one alignment, with no caps, where the bar has three
+  sides, module caps and chip caps;
+- a click anywhere on the top edge is the move drag, so nothing on it can be
+  a button;
+- a format has placeholders and nothing else (on purpose, "Looks: what tmux
+  lets you style"), and there is no Lua hook for the border the way
+  `ranma.module` is one for the bar.
+
+Proposed. The key names may still change after the design handoff
+(`doc/briefs/TITLE_BARS.md`). That brief has looks drawn using only the
+keys below, so that what they cannot express shows up before any code
+exists.
+
+- **The title bar is the top edge, one row.** It is not a row taken from
+  the pane on top of the border. "The mouse: top border moves, the rest
+  resize" already calls the top edge the title bar; a filled title row is
+  that edge drawn differently. So a pane's inner area is the same with or
+  without one, and nothing about the layout changes. Two rows (a title
+  over a toolbar) are not planned, for the same reason the bar is one row.
+- **Which edges are drawn: `border.edges`** (a list of `top`, `bottom`,
+  `left`, `right`; all four by default), with `border.floating_edges` for
+  floats (unset, `edges`). It belongs to the theme and is never per pane,
+  for the reason `border_style` is never `none` per pane: the edges decide
+  the inner area, and the inner area is the layout's. A pane loses a cell
+  only for each edge drawn (`Rect::inset_sides`; today `App::border` takes
+  one cell off all four sides or none). Strict, as everything is:
+  `border.title = "top"` without a top edge is a load error, and so is the
+  bottom. An edge not drawn has no scrollbar and no indicator arrow, and is
+  no handle. Resizing from it goes to the gap beside it when `gaps.inner`
+  leaves one, and to the keys when it does not. With no top edge there is
+  no move handle, which is a choice the theme made.
+- **The top and bottom rows have characters of their own**:
+  `border.top_chars` and `border.bottom_chars`, three one-cell characters
+  each (left corner, fill, right corner), over the style's own. The fill
+  may be a space. `custom` and its six `border.chars` stay as they are.
+- **The title row can have a ground**: `colors.title_bg_active`,
+  `title_bg_inactive` and `title_bg_floating`, with `title_fg_*` for the
+  text and the fill. When set, the whole top row is filled, corners
+  included. Unset, the row is today's border line. In WM mode (or with a
+  latched modifier) the focused pane's row takes `mode_bg` / `mode_fg`, as
+  its border does, because that colour is how you know where the next
+  action goes. States beyond these three (urgent, zoomed, synced, scrolled
+  back) are card c437's, with one precedence for the edges and the title
+  row. A gradient (`border_*_gradient`) runs over the edge characters, not
+  under the title row: a ground changing cell by cell behind text is noise.
+- **Caps round the row**: `border.title_cap_left` and `title_cap_right`
+  take the corner cells, drawn in the title row's ground over whatever lies
+  behind the pane (a gap, the background, another pane's edge). Powerline
+  glyphs then round the bar, as `bar.module_left` / `module_right` round a
+  module. They take the corners rather than adding cells, because there are
+  no cells outside a pane to add.
+- **What the row shows is `init.lua`'s, and how it looks is the theme's**,
+  the bar's split ("The bar: waybar's shape"). `ranma.titlebar { left = {...},
+  center = {...}, right = {...} }` lists pieces by name. Without it, the row
+  is exactly today's: `title_format` at `title_align`, the sync mark and the
+  badges. The built-in pieces are `title` (which draws the theme's
+  `border.title_format`, so the theme keeps its say over the text), `sync`
+  (the `⇉` of synchronized input), `badges`, and `icon` (card c438).
+  A config adds its own with
+  `ranma.title_piece(name, { render, text, style, hover_style, action,
+  on_click, interval })`. `render(pane)` returns a string,
+  `{ text, style }` or `nil` (hidden for that pane), and `style` is a role,
+  as a module's is.
+- **Pieces run as state-driven modules do, never in a frame.** A piece is
+  run for each pane on screen when that pane's title, program, directory,
+  focus or vars change, when the mode changes, and on a resize, and its
+  result is cached per pane. A pane brought on screen runs its pieces once.
+  `interval` ticks only while a pane showing the piece is on screen (the
+  bar's rule for timed modules). Idle stays at zero wakeups, and the smoke
+  test measures that with a `ranma.titlebar` loaded. The time budget and the
+  error display are a module's: a failing piece shows its error in the
+  `urgent` role where its text would be.
+- **The marks a config did not list still show.** If `badges` is not
+  listed, the badges come after `title`. If `sync` is not listed, the mark
+  goes before it. A plugin's badge, or a warning that you are typing into
+  several panes, must not vanish because a config left a name out.
+- **A button is a piece with an `action` or an `on_click`.** A plain left
+  press on its cells runs it and takes the press. Every other cell of the
+  row is still the move drag, so the one rule for the mouse holds, with
+  holes where a config put buttons. The pane under the pointer is focused
+  first, as for a mouse bind, so `close_pane` closes the pane clicked.
+  `hover_style` is the role while the pointer is over the piece (motion is
+  already reported for `hover`). There is no pressed look: a press runs
+  the action at once and there is nothing to show between the two.
+- **A `title` mouse target**: `ranma.mouse("double@title", "toggle_floating")`
+  hears the row's cells that are not buttons. It is matched before `border`
+  and falls back to it, so a `double@border` bind written before this keeps
+  working on the top edge. A plain `left@title` is refused, as
+  `left@border` is.
+- **Narrow panes are budgeted as the bar is**: the right side first, then
+  the left, with the centre taking what is left. A piece is cut with `…`. A
+  button is never cut, because half a glyph is not a button; it is dropped
+  whole. Badges keep their own ladder inside their piece, with urgent ones
+  going last.
+- **Per pane**: a rule's `style` and `pane:style` may set the `title_bg_*`
+  and `title_fg_*` colours and the caps, which are pane-shaped looks
+  ("Looks a single pane may override"). They may not set `edges`, which
+  belong to the layout, nor the pieces, which are the config's.
+- **Groups keep their tab bar.** A group's tabs already are its title row,
+  and card c436 gives the tab bar the same vocabulary (formats, caps).
+  A grouped pane's own top edge is drawn like any other pane's.
+- **Unchanged**: a nested pane drawn without a border has no title row
+  either; the built-in theme draws exactly what it draws today; pickers,
+  sheets and toasts keep their frames (card c441's question).
+
+Left out: images or pixel icons (a cell is a cell), animation (hover is a
+redraw on a pointer event, not a transition), a selector language over
+panes, and a GUI look shipped as a default.
+
 ### Mouse binds (2026-10-13)
 
 The mouse did what ranma decided (focus, drag a border, a menu on the right
