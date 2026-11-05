@@ -2806,6 +2806,35 @@ mod tests {
         assert!(filled.contains("(") && filled.contains(")"), "{filled:?}");
     }
 
+    /// With arrows the pills abut and have no caps: a module still stands
+    /// on its ground (`module_bg`), its text and workspaces as much as its
+    /// padding, as the arrows between them are drawn in that ground.
+    #[test]
+    fn an_arrow_bars_modules_stand_on_their_ground() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app_with(
+            "arrowground",
+            "[colors]\nbar_bg = \"default\"\nmodule_bg = \"#224466\"\n[bar]\njoin = \"arrows\"\n",
+            r#"ranma.module("m", { render = function() return "MOD" end })
+               ranma.bar { left = { "workspaces", "m" }, center = {}, right = {} }"#,
+        );
+        app.render_state_modules();
+        let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+        t.draw(|f| {
+            let area = f.area();
+            draw_bar(f, &app, Rect::new(0, area.height - 1, area.width, 1));
+        })
+        .unwrap();
+        let buf = t.backend().buffer();
+        let row = rows(buf).last().unwrap().clone();
+        let at = |needle: &str| row.find(needle).map(|b| row[..b].chars().count() as u16);
+        let ground = Color::Rgb(0x22, 0x44, 0x66);
+        let x = at("MOD").expect("the module");
+        assert_eq!(buf[(x, 9)].bg, ground, "its text on its ground: {row:?}");
+        assert_eq!(buf[(x - 1, 9)].bg, ground, "and its padding");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn a_border_draws_only_the_edges_the_theme_names() {
         use ratatui::{Terminal, backend::TestBackend};

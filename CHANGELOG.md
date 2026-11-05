@@ -220,6 +220,11 @@ commit log has the detail.
 
 ### Fixed
 
+- With `join = "arrows"`, a module (the workspaces, any module with no role,
+  and a role's module past its own text) stood on the terminal's background
+  while the arrows round it were drawn in its ground: it stands on its
+  ground now, as a pill with caps does.
+
 - A bar cap or arrow with no ground to draw (no `module_bg` and the bar on
   the terminal's own background) was drawn in the terminal's text colour,
   light outlines round pills with no fill; it is blank now.

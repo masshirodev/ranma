@@ -5449,7 +5449,7 @@ impl App {
         // `style`, else the role its text is in), a pill of that colour
         // between the role's caps, else the side's (cards c444, c445). With
         // arrows the pills abut, so there are no caps.
-        let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>, shape: &SideShape| {
+        let wrap_caps = |s: Segment, role: Option<crate::theme::RoleDef>, shape: &SideShape| {
             let role = role.filter(|r| r.bg.is_some()).or_else(|| {
                 s.iter()
                     .find(|p| !p.text.is_empty())
@@ -5506,6 +5506,20 @@ impl App {
                     shape.module_padding_right,
                 ),
             }
+        };
+        let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>, shape: &SideShape| {
+            let mut out = wrap_caps(s, role, shape);
+            // Pills that abut have no caps to mark their pieces as standing
+            // on the pill's ground (`bar::boxed_in` boxes only between caps),
+            // so with arrows each is marked here: the arrows are drawn in that
+            // ground, and the module must stand on it too, its text and
+            // workspaces as much as its padding.
+            if shape.join == Join::Arrows && !large {
+                for p in &mut out {
+                    p.boxed = true;
+                }
+            }
+            out
         };
         let center_shape = theme_bar.shape(Side::Center);
         let wrap = |s: Segment| wrap_in(chips(s, &center_shape), None, &center_shape);
