@@ -1560,6 +1560,7 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), its hidden workspaces (`hidden`, see `hide_workspace`), the bar modules on screen (`modules`), the profile in use (or `nil`), whether the current workspace is fullscreen, its layout (`"dwindle"`, `"master"`, …) and whether that is its own (`workspace_layout`) rather than the `layout` setting or a profile's, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.layouts()` | Every layout `load_layout NAME` takes: `{ { name, saved }, ... }`, `init.lua`'s (`saved = false`) first, then the saved ones they do not shadow. Read when asked. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
+| `ranma.profiles()` | Every declared profile, sorted by name: `{ { name, active, source, line, set, bar, titlebar, toolbars, theme }, ... }`. `active` marks the one in use; `source` and `line` are where the `ranma.profile` call that won was made (`init.lua`, a plugin's file, a module it `require`d, a file it `dofile`d), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is `nil`. Read when asked; `ranma.has("profiles")`. |
 | `ranma.client()` | `{ cols, rows, mobile, remote, outer, focused }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, whether its window has the desktop's focus (`focused`: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; `client_focus` says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
 | `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
@@ -2354,6 +2355,12 @@ your own for the phone takes another name, or replaces that one.
   that names no layout leaves the pins alone.
 - `ranma.use_profile(name)` works in binds and hooks. From a key or a script,
   use the action: `ranma.bind("p", "profile mobile")`, `ranma action "profile none"`.
+- A second `ranma.profile` of a name already declared replaces it whole, as a
+  later `ranma.set` replaces a value: plugins load before `init.lua`, so a
+  profile of yours named like a plugin's is the one used.
+  `ranma.profiles()` lists what was declared and where, and `profile_change`
+  says when another one comes into use, for a picker or a bar module that
+  shows it.
 
 ## Hooks — `ranma.on(event, fn)`
 
@@ -2384,6 +2391,7 @@ end)
 | `option_change` | `key`, `value`, `previous`, `saved` — the settings panel changed an option: as an edit is made (`saved` false), when it is put back, and once more for each edit saved (`saved` true). `value` is `nil` for unset. |
 | `copy` | `text`, `source` (`copy_mode`, `mouse` for a drag in a pane, `slot` for a drag over settings or a plugin's screen, `hints`, `osc52` for a program's own copy, `lua` for `ranma.copy`), `pane` (where it came from; `nil` for `slot` and `lua`) — ranma put text on the clipboard. `text` is whatever was copied, **passwords included**: a plugin that keeps it keeps them (`choose_buffer` keeps its copies in memory only for that reason). A copy the hook makes itself (`ranma.copy` inside it) does not fire it again. |
 | `client_focus` | `focused` — the window of the terminal driving the screen gained or lost the desktop's focus (you went to the browser and back), once per change; also `true` when a terminal attaches after the last one had lost it. Only the driving terminal's reports count (see "Several terminals on one server"). For "notify me when I am not looking at all". |
+| `profile_change` | `profile`, `previous` (names, `nil` for none) — another profile came into use: `ranma.use_profile`, the `profile` action, or a reload that no longer defines the one in use. Switching to the profile already in use is no change. |
 | `module_shown`, `module_hidden` | `name` — a bar module came on screen or went off it: placed in the bar with a bar showing, or not (a profile switch, a reload, the bar hidden). A module that fetches only while it is seen starts and stops on these, with `ranma.refresh_module` to show what it fetched, instead of keeping an interval to find out. A new configuration hears every module on screen as shown. |
 | `layout_change` | `workspace`, `layout`, `previous` (names) — `workspace_layout` gave a workspace a layout of its own, or the setting back. |
 | `pane_resize` | `pane`, `cols`, `rows` — a pane's terminal changed size: once the size settled (a mouse drag says it when the button is released), only for panes whose size really changed. A host resize changes every pane on screen, so keep it cheap. |
@@ -2485,6 +2493,7 @@ the spelling against this table:
 | `hook.float_change` | the `float_change` event |
 | `hook.layout_change` | the `layout_change` event |
 | `hook.pane_resize` | the `pane_resize` event |
+| `hook.profile_change` | the `profile_change` event |
 | `hook.screen_change` | the `screen_change` event |
 | `hook.workspace_rename` | the `workspace_rename` event |
 | `mode.cursor` | `ranma.mode`'s `cursor` |
@@ -2497,6 +2506,7 @@ the spelling against this table:
 | `pane.cursor` | `pane:cursor()` |
 | `pane.style` | `pane:style` and a rule's `style` |
 | `placement` | `ranma.placement` policies |
+| `profiles` | `ranma.profiles()`, with each profile's `source` and `line` |
 | `rule.group` | a window rule's `group` |
 | `rule.match` | window rules matching `program`, `cwd` and `host` |
 | `rule.style` | a window rule's `style` |

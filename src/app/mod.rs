@@ -3713,6 +3713,7 @@ impl App {
         if self.config.profile.as_deref() == name {
             return;
         }
+        let previous = self.config.profile.clone();
         if let Err(e) = self.config.use_profile(name) {
             self.status = Some(e);
             return;
@@ -3721,6 +3722,17 @@ impl App {
         self.relayout();
         self.render_state_modules();
         self.dirty = true;
+        self.emit_profile_change(previous);
+    }
+
+    /// `profile_change`, with the profile now in use and the one before
+    /// (either `nil` for none).
+    fn emit_profile_change(&mut self, previous: Option<String>) {
+        let profile = self.config.profile.clone();
+        self.emit(HookEvent::ProfileChange, |t| {
+            t.set("profile", profile)?;
+            t.set("previous", previous)
+        });
     }
 
     fn reload_config(&mut self) {
@@ -3729,77 +3741,7 @@ impl App {
         // either outcome puts a message in the bar that must be drawn now.
         self.dirty = true;
         match config::load(config::config_dir().as_deref()) {
-            Ok(mut cfg) => {
-                // The profile in use stays in use, if the new config still has it.
-                let kept = self.config.profile.take();
-                if let Some(name) = kept.as_deref()
-                    && cfg.use_profile(Some(name)).is_err()
-                {
-                    self.toast(
-                        format!("profile `{name}` is gone from the config; using none"),
-                        crate::toast::Level::Normal,
-                        None,
-                    );
-                }
-                self.config = cfg;
-                // The new configuration's hooks hear what is on screen.
-                self.modules_shown.clear();
-                // A plugin's screen holds functions of the Lua that just went:
-                // it closes, without an on_close nobody is left to hear. The
-                // plugin, loaded again, opens it again if it wants it open.
-                self.plugin_screen = None;
-                self.stashed_screen = None;
-                self.pending_screen = None;
-                // The new theme's colours are its own; the outer's go over
-                // them again, if the setting still asks for them.
-                self.own_colors = None;
-                self.adopt_colors();
-                self.module_generation += 1;
-                self.module_values.clear();
-                self.piece_values.clear();
-                // A changed scrollback or word_separators reaches the
-                // panes already open; fewer buffers kept drops the oldest.
-                self.buffers.truncate(self.config.settings.buffers_kept);
-                let s = &self.config.settings;
-                for p in self.panes.values() {
-                    p.set_options(s.scrollback_lines, &s.word_separators);
-                }
-                self.piece_hover = None;
-                self.module_running.clear();
-                self.schedule_modules(Instant::now());
-                self.status = Some("config reloaded".into());
-                if self.watcher.is_some() {
-                    self.watcher = watch_config(self.tx.clone(), &self.config.packages);
-                }
-                // A placement's state lived in the old Lua: policies start over.
-                self.placement_state.clear();
-                self.placement_shapes.clear();
-                // The plugins that set them start over too; a rule's stay, as
-                // rules are not run again on panes they matched.
-                for list in self.badges.values_mut() {
-                    list.retain(|(o, _)| o == rules::RULES_OWNER);
-                }
-                self.badges.retain(|_, l| !l.is_empty());
-                self.badge_owners.retain(|o| o == rules::RULES_OWNER);
-                self.watches.clear();
-                self.watch_pending.clear();
-                // Their functions were the old Lua's.
-                self.toast_clicks.clear();
-                self.refresh_settings_panel();
-                self.report_plugin_failures();
-                self.relayout();
-                self.render_state_modules();
-                // Seeded quietly: a hook that is new with this config hears of
-                // changes from now, not of every editor already open.
-                self.alt_screens = self
-                    .panes
-                    .iter()
-                    .filter(|(_, p)| crate::panetext::alt_screen(&p.term.lock()))
-                    .map(|(id, _)| *id)
-                    .collect();
-                self.emit(HookEvent::ConfigReload, |_| Ok(()));
-                self.start_hako();
-            }
+            Ok(cfg) => self.adopt_config(cfg),
             // Keep running on the old config; a typo must never take the session down.
             Err(e) => {
                 let msg = format!("{e:#}");
@@ -3809,6 +3751,85 @@ impl App {
                 ));
             }
         }
+    }
+
+    /// Run on a configuration just loaded in place of the one in use: what a
+    /// reload keeps, what it starts over, and the hooks that hear of it.
+    fn adopt_config(&mut self, mut cfg: Config) {
+        // The profile in use stays in use, if the new config still has it.
+        let kept = self.config.profile.take();
+        let mut lost = None;
+        if let Some(name) = kept.as_deref()
+            && cfg.use_profile(Some(name)).is_err()
+        {
+            lost = kept.clone();
+            self.toast(
+                format!("profile `{name}` is gone from the config; using none"),
+                crate::toast::Level::Normal,
+                None,
+            );
+        }
+        self.config = cfg;
+        // The new configuration's hooks hear what is on screen.
+        self.modules_shown.clear();
+        // A plugin's screen holds functions of the Lua that just went:
+        // it closes, without an on_close nobody is left to hear. The
+        // plugin, loaded again, opens it again if it wants it open.
+        self.plugin_screen = None;
+        self.stashed_screen = None;
+        self.pending_screen = None;
+        // The new theme's colours are its own; the outer's go over
+        // them again, if the setting still asks for them.
+        self.own_colors = None;
+        self.adopt_colors();
+        self.module_generation += 1;
+        self.module_values.clear();
+        self.piece_values.clear();
+        // A changed scrollback or word_separators reaches the
+        // panes already open; fewer buffers kept drops the oldest.
+        self.buffers.truncate(self.config.settings.buffers_kept);
+        let s = &self.config.settings;
+        for p in self.panes.values() {
+            p.set_options(s.scrollback_lines, &s.word_separators);
+        }
+        self.piece_hover = None;
+        self.module_running.clear();
+        self.schedule_modules(Instant::now());
+        self.status = Some("config reloaded".into());
+        if self.watcher.is_some() {
+            self.watcher = watch_config(self.tx.clone(), &self.config.packages);
+        }
+        // A placement's state lived in the old Lua: policies start over.
+        self.placement_state.clear();
+        self.placement_shapes.clear();
+        // The plugins that set them start over too; a rule's stay, as
+        // rules are not run again on panes they matched.
+        for list in self.badges.values_mut() {
+            list.retain(|(o, _)| o == rules::RULES_OWNER);
+        }
+        self.badges.retain(|_, l| !l.is_empty());
+        self.badge_owners.retain(|o| o == rules::RULES_OWNER);
+        self.watches.clear();
+        self.watch_pending.clear();
+        // Their functions were the old Lua's.
+        self.toast_clicks.clear();
+        self.refresh_settings_panel();
+        self.report_plugin_failures();
+        self.relayout();
+        self.render_state_modules();
+        // Seeded quietly: a hook that is new with this config hears of
+        // changes from now, not of every editor already open.
+        self.alt_screens = self
+            .panes
+            .iter()
+            .filter(|(_, p)| crate::panetext::alt_screen(&p.term.lock()))
+            .map(|(id, _)| *id)
+            .collect();
+        self.emit(HookEvent::ConfigReload, |_| Ok(()));
+        if lost.is_some() {
+            self.emit_profile_change(lost);
+        }
+        self.start_hako();
     }
 
     // ---- Lua ---------------------------------------------------------------------
@@ -3847,6 +3868,7 @@ impl App {
             },
             layouts_dir: self.layouts_dir.clone(),
             profile: self.config.profile.clone(),
+            profiles: self.config.profile_entries.clone(),
             fullscreen: self.active().fullscreen,
             layout: self.layout_here().name(),
             own_layout: self.active().layout.is_some() && !self.config.profile_sets_layout(),
@@ -6713,6 +6735,116 @@ mod tests {
                 .as_deref()
                 .unwrap_or("")
                 .contains("no profile `nope`")
+        );
+    }
+
+    #[test]
+    fn plugins_list_the_profiles_and_hear_them_change() {
+        let mut a = app(Some(
+            r#"
+            seen = {}
+            ranma.profile("present", { toolbars = {} })
+            ranma.profile("mobile", { set = { layout = "master" }, bar = { right = { "mode" } } })
+            ranma.on("profile_change", function(e)
+              seen[#seen + 1] = tostring(e.profile) .. "<" .. tostring(e.previous)
+              listed = ranma.profiles()
+            end)
+            "#,
+        ));
+        let lua = &a.config.lua;
+        assert!(
+            lua.load("return ranma.profiles()")
+                .eval::<mlua::Table>()
+                .is_err(),
+            "at load there is no runtime to read"
+        );
+        let seen = |a: &App| -> Vec<String> {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        a.run_action("profile mobile".parse().unwrap());
+        a.run_action("profile mobile".parse().unwrap());
+        assert_eq!(
+            seen(&a),
+            vec!["mobile<nil"],
+            "the same profile again is no change"
+        );
+        let got: Vec<(String, bool, Option<String>, Option<u32>)> = a
+            .config
+            .lua
+            .load(
+                "local out = {}
+                 for _, p in ipairs(listed) do
+                   out[#out + 1] = { p.name, p.active, p.source, p.line }
+                 end
+                 return out",
+            )
+            .eval::<mlua::Table>()
+            .unwrap()
+            .sequence_values::<mlua::Table>()
+            .map(|t| {
+                let t = t.unwrap();
+                (
+                    t.get(1).unwrap(),
+                    t.get(2).unwrap(),
+                    t.get(3).unwrap(),
+                    t.get(4).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(
+            (got[0].0.as_str(), got[0].1),
+            ("mobile", true),
+            "sorted, the one in use marked"
+        );
+        assert_eq!((got[1].0.as_str(), got[1].1), ("present", false));
+        assert!(got[0].2.is_some(), "the file that declared it: {got:?}");
+        assert_eq!((got[0].3, got[1].3), (Some(4), Some(3)), "and the line");
+        let declared: (String, String) = a
+            .config
+            .lua
+            .load("return listed[1].set.layout, listed[1].bar.right[1]")
+            .eval()
+            .unwrap();
+        assert_eq!(
+            declared,
+            ("master".into(), "mode".into()),
+            "what it declares"
+        );
+        a.run_action("profile none".parse().unwrap());
+        assert_eq!(seen(&a), vec!["mobile<nil", "nil<mobile"]);
+        a.run_action("profile nope".parse().unwrap());
+        assert_eq!(seen(&a).len(), 2, "a refused switch is no change");
+    }
+
+    #[test]
+    fn a_reload_that_drops_the_profile_in_use_says_so_to_the_hook() {
+        let src = r#"
+            seen = {}
+            ranma.on("profile_change", function(e)
+              seen[#seen + 1] = tostring(e.profile) .. "<" .. tostring(e.previous)
+            end)
+        "#;
+        let with = format!("{src}\nranma.profile('mobile', {{ set = {{ layout = 'master' }} }})");
+        let mut a = app(Some(&with));
+        a.run_action("profile mobile".parse().unwrap());
+        let seen = |a: &App| -> Vec<String> {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        a.adopt_config(crate::config::load_from(None, None, Some(&with)).unwrap());
+        assert_eq!(a.config.profile.as_deref(), Some("mobile"));
+        assert!(
+            seen(&a).is_empty(),
+            "kept over the reload: no change to hear"
+        );
+        a.adopt_config(crate::config::load_from(None, None, Some(src)).unwrap());
+        assert_eq!(a.config.profile, None);
+        assert_eq!(
+            seen(&a),
+            vec!["nil<mobile"],
+            "the new config's hook hears it go"
         );
     }
 

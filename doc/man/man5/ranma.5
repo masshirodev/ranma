@@ -2137,6 +2137,9 @@ Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBin
 \fBranma.use_profile(name)\fR
 Use that profile, or \fBnil\fR for none (see Profiles\fR).
 .TP
+\fBranma.profiles()\fR
+Every declared profile, sorted by name: \fB{ { name, active, source, line, set, bar, titlebar, toolbars, theme }, ... }\fR. \fBactive\fR marks the one in use; \fBsource\fR and \fBline\fR are where the \fBranma.profile\fR call that won was made (\fBinit.lua\fR, a plugin's file, a module it \fBrequire\fRd, a file it \fBdofile\fRd), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is \fBnil\fR. Read when asked; \fBranma.has("profiles")\fR.
+.TP
 \fBranma.client()\fR
 \fB{ cols, rows, mobile, remote, outer, focused }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, whether its window has the desktop's focus (\fBfocused\fR: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; \fBclient_focus\fR says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
 .TP
@@ -3081,6 +3084,13 @@ that names no layout leaves the pins alone.
 .IP \(bu 2
 \fBranma.use_profile(name)\fR works in binds and hooks. From a key or a script,
 use the action: \fBranma.bind("p", "profile mobile")\fR, \fBranma action "profile none"\fR.
+.IP \(bu 2
+A second \fBranma.profile\fR of a name already declared replaces it whole, as a
+later \fBranma.set\fR replaces a value: plugins load before \fBinit.lua\fR, so a
+profile of yours named like a plugin's is the one used.
+\fBranma.profiles()\fR lists what was declared and where, and \fBprofile_change\fR
+says when another one comes into use, for a picker or a bar module that
+shows it.
 .SH "HOOKS — \fBranma.on(event, fn)\fR"
 .PP
 .RS 4
@@ -3147,6 +3157,9 @@ nothing; runs in the newly loaded config
 .TP
 \fBclient_focus\fR
 \fBfocused\fR — the window of the terminal driving the screen gained or lost the desktop's focus (you went to the browser and back), once per change; also \fBtrue\fR when a terminal attaches after the last one had lost it. Only the driving terminal's reports count (see "Several terminals on one server"). For "notify me when I am not looking at all".
+.TP
+\fBprofile_change\fR
+\fBprofile\fR, \fBprevious\fR (names, \fBnil\fR for none) — another profile came into use: \fBranma.use_profile\fR, the \fBprofile\fR action, or a reload that no longer defines the one in use. Switching to the profile already in use is no change.
 .TP
 \fBmodule_shown\fR, \fBmodule_hidden\fR
 \fBname\fR — a bar module came on screen or went off it: placed in the bar with a bar showing, or not (a profile switch, a reload, the bar hidden). A module that fetches only while it is seen starts and stops on these, with \fBranma.refresh_module\fR to show what it fetched, instead of keeping an interval to find out. A new configuration hears every module on screen as shown.
@@ -3285,6 +3298,9 @@ the \fBlayout_change\fR event
 \fBhook.pane_resize\fR
 the \fBpane_resize\fR event
 .TP
+\fBhook.profile_change\fR
+the \fBprofile_change\fR event
+.TP
 \fBhook.screen_change\fR
 the \fBscreen_change\fR event
 .TP
@@ -3320,6 +3336,9 @@ the \fBworkspace_rename\fR event
 .TP
 \fBplacement\fR
 \fBranma.placement\fR policies
+.TP
+\fBprofiles\fR
+\fBranma.profiles()\fR, with each profile's \fBsource\fR and \fBline\fR
 .TP
 \fBrule.group\fR
 a window rule's \fBgroup\fR

@@ -618,10 +618,13 @@ pub enum Event {
     /// A pane's program went onto the alternate screen (a full-screen
     /// program started) or back to the main one.
     ScreenChange,
+    /// Another profile came into use, or none (`use_profile`, the `profile`
+    /// action, or a reload that no longer defines the one in use).
+    ProfileChange,
 }
 
 /// Every event by the name `ranma.on` takes.
-pub const EVENTS: [(&str, Event); 27] = [
+pub const EVENTS: [(&str, Event); 28] = [
     ("pane_open", Event::PaneOpen),
     ("pane_close", Event::PaneClose),
     ("focus_change", Event::FocusChange),
@@ -649,6 +652,7 @@ pub const EVENTS: [(&str, Event); 27] = [
     ("screen_change", Event::ScreenChange),
     ("module_shown", Event::ModuleShown),
     ("module_hidden", Event::ModuleHidden),
+    ("profile_change", Event::ProfileChange),
 ];
 
 impl Event {
@@ -1132,6 +1136,26 @@ pub struct Profile {
     theme: Option<toml::Table>,
     #[serde(skip)]
     built: Option<Theme>,
+    /// What was declared, after the shorthands are normalized: what
+    /// `ranma.profiles()` hands a plugin, so it can show what a profile
+    /// changes without ranma growing a second reader of every field.
+    #[serde(skip)]
+    declared: serde_json::Value,
+    /// The file and line whose code called `ranma.profile`: a plugin that
+    /// writes profiles as files (profiles.ranma) tells its own from the
+    /// rest by this, and a later declaration of the same name wins.
+    #[serde(skip)]
+    source: Option<(String, u32)>,
+}
+
+/// One declared profile, as `ranma.profiles()` answers: made once per load,
+/// since profiles cannot change until the next one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileEntry {
+    pub name: String,
+    pub source: Option<String>,
+    pub line: Option<u32>,
+    pub declared: serde_json::Value,
 }
 
 impl Profile {
@@ -1562,6 +1586,9 @@ pub struct StateSnapshot {
     pub layouts_dir: Option<std::path::PathBuf>,
     /// The profile in use, if any.
     pub profile: Option<String>,
+    /// Every declared profile (`ranma.profiles()`); shared, not copied, as
+    /// this snapshot is made before every call.
+    pub profiles: Rc<[ProfileEntry]>,
     /// The current workspace is fullscreen.
     pub fullscreen: bool,
     /// The current workspace's layout, and whether it is its own
@@ -1764,6 +1791,8 @@ pub struct Config {
     pub theme: Theme,
     /// `ranma.profile` definitions, by name.
     pub profiles: HashMap<String, Profile>,
+    /// The same, by name, as `ranma.profiles()` hands them out.
+    pub profile_entries: Rc<[ProfileEntry]>,
     /// The profile in use, applied over `base`.
     pub profile: Option<String>,
     /// The layout the profile in use names in its `set`, if it does: it wins
@@ -1917,6 +1946,21 @@ impl Config {
     pub fn profile_sets_layout(&self) -> bool {
         self.profile_layout.is_some()
     }
+}
+
+/// Every profile, sorted by name, for `ranma.profiles()`.
+fn profile_entries(profiles: &HashMap<String, Profile>) -> Rc<[ProfileEntry]> {
+    let mut v: Vec<ProfileEntry> = profiles
+        .iter()
+        .map(|(name, p)| ProfileEntry {
+            name: name.clone(),
+            source: p.source.as_ref().map(|(s, _)| s.clone()),
+            line: p.source.as_ref().map(|(_, l)| *l),
+            declared: p.declared.clone(),
+        })
+        .collect();
+    v.sort_by(|a, b| a.name.cmp(&b.name));
+    v.into()
 }
 
 /// `$RANMA_CONFIG_DIR`, else `$XDG_CONFIG_HOME/ranma` (`~/.config/ranma`).
@@ -2483,6 +2527,7 @@ pub const CAPABILITIES: &[&str] = &[
     "hook.float_change",
     "hook.layout_change",
     "hook.pane_resize",
+    "hook.profile_change",
     "hook.screen_change",
     "hook.workspace_rename",
     "mode.cursor",
@@ -2496,6 +2541,7 @@ pub const CAPABILITIES: &[&str] = &[
     "pane.state",
     "pane.style",
     "placement",
+    "profiles",
     "rule.group",
     "rule.match",
     "rule.style",
@@ -2504,6 +2550,24 @@ pub const CAPABILITIES: &[&str] = &[
     "titlebar",
     "toast.on_click",
 ];
+
+/// The file and line of the Lua calling `ranma.profile`: a chunk loaded
+/// from a file is named `@path` (init.lua, plugins, `require`, `dofile`);
+/// any other chunk keeps its own name.
+fn profile_source(lua: &Lua) -> Option<(String, u32)> {
+    lua.inspect_stack(1, |d| {
+        let src = d.source().source?.into_owned();
+        let line = d
+            .current_line()
+            .and_then(|l| u32::try_from(l).ok())
+            .unwrap_or(0);
+        Some((
+            src.strip_prefix('@').map(str::to_string).unwrap_or(src),
+            line,
+        ))
+    })
+    .flatten()
+}
 
 fn install_api(
     lua: &Lua,
@@ -2971,7 +3035,14 @@ fn install_api(
                 )?;
                 normalize_bar(lua, &format!("{who} bar"), &t.get::<Value>("bar")?)?;
             }
-            let def: Profile = lua.from_value(value).map_err(|e| {
+            // Kept as declared (normalized above) for ranma.profiles(). Read
+            // before the strict parse below takes the value; a value that
+            // does not convert fails that parse anyway, with its message.
+            let declared: serde_json::Value = lua
+                .from_value(value.clone())
+                .unwrap_or(serde_json::Value::Null);
+            let source = profile_source(lua);
+            let mut def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
                     "{who}: {e} (a profile takes set, bar, titlebar, toolbars and theme)"
                 ))
@@ -2986,6 +3057,11 @@ fn install_api(
             // is an error at load and not when the profile is first used.
             let mut probe = b.settings.clone();
             apply_settings(&mut probe, def.set.clone(), &format!("{who} set")).map_err(rt_err)?;
+            def.declared = declared;
+            def.source = source;
+            // A second declaration of a name replaces the first, as a later
+            // ranma.set does: plugins load before init.lua, so the user's
+            // word is final, and ranma.profiles() says whose won.
             b.profiles.insert(name, def);
             Ok(())
         })?,
@@ -3670,6 +3746,33 @@ fn install_api(
         })?,
     )?;
 
+    // Every declared profile, sorted by name: `{ name, active, source,
+    // line, set, bar, ... }`, the fields as declared (normalized).
+    ranma.set(
+        "profiles",
+        lua.create_function(|lua, ()| {
+            let (entries, active) = {
+                let rt = lua.app_data_ref::<Runtime>().ok_or_else(|| {
+                    rt_err("ranma.profiles only works inside binds, hooks and modules, not at config load")
+                })?;
+                (rt.state.profiles.clone(), rt.state.profile.clone())
+            };
+            let out = lua.create_table()?;
+            for (i, e) in entries.iter().enumerate() {
+                let t = match lua.to_value(&e.declared)? {
+                    Value::Table(t) => t,
+                    _ => lua.create_table()?,
+                };
+                t.set("name", e.name.as_str())?;
+                t.set("active", active.as_deref() == Some(e.name.as_str()))?;
+                t.set("source", e.source.as_deref())?;
+                t.set("line", e.line)?;
+                out.set(i + 1, t)?;
+            }
+            Ok(out)
+        })?,
+    )?;
+
     // Every layout by name: `{ name, saved }`, init.lua's first, then the
     // saved ones it does not shadow (what `load_layout NAME` takes).
     ranma.set(
@@ -4214,6 +4317,7 @@ pub fn load_full(
         hint_patterns: builder.hint_patterns,
         toolbars: builder.toolbars,
         toolbars_shown: builder.toolbars_shown,
+        profile_entries: profile_entries(&builder.profiles),
         profiles: builder.profiles,
         profile: None,
         profile_layout: None,
@@ -5224,6 +5328,24 @@ mod tests {
             "{e}"
         );
         assert_eq!(cfg.settings, settings, "a failed switch changes nothing");
+    }
+
+    #[test]
+    fn a_later_profile_of_the_same_name_wins_and_keeps_what_it_declared() {
+        let cfg = with_user(
+            r#"
+            ranma.profile("p", { set = { layout = "master" } })
+            ranma.profile("p", { bar = { right = { "mode" } }, theme = { border = { style = "none" } } })
+            "#,
+        )
+        .unwrap();
+        let e = &cfg.profile_entries;
+        assert_eq!(e.len(), 1);
+        assert_eq!(e[0].name, "p");
+        assert_eq!(e[0].line, Some(3), "the second declaration's");
+        assert_eq!(e[0].declared["bar"]["right"][0], "mode");
+        assert_eq!(e[0].declared["theme"]["border"]["style"], "none");
+        assert!(e[0].declared.get("set").is_none(), "nothing of the first");
     }
 
     /// The mobile view is mobile.ranma's, which the default hako setup

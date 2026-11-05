@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.profiles()`: every declared profile, with whether it is in use,
+  the file and line that declared it, and what it sets; and a
+  `profile_change` hook (`profile`, `previous`) when another one comes into
+  use, a reload dropping the one in use included. `ranma.has("profiles")`
+  and `ranma.has("hook.profile_change")`.
+
 - Bar modules give way by `priority` (`ranma.module("load", { priority = 20
   })`, and a bar group's `{ "cpu", "mem", priority = 30 }`): on a bar too
   narrow for everything, the lowest goes whole, on whichever side, before

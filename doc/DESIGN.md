@@ -3664,6 +3664,23 @@ SSH; the plugin then reads `ranma.client().outer` (below).
   could empty the bar but not take its row away. Each profile's theme is
   built and checked at load (over `settings.toml`'s `[theme]`, as one more
   layer), and switching swaps the whole theme, as it swaps the settings.
+- **Profiles are declared at load and read at run time** (2026-11-05, for
+  profiles.ranma, a picker over them). `ranma.profile` stays loading-only:
+  a profile is checked as strictly as the base when `init.lua` loads, so a
+  typo is a config error and not a surprise at the first switch, and one
+  declared later could not be. What a plugin needed was to *see* them:
+  `ranma.profiles()` lists every one, with the fields as declared (the bar's
+  shorthands written out, so a plugin reads one shape) rather than as
+  applied, since what a profile *changes* is what a picker shows. Each
+  carries the file and line of the `ranma.profile` call, because a plugin
+  that keeps profiles as files must tell its own from those of `init.lua`
+  and other plugins, and never rewrite another's. A second declaration of
+  a name replaces the first, silently, as a later `ranma.set` does:
+  mobile.ranma's docs already tell users to replace its `mobile`, so a
+  warning would fire on the case that was asked for; the `source` says
+  whose won. `profile_change` (`profile`, `previous`) fires on every real
+  change, a reload that drops the profile in use included, and not on a
+  switch to the profile already in use.
 - **Toolbars**: named rows of buttons, each a label and an action or a Lua
   function, `top`, `bottom` or `beside` the bar, `normal` or `large`.
 - **`send <keys>` and latching modifiers** (`latch ctrl`): what Gboard cannot

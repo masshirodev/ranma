@@ -180,6 +180,7 @@ function ranma.unbind_all(opts) end
 ---| "float_change"     # { pane, floating }: it floated, or was tiled again
 ---| "workspace_rename" # { workspace, name, previous }: named, renamed, or cleared (nil)
 ---| "before_close"     # { pane, workspace, title, program }: return false to keep the pane
+---| "profile_change"   # { profile, previous }: another profile came into use (nil for none)
 ---| `user:${string}`   # a plugin's own event: what ranma.emit passed
 
 ---Run `fn` on an event. A plugin's own events are named "user:<name>".
@@ -442,6 +443,21 @@ function ranma.client() end
 ---Use a profile, or nil for none.
 ---@param name string?
 function ranma.use_profile(name) end
+
+---@class ranma.ProfileInfo
+---@field name string
+---@field active boolean it is the profile in use
+---@field source string? the file whose ranma.profile call declared it (the last, if several did)
+---@field line integer? the line of that call
+---@field set? table as declared
+---@field bar? table as declared, its shorthands written out
+---@field titlebar? table
+---@field toolbars? string[]
+---@field theme? table
+
+---Every declared profile, sorted by name. `ranma.has("profiles")`.
+---@return ranma.ProfileInfo[]
+function ranma.profiles() end
 
 ---@class ranma.Hit
 ---@field line integer
