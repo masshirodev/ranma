@@ -181,9 +181,13 @@ outer draws it** (`nested_bar = "inner"`, card c464).
   whose bar is up.
 - The outer keeps what is the outer's: the bar's position and size (the
   screen's, not the host's), its workspaces with the inner's in brackets
-  in the place the host's bar gives `workspaces`, the mode chip, and its
-  `nested = "own"` modules' values. That last is the existing rule for a
-  desk fact (a clock), now meeting a layout from elsewhere.
+  in the place the host's bar gives `workspaces`, and the mode chip.
+  Whose value a module shows was first the outer's `nested` marks; the
+  owner's clock in the workstation's bar (follow, two spaces added) kept
+  showing the work clock, the work ranma's own clock being `"own"`. The
+  host decides that too now (card c472): its bar carries the modules it
+  marks `"own"`, which show the desk's value (where the outer has such a
+  module), and the rest show the host's.
 - Off by default (`"outer"`): today's bar is unchanged until asked.
 - A lent bar is the bar in use for everything a bar drives: its modules are
   scheduled when it comes and when it goes (a timed module ticks only while

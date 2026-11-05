@@ -228,6 +228,10 @@ commit log has the detail.
 
 ### Fixed
 
+- With `nested_bar = "inner"`, whose value a module shows (the host's or
+  the desk's) is the host's `nested` choice, not this ranma's: a host
+  module on `follow` showed this ranma's own clock when that was `"own"`.
+
 - `background.art` (and `splash.art`) take a name with its `.txt` too
   (`default.txt` is the `default` in the backgrounds folder); a path is the
   file as written. And an error in the settings panel, cut to one line

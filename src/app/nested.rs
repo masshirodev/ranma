@@ -391,6 +391,21 @@ impl App {
                 .bar_source
                 .as_ref()
                 .and_then(|t| serde_json::to_value(t).ok()),
+            own: Some({
+                let mut own: Vec<String> = bar
+                    .all()
+                    .filter(|n| {
+                        self.config
+                            .modules
+                            .get(*n)
+                            .is_some_and(|m| m.nested == ModuleNested::Own)
+                    })
+                    .cloned()
+                    .collect();
+                own.sort();
+                own.dedup();
+                own
+            }),
         }
     }
 
@@ -550,11 +565,22 @@ impl App {
     /// the innermost's value all the way out.
     pub(super) fn module_value(&self, name: &str) -> Segment {
         let own = || self.module_values.get(name).cloned().unwrap_or_default();
-        let nested = self
-            .config
-            .modules
-            .get(name)
-            .map_or(ModuleNested::Follow, |m| m.nested);
+        let nested = match self.inner_bar.as_ref().and_then(|b| b.own.as_ref()) {
+            // A host's bar in use: its marks decide (card c472). A desk
+            // value it asks for that this ranma has no module for is the
+            // host's own.
+            Some(own)
+                if own.iter().any(|n| n == name) && self.config.modules.contains_key(name) =>
+            {
+                ModuleNested::Own
+            }
+            Some(_) => ModuleNested::Follow,
+            None => self
+                .config
+                .modules
+                .get(name)
+                .map_or(ModuleNested::Follow, |m| m.nested),
+        };
         if nested == ModuleNested::Own {
             return own();
         }

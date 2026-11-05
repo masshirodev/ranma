@@ -852,9 +852,11 @@ Over SSH, three levels deep, each machine starting ranma: with
   `[roles]`), so each host says what its own bar shows over ssh, in its own
   `init.lua` and theme, and the machine you sit at says nothing about it.
   This ranma keeps what only it can show: its workspaces with that ranma's
-  in brackets (where that bar puts `workspaces`, on any side), the mode chip, the bar's position and size, and the
-  values of its own modules marked `nested = "own"` (a desk clock named in
-  that bar shows this machine's time). Its own bar comes back as soon as
+  in brackets (where that bar puts `workspaces`, on any side), the mode chip, and the bar's position and size.
+  Whose value each module shows is that ranma's choice too: one it marks
+  `nested = "own"` (a desk clock) shows this machine's value, when this
+  ranma has a module of that name; the rest show that ranma's. An inner
+  older than this sends no marks, and this ranma's own decide. Its own bar comes back as soon as
   the focus leaves. Colours stay `theme_colors`' to choose. A look this
   build cannot read (a key a newer ranma knows) leaves this one's look, the
   modules still that ranma's; an inner older than the setting sends no bar,

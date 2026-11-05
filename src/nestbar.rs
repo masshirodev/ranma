@@ -64,6 +64,12 @@ pub struct WireBar {
     pub styles: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub look: Option<serde_json::Value>,
+    /// The modules of its bar it marks `nested = "own"` (card c472): the
+    /// desk's value is shown for them, the inner's for the rest, so the
+    /// host decides as it does for the rest of its bar. `None` from an older
+    /// inner: the outer's own marks decide, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own: Option<Vec<String>>,
 }
 
 /// A module's name, or a group of them in one pill.

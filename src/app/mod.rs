@@ -10843,6 +10843,50 @@ mod tests {
         assert!(!a.module_due.contains_key("tick"));
     }
 
+    /// Under a host's bar, the host's `nested` marks decide whose value a
+    /// module shows, not this ranma's (card c472): the owner's clock in
+    /// the workstation's `main` (follow) showed the work clock, because the
+    /// work ranma's own clock is `nested = "own"`.
+    #[test]
+    fn a_hosts_bar_decides_whose_value_its_modules_show() {
+        let (mut a, id) = with_ranma_inside(
+            r#"
+            ranma.set { nested_bar = "inner" }
+            ranma.module("clock", { interval = 60, nested = "own", render = function() return "DESK" end })
+            ranma.bar { left = { "workspaces" }, center = {}, right = { "clock" } }
+            "#,
+        );
+        a.render_state_modules();
+        a.run_timers(std::time::Instant::now());
+        let shown = |a: &mut App, own: &str| {
+            let r = crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{p},"current":1,"ws":[{{"n":1}}],"modules":{{"clock":[{{"text":"HOST"}}]}},
+                    "bar":{{"right":["clock"]{own}}}}}"#,
+                p = crate::nestbar::PROTOCOL
+            ))
+            .unwrap();
+            a.reports.insert(id, r);
+            a.follow_inner_bar();
+            let t: String = a.segment("clock").iter().map(|p| p.text.clone()).collect();
+            t
+        };
+        assert_eq!(
+            shown(&mut a, r#","own":[]"#),
+            "HOST",
+            "the host follows: its value"
+        );
+        assert_eq!(
+            shown(&mut a, r#","own":["clock"]"#),
+            "DESK",
+            "the host asks for the desk's"
+        );
+        assert_eq!(
+            shown(&mut a, ""),
+            "DESK",
+            "an older host: this ranma's marks, as before"
+        );
+    }
+
     #[test]
     fn the_pointer_in_an_inner_ranmas_text_is_the_inners() {
         use crossterm::event::{
