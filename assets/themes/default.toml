@@ -59,6 +59,14 @@ tab_inactive_bg = "#313244"
 # purpose: bar_accent.
 # ws_activity = ...
 
+# A filled title row: the ground and text of the row the title is on, for the
+# focused pane, the others, and an unfocused float (unset: its inactive one).
+# Unset here on purpose: the row is the border line. A colour may name
+# another key of [colors] (title_bg_active = "tab_active_bg").
+# title_bg_active = ...    title_fg_active = ...
+# title_bg_inactive = ...  title_fg_inactive = ...
+# title_bg_floating = ...  title_fg_floating = ...
+
 # Borders that run through colours instead of one, along border.gradient_angle:
 # two or more, spread over each pane's border, one colour per cell (a short
 # border shows the steps). Not in WM mode, whose one colour is the point.
@@ -101,6 +109,10 @@ style = "rounded"
 # gives a cell only to the sides drawn; the side the title is on must be one.
 # edges = ["top"]
 # floating_edges = ["top", "right", "bottom", "left"]
+# A filled title row's corners, in its ground (colors.title_bg_*): one
+# character each, "\ue0b6" and "\ue0b4" round it.
+# title_corner_left = ""
+# title_corner_right = ""
 # Where a pane's title goes on its border: top | bottom | off.
 title = "top"
 # left | center | right
@@ -160,6 +172,8 @@ dim_unfocused = 0.0
 # Unset: the terminal's own.
 # active_bg = "#1e1e2e"
 # inactive_bg = "#181825"
+# An unfocused float's ground; unset, inactive_bg.
+# floating_bg = "#24273a"
 # A thumb on a pane's right border showing where the view is in its history
 # (tmux's pane-scrollbars): "scrolled" only while you are scrolled back, "on"
 # whenever there is history, "off" never. Drawn in the border's colour.

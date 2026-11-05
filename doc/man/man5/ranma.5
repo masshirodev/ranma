@@ -2019,7 +2019,7 @@ Scroll so the line is on screen: a scrollback line lands mid\-view.
 Your plugin's mark on the pane's border, after its title: \fBp:badge("agents", "?", "waiting", "urgent")\fR. \fBowner\fR is your plugin's name; one badge per owner per pane, replaced by the next call, taken off with no glyph (\fBp:badge("agents")\fR). The glyph (one or two characters) carries the meaning without colour; the word (12 at most) goes first on a narrow pane; then the title is cut, calm badges go (dim, normal, accent), the title goes, and urgent badges last. Badges keep the order their owners first set one, and are cleared on a reload.
 .TP
 \fB:style(looks)\fR
-The pane's own looks over the theme, kept until it closes (over a reload and an upgrade, not a restored snapshot): \fBp:style { border_active = "#f38ba8", active_bg = "#200000" }\fR. Keys, all optional and strict: \fBborder_active\fR, \fBborder_inactive\fR, \fBborder_floating\fR and their \fB_gradient\fR lists, \fBgradient_angle\fR, \fBborder_style\fR and \fBfloating_style\fR (not \fBnone\fR: whether panes have borders is the layout's), \fBborder_chars\fR, \fBtitle\fR, \fBtitle_align\fR, \fBtitle_format\fR, \fBindicator\fR, \fBtitle_style\fR and \fBtitle_active_style\fR (attribute lists), \fBactive_bg\fR, \fBinactive_bg\fR, \fBdim_unfocused\fR, and \fBpalette = { color1 = "#…", … }\fR. A later call replaces the keys it names and keeps the rest (a rule's \fBstyle\fR included); \fBp:style()\fR clears them all.
+The pane's own looks over the theme, kept until it closes (over a reload and an upgrade, not a restored snapshot): \fBp:style { border_active = "#f38ba8", active_bg = "#200000" }\fR. Keys, all optional and strict: \fBborder_active\fR, \fBborder_inactive\fR, \fBborder_floating\fR and their \fB_gradient\fR lists, \fBgradient_angle\fR, \fBborder_style\fR and \fBfloating_style\fR (not \fBnone\fR: whether panes have borders is the layout's), \fBborder_chars\fR, \fBtitle\fR, \fBtitle_align\fR, \fBtitle_format\fR, \fBindicator\fR, \fBtitle_style\fR and \fBtitle_active_style\fR (attribute lists), \fBactive_bg\fR, \fBinactive_bg\fR, \fBfloating_bg\fR, \fBdim_unfocused\fR, the title row's \fBtitle_bg_active\fR, \fBtitle_bg_inactive\fR, \fBtitle_bg_floating\fR, \fBtitle_fg_active\fR, \fBtitle_fg_inactive\fR, \fBtitle_fg_floating\fR, \fBtitle_corner_left\fR and \fBtitle_corner_right\fR, and \fBpalette = { color1 = "#…", … }\fR. Not \fBedges\fR, which shape every pane's inner area. A later call replaces the keys it names and keeps the rest (a rule's \fBstyle\fR included); \fBp:style()\fR clears them all.
 .TP
 \fB:copy_mode(line, col)\fR
 Focus it and enter copy mode with the cursor there, scrolled into view.
@@ -3185,6 +3185,15 @@ which sides of a pane are drawn: a list of \fBtop\fR, \fBright\fR, \fBbottom\fR,
 \fBborder.floating_edges\fR
 the same, for floats and popups; unset, \fBedges\fR
 .TP
+\fBcolors.title_bg_active\fR, \fBtitle_bg_inactive\fR, \fBtitle_bg_floating\fR
+a ground for the row the title is on (the focused pane's, the others', an unfocused float's), filling the whole row, corners included: a title bar rather than a line with words in it. Each is its own; unset, that row is the border line as before. An unfocused float's falls back to \fBtitle_bg_inactive\fR. In WM mode the focused pane's filled row takes \fBmode_bg\fR and \fBmode_fg\fR; so does a row with no ground whose line is blanks (\fB[border.chars]\fR \fBtop = "   "\fR), or the mode would show on the title's letters only.
+.TP
+\fBcolors.title_fg_active\fR, \fBtitle_fg_inactive\fR, \fBtitle_fg_floating\fR
+a filled row's text and fill; unset, the border's colour. Badges keep their own colours on the row's ground.
+.TP
+\fBborder.title_corner_left\fR, \fBtitle_corner_right\fR
+one character each (empty by default), drawn in the corner cells of a filled title row, in the row's ground over whatever lies behind the pane (\fBcolors.background_bg\fR, else the terminal's): \fB"\eue0b6"\fR and \fB"\eue0b4"\fR round it like a window's top. On a side with no edge the corner takes the row's end cell and the title starts after it. Not drawn on a row that is not filled.
+.TP
 \fBborder.floating_style\fR
 floats and popups (\fBranma popup\fR); unset, \fBstyle\fR
 .TP
@@ -3226,6 +3235,9 @@ drawn before and after every filled chip (the current workspace, a \fBpane_strip
 .TP
 \fBpanes.dim_unfocused\fR
 \fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.
+.TP
+\fBpanes.floating_bg\fR
+an unfocused float's ground; unset, \fBinactive_bg\fR. A float with no edges on the same ground as the tiles under it runs into them.
 .TP
 \fBpanes.active_bg\fR, \fBinactive_bg\fR
 the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's \fBwindow\-active\-style\fR and \fBwindow\-style\fR); unset, the terminal's own. Unfocused text fades toward \fBinactive_bg\fR.

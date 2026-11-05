@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- A filled title row: `colors.title_bg_*` and `title_fg_*` (focused,
+  unfocused, float) give the row the title is on a ground of its own, and
+  `border.title_corner_left` / `_right` round it. `panes.floating_bg` gives
+  an unfocused float its own ground. A pane may set all of these in its
+  `style`.
+
 - `border.edges` and `border.floating_edges`: which sides of a pane have a
   border, so a theme can draw a title row and nothing else. A pane gives a
   cell only to the sides drawn; a side left out is grabbed in the gap beside

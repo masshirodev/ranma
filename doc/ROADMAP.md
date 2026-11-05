@@ -366,7 +366,7 @@ not listed here.
   the proposal settled from it (F1-F12, R1-R4, D1-D4, B1-B10)
 - [x] A colour may name another colour role (F9)
 - [x] `border.edges`, `floating_edges`, `[border.chars]` per edge
-- [ ] A filled title row: `title_bg_*`, `title_fg_*`, `title_corner_left` / `right`,
+- [x] A filled title row: `title_bg_*`, `title_fg_*`, `title_corner_left` / `right`,
   `panes.floating_bg`
 - [ ] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`,
   priorities and the handoff's ladder; `tabs`, `index` built in; profiles carry it

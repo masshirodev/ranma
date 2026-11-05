@@ -398,6 +398,8 @@ fn draw_pane(
     };
     let ground = if view.focused {
         panes.active_bg
+    } else if view.floating {
+        panes.floating_bg.or(panes.inactive_bg)
     } else {
         panes.inactive_bg
     }
@@ -946,10 +948,38 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         };
     }
     let r = view.outer;
-    f.render_widget(block, rrect(r));
+    let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
+    let row = title_row(view, c, b, &set, border, mode_edge);
+    let (cut_left, cut_right) = match &row {
+        Some(_) => corner_cells(view, b),
+        None => (0, 0),
+    };
+    f.render_widget(block.clone(), rrect(r));
+    // Corners on sides with no edge take the row's end cells: the title and
+    // its line are laid out in the cells between them instead.
+    if let Some(row) = &row
+        && cut_left + cut_right > 0
+        && r.w > cut_left + cut_right
+    {
+        let w = r.w - cut_left - cut_right;
+        let area = ratatui::layout::Rect::new(0, 0, w, 1);
+        let mut one = ratatui::buffer::Buffer::empty(area);
+        let side = if row.y == r.y {
+            Borders::TOP
+        } else {
+            Borders::BOTTOM
+        };
+        ratatui::widgets::Widget::render(block.borders(side), area, &mut one);
+        let buf = f.buffer_mut();
+        for i in 0..w {
+            let x = r.x + cut_left + i;
+            if buf.area.contains(Position::new(x, row.y)) {
+                buf[(x, row.y)] = one[(i, 0)].clone();
+            }
+        }
+    }
     // A gradient: the edge's cells, recoloured one by one. Not in WM mode,
     // whose one colour is the point.
-    let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
     let stops = match (view.focused, mode_edge, view.floating) {
         (_, true, _) => None,
         (true, false, _) => c.border_active_gradient.as_deref(),
@@ -966,6 +996,10 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
             b.gradient_angle,
             &app.host_colors,
         );
+    }
+    if let Some(row) = &row {
+        let behind = color(c.background_bg.unwrap_or(theme::Color::Default));
+        paint_title_row(f, view, b, &set, row, color(border), behind);
     }
     if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
         let buf = f.buffer_mut();
@@ -986,6 +1020,116 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         }
         for (x, y, a) in arrows {
             buf.set_string(x, y, a, edge);
+        }
+    }
+}
+
+/// The row the title is on, when it is filled (DESIGN.md, "Title bars a
+/// theme can build"): the state's `title_bg_*` and `title_fg_*`. In WM mode
+/// the focused pane's row takes the mode colours, when it is filled or when
+/// its line is blanks (F10: otherwise the mode colour would land on the
+/// title's letters only). Unset for the state, the row stays the border line
+/// it was, and this is `None`.
+struct TitleRow {
+    y: u16,
+    ground: Color,
+    ink: Color,
+}
+
+fn title_row(
+    view: &PaneView,
+    c: &Colors,
+    b: &theme::Border,
+    set: &border::Set<'_>,
+    border: theme::Color,
+    mode_edge: bool,
+) -> Option<TitleRow> {
+    let drawn = view.drawn();
+    let (y, fill) = match b.title {
+        TitlePosition::Top if drawn.top => (view.outer.y, set.horizontal_top),
+        TitlePosition::Bottom if drawn.bottom => (view.outer.bottom() - 1, set.horizontal_bottom),
+        _ => return None,
+    };
+    let (bg, fg) = if view.focused {
+        (c.title_bg_active, c.title_fg_active)
+    } else if view.floating {
+        (
+            c.title_bg_floating.or(c.title_bg_inactive),
+            c.title_fg_floating.or(c.title_fg_inactive),
+        )
+    } else {
+        (c.title_bg_inactive, c.title_fg_inactive)
+    };
+    let (bg, fg) = match (mode_edge, bg) {
+        (true, Some(_)) => (c.mode_bg, c.mode_fg),
+        (true, None) if fill.trim().is_empty() => (c.mode_bg, c.mode_fg),
+        (_, Some(bg)) => (bg, fg.unwrap_or(border)),
+        (_, None) => return None,
+    };
+    Some(TitleRow {
+        y,
+        ground: color(bg),
+        ink: color(fg),
+    })
+}
+
+/// How many cells a filled row's corner glyphs take at its ends, `(left,
+/// right)`: a glyph on a side with no edge takes the cell the title would
+/// otherwise start (or end) in, so the row's content moves in by one.
+fn corner_cells(view: &PaneView, b: &theme::Border) -> (u16, u16) {
+    let d = view.drawn();
+    (
+        u16::from(!b.title_corner_left.is_empty() && !d.left),
+        u16::from(!b.title_corner_right.is_empty() && !d.right),
+    )
+}
+
+/// Paint a filled title row: its ground under the whole row, corners
+/// included; the fill and text drawn in the border's colour in its ink;
+/// badges keep their own colours on the new ground. A filled row has no
+/// corner characters (D4): the fill takes them, or `title_corner_*` do, in
+/// the row's ground over what lies behind the pane.
+fn paint_title_row(
+    f: &mut Frame,
+    view: &PaneView,
+    b: &theme::Border,
+    set: &border::Set<'_>,
+    row: &TitleRow,
+    border: Color,
+    behind: Color,
+) {
+    let r = view.outer;
+    let drawn = view.drawn();
+    let fill = if row.y == r.y {
+        set.horizontal_top
+    } else {
+        set.horizontal_bottom
+    };
+    let screen = f.area();
+    if row.y >= screen.bottom() || r.w == 0 {
+        return;
+    }
+    let buf = f.buffer_mut();
+    let last = r.right().min(screen.right()).saturating_sub(1);
+    for x in r.x..=last {
+        let cell = &mut buf[(x, row.y)];
+        if (x == r.x && drawn.left) || (x == r.right() - 1 && drawn.right) {
+            cell.set_symbol(fill);
+            cell.set_fg(row.ink);
+        } else if cell.fg == border {
+            cell.set_fg(row.ink);
+        }
+        cell.set_bg(row.ground);
+    }
+    for (x, glyph) in [
+        (r.x, b.title_corner_left.as_str()),
+        (r.right() - 1, b.title_corner_right.as_str()),
+    ] {
+        if !glyph.is_empty() && x <= last {
+            let cell = &mut buf[(x, row.y)];
+            cell.set_symbol(glyph);
+            cell.set_fg(row.ground);
+            cell.set_bg(behind);
         }
     }
 }
@@ -2198,6 +2342,96 @@ mod tests {
         let r = rows(&draw(&float));
         assert_eq!(r[0], "▛ t ▀▀▀▀▀▀▀▜", "{r:?}");
         assert_eq!(r[3], "╰──────────╯", "{r:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_title_row_can_be_filled_and_rounded() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app(
+            "title-row",
+            r##"
+            [colors]
+            border_active = "#0000aa"
+            border_inactive = "#000011"
+            title_bg_active = "#111111"
+            title_fg_active = "#eeeeee"
+            mode_bg = "#ff0000"
+            mode_fg = "#000000"
+            background_bg = "#050505"
+            [border]
+            edges = ["top"]
+            title_corner_left = "("
+            title_corner_right = ")"
+            [border.chars]
+            top = "   "
+            "##,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let view = PaneView {
+            id: 1,
+            outer,
+            inner: outer.inset_sides(app.insets(false)),
+            focused: true,
+            floating: false,
+        };
+        let draw = |app: &crate::app::App, view: &PaneView| {
+            let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+            t.draw(|f| draw_border(f, app, view, " t ")).unwrap();
+            t.backend().buffer().clone()
+        };
+        let b = draw(&app, &view);
+        assert_eq!(
+            rows(&b)[0],
+            "( t        )",
+            "the title starts after the corner"
+        );
+        // The whole row on the title's ground, its text in the title's ink.
+        assert!((1..11).all(|x| b[(x, 0)].bg == Color::Rgb(0x11, 0x11, 0x11)));
+        assert_eq!(b[(2, 0)].fg, Color::Rgb(0xee, 0xee, 0xee));
+        // The corners: the row's ground as ink, over what lies behind.
+        assert_eq!(b[(0, 0)].fg, Color::Rgb(0x11, 0x11, 0x11));
+        assert_eq!(b[(0, 0)].bg, Color::Rgb(5, 5, 5));
+        // An unfocused tile with no title_bg_inactive keeps its line.
+        let quiet = PaneView {
+            focused: false,
+            ..view
+        };
+        let b = draw(&app, &quiet);
+        assert_eq!(b[(5, 0)].bg, Color::Reset);
+        assert_eq!(rows(&b)[0], " t          ", "no corners on a line");
+        assert_eq!(b[(1, 0)].fg, Color::Rgb(0, 0, 0x11));
+        // WM mode: the focused row in the mode's colours, corners too.
+        app.mode = crate::app::Mode::Wm;
+        let b = draw(&app, &view);
+        assert_eq!(b[(5, 0)].bg, Color::Rgb(0xff, 0, 0));
+        assert_eq!(b[(2, 0)].fg, Color::Rgb(0, 0, 0));
+        assert_eq!(b[(11, 0)].fg, Color::Rgb(0xff, 0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_blank_row_in_wm_mode_takes_the_mode_colour() {
+        use ratatui::{Terminal, backend::TestBackend};
+        // F10: no title ground, a line of blanks. Without the rule only the
+        // title's letters would show the mode.
+        let (mut app, dir) = themed_app(
+            "blank-row",
+            "[colors]\nmode_bg = \"#ff0000\"\n[border]\nedges = [\"top\"]\n[border.chars]\ntop = \"   \"\n",
+        );
+        app.mode = crate::app::Mode::Wm;
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let view = PaneView {
+            id: 1,
+            outer,
+            inner: outer.inset_sides(app.insets(false)),
+            focused: true,
+            floating: false,
+        };
+        let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+        t.draw(|f| draw_border(f, &app, &view, " t ")).unwrap();
+        let b = t.backend().buffer();
+        assert!((0..12).all(|x| b[(x, 0)].bg == Color::Rgb(0xff, 0, 0)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

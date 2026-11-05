@@ -194,6 +194,22 @@ pub struct Colors {
     pub border_inactive_gradient: Option<Vec<Color>>,
     #[serde(default)]
     pub border_floating_gradient: Option<Vec<Color>>,
+    // A filled title row (DESIGN.md, "Title bars a theme can build"): the
+    // ground of the row the title is on, and its text and fill. Each state
+    // is its own: unset, that state's row is the border line it always was.
+    // An unfocused float's falls back to the inactive one.
+    #[serde(default)]
+    pub title_bg_active: Option<Color>,
+    #[serde(default)]
+    pub title_bg_inactive: Option<Color>,
+    #[serde(default)]
+    pub title_bg_floating: Option<Color>,
+    #[serde(default)]
+    pub title_fg_active: Option<Color>,
+    #[serde(default)]
+    pub title_fg_inactive: Option<Color>,
+    #[serde(default)]
+    pub title_fg_floating: Option<Color>,
 }
 
 impl Colors {
@@ -464,6 +480,13 @@ pub struct Border {
     /// to bottom, clockwise.
     #[serde(default)]
     pub gradient_angle: u16,
+    /// Drawn in the corner cells of a filled title row, in the row's ground
+    /// over what lies behind the pane: a powerline glyph rounds the row.
+    /// Empty (the default) leaves the corners to the fill.
+    #[serde(default)]
+    pub title_corner_left: String,
+    #[serde(default)]
+    pub title_corner_right: String,
 }
 
 impl Border {
@@ -854,8 +877,17 @@ pub struct PaneLooks {
     pub title_active_style: Option<Attrs>,
     pub active_bg: Option<Color>,
     pub inactive_bg: Option<Color>,
+    pub floating_bg: Option<Color>,
     pub dim_unfocused: Option<f32>,
     pub palette: Option<Palette>,
+    pub title_bg_active: Option<Color>,
+    pub title_bg_inactive: Option<Color>,
+    pub title_bg_floating: Option<Color>,
+    pub title_fg_active: Option<Color>,
+    pub title_fg_inactive: Option<Color>,
+    pub title_fg_floating: Option<Color>,
+    pub title_corner_left: Option<String>,
+    pub title_corner_right: Option<String>,
 }
 
 impl PaneLooks {
@@ -897,6 +929,14 @@ impl PaneLooks {
         {
             return Err("dim_unfocused must be 0-1".into());
         }
+        for (k, corner) in [
+            ("title_corner_left", &self.title_corner_left),
+            ("title_corner_right", &self.title_corner_right),
+        ] {
+            if let Some(c) = corner {
+                check_corner(k, c)?;
+            }
+        }
         if let Some(c) = &self.border_chars {
             use unicode_width::UnicodeWidthChar;
             if c.chars().count() != 6 || c.chars().any(|ch| ch.width() != Some(1)) {
@@ -929,6 +969,8 @@ impl PaneLooks {
             title_style => styles.title,
             title_active_style => styles.title_active,
             dim_unfocused => panes.dim_unfocused,
+            title_corner_left => border.title_corner_left,
+            title_corner_right => border.title_corner_right,
         }
         macro_rules! opt {
             ($($src:ident => $($dst:ident).+),* $(,)?) => {
@@ -942,6 +984,13 @@ impl PaneLooks {
             floating_style => border.floating_style,
             active_bg => panes.active_bg,
             inactive_bg => panes.inactive_bg,
+            floating_bg => panes.floating_bg,
+            title_bg_active => colors.title_bg_active,
+            title_bg_inactive => colors.title_bg_inactive,
+            title_bg_floating => colors.title_bg_floating,
+            title_fg_active => colors.title_fg_active,
+            title_fg_inactive => colors.title_fg_inactive,
+            title_fg_floating => colors.title_fg_floating,
         }
         if let Some(c) = &self.border_chars {
             t.border.chars = Some(Chars::Six(c.clone()));
@@ -1127,6 +1176,10 @@ pub struct Panes {
     pub active_bg: Option<Color>,
     #[serde(default)]
     pub inactive_bg: Option<Color>,
+    /// An unfocused float's ground; unset, `inactive_bg`. A float with no
+    /// edges on the tiles' own ground runs into them.
+    #[serde(default)]
+    pub floating_bg: Option<Color>,
     /// A thumb on the right border for where the view is in the history.
     #[serde(default)]
     pub scrollbar: Scrollbar,
@@ -1435,6 +1488,17 @@ fn check_edges(b: &Border) -> Result<(), String> {
     Ok(())
 }
 
+/// A title row's corner: nothing, or one one-cell character.
+fn check_corner(key: &str, c: &str) -> Result<(), String> {
+    use unicode_width::UnicodeWidthChar;
+    if c.chars().count() > 1 || c.chars().any(|ch| ch.width() != Some(1)) {
+        return Err(format!(
+            "{key} must be one one-cell character or empty, not `{c}`"
+        ));
+    }
+    Ok(())
+}
+
 /// A table of sides: `top` and `bottom` three one-cell characters, `left`
 /// and `right` one.
 fn check_sides(s: &SideChars) -> Result<(), String> {
@@ -1514,6 +1578,8 @@ fn check(t: &Theme) -> Result<(), String> {
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
     check_edges(&t.border)?;
+    check_corner("border.title_corner_left", &t.border.title_corner_left)?;
+    check_corner("border.title_corner_right", &t.border.title_corner_right)?;
     let custom = t.border.style == BorderStyle::Custom
         || t.border.floating_style == Some(BorderStyle::Custom);
     if let Some(Chars::Sides(sides)) = &t.border.chars {
@@ -1873,6 +1939,28 @@ mod tests {
         d.style = BorderStyle::None;
         assert_eq!(d.insets(true), [0; 4]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_title_rows_corners_are_one_cell_and_a_pane_may_set_its_looks() {
+        let dir = tmp_dir("corners");
+        std::fs::write(dir.join("c.toml"), "[border]\ntitle_corner_left = \"((\"\n").unwrap();
+        let err = format!("{:#}", load("c", std::slice::from_ref(&dir)).unwrap_err());
+        assert!(err.contains("border.title_corner_left"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+        // A pane's own title row and float ground, over the theme's.
+        let t: toml::Table = toml::from_str(
+            "title_bg_active = \"#101010\"\ntitle_corner_right = \")\"\nfloating_bg = \"#202020\"\n",
+        )
+        .unwrap();
+        let over = PaneLooks::from_table(&t)
+            .unwrap()
+            .over(&load("default", &[]).unwrap());
+        assert_eq!(over.colors.title_bg_active, Some(Color::Rgb(16, 16, 16)));
+        assert_eq!(over.border.title_corner_right, ")");
+        assert_eq!(over.panes.floating_bg, Some(Color::Rgb(32, 32, 32)));
+        let bad: toml::Table = toml::from_str("title_corner_left = \"ab\"\n").unwrap();
+        assert!(PaneLooks::from_table(&bad).is_err());
     }
 
     #[test]
