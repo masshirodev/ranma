@@ -1,6 +1,6 @@
 # ranma
 
-![ranma: nvim in a large pane beside a shell running tests and a tail of pacman.log, the bar on top with workspaces, the focused workspace's panes and system modules, and a toast for a finished build](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/screenshot.png)
+![ranma in the sumi theme: nvim on src/layout.rs in a large pane beside a shell that ran the layout tests and a git log, the bar on top with workspaces, the focused workspace's panes and system modules, and a toast for a release build that finished on workspace 3](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/screenshot.png)
 
 A tiling window manager for the terminal: i3's container tree and Hyprland's
 dwindle placement, where every window is a PTY. Sessions, workspaces, a floating
@@ -11,7 +11,7 @@ Named for the 欄間, the carved transom panel above sliding doors.
 
 **Website:** [ranma.masshiro.pro](https://ranma.masshiro.pro).
 
-![ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a second workspace and back, a toast from `ranma notify`, and the which-key hint WM mode shows when it waits](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/demo.gif)
+![ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a test run left on a second workspace and the toast it raises when it ends out of sight, and the which-key hint WM mode shows when it waits](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/demo.gif)
 
 **Status:** a daily driver. Every milestone of
 [`doc/ROADMAP.md`](doc/ROADMAP.md), 0-13, is done (one plugin primitive aside):
@@ -61,10 +61,12 @@ the program in the pane.
 **The bar is on by default, at the bottom, in plain colours.** The one in the
 screenshot above is a theme and a few modules:
 [`doc/examples/screenshot/`](doc/examples/screenshot) is that configuration,
-ready to copy (it needs a Nerd Font). Its
+ready to copy (it needs a Nerd Font), and the screenshot and the recording
+are taken with it, in a real kitty, by
+[ranma-site](https://github.com/masshirodev/ranma-site)'s `capture/`. Its
 [README](doc/examples/README.md) says how to try it without touching your own
 config (not from inside a running ranma: a nested one hands its bar to the
-outer one), and what in the screenshot it cannot reproduce. [`doc/CONFIG.md`](doc/CONFIG.md), "The bar" and "Themes", covers
+outer one), and what the toast in it needs from your shell. [`doc/CONFIG.md`](doc/CONFIG.md), "The bar" and "Themes", covers
 the rest.
 
 ## Plugins
