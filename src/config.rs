@@ -6075,6 +6075,13 @@ mod tests {
             !shot.theme.bar.chip_left.is_empty(),
             "the round current workspace"
         );
+
+        let show = load(Some(&root.join("showcase"))).unwrap();
+        assert_eq!(show.theme.name, "kiln");
+        assert!(show.titlebar.is_some(), "the title bar's pieces");
+        assert_eq!(show.hint_patterns.len(), 3);
+        assert_eq!(show.theme.border.edges, [crate::theme::Edge::Top]);
+        assert_eq!(names(&show.bar.center), ["workspaces"]);
     }
 
     #[test]

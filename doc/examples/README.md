@@ -54,3 +54,34 @@ What the screenshot shows that this does not:
   shows the session's name only once there are two sessions.
 - **The contents of the panes** (nvim's statusline, the prompt) are those
   programs' own configuration, not ranma's.
+
+## `showcase/` — what a theme and `init.lua` can build now
+
+Milestones 17 and 18 in one config, for trying them out. Needs a Nerd Font.
+
+- `themes/kiln.toml`: every pane a window, a filled title row with round
+  corners (`title_bg_*`, `title_corner_left`/`_right`) and no lines beside or
+  under the text (`border.edges = ["top"]`), floats keeping a full frame
+  (`floating_edges`) and casting a shadow (`floating.shadow`); state colours
+  on the title bar (urgent, zoomed, synced, scrolled back); `[icons]` in the
+  titles and the tabs; pane padding; the scrollbar's own characters;
+  `overlay_style` for pickers and toasts. The bar: a powerline on the left
+  (`bar.join = "arrows"`), round pills on the right (`[bar.right]`), modules
+  on roles' grounds, and the workspaces as dots, a glyph per state
+  (`workspace_empty_format` and the rest), lit under the pointer
+  (`ws_hover_fg`/`_bg`).
+- `init.lua`: `ranma.titlebar` with the sync mark, title and tabs on the
+  left, a `render` piece (the directory) in the middle, and the index, badges
+  and float/zoom/close buttons in one pill on the right, close kept longest
+  as a pane narrows. The bar with mode, session, title and `message` on the
+  left, six dots in the centre (`center_min`), and cpu, mem and load in one
+  pill (a group). `word_separators`, `hint_alphabet`, `mouse_wheel_lines`,
+  `mouse_double_click`, `buffers_kept`, `toasts`, three `ranma.hint_pattern`s
+  and a few copy-mode binds.
+
+Things to try in it: open a few panes (`leader t`) and drag the
+window narrower to watch the title bars give way; click a title bar's
+buttons; `leader alt+Enter` to zoom (green bar); float a pane (`leader w`) for the
+frame and shadow; ring a bell in a pane you then leave
+(`sleep 2; printf '\a'`) for the urgent colour; hover the dots; `leader o`
+over `git log --oneline` for the hash hints.

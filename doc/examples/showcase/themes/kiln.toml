@@ -1,0 +1,188 @@
+# kiln: a showcase of what a theme can build (milestone 17). Every pane is a
+# window with a filled, rounded title bar; the bar is a powerline with the
+# workspaces as dots in the middle. Needs a Nerd Font for the round ends,
+# the arrows and the icons.
+#
+#   coal   #16161e  ground        bone    #e6e0d4  text
+#   ember  #e8945a  focus/accent  slate   #2b2b38  pills, idle title bars
+#   moss   #9ccf8a  sys pill      rust    #e0533d  WM mode, urgent
+#   ash    #6c6a73  dim           sky     #7aa2f7  floats, tabs
+
+[colors]
+border_active = "#e8945a"
+border_inactive = "#2b2b38"
+border_floating = "#7aa2f7"
+bar_bg = "default"
+bar_fg = "#e6e0d4"
+bar_dim = "#6c6a73"
+bar_accent = "#e8945a"
+bar_urgent = "#e0533d"
+mode_fg = "#16161e"
+mode_bg = "#e0533d"
+module_bg = "#2b2b38"
+module_fg = "#e6e0d4"
+
+# The workspaces are dots: the colour says the state, hover lights one up.
+ws_active_fg = "#e8945a"
+ws_active_bg = "#2b2b38"
+ws_occupied = "#e6e0d4"
+ws_empty = "#6c6a73"
+ws_urgent = "#e0533d"
+ws_activity = "#7aa2f7"
+ws_hover_fg = "#16161e"
+ws_hover_bg = "#e8945a"
+
+tab_active_fg = "#16161e"
+tab_active_bg = "#7aa2f7"
+tab_inactive_fg = "#a9a4b0"
+tab_inactive_bg = "#2b2b38"
+
+# The title bars. A colour may name another key of [colors].
+title_bg_active = "border_active"
+title_fg_active = "#16161e"
+title_bg_inactive = "tab_inactive_bg"
+title_fg_inactive = "tab_inactive_fg"
+title_bg_floating = "border_floating"
+title_fg_floating = "#16161e"
+
+# A pane's state colours its title bar. Ring a bell in an unfocused pane
+# (`sleep 2; printf "\a"`, then focus another) to see urgent; leader alt+Enter
+# for zoomed; scroll back for scrolled.
+state_urgent = "#e0533d"
+state_urgent_fg = "#16161e"
+state_zoomed = "#9ccf8a"
+state_zoomed_fg = "#16161e"
+state_scrolled = "#c4a7e7"
+state_scrolled_fg = "#16161e"
+state_synced = "#f6c177"
+state_synced_fg = "#16161e"
+
+separator = "#6c6a73"
+scrollbar_thumb = "#e8945a"
+scrollbar_track = "#2b2b38"
+shadow = "#000000"
+
+picker_selected_fg = "#16161e"
+picker_selected_bg = "#e8945a"
+search_fg = "#16161e"
+search_bg = "#9ccf8a"
+search_current_fg = "#16161e"
+search_current_bg = "#e8945a"
+toast_fg = "#e6e0d4"
+toast_bg = "#2b2b38"
+
+[border]
+style = "rounded"
+# Only the title row: no lines beside or under the text, like a window.
+edges = ["top"]
+# Floats keep a full frame, so they stand out over the tiles.
+floating_edges = ["top", "right", "bottom", "left"]
+title = "top"
+title_format = " {icon} {title} "
+title_corner_left = ""
+title_corner_right = ""
+title_ground = "row"
+# Pickers, toasts and the settings panel framed on their own terms.
+overlay_style = "double"
+
+[border.chars]
+top = "   "
+
+[gaps]
+inner = 1
+outer_horizontal = 1
+outer_vertical = 1
+
+[panes]
+padding_left = 1
+padding_right = 1
+floating_bg = "#1c1c26"
+active_bg = "#16161e"
+inactive_bg = "#13131a"
+dim_unfocused = 0.3
+scrollbar = "scrolled"
+scrollbar_thumb = "█"
+scrollbar_track = "│"
+
+[floating]
+shadow = "shade"
+
+[tabs]
+format = " {icon} {title} "
+current_format = " {icon} {title} "
+separator = ""
+chip_left = ""
+chip_right = ""
+align = "left"
+
+[icons]
+nvim = ""
+vim = ""
+zsh = ""
+bash = ""
+htop = ""
+btop = ""
+ssh = ""
+git = ""
+"cargo*" = ""
+python = ""
+node = ""
+"*" = ""
+
+[bar]
+position = "top"
+separator = ""
+# The left side is a real powerline; the right keeps round pills.
+join = "arrows"
+group_separator = " │ "
+# Dots: hollow when empty, filled when something runs there, big when current.
+workspace_format = " • "
+workspace_empty_format = " · "
+workspace_current_format = " ● "
+workspace_urgent_format = " ◆ "
+workspace_activity_format = " ∘ "
+module_padding_left = 1
+module_padding_right = 1
+
+[bar.left]
+join = "arrows"
+arrow = ""
+
+[bar.right]
+join = "pills"
+module_left = ""
+module_right = ""
+
+[roles.mode]
+fg = "#16161e"
+bg = "#e8945a"
+styles = ["bold"]
+
+[roles.where]
+fg = "#e6e0d4"
+bg = "#2b2b38"
+
+[roles.sys]
+fg = "#16161e"
+bg = "#9ccf8a"
+separator = "#3d5a33"
+
+[roles.time]
+fg = "#16161e"
+bg = "#7aa2f7"
+styles = ["bold"]
+
+# Hover colours for the title bar's buttons.
+[roles.close]
+fg = "#e0533d"
+styles = ["bold"]
+
+[roles.lit]
+fg = "#16161e"
+styles = ["bold", "underline"]
+
+[styles]
+mode = ["bold"]
+title = []
+title_active = ["bold"]
+accent = ["bold"]
