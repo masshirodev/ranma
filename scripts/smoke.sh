@@ -857,6 +857,16 @@ T send-keys -t s 'UPG=kept-across; echo before-upgrade' Enter; sleep 0.4
 PID0=$(server_pid)
 $ENV $BIN upgrade 1 >/dev/null || fail "ranma upgrade failed"
 wait_for 'ranma upgraded' 20 || fail "no toast after the upgrade"
+# The pane keeps its title (the prompt's `user@host:dir`), read before any
+# key reaches the shell, whose next prompt would set it again: an adopted
+# terminal that did not know its title announced a reset when its options
+# were set, so every title was gone after an upgrade, the `⧉ ranma` an outer
+# ranma reads among them (2026-11-05).
+# Asked of this server's own socket: RANMA_SOCKET from the environment
+# would ask the ranma this script happens to run inside.
+PANES="$ENV RANMA_SOCKET=$RT/ranma/1.sock $BIN panes"
+$PANES | grep -q "$USER@" ||
+  fail "the pane's title was lost across the upgrade ($($PANES 2>&1 | tr '\n' ' '))"
 [ "$(server_pid)" = "$PID0" ] || fail "the upgrade changed the server's process"
 screen | grep -q 'before-upg' || fail "the screen was not kept across the upgrade"
 T send-keys -t s 'echo "after-$UPG"' Enter

@@ -600,6 +600,19 @@ impl Pane {
         });
     }
 
+    /// The title a pane had before an upgrade, given back to it and to its
+    /// terminal alike. The terminal must know it: alacritty's `set_options`
+    /// announces the terminal's own title, and an adopted terminal that had
+    /// none announced a reset, wiping the title just restored (and with it
+    /// the `⧉ ranma` an outer ranma reads, 2026-11-05).
+    pub fn restore_title(&mut self, title: &str) {
+        use alacritty_terminal::vte::ansi::Handler;
+        self.title = title.to_string();
+        if !title.is_empty() {
+            self.term.lock().set_title(Some(title.to_string()));
+        }
+    }
+
     /// A pane around a child that is already running, after a server took a
     /// new build (DESIGN.md, "Upgrading a server in place"): `fd` is the PTY
     /// master kept across the exec, `snapshot` what the pane showed.

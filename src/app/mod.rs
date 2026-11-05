@@ -1990,6 +1990,9 @@ impl App {
             // A pane nobody can see does not cost a frame. Its wakeup flag stays
             // set, so it sends no more wakeups until it is shown and drawn.
             TermEvent::Wakeup => self.dirty |= visible,
+            // The same title again (a terminal's options set, which announces
+            // it) changes nothing, and runs no title rules a second time.
+            TermEvent::Title(t) if pane.title == t => {}
             TermEvent::Title(t) => {
                 pane.title = t.clone();
                 self.dirty |= visible;

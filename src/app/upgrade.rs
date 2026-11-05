@@ -189,8 +189,10 @@ impl App {
                 Pane::adopt(p.id, size, p.fd, p.pid, &p.snapshot, scrollback, tx.clone())
             } {
                 Ok(mut pane) => {
+                    // The title first: `set_options` announces the
+                    // terminal's own, which must be this one.
+                    pane.restore_title(&p.title);
                     pane.set_options(scrollback, &app.config.settings.word_separators);
-                    pane.title = p.title.clone();
                     pane.name = p.name.clone();
                     pane.command = p.command.clone();
                     pane.start_cwd = p.start_cwd.clone();

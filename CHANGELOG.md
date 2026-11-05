@@ -189,6 +189,12 @@ commit log has the detail.
 
 ### Fixed
 
+- An upgrade in place (`ranma update`, `install.sh`) wiped every pane's
+  title a moment after restoring it, until its program set one again. A
+  ranma inside one (over ssh) does that only when its title changes, so
+  its workspaces vanished from the outer bar after every update of the
+  outer. Broken by `word_separators` in this release; titles are kept now.
+
 - A bar pill's plain text is in its role's `fg` (`[roles.sys] fg = ...`),
   the pill's text colour: it was drawn in `module_fg` or `bar_fg`, whatever
   the role said. Text a module styles itself keeps its own colour.

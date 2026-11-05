@@ -231,6 +231,19 @@ server, `--all` every one; `install.sh` runs `ranma upgrade --all` after a
 good install, so installing a new build is enough. A server from before this
 existed does not know the request, and says so: it needs one last restart.
 
+**A pane's title is its terminal's too** (2026-11-05). The handover keeps
+each pane's title, and the adopted pane's terminal must be told it as well,
+not only the pane: alacritty's `set_options` announces the terminal's own
+title, and a terminal rebuilt from a snapshot has none, so it announced a
+reset. Once `word_separators` (c427) set the options of every adopted
+pane, every upgrade wiped every title a moment after restoring it, until
+each program set its own again. A shell's prompt does at once; a ranma
+inside one only when its focused title changed, so the `⧉ ranma` an outer
+reads was gone and the inner's workspaces vanished from the outer bar
+after every update of the outer. `Pane::restore_title` sets both, and a
+title event that repeats the title the pane has is a no-op, so it runs no
+title rules a second time (which rules applied is not handed over).
+
 ### What a release promises not to break (2026-10-13, proposed)
 
 ranma is released and packaged (v0.1.0 to v0.2.4), so an upgrade arrives
