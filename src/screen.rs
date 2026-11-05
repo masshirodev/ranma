@@ -47,7 +47,7 @@ impl Role {
     }
 
     /// How calm it is, for which badge gives way first.
-    fn calm(self) -> u8 {
+    pub(crate) fn calm(self) -> u8 {
         match self {
             Role::Dim => 0,
             Role::Normal => 1,

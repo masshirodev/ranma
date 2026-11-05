@@ -839,16 +839,7 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         Some(t) => std::borrow::Cow::Borrowed(&t.colors),
         None => app.colors(),
     };
-    // In WM mode the focused border takes the mode colour, so it is obvious which
-    // pane the next action applies to.
-    let border = match (view.focused, app.mode, view.floating) {
-        (true, Mode::Wm | Mode::Copy, _) => c.mode_bg,
-        // A latched modifier takes the next key, as WM mode does.
-        (true, Mode::Normal, _) if app.latched() => c.mode_bg,
-        (true, Mode::Normal, _) => c.border_active,
-        (false, _, true) => c.border_floating,
-        (false, _, false) => c.border_inactive,
-    };
+    let border = border_colour(app, view, c);
     let edge = Style::default().fg(color(border));
     let drawn = view.drawn();
     let mut sides = Borders::NONE;
@@ -868,7 +859,9 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         .border_style(edge);
     let mark = if app.is_synced(view.id) { "⇉ " } else { "" };
     let badges = app.badges_of(view.id);
-    if !badges.is_empty() {
+    if app.config.titlebar.is_some() {
+        // `ranma.titlebar`'s pieces are painted over the row below.
+    } else if !badges.is_empty() {
         // Plugins' badges sit after the title, each an island, and give way
         // by the handoff's ladder as the pane narrows (`screen::title_run`).
         use crate::screen::{EdgeStyle, Role};
@@ -1001,6 +994,23 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         let behind = color(c.background_bg.unwrap_or(theme::Color::Default));
         paint_title_row(f, view, b, &set, row, color(border), behind);
     }
+    if let Some((x0, y, placed)) = app.title_placed(view) {
+        let attrs = if view.focused {
+            theme.styles.title_active
+        } else {
+            theme.styles.title
+        };
+        paint_pieces(
+            f,
+            c,
+            &theme.styles,
+            edge,
+            attrs,
+            row.as_ref(),
+            (x0, y),
+            &placed,
+        );
+    }
     if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
         let buf = f.buffer_mut();
         let (mx, my) = (r.x + r.w / 2, r.y + r.h / 2);
@@ -1071,6 +1081,109 @@ fn title_row(
         ground: color(bg),
         ink: color(fg),
     })
+}
+
+/// The colour of a pane's border now. In WM mode (or with a latched
+/// modifier) the focused border takes the mode colour, so it is obvious which
+/// pane the next action applies to.
+fn border_colour(app: &App, view: &PaneView, c: &Colors) -> theme::Color {
+    match (view.focused, app.mode, view.floating) {
+        (true, Mode::Wm | Mode::Copy, _) => c.mode_bg,
+        (true, Mode::Normal, _) if app.latched() => c.mode_bg,
+        (true, Mode::Normal, _) => c.border_active,
+        (false, _, true) => c.border_floating,
+        (false, _, false) => c.border_inactive,
+    }
+}
+
+/// Where a pane's title row is and how much of it the title may use: its
+/// row, its first cell and its width, between the side edges and a filled
+/// row's corners. What the drawing and a click on a title piece both go by.
+pub(crate) fn title_span(app: &App, view: &PaneView) -> Option<(u16, u16, u16)> {
+    let own = app.pane_theme(view.id);
+    let theme = own.as_ref().unwrap_or(&app.config.theme);
+    let b = &theme.border;
+    let style = if view.floating { b.floating() } else { b.style };
+    let set = border_set(b, style)?;
+    let c = &match &own {
+        Some(t) => std::borrow::Cow::Borrowed(&t.colors),
+        None => app.colors(),
+    };
+    let drawn = view.drawn();
+    let o = view.outer;
+    let y = match b.title {
+        TitlePosition::Top if drawn.top => o.y,
+        TitlePosition::Bottom if drawn.bottom => o.bottom() - 1,
+        _ => return None,
+    };
+    let mode_edge = view.focused && (matches!(app.mode, Mode::Wm | Mode::Copy) || app.latched());
+    let border = border_colour(app, view, c);
+    let (cl, cr) = match title_row(view, c, b, &set, border, mode_edge) {
+        Some(_) => corner_cells(view, b),
+        None => (0, 0),
+    };
+    let x0 = o.x + u16::from(drawn.left) + cl;
+    let x1 = o.right().saturating_sub(u16::from(drawn.right) + cr);
+    Some((y, x0, x1.saturating_sub(x0)))
+}
+
+/// A badge's colour, by its role, as plugins mark panes.
+fn badge_style(c: &Colors, role: crate::screen::Role) -> Style {
+    use crate::screen::Role;
+    let fg = match role {
+        Role::Normal => c.toast_fg,
+        Role::Dim => c.bar_dim,
+        Role::Accent => c.bar_accent,
+        Role::Urgent => c.bar_urgent,
+    };
+    let s = Style::default().fg(color(fg));
+    if role == Role::Urgent {
+        s.add_modifier(Modifier::BOLD)
+    } else {
+        s
+    }
+}
+
+/// `ranma.titlebar`'s pieces, placed, over the row: the title and the line
+/// in the border's colour (a filled row's ink), roles and badges in theirs,
+/// all on the row's ground when it has one.
+#[allow(clippy::too_many_arguments)]
+fn paint_pieces(
+    f: &mut Frame,
+    c: &Colors,
+    styles: &theme::Styles,
+    edge: Style,
+    attrs: theme::Attrs,
+    row: Option<&TitleRow>,
+    (x0, y): (u16, u16),
+    placed: &[crate::titlebar::Placed],
+) {
+    use crate::titlebar::Ink;
+    let buf = f.buffer_mut();
+    if y >= buf.area.bottom() {
+        return;
+    }
+    for p in placed {
+        let mut st = match p.span.ink {
+            Ink::Title => edge.add_modifier(modifier(attrs)),
+            Ink::Line => edge,
+            Ink::Role(s) => piece_style(c, styles, s),
+            Ink::Badge(role) => badge_style(c, role),
+        };
+        if let Some(r) = row {
+            if matches!(p.span.ink, Ink::Title | Ink::Line) {
+                st = st.fg(r.ink);
+            }
+            if st.bg.is_none() {
+                st = st.bg(r.ground);
+            }
+        }
+        let x = x0 + p.x;
+        if x < buf.area.right() {
+            let room = (buf.area.right() - x) as usize;
+            buf.set_stringn(x, y, &p.span.text, room, st);
+        }
+    }
 }
 
 /// How many cells a filled row's corner glyphs take at its ends, `(left,
@@ -2259,12 +2372,16 @@ mod tests {
 
     /// An app on a theme of its own, in a config directory made for it.
     fn themed_app(tag: &str, theme: &str) -> (crate::app::App, std::path::PathBuf) {
+        themed_app_with(tag, theme, "")
+    }
+
+    fn themed_app_with(tag: &str, theme: &str, lua: &str) -> (crate::app::App, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("ranma-render-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("themes")).unwrap();
         std::fs::write(dir.join("themes").join("t.toml"), theme).unwrap();
-        let src = "ranma.set { theme = \"t\" }";
-        let config = crate::config::load_from(Some(&dir), None, Some(src)).unwrap();
+        let src = format!("ranma.set {{ theme = \"t\" }}\n{lua}");
+        let config = crate::config::load_from(Some(&dir), None, Some(&src)).unwrap();
         let (tx, _rx) = std::sync::mpsc::channel();
         (crate::app::App::new(config, tx, 40, 10), dir)
     }
@@ -2407,6 +2524,47 @@ mod tests {
         assert_eq!(b[(5, 0)].bg, Color::Rgb(0xff, 0, 0));
         assert_eq!(b[(2, 0)].fg, Color::Rgb(0, 0, 0));
         assert_eq!(b[(11, 0)].fg, Color::Rgb(0xff, 0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn title_pieces_are_painted_on_the_row() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (app, dir) = themed_app_with(
+            "pieces",
+            r##"
+            [colors]
+            title_bg_inactive = "#111111"
+            bar_urgent = "#ff0000"
+            [border]
+            edges = ["top"]
+            title_corner_left = "("
+            title_corner_right = ")"
+            "##,
+            r#"
+            ranma.title_piece("close", { text = "x", style = "urgent" })
+            ranma.titlebar { right = { "close" } }
+            "#,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let view = PaneView {
+            id: 1,
+            outer,
+            inner: outer.inset_sides(app.insets(false)),
+            focused: false,
+            floating: false,
+        };
+        let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+        t.draw(|f| draw_border(f, &app, &view, "")).unwrap();
+        let b = t.backend().buffer();
+        // Before the right corner, in its role, on the row's ground.
+        assert_eq!(
+            rows(b)[0],
+            "(─────────x)",
+            "the style's fill, in the row's ink"
+        );
+        assert_eq!(b[(10, 0)].fg, Color::Rgb(0xff, 0, 0));
+        assert_eq!(b[(10, 0)].bg, Color::Rgb(0x11, 0x11, 0x11));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

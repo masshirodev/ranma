@@ -52,6 +52,7 @@ pub mod store;
 pub mod strip;
 pub mod sysstat;
 pub mod theme;
+pub mod titlebar;
 pub mod tmux;
 pub mod toast;
 pub mod toolbar;

@@ -368,7 +368,7 @@ not listed here.
 - [x] `border.edges`, `floating_edges`, `[border.chars]` per edge
 - [x] A filled title row: `title_bg_*`, `title_fg_*`, `title_corner_left` / `right`,
   `panes.floating_bg`
-- [ ] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`,
+- [x] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`,
   priorities and the handoff's ladder; `tabs`, `index` built in; profiles carry it
 - [ ] Pane handles: `index`, `zoomed`, `synced`, `urgent`
 - [ ] `title_ground = "pieces"`: pills on the row, from roles

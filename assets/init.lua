@@ -469,6 +469,15 @@ ranma.module("workspaces", { show = "occupied", label = "program", nested = "foc
 -- reports here: it shows the title on its own pane's border. "show" keeps both.
 ranma.module("title", { nested = "hide" })
 
+-- Title row -----------------------------------------------------------------------
+-- Unset, a pane's title row is the theme's title_format. ranma.titlebar makes
+-- it pieces on three sides, as the bar has modules: built in are title, sync
+-- (the ⇉ of synced input), badges, index and tabs (a group's tabs, in its row);
+-- your own come from ranma.title_piece, and one with an action is a button.
+-- The theme fills and rounds the row (colors.title_bg_*, border.title_corner_*).
+--   ranma.title_piece("close", { text = " ✕ ", action = "close_pane", priority = 70 })
+--   ranma.titlebar { left = { "title" }, right = { "close" } }
+
 -- cpu and mem take interval and format ("%s" is the reading):
 --   ranma.module("cpu", { interval = 1, format = "CPU %s" })
 --   ranma.bar { right = { "cpu", "mem", "update", "datetime" } }

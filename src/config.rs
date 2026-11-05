@@ -751,6 +751,65 @@ impl ModuleNested {
     }
 }
 
+/// What a pane's title row may show without a `ranma.title_piece`
+/// (DESIGN.md, "Title bars a theme can build").
+pub const BUILTIN_PIECES: [&str; 5] = ["title", "sync", "badges", "index", "tabs"];
+
+/// `ranma.titlebar`: the pieces a pane's title row shows, in order, on each
+/// side. Unset, the row is the theme's `title_format` at `title_align`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TitleLayout {
+    pub left: Vec<String>,
+    pub center: Vec<String>,
+    pub right: Vec<String>,
+}
+
+impl TitleLayout {
+    pub fn all(&self) -> impl Iterator<Item = &String> {
+        self.left.iter().chain(&self.center).chain(&self.right)
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TitlebarPatch {
+    left: Option<Vec<String>>,
+    center: Option<Vec<String>>,
+    right: Option<Vec<String>>,
+}
+
+fn apply_titlebar(t: &mut Option<TitleLayout>, patch: TitlebarPatch) {
+    let t = t.get_or_insert_with(TitleLayout::default);
+    if let Some(v) = patch.left {
+        t.left = v;
+    }
+    if let Some(v) = patch.center {
+        t.center = v;
+    }
+    if let Some(v) = patch.right {
+        t.right = v;
+    }
+}
+
+/// `ranma.title_piece(name, def)`: a piece of the title row, drawn for each
+/// pane on screen. Run as a state-driven module is, never in a frame.
+#[derive(Debug, Clone)]
+pub struct TitlePieceDef {
+    /// `render(pane)`: a string, `{ text, style }`, or nil (hidden there).
+    pub render: Option<Rc<RegistryKey>>,
+    /// A fixed text, for a piece with no `render` (a button's glyph).
+    pub text: Option<String>,
+    /// A role: one of the four or one the theme declares.
+    pub style: Option<String>,
+    /// The role while the pointer is over it.
+    pub hover_style: Option<String>,
+    /// What a plain left press on it does: it is a button.
+    pub click: Option<BindAction>,
+    pub interval: Option<std::time::Duration>,
+    /// How long it stays as the pane narrows; higher stays longer.
+    pub priority: Option<u8>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BarPatch {
@@ -770,6 +829,10 @@ pub struct Profile {
     set: SettingsPatch,
     #[serde(default)]
     bar: BarPatch,
+    /// The title row's pieces while it is in use, over the base's: a look
+    /// that needs both halves (a theme and its pieces) is shipped as one.
+    #[serde(default)]
+    titlebar: Option<TitlebarPatch>,
     /// The toolbars shown while it is in use, instead of the base's.
     #[serde(default)]
     toolbars: Option<Vec<String>>,
@@ -783,6 +846,14 @@ pub struct Profile {
 }
 
 impl Profile {
+    fn pieces(&self) -> impl Iterator<Item = &String> {
+        self.titlebar
+            .iter()
+            .flat_map(|t| [&t.left, &t.center, &t.right])
+            .flatten()
+            .flatten()
+    }
+
     fn modules(&self) -> impl Iterator<Item = &String> {
         [&self.bar.left, &self.bar.center, &self.bar.right]
             .into_iter()
@@ -813,6 +884,91 @@ impl Button {
             BindAction::Lua(_) | BindAction::Folder(_) => None,
         }
     }
+}
+
+/// Parse `ranma.title_piece`'s definition, strictly.
+fn parse_title_piece(lua: &Lua, name: &str, opts: &Table) -> mlua::Result<TitlePieceDef> {
+    let who = format!("ranma.title_piece(\"{name}\")");
+    if BUILTIN_PIECES.contains(&name) {
+        return Err(rt_err(format!(
+            "{who}: `{name}` is built in; list it in ranma.titlebar as it is"
+        )));
+    }
+    let mut def = TitlePieceDef {
+        render: None,
+        text: None,
+        style: None,
+        hover_style: None,
+        click: None,
+        interval: None,
+        priority: None,
+    };
+    let mut on_click = None;
+    for pair in opts.pairs::<String, Value>() {
+        let (k, v) = pair?;
+        let bad = |what: &str| rt_err(format!("{who}: `{k}` must be {what}"));
+        match (k.as_str(), v) {
+            ("render", Value::Function(f)) => {
+                def.render = Some(Rc::new(lua.create_registry_value(f)?));
+            }
+            ("render", _) => return Err(bad("a function of the pane")),
+            ("text", Value::String(s)) => def.text = Some(s.to_str()?.to_string()),
+            ("text", _) => return Err(bad("a string")),
+            ("style", Value::String(s)) => def.style = Some(s.to_str()?.to_string()),
+            ("hover_style", Value::String(s)) => {
+                def.hover_style = Some(s.to_str()?.to_string());
+            }
+            ("style" | "hover_style", _) => return Err(bad("a role's name")),
+            ("action", Value::String(s)) => {
+                let a: Action = s
+                    .to_str()?
+                    .parse()
+                    .map_err(|e| rt_err(format!("{who}: action: {e}")))?;
+                def.click = Some(BindAction::Builtin(a));
+            }
+            ("action", Value::Function(f)) => {
+                def.click = Some(BindAction::Lua(Rc::new(lua.create_registry_value(f)?)));
+            }
+            ("action", _) => return Err(bad("an action or a function")),
+            ("on_click", Value::Function(f)) => {
+                on_click = Some(BindAction::Lua(Rc::new(lua.create_registry_value(f)?)));
+            }
+            ("on_click", _) => return Err(bad("a function")),
+            ("interval", Value::Integer(n)) if n > 0 => {
+                def.interval = Some(std::time::Duration::from_secs(n as u64));
+            }
+            ("interval", Value::Number(n)) if n > 0.0 => {
+                def.interval = Some(std::time::Duration::from_secs_f64(n));
+            }
+            ("interval", _) => return Err(bad("a positive number of seconds")),
+            ("priority", Value::Integer(n)) if (0..=100).contains(&n) => {
+                def.priority = Some(n as u8);
+            }
+            ("priority", _) => return Err(bad("a whole number from 0 to 100")),
+            _ => {
+                return Err(rt_err(format!(
+                    "{who}: unknown option `{k}` (expected render, text, style, hover_style, action, on_click, interval, priority)"
+                )));
+            }
+        }
+    }
+    match (def.render.is_some(), def.text.is_some()) {
+        (true, true) => return Err(rt_err(format!("{who}: give render or text, not both"))),
+        (false, false) => return Err(rt_err(format!("{who}: give render or text"))),
+        _ => {}
+    }
+    if def.interval.is_some() && def.render.is_none() {
+        return Err(rt_err(format!(
+            "{who}: interval runs render again; a fixed text has nothing to run"
+        )));
+    }
+    if let Some(c) = on_click {
+        if def.click.is_some() {
+            return Err(rt_err(format!("{who}: give action or on_click, not both")));
+        }
+        def.click = Some(c);
+    }
+    Ok(def)
 }
 
 /// Parse `ranma.toolbar`'s definition, strictly.
@@ -1168,6 +1324,8 @@ struct Builder {
     global_binds: HashMap<Chord, Bind>,
     hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
     bar: BarLayout,
+    titlebar: Option<TitleLayout>,
+    title_pieces: HashMap<String, TitlePieceDef>,
     modules: HashMap<String, ModuleDef>,
     workspaces_show_all: bool,
     workspaces_numbers_only: bool,
@@ -1217,6 +1375,12 @@ pub struct Config {
     pub global_binds: HashMap<Chord, Bind>,
     pub hooks: HashMap<Event, Vec<Rc<RegistryKey>>>,
     pub bar: BarLayout,
+    /// The title row's pieces (`ranma.titlebar`), with a profile's over
+    /// them; unset, the row is the theme's title format.
+    pub titlebar: Option<TitleLayout>,
+    /// `ranma.titlebar` as `init.lua` left it, before any profile.
+    base_titlebar: Option<TitleLayout>,
+    pub title_pieces: HashMap<String, TitlePieceDef>,
     pub modules: HashMap<String, ModuleDef>,
     /// The workspaces module shows 1-10 even when empty.
     pub workspaces_show_all: bool,
@@ -1342,6 +1506,7 @@ impl Config {
 
     pub fn use_profile(&mut self, name: Option<&str>) -> Result<(), String> {
         let (mut settings, mut bar, mut toolbars) = self.base.clone();
+        let mut titlebar = self.base_titlebar.clone();
         let mut theme = self.base_theme.clone();
         let mut profile_layout = None;
         if let Some(name) = name {
@@ -1360,6 +1525,9 @@ impl Config {
             profile_layout = p.set.layout;
             apply_settings(&mut settings, p.set.clone(), &format!("profile `{name}`"))?;
             apply_bar(&mut bar, p.bar.clone());
+            if let Some(t) = &p.titlebar {
+                apply_titlebar(&mut titlebar, t.clone());
+            }
             if let Some(t) = &p.toolbars {
                 toolbars = t.clone();
             }
@@ -1370,6 +1538,7 @@ impl Config {
         self.theme = theme;
         self.settings = settings;
         self.bar = bar;
+        self.titlebar = titlebar;
         self.toolbars_shown = toolbars;
         self.profile = name.map(str::to_string);
         self.profile_layout = profile_layout;
@@ -1908,6 +2077,7 @@ pub const CAPABILITIES: &[&str] = &[
     "rule.style",
     "theme.palette",
     "theme.roles",
+    "titlebar",
     "toast.on_click",
 ];
 
@@ -2260,12 +2430,34 @@ fn install_api(
     )?;
 
     ranma.set(
+        "titlebar",
+        lua.create_function(|lua, value: Value| {
+            let patch: TitlebarPatch = lua
+                .from_value(value)
+                .map_err(|e| rt_err(format!("ranma.titlebar: {e}")))?;
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            apply_titlebar(&mut b.titlebar, patch);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "title_piece",
+        lua.create_function(|lua, (name, opts): (String, Table)| {
+            let def = parse_title_piece(lua, &name, &opts)?;
+            let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            b.title_pieces.insert(name, def);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
         "profile",
         lua.create_function(|lua, (name, value): (String, Value)| {
             let who = format!("ranma.profile(\"{name}\")");
             let def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
-                    "{who}: {e} (a profile takes set, bar and toolbars)"
+                    "{who}: {e} (a profile takes set, bar, titlebar, toolbars and theme)"
                 ))
             })?;
             if def.set.theme.is_some() {
@@ -3257,6 +3449,32 @@ pub fn load_full(
             builtins.join(", ")
         );
     }
+    // The title row's pieces, after the whole file too: a piece may be
+    // defined after the ranma.titlebar call that names it.
+    let layouts = builder
+        .titlebar
+        .iter()
+        .map(|t| ("ranma.titlebar".to_string(), t.all().collect::<Vec<_>>()))
+        .chain(builder.profiles.iter().map(|(n, p)| {
+            (
+                format!("ranma.profile(\"{n}\") titlebar"),
+                p.pieces().collect(),
+            )
+        }));
+    for (who, names) in layouts {
+        for (i, name) in names.iter().enumerate() {
+            if !BUILTIN_PIECES.contains(&name.as_str()) && !builder.title_pieces.contains_key(*name)
+            {
+                anyhow::bail!(
+                    "{who}: unknown piece `{name}` (define it with ranma.title_piece, or use a built-in: {})",
+                    BUILTIN_PIECES.join(", ")
+                );
+            }
+            if names[..i].contains(name) {
+                anyhow::bail!("{who}: `{name}` is listed twice");
+            }
+        }
+    }
     // Also after the whole file: a profile may name a toolbar defined later.
     for (pname, p) in &builder.profiles {
         if let Some(t) = p
@@ -3366,6 +3584,9 @@ pub fn load_full(
             builder.toolbars_shown.clone(),
         ),
         base_theme: theme.clone(),
+        base_titlebar: builder.titlebar.clone(),
+        titlebar: builder.titlebar,
+        title_pieces: builder.title_pieces,
         toolbars: builder.toolbars,
         toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,
@@ -3995,6 +4216,72 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn title_pieces_are_read_strictly() {
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        let ok = with_user(
+            r#"
+            ranma.title_piece("close", { text = "x", action = "close_pane", priority = 70, hover_style = "urgent" })
+            ranma.title_piece("cwd", { render = function(p) return p:cwd() end, interval = 5 })
+            ranma.titlebar { left = { "title", "cwd" }, right = { "close" } }
+            ranma.profile("plain", { titlebar = { right = {} } })
+            assert(ranma.has("titlebar"))
+            "#,
+        )
+        .unwrap();
+        let t = ok.titlebar.clone().unwrap();
+        assert_eq!(t.right, vec!["close"]);
+        assert_eq!(ok.title_pieces["close"].priority, Some(70));
+        assert!(matches!(
+            ok.title_pieces["close"].click,
+            Some(BindAction::Builtin(Action::ClosePane))
+        ));
+        // A profile carries its own row, over the base, and back.
+        let mut ok = ok;
+        ok.use_profile(Some("plain")).unwrap();
+        assert_eq!(ok.titlebar.as_ref().unwrap().right, Vec::<String>::new());
+        assert_eq!(ok.titlebar.as_ref().unwrap().left, vec!["title", "cwd"]);
+        ok.use_profile(None).unwrap();
+        assert_eq!(ok.titlebar.as_ref().unwrap().right, vec!["close"]);
+
+        assert!(
+            err(r#"ranma.title_piece("x", { text = "a", colour = "red" })"#)
+                .contains("unknown option `colour`")
+        );
+        assert!(
+            err(r#"ranma.title_piece("x", { text = "a", render = function() end })"#)
+                .contains("not both")
+        );
+        assert!(err(r#"ranma.title_piece("x", {})"#).contains("give render or text"));
+        assert!(err(r#"ranma.title_piece("title", { text = "a" })"#).contains("built in"));
+        assert!(
+            err(r#"ranma.title_piece("x", { text = "a", interval = 2 })"#).contains("interval")
+        );
+        assert!(
+            err(r#"ranma.title_piece("x", { text = "a", priority = 101 })"#).contains("0 to 100")
+        );
+        assert!(
+            err(r#"ranma.title_piece("x", { text = "a", action = "fly" })"#).contains("action")
+        );
+        assert!(err(r#"ranma.titlebar { left = { "nope" } }"#).contains("unknown piece `nope`"));
+        assert!(
+            err(r#"ranma.titlebar { left = { "title" }, right = { "title" } }"#).contains("twice")
+        );
+        assert!(err(r#"ranma.titlebar { top = { "title" } }"#).contains("top"));
+        assert!(
+            err(r#"ranma.profile("p", { titlebar = { left = { "nope" } } })"#)
+                .contains("ranma.profile(\"p\") titlebar: unknown piece")
+        );
+        // A piece may be defined after the call that names it.
+        with_user(
+            r#"
+            ranma.titlebar { right = { "late" } }
+            ranma.title_piece("late", { text = "!" })
+            "#,
+        )
+        .unwrap();
     }
 
     #[test]

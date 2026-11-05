@@ -672,6 +672,31 @@ impl Tree {
         false
     }
 
+    /// The nearest group around `id`: the pane each of its tabs shows first,
+    /// and which tab is the active one.
+    pub fn group_tabs(&self, id: PaneId) -> Option<(Vec<PaneId>, usize)> {
+        let root = self.root.as_ref()?;
+        let path = find_path(root, id)?;
+        let mut found = None;
+        let mut n = root;
+        for &i in &path {
+            let Node::Container {
+                tabbed, children, ..
+            } = n
+            else {
+                break;
+            };
+            if let Some(active) = tabbed {
+                found = Some((
+                    children.iter().map(|(c, _)| c.first_pane()).collect(),
+                    *active,
+                ));
+            }
+            n = &children[i].0;
+        }
+        found
+    }
+
     /// Cycle the nearest tabbed container around `id`. Returns the pane to focus.
     pub fn cycle_group(&mut self, id: PaneId, forward: bool) -> Option<PaneId> {
         let root = self.root.as_mut()?;

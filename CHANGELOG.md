@@ -15,6 +15,13 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.titlebar` and `ranma.title_piece`: a pane's title row as pieces on
+  three sides. Built in are `title`, `sync`, `badges`, `index` and `tabs` (a
+  group's tabs, drawn in its row, which then has no tab row of its own); your
+  own run per pane like state-driven modules, and one with an `action` is a
+  button, with a `hover_style`. A narrow pane gives way by priority across
+  the sides. A profile may carry a `titlebar`. `ranma.has("titlebar")`.
+
 - A filled title row: `colors.title_bg_*` and `title_fg_*` (focused,
   unfocused, float) give the row the title is on a ground of its own, and
   `border.title_corner_left` / `_right` round it. `panes.floating_bg` gives

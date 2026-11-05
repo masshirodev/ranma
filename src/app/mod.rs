@@ -50,6 +50,7 @@ mod slotsel;
 mod snapshots;
 mod switch;
 mod themes;
+mod titlepieces;
 mod touch;
 mod updating;
 mod watch;
@@ -108,6 +109,32 @@ pub struct PaneView {
     pub inner: Rect,
     pub focused: bool,
     pub floating: bool,
+}
+
+/// The title row draws the groups' tabs: each group's tab row goes back to
+/// its panes, the one shown and the hidden ones alike, so they keep one size.
+/// A row that is not a group's (monocle's strip of panes, in a row of the
+/// chrome's own) has no pane right under it, and stays.
+fn give_back_tab_rows(f: &mut Frame, sides: [u16; 4]) {
+    let mut kept = Vec::new();
+    for tb in std::mem::take(&mut f.tab_bars) {
+        let h = tb.rect.h;
+        let under = |r: Rect| r.y == tb.rect.y + h && r.x == tb.rect.x && r.w == tb.rect.w;
+        if !f.views.iter().any(|v| under(v.outer)) {
+            kept.push(tb);
+            continue;
+        }
+        for v in f.views.iter_mut().filter(|v| under(v.outer)) {
+            v.outer = Rect::new(v.outer.x, tb.rect.y, v.outer.w, v.outer.h + h);
+            v.inner = v.outer.inset_sides(sides);
+        }
+        for (id, r) in f.hidden.iter_mut() {
+            if tb.tabs.contains(id) && r.y >= tb.rect.y + h {
+                *r = Rect::new(r.x, r.y - h, r.w, r.h + h);
+            }
+        }
+    }
+    f.tab_bars = kept;
 }
 
 /// Which sides of a pane have a border drawn on them.
@@ -249,6 +276,13 @@ pub struct App {
     /// Lua and exec module output, keyed by module name.
     module_values: HashMap<String, Segment>,
     module_due: HashMap<String, Instant>,
+    /// Title pieces' last results, by piece and pane (`ranma.title_piece`).
+    piece_values: HashMap<(String, PaneId), Segment>,
+    /// When each timed title piece runs next.
+    piece_due: HashMap<String, Instant>,
+    /// The title piece with a `hover_style` under the pointer: its pane and
+    /// its place in the row.
+    piece_hover: Option<(PaneId, usize)>,
     /// What to call back when the picker or prompt a plugin opened closes.
     lua_ui: Option<crate::luaui::Hooks>,
     /// Panes that printed since they were last idle: when the burst began and
@@ -522,6 +556,9 @@ impl App {
             modules_shown: Default::default(),
             module_values: HashMap::new(),
             module_due: HashMap::new(),
+            piece_values: HashMap::new(),
+            piece_due: HashMap::new(),
+            piece_hover: None,
             lua_ui: None,
             activity: HashMap::new(),
             idle_due: None,
@@ -1046,6 +1083,9 @@ impl App {
             for (id, r) in &self.scratch.floating {
                 f.views.push(view(*id, r.clamp_into(area), true));
             }
+        }
+        if self.tabs_in_title() {
+            give_back_tab_rows(&mut f, tile);
         }
         f
     }
@@ -2359,6 +2399,7 @@ impl App {
         if m.kind == MouseEventKind::Moved {
             self.leave_tooltip(m.column, m.row);
             self.track_hover(m.column, m.row);
+            self.track_piece_hover(m.column, m.row);
         }
         // A click on a toast dismisses it, in any mode; it never reaches a pane.
         if let MouseEventKind::Down(_) = m.kind
@@ -2390,6 +2431,11 @@ impl App {
                 // the label says, and never starts a resize.
                 if let Some((pane, n)) = self.nest_label_at(&frame, x, y) {
                     self.click_in_pane(pane, n);
+                    return;
+                }
+                // A title row's button takes its press; the rest of the row
+                // is still the drag below.
+                if self.click_title_piece(&frame, x, y) {
                     return;
                 }
                 if let Some(hit) = self.border_hit(&frame, x, y) {
@@ -3570,6 +3616,8 @@ impl App {
                 self.adopt_colors();
                 self.module_generation += 1;
                 self.module_values.clear();
+                self.piece_values.clear();
+                self.piece_hover = None;
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());
                 self.status = Some("config reloaded".into());
@@ -4362,6 +4410,7 @@ impl App {
             .filter(|(name, m)| m.interval.is_some() && shown.contains(name))
             .map(|(name, _)| (name.clone(), now))
             .collect();
+        self.schedule_pieces(now);
     }
 
     /// A bar message goes `STATUS_FOR` after it first showed. Messages are
@@ -4390,6 +4439,7 @@ impl App {
         self.module_due
             .values()
             .copied()
+            .chain(self.piece_due.values().copied())
             .chain(self.reload_at)
             .chain(self.programs_due)
             .chain(self.snapshot_due)
@@ -4675,6 +4725,7 @@ impl App {
             self.module_due.insert(name.clone(), bar::next_due(now, iv));
             self.run_module(&name);
         }
+        self.tick_pieces(now);
     }
 
     fn run_module(&mut self, name: &str) {
@@ -4747,6 +4798,7 @@ impl App {
         for n in names {
             self.run_module(&n);
         }
+        self.run_title_pieces(None);
     }
 
     fn set_module_value(&mut self, name: String, seg: Segment) {

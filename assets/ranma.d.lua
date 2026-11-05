@@ -207,6 +207,30 @@ function ranma.bar(bar) end
 ---@param def ranma.Module|table
 function ranma.module(name, def) end
 
+---@class ranma.Titlebar
+---@field left? string[] Piece names: built-ins (title, sync, badges, index, tabs) or ranma.title_piece's.
+---@field center? string[]
+---@field right? string[]
+
+---Lay a pane's title row out from pieces: the sides it names change.
+---@param titlebar ranma.Titlebar
+function ranma.titlebar(titlebar) end
+
+---@class ranma.TitlePiece
+---@field render? fun(pane: ranma.Pane): (string|{ text: string, style?: string }|nil) Run per pane on screen when its state changes; nil hides it there.
+---@field text? string A fixed text instead of render (a button's glyph).
+---@field style? string A role: normal, dim, accent, urgent, or the theme's own.
+---@field hover_style? string The role while the pointer is over it.
+---@field action? string|fun(e: { pane: integer, x: integer, y: integer, workspace: integer }) A plain left press runs it: a button.
+---@field on_click? fun(e: { pane: integer, x: integer, y: integer, workspace: integer })
+---@field interval? number Seconds between runs of render, while a pane showing it is on screen.
+---@field priority? integer 0-100: how long it stays as the pane narrows (40 by default; close is 70 in the docs).
+
+---Define a piece of the title row.
+---@param name string
+---@param def ranma.TitlePiece
+function ranma.title_piece(name, def) end
+
 ---@class ranma.Rule
 ---@field command? string Glob against an exec pane's command.
 ---@field title? string Glob against the pane's title.
@@ -234,7 +258,7 @@ function ranma.session(name, opts) end
 
 ---Overrides used over the base configuration while the profile is in use.
 ---@param name string
----@param def { set?: ranma.Settings, bar?: ranma.Bar, toolbars?: string[], theme?: table }
+---@param def { set?: ranma.Settings, bar?: ranma.Bar, titlebar?: ranma.Titlebar, toolbars?: string[], theme?: table }
 function ranma.profile(name, def) end
 
 ---@class ranma.Toolbar

@@ -848,7 +848,9 @@ bottom, or both of a bottom corner's) while the opposite edge stays put.
 Programs are resized once, when the button is released. (With `border.style =
 "none"` there are no borders to grab; the keyboard still does all of it.) A
 side the theme does not draw (`border.edges`) is grabbed in the gap beside it,
-when `gaps.inner` leaves one; with no gap, the keyboard resizes it.
+when `gaps.inner` leaves one; with no gap, the keyboard resizes it. A title
+row's buttons (pieces with an `action`, see [Title bars](#title-bars--ranmatitlebar-and-ranmatitle_piece))
+take a plain left press on their own cells; the rest of the row still drags.
 
 **A right click opens the pane's menu**: on its border or title bar, or in
 its text when its program does not use the mouse (a shell at its prompt, say).
@@ -986,6 +988,80 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 Give exactly one of `render` or `exec`. A module that fails shows its error in the
 `urgent` style instead of its text. Modules never run while a frame is drawn; the
 bar shows their last result.
+
+## Title bars — `ranma.titlebar` and `ranma.title_piece`
+
+A pane's title row is its top edge (or its bottom one, with `border.title =
+"bottom"`). Without `ranma.titlebar` it shows the theme's `title_format` at
+`title_align`, the `⇉` of synchronized input and the plugins' badges, as it
+always has. With it, the row is pieces, laid out on three sides as the bar's
+modules are. What the row shows is `init.lua`'s; how it looks (its ground,
+corners, edges) is the theme's. A look that needs both is a theme plus a few
+lines here, or a [profile](#profiles--ranmaprofilename-def) carrying both.
+
+```lua
+ranma.title_piece("float", { text = " ⊡", action = "toggle_floating", hover_style = "accent" })
+ranma.title_piece("zoom",  { text = " ▢", action = "fullscreen", hover_style = "accent" })
+ranma.title_piece("close", { text = " ✕ ", action = "close_pane", hover_style = "urgent", priority = 70 })
+ranma.titlebar { left = { "title" }, right = { "float", "zoom", "close" } }
+```
+
+with a theme that fills the row and rounds it:
+
+```toml
+[colors]
+title_bg_active = "tab_active_bg"     # a colour may name another key of [colors]
+title_fg_active = "tab_active_fg"
+title_bg_inactive = "tab_inactive_bg"
+title_fg_inactive = "tab_inactive_fg"
+[border]
+edges = ["top"]
+title_corner_left = ""
+title_corner_right = ""
+[border.chars]
+top = "   "
+```
+
+**Built-in pieces**:
+
+| Piece | Shows |
+| --- | --- |
+| `title` | the theme's `border.title_format` for the pane, so the theme keeps its say over the text |
+| `sync` | `⇉` while the pane takes synchronized input |
+| `badges` | the plugins' badges (`pane:badge`), each glyph and word in its role |
+| `index` | the pane's place in its workspace, from 1 |
+| `tabs` | in a group, its tabs, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and `title` is not drawn in a grouped pane (its tabs name it). Outside a group, nothing. |
+
+`sync` and `badges` show even when a config does not list them: the mark
+goes before `title` and the badges after it (at the left side's end when
+`title` is not listed either). A warning that you are typing into several
+panes, or a plugin's mark, never vanishes because a name was left out.
+
+**Your own pieces**: `ranma.title_piece(name, def)`, with exactly one of
+`render` and `text`:
+
+| Option | Meaning |
+| --- | --- |
+| `render` | `function(pane)`, given the pane's handle (see [Pane handles](#pane-handles)), returning a string, `{ text = "...", style = "..." }`, or `nil` to hide it on that pane. Run for each pane on screen when its title, program, directory, focus or the mode change, on a resize and a profile switch, never while a frame is drawn; the row shows the last result. A failing one shows `name: error` in the `urgent` style. |
+| `text` | a fixed text: a button's glyph |
+| `style` | a role, as a module's: `normal`, `dim`, `accent`, `urgent`, or one the theme declares (`[roles.<name>]`) |
+| `hover_style` | the role while the pointer is over it |
+| `action` | an action (`"close_pane"`) or a function: a plain left press on the piece runs it, after focusing its pane. The rest of the row is still the move drag. |
+| `on_click` | a function, called with `{ pane, x, y, workspace }`: the same as a function `action` |
+| `interval` | seconds between runs of `render`, while a pane showing it is on screen |
+| `priority` | `0`-`100`, how long it stays as the pane narrows; `40` unless given |
+
+**A narrow pane** gives way by priority, across all three sides, lowest
+first: the badges' words (10), the title cut to four letters (20), calm
+badges (30, dim before normal before accent), your pieces at their
+priority (40 unless given: a tie goes leftmost first), the title's name (50),
+urgent badges (60), the index (70), and `⇉` last (90). Give the button you
+never want to lose a high priority, as `close` has above. A piece is cut with
+`…` only where it is the title; anything else, a button above all, goes
+whole.
+
+A title piece's `render` gets the pane's handle; a pane without a terminal
+behind it yet gets `nil`.
 
 ## Pasting files over ssh
 
@@ -2167,7 +2243,9 @@ your own for the phone takes another name, or replaces that one.
   profile is: the frame, which `set` cannot reach, as in
   `theme = { bar = { position = "hidden" }, border = { style = "none" } }`.
   They are checked when `init.lua` loads, as strictly as a theme file;
-  `bar` what `ranma.bar` takes; `toolbars` the names of the toolbars shown
+  `bar` what `ranma.bar` takes; `titlebar` what `ranma.titlebar` takes, over
+  the base's, so a look that needs a theme and its pieces switches whole;
+  `toolbars` the names of the toolbars shown
   while it is in use, instead of the base's. Both are checked when `init.lua` loads, as
   strictly as the calls they mirror: a typo in a profile is a config error,
   not a surprise the first time a phone attaches.
@@ -2331,6 +2409,7 @@ the spelling against this table:
 | `rule.style` | a window rule's `style` |
 | `theme.palette` | a theme's `[palette]` |
 | `theme.roles` | a theme's `[roles.<name>]` |
+| `titlebar` | `ranma.titlebar`, `ranma.title_piece`, and a profile's `titlebar` |
 | `toast.on_click` | `ranma.toast`'s `on_click` |
 
 ## Themes
