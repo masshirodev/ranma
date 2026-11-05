@@ -1824,8 +1824,17 @@ impl Panel {
                     s.put(x0 + cw - len(&kt), prov_y, &kt, st("bar_dim"));
                 }
                 if let Some(e) = &self.error {
+                    // One line: cut, it says where the rest is (the log has
+                    // every panel error whole, card c471).
+                    let line = e.lines().next().unwrap_or("");
+                    let shown = if len(line) > cw || e.lines().count() > 1 {
+                        let hint = " · ranma logs";
+                        format!("{}{hint}", trunc(line, cw - len(hint)))
+                    } else {
+                        line.to_string()
+                    };
                     s.fill(x0, prov_y, cw, 1, St::default());
-                    s.put(x0, prov_y, &trunc(e, cw), st("bar_urgent").bold());
+                    s.put(x0, prov_y, &trunc(&shown, cw), st("bar_urgent").bold());
                 }
             }
         }

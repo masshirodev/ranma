@@ -228,6 +228,11 @@ commit log has the detail.
 
 ### Fixed
 
+- `background.art` (and `splash.art`) take a name with its `.txt` too
+  (`default.txt` is the `default` in the backgrounds folder); a path is the
+  file as written. And an error in the settings panel, cut to one line
+  there, is in the log whole, the panel saying `· ranma logs` when it is cut.
+
 - A mistake in `init.lua` no longer keeps ranma from starting (a shell that
   starts it fell back to a plain one): it starts on the built-in defaults, an
   urgent toast says why until a fixed `init.lua` loads, and the error is in

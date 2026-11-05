@@ -132,7 +132,16 @@ impl Art {
     /// order, `<name>.txt`), else a built-in; a name with a `/` or starting
     /// with `~` is a path.
     pub fn load(name: &str, dirs: &[PathBuf]) -> Result<Art> {
-        let path = if name.contains('/') || name.starts_with('~') {
+        let is_path = name.contains('/') || name.starts_with('~');
+        // A name may be given as its file's name: `default.txt` is the
+        // `default` a backgrounds folder holds (card c471). A path is the
+        // file as written.
+        let name = if is_path {
+            name
+        } else {
+            name.strip_suffix(".txt").unwrap_or(name)
+        };
+        let path = if is_path {
             Some(expand(name))
         } else {
             dirs.iter()
@@ -263,6 +272,24 @@ pub fn place(
 mod tests {
     use super::*;
     use crate::theme::BackgroundAlign;
+
+    /// A name is found with or without its `.txt`; a path is the file as
+    /// written (card c471).
+    #[test]
+    fn a_name_takes_its_txt_and_a_path_is_as_written() {
+        let dir = std::env::temp_dir().join(format!("ranma-art-txt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("mine.txt"), "x\n").unwrap();
+        let dirs = [dir.clone()];
+        assert!(Art::load("mine", &dirs).is_ok());
+        assert!(Art::load("mine.txt", &dirs).is_ok());
+        let path = dir.join("mine.txt").display().to_string();
+        assert!(Art::load(&path, &[]).is_ok(), "a path as written");
+        let e = format!("{:#}", Art::load("nope.txt", &dirs).unwrap_err());
+        assert!(e.contains("no nope.txt in"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn colours_and_attributes_from_sgr() {

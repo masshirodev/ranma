@@ -153,6 +153,7 @@ impl App {
                     Err(e) => {
                         let st = self.settings.as_mut().expect("checked above");
                         st.panel.entries = before;
+                        crate::journal::error(format!("settings: {e}"));
                         st.panel.error = Some(e);
                         let _ = self.apply_settings_edits();
                     }
@@ -340,7 +341,10 @@ impl App {
 
     fn settings_error(&mut self, msg: &str) {
         match self.settings.as_mut() {
-            Some(st) => st.panel.error = Some(msg.to_string()),
+            Some(st) => {
+                crate::journal::error(format!("settings: {msg}"));
+                st.panel.error = Some(msg.to_string());
+            }
             None => self.status = Some(msg.to_string()),
         }
     }
