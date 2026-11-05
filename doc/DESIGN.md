@@ -185,6 +185,12 @@ outer draws it** (`nested_bar = "inner"`, card c464).
   `nested = "own"` modules' values. That last is the existing rule for a
   desk fact (a clock), now meeting a layout from elsewhere.
 - Off by default (`"outer"`): today's bar is unchanged until asked.
+- A lent bar is the bar in use for everything a bar drives: its modules are
+  scheduled when it comes and when it goes (a timed module ticks only while
+  shown, so the desk's clock in a host's bar was never scheduled), and the
+  nested workspaces expand on whichever side it puts them (card c468). The
+  ladder that shortens their names still measures the sides but the
+  centre, unless they are in it: a long title gives way before the names.
 
 Two things the first use showed (card c465). The bracketed workspaces kept
 their fixed `n:name` while the host's own theme drew dots, which is a

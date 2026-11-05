@@ -2850,8 +2850,15 @@ mod tests {
             Color::Rgb(0x11, 0x11, 0x11),
             "on its pill"
         );
+        // No caps, a ground all the same: a pill (card c468).
         assert_eq!(
             draw(pill, false),
+            Color::Rgb(0x11, 0x11, 0x11),
+            "capless, on its ground"
+        );
+        // No ground at all: the bar's.
+        assert_eq!(
+            draw("module_accent = \"#111111\"", false),
             Color::Rgb(0xff, 0xff, 0xff),
             "no pill: the bar's"
         );

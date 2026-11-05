@@ -891,41 +891,51 @@ pub fn expands(set: &Report, expand_all: bool) -> bool {
         || (set.scratch_nest.is_some() && (expand_all || set.scratch_shown))
 }
 
-/// The bar with nested workspaces: the left side is what `left` builds
-/// round the workspaces of `set` (the modules before and after them, as one
-/// side: its pills, its arrows), stepped down the ladder until it fits
-/// beside the right side; the centre (`center`) gets what is left, and is
-/// left out when that would cut it below `floor` (`TITLE_FLOOR` for the
-/// title). With nothing to expand this is `bar::fit` over today's pieces,
-/// exactly.
+/// The bar with nested workspaces: the three sides as `sides` builds them
+/// round the workspaces of `set` (on whichever side the bar puts them,
+/// with that side's pills and arrows), stepped down the ladder until the
+/// sides fit, a cell between those that show (the centre counted only when
+/// it holds them: otherwise it gives way, as it always did); then laid out as
+/// any bar is (`bar::fit_keep`): the centre keeps `keep` cells, and is left
+/// out when that would cut it below `floor` (`TITLE_FLOOR` for the title).
+/// With nothing to expand this is today's bar, exactly.
 #[allow(clippy::too_many_arguments)]
 pub fn fit_nested(
-    left: &dyn Fn(Segment) -> Vec<Segment>,
+    sides: &dyn Fn(Segment) -> [Vec<Segment>; 3],
     set: &Report,
-    center: &[Segment],
-    right: &[Segment],
     sep: &str,
     cols: u16,
     expand_all: bool,
     floor: usize,
+    keep: usize,
     fmt: Option<&WsFormats>,
+    ws_center: bool,
 ) -> Vec<(u16, Piece)> {
     // The nested workspaces are one module: one pill, one pair of caps.
-    let build = |o: &Opts| -> Vec<Segment> { left(pieces_in(set, 0, true, o, &[], fmt)) };
-    if !expands(set, expand_all) {
-        return crate::bar::fit(&build(&Opts::default()), center, right, sep, cols);
-    }
-    let rw = crate::bar::joined_width(right, sep);
-    let steps = ladder(expand_all);
-    let mut left = build(&steps[0]);
-    for o in &steps {
-        left = build(o);
-        // One cell of air between the left side and the right.
-        if crate::bar::joined_width(&left, sep) + rw < cols as usize {
-            break;
+    let build = |o: &Opts| sides(pieces_in(set, 0, true, o, &[], fmt));
+    // The sides the workspaces must fit beside. The centre gives way to
+    // them (a long title is cut, not the names), unless they are in it.
+    let fits = |b: &[Vec<Segment>; 3]| {
+        let ws: Vec<usize> = b
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != 1 || ws_center)
+            .map(|(_, s)| crate::bar::joined_width(s, sep))
+            .collect();
+        let shown = ws.iter().filter(|w| **w > 0).count();
+        ws.iter().sum::<usize>() + shown.saturating_sub(1) <= cols as usize
+    };
+    let mut b = build(&Opts::default());
+    if expands(set, expand_all) {
+        for o in &ladder(expand_all) {
+            b = build(o);
+            if fits(&b) {
+                break;
+            }
         }
     }
-    crate::bar::fit_floor(&left, center, right, sep, cols, floor)
+    let [left, center, right] = b;
+    crate::bar::fit_keep(&left, &center, &right, sep, cols, floor, keep)
 }
 
 // ---- the compact label -------------------------------------------------------------
@@ -1311,15 +1321,21 @@ mod tests {
         ];
         let center: Vec<Segment> = vec![vec![Piece::new(TITLE, Style::Normal)]];
         let placed = fit_nested(
-            &|ws| vec![vec![Piece::new(" ⧉ ", Style::Dim)], ws],
+            &|ws| {
+                [
+                    vec![vec![Piece::new(" ⧉ ", Style::Dim)], ws],
+                    center.clone(),
+                    right.clone(),
+                ]
+            },
             set,
-            &center,
-            &right,
             "  ",
             cols,
             expand_all,
             TITLE_FLOOR,
+            0,
             None,
+            false,
         );
         let mut row = vec![' '; cols as usize];
         for (x, p) in placed {

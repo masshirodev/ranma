@@ -5509,12 +5509,15 @@ impl App {
         };
         let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>, shape: &SideShape| {
             let mut out = wrap_caps(s, role, shape);
-            // Pills that abut have no caps to mark their pieces as standing
-            // on the pill's ground (`bar::boxed_in` boxes only between caps),
-            // so with arrows each is marked here: the arrows are drawn in that
-            // ground, and the module must stand on it too, its text and
-            // workspaces as much as its padding.
-            if shape.join == Join::Arrows && !large {
+            // A module stands on its ground (`module_bg`, its role's): its
+            // pieces are marked so between caps (`bar::boxed_in`), and with
+            // none (pills that abut with arrows, a side with no caps) they
+            // are marked here, so it stands on it all the same, its text and
+            // workspaces as much as its padding (cards c466, c468).
+            let capped = out
+                .iter()
+                .any(|p| p.boxed || matches!(p.style, Style::Cap | Style::RoleCap(_)));
+            if !capped && !large {
                 for p in &mut out {
                     p.boxed = true;
                 }
@@ -5716,20 +5719,27 @@ impl App {
             self.config.theme.bar.separator.as_str()
         };
         // The workspaces module, with the workspaces of the ranmas inside
-        // them (see `nestbar`), when there are any to show.
+        // them (see `nestbar`), when there are any to show: on whichever
+        // side the bar puts it (card c468). A message in the centre's place
+        // takes the centre's workspaces with it, as it takes the rest.
+        let message_centre = status.is_some() && !placed;
+        let ws = config::TitleEntry::Piece("workspaces".into());
+        let ws_at = [&bar.left, &bar.center, &bar.right]
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !(*i == 1 && message_centre))
+            .find_map(|(i, side)| side.iter().position(|e| *e == ws).map(|at| (i, at)));
         if self.config.workspaces_nested != config::NestedWorkspaces::Off
-            && let Some(at) = bar
-                .left
-                .iter()
-                .position(|e| *e == config::TitleEntry::Piece("workspaces".into()))
+            && let Some((ws_side, at)) = ws_at
         {
             let set = self.own_report();
             let expand_all = self.config.workspaces_nested == config::NestedWorkspaces::All;
             if crate::nestbar::expands(&set, expand_all) {
                 // The expanded workspaces in the workspaces module's place,
-                // as the module itself stands: the left side's shape, its
-                // role, its arrows across the whole side (card c458).
-                let shape = theme_bar.shape(Side::Left);
+                // as the module itself stands: its side's shape, its role,
+                // that side's arrows across it (card c458).
+                let which = [Side::Left, Side::Center, Side::Right][ws_side];
+                let shape = theme_bar.shape(which);
                 let ws_name = "workspaces".to_string();
                 let expansion = |ws: Segment| -> Segment {
                     wrap_in(
@@ -5751,46 +5761,54 @@ impl App {
                     .first()
                     .map(|o| crate::nestbar::pieces_in(&set, 0, true, o, &[], formats.as_ref()))
                     .unwrap_or_default();
-                let mut left_entries = entries_in(&bar.left[..at], Side::Left);
-                left_entries.push((expansion(fullest), None));
-                left_entries.extend(entries_in(&bar.left[at + 1..], Side::Left));
-                let mut sides = [left_entries, center_entries, right_entries];
+                let decl = [&bar.left, &bar.center, &bar.right][ws_side];
+                let mut own = entries_in(&decl[..at], which);
+                own.push((expansion(fullest), None));
+                own.extend(entries_in(&decl[at + 1..], which));
+                let mut sides = [
+                    entries_in(&bar.left, Side::Left),
+                    center_entries,
+                    right_entries,
+                ];
+                sides[ws_side] = own;
                 drop_by_priority(&mut sides, cols as usize, |entries, i| {
                     let which = [Side::Left, Side::Center, Side::Right][i];
                     bar::joined_width(&finish(entries, which), sep)
                 });
-                let [left_entries, center_entries, right_entries] = sides;
-                let center = finish(&center_entries, Side::Center);
-                let right = finish(&right_entries, Side::Right);
-                let left = |ws: Segment| -> Vec<Segment> {
+                let build = |ws: Segment| -> [Vec<Segment>; 3] {
                     let ws = expansion(ws);
-                    let entries: Vec<Entry> = left_entries
-                        .iter()
-                        .map(|(s, p)| {
-                            if is_ws(s) {
-                                (ws.clone(), *p)
-                            } else {
-                                (s.clone(), *p)
-                            }
-                        })
-                        .collect();
-                    finish(&entries, Side::Left)
+                    let mut out: [Vec<Segment>; 3] = Default::default();
+                    for (i, side) in sides.iter().enumerate() {
+                        let entries: Vec<Entry> = side
+                            .iter()
+                            .map(|(s, p)| {
+                                if i == ws_side && is_ws(s) {
+                                    (ws.clone(), *p)
+                                } else {
+                                    (s.clone(), *p)
+                                }
+                            })
+                            .collect();
+                        out[i] = finish(&entries, [Side::Left, Side::Center, Side::Right][i]);
+                    }
+                    out
                 };
                 return crate::nestbar::fit_nested(
-                    &left,
+                    &build,
                     &set,
-                    &center,
-                    &right,
                     sep,
                     cols,
                     expand_all,
-                    // A message is never left out; the title may be.
-                    if status.is_some() {
+                    // A message is never left out, nor the workspaces in
+                    // the centre; the title may be.
+                    if status.is_some() || ws_side == 1 {
                         0
                     } else {
                         crate::nestbar::TITLE_FLOOR
                     },
+                    bar.center_min as usize,
                     formats.as_ref(),
+                    ws_side == 1,
                 );
             }
         }
@@ -10739,6 +10757,51 @@ mod tests {
         a.reports.insert(id, report(serde_json::json!({})));
         a.follow_inner_bar();
         assert!(row(&a).contains("MINE"));
+    }
+
+    /// The workspaces of a ranma inside expand wherever the bar puts the
+    /// workspaces module, the centre too; and a bar lent by a ranma inside
+    /// has its timed modules scheduled, this one's own clock among them
+    /// (card c468).
+    #[test]
+    fn centre_workspaces_expand_and_a_lent_bar_ticks() {
+        let (mut a, id) = with_ranma_inside(
+            r#"
+            ranma.set { nested_bar = "inner" }
+            ranma.module("tick", { interval = 60, nested = "own", render = function() return "TICK" end })
+            ranma.bar { left = { "mode" }, center = { "workspaces" }, right = {} }
+            "#,
+        );
+        let report = |bar: &str| {
+            crate::nestbar::Report::parse(&format!(
+                r#"{{"v":{p},"current":1,"ws":[{{"n":1,"name":"in","occ":true}}]{bar}}}"#,
+                p = crate::nestbar::PROTOCOL
+            ))
+            .unwrap()
+        };
+        a.reports.insert(id, report(""));
+        let row: String = a
+            .bar_pieces(80)
+            .iter()
+            .map(|(_, p)| p.text.clone())
+            .collect();
+        assert!(row.contains("[1:in]"), "expanded in the centre: {row:?}");
+        // The inner's bar names this ranma's timed module, which this bar
+        // never showed: lent, it is due.
+        assert!(!a.module_due.contains_key("tick"));
+        a.reports.insert(
+            id,
+            report(r#","bar":{"center":["workspaces"],"right":["tick"]}"#),
+        );
+        a.follow_inner_bar();
+        assert!(
+            a.module_due.contains_key("tick"),
+            "scheduled with the lent bar"
+        );
+        // Given back: not shown, not due.
+        a.reports.remove(&id);
+        a.follow_inner_bar();
+        assert!(!a.module_due.contains_key("tick"));
     }
 
     #[test]

@@ -851,8 +851,7 @@ Over SSH, three levels deep, each machine starting ranma: with
   `[roles]`), so each host says what its own bar shows over ssh, in its own
   `init.lua` and theme, and the machine you sit at says nothing about it.
   This ranma keeps what only it can show: its workspaces with that ranma's
-  in brackets (where that bar puts `workspaces`; on its left side, as here,
-  for the brackets), the mode chip, the bar's position and size, and the
+  in brackets (where that bar puts `workspaces`, on any side), the mode chip, the bar's position and size, and the
   values of its own modules marked `nested = "own"` (a desk clock named in
   that bar shows this machine's time). Its own bar comes back as soon as
   the focus leaves. Colours stay `theme_colors`' to choose. A look this
@@ -2665,7 +2664,7 @@ colours only; a key set to a name shows the name there.
 | `colors.search_fg`, `search_bg`, `search_current_fg`, `search_current_bg` | search matches in copy mode |
 | `colors.selection_fg`, `selection_bg` | copy mode's selection; unset, the cells are reversed |
 | `colors.toast_fg`, `toast_bg` | toasts (their border is `bar_accent`, or `bar_urgent` when urgent) |
-| `colors.module_bg`, `module_fg` | a bar module's ground, between `bar.module_left` and `module_right`, and its `normal` text there; unset, modules sit on `bar_bg` |
+| `colors.module_bg`, `module_fg` | a bar module's ground, between `bar.module_left` and `module_right`, and its `normal` text there; unset, modules sit on `bar_bg` A module stands on `module_bg` with caps or without: a side with no caps (arrows, or none set) is a row of square pills. |
 | `colors.module_dim`, `module_accent`, `module_urgent` | a module's text in the `dim`, `accent` and `urgent` styles on its ground, as `module_fg` is its plain text there: a plugin's accent (a count of agents, open ports) readable on a pill when `bar_accent` is chosen for the bar's own ground. Unset, `bar_dim`, `bar_accent`, `bar_urgent`. |
 | `colors.border_active_gradient`, `border_inactive_gradient`, `border_floating_gradient` | two colours or more: the border runs through them along `border.gradient_angle` instead of being one colour, spread over each pane's own border, one colour per cell (a terminal cannot shade inside a cell, so a short border shows the steps). Not while the focused border is in the WM-mode colour. A colour the host terminal did not report (an index or `default` with no answer) leaves that border one colour. Unset, the one colour. |
 | `border.gradient_angle` | `0`-`359` degrees: `0` left to right, `90` top to bottom, clockwise. A row counts as two columns, so `45` runs corner to corner as it looks. `0` by default. |

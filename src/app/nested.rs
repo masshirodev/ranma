@@ -400,8 +400,19 @@ impl App {
     pub(super) fn return_bar(&mut self) {
         if let Some(own) = self.own_bar.take() {
             own.put_back(&mut self.config);
+            self.bar_changed();
         }
         self.inner_bar = None;
+    }
+
+    /// Another bar is in use: the modules it shows tick now (a timed one is
+    /// scheduled only while a bar shows it, and the one that came in was
+    /// never scheduled: the desk's clock in a host's bar stayed blank), and
+    /// the state-driven ones render (card c468).
+    fn bar_changed(&mut self) {
+        self.schedule_modules(std::time::Instant::now());
+        self.render_state_modules();
+        self.dirty = true;
     }
 
     /// Under `nested_bar = "inner"`, draw the bar of the ranma the focus is
@@ -424,7 +435,7 @@ impl App {
             self.own_bar = Some(OwnBar::lend(&mut self.config, w));
         }
         self.inner_bar = want;
-        self.dirty = true;
+        self.bar_changed();
     }
 
     /// The report of the ranma a toolbar button acts on instead of this one:

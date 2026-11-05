@@ -225,6 +225,12 @@ commit log has the detail.
 
 ### Fixed
 
+- Over ssh with `nested_bar = "inner"`: the workspaces of the ranma inside
+  expand wherever its bar puts the workspaces (the centre too, not only the
+  left); this ranma's own timed modules in that bar tick (the desk's clock
+  was blank); and a module with no caps stands on `module_bg` (the centre's
+  workspaces had no ground).
+
 - With `join = "arrows"`, a module (the workspaces, any module with no role,
   and a role's module past its own text) stood on the terminal's background
   while the arrows round it were drawn in its ground: it stands on its

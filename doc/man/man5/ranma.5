@@ -1283,8 +1283,7 @@ and widths, and its look (\fBjoin\fR, arrows, caps, workspace formats, its
 \fB[roles]\fR), so each host says what its own bar shows over ssh, in its own
 \fBinit.lua\fR and theme, and the machine you sit at says nothing about it.
 This ranma keeps what only it can show: its workspaces with that ranma's
-in brackets (where that bar puts \fBworkspaces\fR; on its left side, as here,
-for the brackets), the mode chip, the bar's position and size, and the
+in brackets (where that bar puts \fBworkspaces\fR, on any side), the mode chip, the bar's position and size, and the
 values of its own modules marked \fBnested = "own"\fR (a desk clock named in
 that bar shows this machine's time). Its own bar comes back as soon as
 the focus leaves. Colours stay \fBtheme_colors\fR' to choose. A look this
@@ -3574,7 +3573,7 @@ copy mode's selection; unset, the cells are reversed
 toasts (their border is \fBbar_accent\fR, or \fBbar_urgent\fR when urgent)
 .TP
 \fBcolors.module_bg\fR, \fBmodule_fg\fR
-a bar module's ground, between \fBbar.module_left\fR and \fBmodule_right\fR, and its \fBnormal\fR text there; unset, modules sit on \fBbar_bg\fR
+a bar module's ground, between \fBbar.module_left\fR and \fBmodule_right\fR, and its \fBnormal\fR text there; unset, modules sit on \fBbar_bg\fR A module stands on \fBmodule_bg\fR with caps or without: a side with no caps (arrows, or none set) is a row of square pills.
 .TP
 \fBcolors.module_dim\fR, \fBmodule_accent\fR, \fBmodule_urgent\fR
 a module's text in the \fBdim\fR, \fBaccent\fR and \fBurgent\fR styles on its ground, as \fBmodule_fg\fR is its plain text there: a plugin's accent (a count of agents, open ports) readable on a pill when \fBbar_accent\fR is chosen for the bar's own ground. Unset, \fBbar_dim\fR, \fBbar_accent\fR, \fBbar_urgent\fR.
