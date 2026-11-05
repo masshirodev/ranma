@@ -201,6 +201,11 @@ commit log has the detail.
 
 ### Fixed
 
+- Every directory linked into the top of the config directory is watched
+  behind its link, not only `themes/`, `lua/`, `plugin/` and `pack/`: a
+  linked `profiles/` (profiles.ranma) or a folder `init.lua` reads reloads
+  when a file in it is saved.
+
 - A profile's theme keys are checked at the `ranma.profile` call, not only
   once the whole configuration has run: a bad one is an error there, which
   a `pcall` catches, instead of failing the load (at start, every terminal

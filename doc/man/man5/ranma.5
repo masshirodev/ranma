@@ -25,7 +25,10 @@ silently ignored.
 .PP
 \fBSymlinks are fine.\fR Dotfile setups often make \fBinit.lua\fR, \fBthemes/\fR or a
 plugin directory a link into a repository; ranma watches the real files behind the links, so saving
-through them reloads as well.
+through them reloads as well. Any directory linked in at the top of the config
+directory is watched this way, not only ranma's own (a \fBprofiles/\fR for
+profiles.ranma\fR <https://github.com/masshirodev/profiles.ranma>, a folder
+\fBinit.lua\fR reads with \fBdofile\fR).
 .PP
 \fBReloading is automatic.\fR ranma watches the config directory (inotify, so it
 costs nothing while idle) and reloads a moment after \fBinit.lua\fR or a theme is
@@ -2094,8 +2097,8 @@ taking it out) reloads as well, and its files are watched from then on: every
 reload looks again at what is linked.
 .PP
 Saving any \fB.lua\fR file under the config directory reloads, plugins included,
-and linked \fBlua/\fR, \fBplugin/\fR, \fBpack/\fR or package directories are watched behind
-their links.
+and every directory linked in at its top (\fBlua/\fR, \fBplugin/\fR, \fBpack/\fR, or any
+other), and each linked package, is watched behind its link.
 .SH "LUA AT RUN TIME"
 .PP
 Inside a bind function, a hook, a module's \fBrender\fR, a timer, or a

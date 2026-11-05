@@ -5922,8 +5922,9 @@ pub(super) fn watch_config(
 }
 
 /// Directories behind symlinks in the config dir that need their own watch:
-/// the parent of a linked `init.lua`, and a linked `themes/`, `lua/`,
-/// `plugin/`, `pack/` or package itself.
+/// the parent of a linked `init.lua`, every directory linked in at the top
+/// (`themes/`, `lua/`, `plugin/`, `pack/`, and any other: profiles.ranma's
+/// `profiles/`, a folder `init.lua` reads), and each linked package.
 fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify::RecursiveMode)> {
     let mut out = Vec::new();
     let init = dir.join("init.lua");
@@ -5935,8 +5936,9 @@ fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify
     {
         out.push((parent, notify::RecursiveMode::NonRecursive));
     }
-    // Directories a dotfiles repo or a cloned plugin is linked in as: the
-    // plugin layout's three, and each package under `pack/*/start/`.
+    // Directories a dotfiles repo or a cloned plugin is linked in as: any at
+    // the top, since what a config reads is not only ranma's own folders,
+    // and each package under `pack/*/start/`.
     let packages = std::fs::read_dir(dir.join("pack"))
         .into_iter()
         .flatten()
@@ -5948,12 +5950,14 @@ fn config_link_targets(dir: &std::path::Path) -> Vec<(std::path::PathBuf, notify
         })
         .flatten()
         .map(|e| e.path());
-    let linked = ["themes", "lua", "plugin", "pack"]
+    let top = std::fs::read_dir(dir)
         .into_iter()
-        .map(|d| dir.join(d))
-        .chain(packages);
-    for d in linked {
+        .flatten()
+        .flatten()
+        .map(|e| e.path());
+    for d in top.chain(packages) {
         if d.is_symlink()
+            && d.is_dir()
             && let Ok(t) = d.canonicalize()
         {
             out.push((t, notify::RecursiveMode::Recursive));
@@ -6975,6 +6979,46 @@ mod tests {
                 .unwrap_or("")
                 .contains("no profile `nope`")
         );
+    }
+
+    #[test]
+    fn every_directory_linked_into_the_config_is_watched() {
+        let root = std::env::temp_dir().join(format!("ranma-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (cfg, dots) = (root.join("cfg"), root.join("dots"));
+        for d in ["themes", "profiles", "pack/p/start/x"] {
+            std::fs::create_dir_all(dots.join(d)).unwrap();
+        }
+        std::fs::create_dir_all(cfg.join("pack/p/start")).unwrap();
+        std::fs::create_dir_all(cfg.join("own")).unwrap();
+        std::fs::write(dots.join("init.lua"), "").unwrap();
+        std::fs::write(dots.join("a.lua"), "").unwrap();
+        let link = |from: &str, to: &str| {
+            std::os::unix::fs::symlink(dots.join(from), cfg.join(to)).unwrap()
+        };
+        link("init.lua", "init.lua");
+        link("themes", "themes");
+        link("profiles", "profiles");
+        link("a.lua", "a.lua");
+        link("pack/p/start/x", "pack/p/start/x");
+        let mut got: Vec<std::path::PathBuf> = config_link_targets(&cfg)
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        got.sort();
+        let dots = dots.canonicalize().unwrap();
+        let mut want = vec![
+            dots.clone(),
+            dots.join("themes"),
+            dots.join("profiles"),
+            dots.join("pack/p/start/x"),
+        ];
+        want.sort();
+        assert_eq!(
+            got, want,
+            "init.lua's folder, each linked directory; not a linked file or a real one"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// word_separators' default holds a tab, which the settings panel drew

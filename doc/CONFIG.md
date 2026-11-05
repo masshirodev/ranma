@@ -20,7 +20,10 @@ silently ignored.
 
 **Symlinks are fine.** Dotfile setups often make `init.lua`, `themes/` or a
 plugin directory a link into a repository; ranma watches the real files behind the links, so saving
-through them reloads as well.
+through them reloads as well. Any directory linked in at the top of the config
+directory is watched this way, not only ranma's own (a `profiles/` for
+[profiles.ranma](https://github.com/masshirodev/profiles.ranma), a folder
+`init.lua` reads with `dofile`).
 
 **Reloading is automatic.** ranma watches the config directory (inotify, so it
 costs nothing while idle) and reloads a moment after `init.lua` or a theme is
@@ -1538,8 +1541,8 @@ taking it out) reloads as well, and its files are watched from then on: every
 reload looks again at what is linked.
 
 Saving any `.lua` file under the config directory reloads, plugins included,
-and linked `lua/`, `plugin/`, `pack/` or package directories are watched behind
-their links.
+and every directory linked in at its top (`lua/`, `plugin/`, `pack/`, or any
+other), and each linked package, is watched behind its link.
 
 ## Lua at run time
 
