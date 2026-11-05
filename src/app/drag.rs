@@ -9,7 +9,7 @@
 //! corner's two) and leaves the opposite ones where they are. Programs are
 //! resized once, when the button is released, not on every mouse event.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line, Point, Side};
@@ -401,14 +401,13 @@ impl App {
 // copy_on_select and most X terminals do. Panes whose program uses the mouse get
 // their clicks as before.
 
-/// Double and triple clicks: presses this close together on the same cell.
-pub(super) const MULTI_CLICK: Duration = Duration::from_millis(400);
-
 impl App {
     pub(super) fn start_selection(&mut self, v: PaneView, x: u16, y: u16) {
         let now = Instant::now();
         let count = match self.last_click {
-            Some((t, lx, ly, n)) if now.duration_since(t) < MULTI_CLICK && (lx, ly) == (x, y) => {
+            Some((t, lx, ly, n))
+                if now.duration_since(t) < self.double_click() && (lx, ly) == (x, y) =>
+            {
                 n % 3 + 1
             }
             _ => 1,

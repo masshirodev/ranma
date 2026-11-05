@@ -258,6 +258,11 @@ Default: \fB10000\fR
 .br
 Scrollback per pane.
 .TP
+\fBmouse_double_click\fR
+Default: \fB400\fR
+.br
+Milliseconds a second press on the same cell has to be a double one (100\-2000): \fBdouble@\fR mouse binds, a double\-click's word and a triple\-click's line, and a double tap on a touch toolbar's latch.
+.TP
 \fBbuffers_kept\fR
 Default: \fB50\fR
 .br
@@ -1327,7 +1332,8 @@ ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
 .RE
 .PP
 A spec is \fB[ctrl+][alt+][shift+]EVENT@TARGET\fR. Events: \fBleft\fR, \fBmiddle\fR,
-\fBright\fR, \fBdouble\fR (a second left press on the same cell within 400 ms),
+\fBright\fR, \fBdouble\fR (a second left press on the same cell within
+\fBmouse_double_click\fR, 400 ms by default),
 \fBwheel_up\fR, \fBwheel_down\fR. Targets: \fBpane\fR (a pane's text), \fBborder\fR (its
 border, the title row included where no \fBtitle\fR bind is), \fBtitle\fR (the row
 the title is on, but its buttons: title pieces\fR

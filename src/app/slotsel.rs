@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use super::{App, drag::MULTI_CLICK};
+use super::App;
 use crate::settings::Grid;
 
 /// What a press selects, as panes have it.
@@ -223,7 +223,7 @@ impl App {
                 let now = Instant::now();
                 let count = match self.last_click {
                     Some((t, lx, ly, n))
-                        if now.duration_since(t) < MULTI_CLICK && (lx, ly) == (x, y) =>
+                        if now.duration_since(t) < self.double_click() && (lx, ly) == (x, y) =>
                     {
                         n % 3 + 1
                     }

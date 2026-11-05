@@ -1010,6 +1010,13 @@ impl App {
         self.workspace_area().centered(80, 80)
     }
 
+    /// The window a second press (or tap) on the same place must come in to
+    /// be a double one (`mouse_double_click`, card c432): mouse binds'
+    /// `double`, word and line selection, a touch double tap.
+    pub(super) fn double_click(&self) -> Duration {
+        self.config.settings.mouse_double_click
+    }
+
     /// Lines one notch of the wheel scrolls (`mouse_wheel_lines`, card
     /// c429): through scrollback, in copy mode, and as arrow keys in a
     /// full-screen program that takes none.
@@ -2335,7 +2342,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left) => {
                 let now = Instant::now();
                 let double = self.bind_click.is_some_and(|(t, cx, cy)| {
-                    now.duration_since(t) < Duration::from_millis(400) && (cx, cy) == (x, y)
+                    now.duration_since(t) < self.double_click() && (cx, cy) == (x, y)
                 });
                 self.bind_click = (!double).then_some((now, x, y));
                 if double { Event::Double } else { Event::Left }

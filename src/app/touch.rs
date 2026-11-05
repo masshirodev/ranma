@@ -30,7 +30,6 @@ const PRESS_HOLD: Duration = Duration::from_millis(90);
 const KEYBOARD_FOR: Duration = Duration::from_millis(1500);
 
 /// Tapped again within this, a latch locks instead of letting go.
-const DOUBLE_TAP: Duration = Duration::from_millis(400);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Hold {
@@ -71,10 +70,11 @@ impl Latches {
 
     /// A tap on a latch: off to latched, latched to locked when quick, else
     /// off; locked to off.
-    pub fn tap(&mut self, l: Latch, now: Instant) {
+    /// `window` is the double-tap's (`mouse_double_click`).
+    pub fn tap(&mut self, l: Latch, now: Instant, window: Duration) {
         let quick = self
             .last_tap
-            .is_some_and(|(p, t)| p == l && now.duration_since(t) <= DOUBLE_TAP);
+            .is_some_and(|(p, t)| p == l && now.duration_since(t) <= window);
         let next = match (self.get(l), quick) {
             (Hold::Off, _) => Hold::Latched,
             (Hold::Latched, true) => Hold::Locked,
@@ -439,7 +439,8 @@ impl App {
     }
 
     pub(super) fn tap_latch(&mut self, l: Latch) {
-        self.latches.tap(l, Instant::now());
+        let window = self.double_click();
+        self.latches.tap(l, Instant::now(), window);
         self.dirty = true;
     }
 
@@ -719,22 +720,34 @@ mod tests {
     fn a_latch_holds_for_one_key_and_locks_on_a_double_tap() {
         let t0 = Instant::now();
         let mut l = Latches::default();
-        l.tap(Latch::Ctrl, t0);
+        l.tap(Latch::Ctrl, t0, Duration::from_millis(400));
         assert_eq!(l.label().as_deref(), Some("CTRL"));
         let k = l.apply(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
         assert_eq!(k.modifiers, KeyModifiers::CONTROL);
         assert!(!l.any(), "one key only");
         // Twice quickly: locked, for every key until tapped again.
-        l.tap(Latch::Ctrl, t0);
-        l.tap(Latch::Ctrl, t0 + Duration::from_millis(200));
+        l.tap(Latch::Ctrl, t0, Duration::from_millis(400));
+        l.tap(
+            Latch::Ctrl,
+            t0 + Duration::from_millis(200),
+            Duration::from_millis(400),
+        );
         assert_eq!(l.label().as_deref(), Some("CTRL LOCK"));
         l.apply(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert_eq!(l.label().as_deref(), Some("CTRL LOCK"));
-        l.tap(Latch::Ctrl, t0 + Duration::from_secs(5));
+        l.tap(
+            Latch::Ctrl,
+            t0 + Duration::from_secs(5),
+            Duration::from_millis(400),
+        );
         assert!(!l.any());
         // Twice slowly: on, then off.
-        l.tap(Latch::Alt, t0);
-        l.tap(Latch::Alt, t0 + Duration::from_secs(1));
+        l.tap(Latch::Alt, t0, Duration::from_millis(400));
+        l.tap(
+            Latch::Alt,
+            t0 + Duration::from_secs(1),
+            Duration::from_millis(400),
+        );
         assert!(!l.any());
     }
 
@@ -742,12 +755,12 @@ mod tests {
     fn latches_stack() {
         let t0 = Instant::now();
         let mut l = Latches::default();
-        l.tap(Latch::Ctrl, t0);
-        l.tap(Latch::Alt, t0);
+        l.tap(Latch::Ctrl, t0, Duration::from_millis(400));
+        l.tap(Latch::Alt, t0, Duration::from_millis(400));
         assert_eq!(l.label().as_deref(), Some("CTRL ALT"));
         let k = l.apply(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(k.modifiers, KeyModifiers::CONTROL | KeyModifiers::ALT);
-        l.tap(Latch::Shift, t0);
+        l.tap(Latch::Shift, t0, Duration::from_millis(400));
         let k = l.apply(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
         assert_eq!(k.code, KeyCode::Char('A'));
     }

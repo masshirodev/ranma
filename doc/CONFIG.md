@@ -183,6 +183,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `splash` | `true` | An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to `help` lists every bind. It is drawn in `bar_accent` (the logo), `bar_fg` (the keys) and `bar_dim`; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. `false` leaves an empty workspace blank. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
+| `mouse_double_click` | `400` | Milliseconds a second press on the same cell has to be a double one (100-2000): `double@` mouse binds, a double-click's word and a triple-click's line, and a double tap on a touch toolbar's latch. |
 | `buffers_kept` | `50` | Copies kept to paste again (`choose_buffer`, `paste_buffer`), 1-1000, in memory only; fewer at a reload drops the oldest. |
 | `mouse_wheel_lines` | `3` | Lines one notch of the wheel scrolls (1-50): through a pane's scrollback, in copy mode, and as that many arrow keys to a full-screen program that takes no mouse (less, man). A program that takes the mouse gets the wheel as it is. |
 | `hint_alphabet` | `"asdfghjklqwertyuiopzxcvbnm"` | The letters hint labels (`hints`, `leader o`) are made of, easiest to reach first: Colemak's `"arstneiodh…"`, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open. |
@@ -906,7 +907,8 @@ ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
 ```
 
 A spec is `[ctrl+][alt+][shift+]EVENT@TARGET`. Events: `left`, `middle`,
-`right`, `double` (a second left press on the same cell within 400 ms),
+`right`, `double` (a second left press on the same cell within
+`mouse_double_click`, 400 ms by default),
 `wheel_up`, `wheel_down`. Targets: `pane` (a pane's text), `border` (its
 border, the title row included where no `title` bind is), `title` (the row
 the title is on, but its buttons: [title pieces](#title-bars--ranmatitlebar-and-ranmatitle_piece)

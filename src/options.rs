@@ -370,6 +370,14 @@ pub fn builtin() -> Vec<Opt> {
             "Lines of scrollback kept per pane.",
         ),
         opt(
+            "mouse_double_click",
+            "general",
+            "Double click (ms)",
+            int(100, 2000, 50, false),
+            Init,
+            "Milliseconds a second press on the same cell has to be a double click (or tap).",
+        ),
+        opt(
             "buffers_kept",
             "general",
             "Buffers kept",

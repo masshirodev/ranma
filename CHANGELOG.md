@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `mouse_double_click`: the double-click (and double-tap) window, in
+  milliseconds, 400 as before.
+
 - `buffers_kept`: how many copies are kept to paste again (50 as before, up
   to 1000); `paste_buffer N` takes any N up to it.
 

@@ -265,6 +265,8 @@ pub struct Settings {
     /// What ends a word for copy mode's word motions and a double click
     /// (alacritty's semantic escape characters; card c427).
     pub word_separators: String,
+    /// A second press on the same cell within this is a double one (c432).
+    pub mouse_double_click: std::time::Duration,
     /// Copies kept as paste buffers (card c431).
     pub buffers_kept: usize,
     /// Lines one notch of the wheel scrolls (card c429).
@@ -331,6 +333,7 @@ impl Default for Settings {
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
             buffers_kept: crate::app::buffers_kept_default(),
+            mouse_double_click: std::time::Duration::from_millis(400),
             toast_position: crate::toast::Corner::TopRight,
             toast_timeout: crate::toast::DEFAULT_TIMEOUT,
             hint_urls: true,
@@ -378,6 +381,7 @@ struct SettingsPatch {
     hint_alphabet: Option<String>,
     mouse_wheel_lines: Option<u8>,
     buffers_kept: Option<usize>,
+    mouse_double_click: Option<u64>,
     hint_urls: Option<bool>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
@@ -2213,6 +2217,14 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(u) = patch.hint_urls {
         s.hint_urls = u;
+    }
+    if let Some(ms) = patch.mouse_double_click {
+        if !(100..=2000).contains(&ms) {
+            return Err(format!(
+                "{who}: mouse_double_click must be 100 to 2000 milliseconds, not {ms}"
+            ));
+        }
+        s.mouse_double_click = std::time::Duration::from_millis(ms);
     }
     if let Some(n) = patch.buffers_kept {
         if !(1..=crate::app::BUFFERS_MAX).contains(&n) {
@@ -4669,6 +4681,20 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn the_double_click_window_is_one_setting() {
+        let ms = |src: &str| {
+            with_user(src)
+                .unwrap()
+                .settings
+                .mouse_double_click
+                .as_millis()
+        };
+        assert_eq!(ms(""), 400);
+        assert_eq!(ms("ranma.set { mouse_double_click = 650 }"), 650);
+        assert!(with_user("ranma.set { mouse_double_click = 50 }").is_err());
     }
 
     #[test]
