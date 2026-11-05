@@ -2138,10 +2138,10 @@ Every layout \fBload_layout NAME\fR takes: \fB{ { name, saved }, ... }\fR, \fBin
 Use that profile, or \fBnil\fR for none (see Profiles\fR).
 .TP
 \fBranma.profiles()\fR
-Every declared profile, sorted by name: \fB{ { name, active, source, line, set, bar, titlebar, toolbars, theme }, ... }\fR. \fBactive\fR marks the one in use; \fBsource\fR and \fBline\fR are where the \fBranma.profile\fR call that won was made (\fBinit.lua\fR, a plugin's file, a module it \fBrequire\fRd, a file it \fBdofile\fRd), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is \fBnil\fR. Read when asked; \fBranma.has("profiles")\fR.
+Every declared profile, sorted by name: \fB{ { name, active, reloads, source, line, set, bar, titlebar, toolbars, theme }, ... }\fR. \fBactive\fR marks the one in use; \fBreloads\fR that it has a \fBsetup\fR, so switching to or from it reloads; \fBsource\fR and \fBline\fR are where the \fBranma.profile\fR call that won was made (\fBinit.lua\fR, a plugin's file, a module it \fBrequire\fRd, a file it \fBdofile\fRd), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is \fBnil\fR. Read when asked; \fBranma.has("profiles")\fR.
 .TP
 \fBranma.client()\fR
-\fB{ cols, rows, mobile, remote, outer, focused }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, whether its window has the desktop's focus (\fBfocused\fR: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; \fBclient_focus\fR says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
+\fB{ cols, rows, mobile, remote, outer, focused }\fR: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (\fBRANMA_MOBILE=1\fR or \fBattach \-\-mobile\fR), whether it came over SSH, whether its window has the desktop's focus (\fBfocused\fR: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; \fBclient_focus\fR says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. \fBouter\fR is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it on its own (a profile can switch it, \fBtheme = { base = ... }\fR, from a \fBdriver_change\fR hook); for uniform colours, \fBtheme_colors = "outer"\fR already applies only when nested.
 .TP
 \fBranma.unwatch(id)\fR
 Stop a \fBpane:watch\fR.
@@ -3062,6 +3062,9 @@ your own for the phone takes another name, or replaces that one.
 once, at load). \fBtheme\fR takes theme keys, used over the theme while the
 profile is: the frame, which \fBset\fR cannot reach, as in
 \fBtheme = { bar = { position = "hidden" }, border = { style = "none" } }\fR.
+\fBbase\fR among them names another theme file to build over instead of the
+one in use (\fBtheme = { base = "latte", border = { style = "none" } }\fR), so
+a profile can be a different theme and not only keys over yours.
 They are checked when \fBinit.lua\fR loads, as strictly as a theme file;
 \fBbar\fR what \fBranma.bar\fR takes; \fBtitlebar\fR what \fBranma.titlebar\fR takes, over
 the base's, so a look that needs a theme and its pieces switches whole;
@@ -3081,6 +3084,34 @@ screen's, and a workspace pinned to \fBmaster\fR at the desk would otherwise
 stay three columns on a phone. The pin is kept, and is back when the
 profile goes; one made meanwhile waits for it too, and says so. A profile
 that names no layout leaves the pins alone.
+.IP \(bu 2
+\fBsetup = function() ... end\fR changes anything \fBinit.lua\fR can: binds,
+\fBranma.set { theme = "latte" }\fR, a plugin's options, hooks, rules,
+modules. It runs last in a load made for the profile, after \fBinit.lua\fR
+and \fBsettings.toml\fR, so the profile has the last word:
+.PP
+  \fBlua
+  ranma.profile("present", {
+    theme = { bar = { position = "hidden" } },
+    setup = function()
+      ranma.set { theme = "latte" }
+      ranma.bind("f5", "fullscreen")
+    end,
+  })
+\fR
+.PP
+  \fBA switch to or from a profile with a \fBsetup\fB reloads the configuration\fR
+  (for the new profile), where every other switch is an overlay taken on and
+  off with nothing loaded again. Going back is exact either way: leaving it
+  loads the configuration without the \fBsetup\fR. A reload keeps the panes and
+  their programs, and drops what lives in the Lua it replaces: timers,
+  badges, pane watches, open plugin screens. Plugins load again and set
+  theirs up, and a toast (\fBprofile present (reloaded)\fR) says why a screen
+  closed. There is no confirm: the switches a hook makes (mobile.ranma's,
+  on \fBdriver_change\fR) have nobody to ask, and switching back undoes it. A
+  \fBsetup\fR that fails keeps the configuration in use, as any config error does,
+  and \fBranma.use_profile\fR inside one is refused. \fBranma.profiles()\fR says
+  \fBreloads = true\fR for these.
 .IP \(bu 2
 \fBranma.use_profile(name)\fR works in binds and hooks. From a key or a script,
 use the action: \fBranma.bind("p", "profile mobile")\fR, \fBranma action "profile none"\fR.
@@ -3336,6 +3367,12 @@ the \fBworkspace_rename\fR event
 .TP
 \fBplacement\fR
 \fBranma.placement\fR policies
+.TP
+\fBprofile.setup\fR
+a profile's \fBsetup\fR, run in a load made for it
+.TP
+\fBprofile.theme_base\fR
+a profile's \fBtheme = { base = "name" }\fR
 .TP
 \fBprofiles\fR
 \fBranma.profiles()\fR, with each profile's \fBsource\fR and \fBline\fR

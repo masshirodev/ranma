@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- A profile can be another theme, `theme = { base = "latte", ... }`, and
+  change anything `init.lua` can with `setup = function() ... end`, run
+  last in a load made for it (binds, `ranma.set { theme = ... }`, plugin
+  options, hooks). A switch to or from such a profile reloads the
+  configuration, with a toast saying so; other switches are as before.
+  `ranma.has("profile.theme_base")`, `ranma.has("profile.setup")`.
 - `ranma.profiles()`: every declared profile, with whether it is in use,
   the file and line that declared it, and what it sets; and a
   `profile_change` hook (`profile`, `previous`) when another one comes into

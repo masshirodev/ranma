@@ -1560,8 +1560,8 @@ Inside a bind function, a hook, a module's `render`, a timer, or a
 | `ranma.state()` | `{ session, sessions, workspace, workspaces, names, hidden, modules, profile, fullscreen, layout, own_layout, focused, title, mode, panes }`: the shown session and all of them (names), the current workspace (0 while the scratchpad is shown), the occupied ones, the session's workspace names (`names[2] == "kumiko"`; named workspaces only, empty ones included), its hidden workspaces (`hidden`, see `hide_workspace`), the bar modules on screen (`modules`), the profile in use (or `nil`), whether the current workspace is fullscreen, its layout (`"dwindle"`, `"master"`, …) and whether that is its own (`workspace_layout`) rather than the `layout` setting or a profile's, the focused pane's id and title, `"wm"`, `"normal"` or `"copy"`, and the pane count. |
 | `ranma.layouts()` | Every layout `load_layout NAME` takes: `{ { name, saved }, ... }`, `init.lua`'s (`saved = false`) first, then the saved ones they do not shadow. Read when asked. |
 | `ranma.use_profile(name)` | Use that profile, or `nil` for none (see [Profiles](#profiles--ranmaprofilename-def)). |
-| `ranma.profiles()` | Every declared profile, sorted by name: `{ { name, active, source, line, set, bar, titlebar, toolbars, theme }, ... }`. `active` marks the one in use; `source` and `line` are where the `ranma.profile` call that won was made (`init.lua`, a plugin's file, a module it `require`d, a file it `dofile`d), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is `nil`. Read when asked; `ranma.has("profiles")`. |
-| `ranma.client()` | `{ cols, rows, mobile, remote, outer, focused }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, whether its window has the desktop's focus (`focused`: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; `client_focus` says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it (a profile cannot change the theme); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
+| `ranma.profiles()` | Every declared profile, sorted by name: `{ { name, active, reloads, source, line, set, bar, titlebar, toolbars, theme }, ... }`. `active` marks the one in use; `reloads` that it has a `setup`, so switching to or from it reloads; `source` and `line` are where the `ranma.profile` call that won was made (`init.lua`, a plugin's file, a module it `require`d, a file it `dofile`d), so a plugin can tell the profiles it declared from everyone else's; the rest are the fields as declared, with the bar's shorthands written out, and a field left out is `nil`. Read when asked; `ranma.has("profiles")`. |
+| `ranma.client()` | `{ cols, rows, mobile, remote, outer, focused }`: the terminal driving the screen (the one last typed in, when several show it), its size, whether it is a phone or a tablet (`RANMA_MOBILE=1` or `attach --mobile`), whether it came over SSH, whether its window has the desktop's focus (`focused`: from the terminal's focus reports, true until it says otherwise, so a terminal that never reports always looks focused; `client_focus` says when it changes), and whether a ranma runs around it (it answered at attach, in a protocol this build speaks), so this one is nested. `outer` is per attach, not per server: the same server is nested from one terminal and not from another. The theme cannot follow it on its own (a profile can switch it, `theme = { base = ... }`, from a `driver_change` hook); for uniform colours, `theme_colors = "outer"` already applies only when nested. |
 
 | `ranma.get(key)` | An option's value in force; see [Options](#options--ranmaoptionkey-spec-ranmagetkey). Works at load too. |
 | `ranma.screen { ... }` | A screen of the plugin's own; see [Screens](#screens--ranmascreen--). |
@@ -2336,6 +2336,9 @@ your own for the phone takes another name, or replaces that one.
   once, at load). `theme` takes theme keys, used over the theme while the
   profile is: the frame, which `set` cannot reach, as in
   `theme = { bar = { position = "hidden" }, border = { style = "none" } }`.
+  `base` among them names another theme file to build over instead of the
+  one in use (`theme = { base = "latte", border = { style = "none" } }`), so
+  a profile can be a different theme and not only keys over yours.
   They are checked when `init.lua` loads, as strictly as a theme file;
   `bar` what `ranma.bar` takes; `titlebar` what `ranma.titlebar` takes, over
   the base's, so a look that needs a theme and its pieces switches whole;
@@ -2353,6 +2356,33 @@ your own for the phone takes another name, or replaces that one.
   stay three columns on a phone. The pin is kept, and is back when the
   profile goes; one made meanwhile waits for it too, and says so. A profile
   that names no layout leaves the pins alone.
+- `setup = function() ... end` changes anything `init.lua` can: binds,
+  `ranma.set { theme = "latte" }`, a plugin's options, hooks, rules,
+  modules. It runs last in a load made for the profile, after `init.lua`
+  and `settings.toml`, so the profile has the last word:
+
+  ```lua
+  ranma.profile("present", {
+    theme = { bar = { position = "hidden" } },
+    setup = function()
+      ranma.set { theme = "latte" }
+      ranma.bind("f5", "fullscreen")
+    end,
+  })
+  ```
+
+  **A switch to or from a profile with a `setup` reloads the configuration**
+  (for the new profile), where every other switch is an overlay taken on and
+  off with nothing loaded again. Going back is exact either way: leaving it
+  loads the configuration without the `setup`. A reload keeps the panes and
+  their programs, and drops what lives in the Lua it replaces: timers,
+  badges, pane watches, open plugin screens. Plugins load again and set
+  theirs up, and a toast (`profile present (reloaded)`) says why a screen
+  closed. There is no confirm: the switches a hook makes (mobile.ranma's,
+  on `driver_change`) have nobody to ask, and switching back undoes it. A
+  `setup` that fails keeps the configuration in use, as any config error does,
+  and `ranma.use_profile` inside one is refused. `ranma.profiles()` says
+  `reloads = true` for these.
 - `ranma.use_profile(name)` works in binds and hooks. From a key or a script,
   use the action: `ranma.bind("p", "profile mobile")`, `ranma action "profile none"`.
 - A second `ranma.profile` of a name already declared replaces it whole, as a
@@ -2506,6 +2536,8 @@ the spelling against this table:
 | `pane.cursor` | `pane:cursor()` |
 | `pane.style` | `pane:style` and a rule's `style` |
 | `placement` | `ranma.placement` policies |
+| `profile.setup` | a profile's `setup`, run in a load made for it |
+| `profile.theme_base` | a profile's `theme = { base = "name" }` |
 | `profiles` | `ranma.profiles()`, with each profile's `source` and `line` |
 | `rule.group` | a window rule's `group` |
 | `rule.match` | window rules matching `program`, `cwd` and `host` |

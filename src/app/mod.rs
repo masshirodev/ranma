@@ -270,6 +270,10 @@ enum HakoClone {
     Failed,
 }
 
+/// A test's stand-in for loading the config directory, given the profile.
+#[cfg(test)]
+type TestLoader = Box<dyn Fn(Option<&str>) -> anyhow::Result<Config>>;
+
 pub struct App {
     pub config: Config,
     pub panes: HashMap<PaneId, Pane>,
@@ -342,6 +346,10 @@ pub struct App {
     /// Bumped on config reload so results of the old config's execs are dropped.
     module_generation: u64,
     reload_at: Option<Instant>,
+    /// What a reload loads, in place of the config directory: a test's
+    /// config, so a reload under test never reads the user's files.
+    #[cfg(test)]
+    reload_with: Option<TestLoader>,
 
     picker: Option<crate::picker::Picker>,
     /// The settings panel, while open (`settings`).
@@ -612,6 +620,8 @@ impl App {
             module_running: HashSet::new(),
             module_generation: 0,
             reload_at: None,
+            #[cfg(test)]
+            reload_with: None,
             picker: None,
             settings: None,
             plugin_screen: None,
@@ -3713,6 +3723,20 @@ impl App {
         if self.config.profile.as_deref() == name {
             return;
         }
+        if let Some(n) = name
+            && !self.config.profiles.contains_key(n)
+        {
+            self.status = Some(self.config.unknown_profile(n));
+            return;
+        }
+        // A profile with a setup, going or coming, changes what the
+        // configuration is made of: it is loaded again, for the new one.
+        if self.config.profile_reloads(self.config.profile.as_deref())
+            || self.config.profile_reloads(name)
+        {
+            self.reload_for(name.map(str::to_string), true);
+            return;
+        }
         let previous = self.config.profile.clone();
         if let Err(e) = self.config.use_profile(name) {
             self.status = Some(e);
@@ -3736,12 +3760,36 @@ impl App {
     }
 
     fn reload_config(&mut self) {
+        self.reload_for(self.config.profile.clone(), false);
+    }
+
+    /// Load the configuration again, for `profile` (its setup runs in the
+    /// load), and put it in use. `switching` is a profile switch that had to
+    /// reload, which says so: what a reload drops (plugin screens, timers,
+    /// badges) is then not a surprise.
+    fn reload_for(&mut self, profile: Option<String>, switching: bool) {
         self.reload_at = None;
         // A reload can come from a timer, with no input event to trigger a frame;
         // either outcome puts a message in the bar that must be drawn now.
         self.dirty = true;
-        match config::load(config::config_dir().as_deref()) {
-            Ok(cfg) => self.adopt_config(cfg),
+        #[cfg(test)]
+        let loaded = match &self.reload_with {
+            Some(f) => f(profile.as_deref()),
+            None => config::load_as(config::config_dir().as_deref(), profile.as_deref()),
+        };
+        #[cfg(not(test))]
+        let loaded = config::load_as(config::config_dir().as_deref(), profile.as_deref());
+        match loaded {
+            Ok(cfg) => {
+                self.adopt_config(cfg, profile);
+                if switching {
+                    let text = match self.config.profile.as_deref() {
+                        Some(p) => format!("profile {p} (reloaded)"),
+                        None => "no profile (reloaded)".to_string(),
+                    };
+                    self.toast(text, crate::toast::Level::Normal, None);
+                }
+            }
             // Keep running on the old config; a typo must never take the session down.
             Err(e) => {
                 let msg = format!("{e:#}");
@@ -3755,14 +3803,13 @@ impl App {
 
     /// Run on a configuration just loaded in place of the one in use: what a
     /// reload keeps, what it starts over, and the hooks that hear of it.
-    fn adopt_config(&mut self, mut cfg: Config) {
-        // The profile in use stays in use, if the new config still has it.
-        let kept = self.config.profile.take();
-        let mut lost = None;
-        if let Some(name) = kept.as_deref()
+    fn adopt_config(&mut self, mut cfg: Config, profile: Option<String>) {
+        // `profile` is put in use, if the new config has it: the one in use
+        // on a plain reload, the one switched to on a switch that reloads.
+        let previous = self.config.profile.clone();
+        if let Some(name) = profile.as_deref()
             && cfg.use_profile(Some(name)).is_err()
         {
-            lost = kept.clone();
             self.toast(
                 format!("profile `{name}` is gone from the config; using none"),
                 crate::toast::Level::Normal,
@@ -3826,8 +3873,8 @@ impl App {
             .map(|(id, _)| *id)
             .collect();
         self.emit(HookEvent::ConfigReload, |_| Ok(()));
-        if lost.is_some() {
-            self.emit_profile_change(lost);
+        if self.config.profile != previous {
+            self.emit_profile_change(previous);
         }
         self.start_hako();
     }
@@ -6833,18 +6880,100 @@ mod tests {
             let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
             t.sequence_values::<String>().map(|v| v.unwrap()).collect()
         };
-        a.adopt_config(crate::config::load_from(None, None, Some(&with)).unwrap());
+        a.adopt_config(
+            crate::config::load_from(None, None, Some(&with)).unwrap(),
+            a.config.profile.clone(),
+        );
         assert_eq!(a.config.profile.as_deref(), Some("mobile"));
         assert!(
             seen(&a).is_empty(),
             "kept over the reload: no change to hear"
         );
-        a.adopt_config(crate::config::load_from(None, None, Some(src)).unwrap());
+        a.adopt_config(
+            crate::config::load_from(None, None, Some(src)).unwrap(),
+            a.config.profile.clone(),
+        );
         assert_eq!(a.config.profile, None);
         assert_eq!(
             seen(&a),
             vec!["nil<mobile"],
             "the new config's hook hears it go"
+        );
+    }
+
+    #[test]
+    fn a_switch_to_or_from_a_profile_with_setup_reloads_for_it() {
+        let src: &'static str = r#"
+            seen = {}
+            ranma.bind("f5", "equalize")
+            ranma.on("profile_change", function(e)
+              seen[#seen + 1] = tostring(e.profile) .. "<" .. tostring(e.previous)
+            end)
+            ranma.profile("p", { setup = function() ranma.bind("f5", "help") end })
+            ranma.profile("plain", {})
+            ranma.profile("boom", { setup = function() error("boom") end })
+        "#;
+        let mut a = app(Some(src));
+        a.reload_with = Some(Box::new(move |p| {
+            crate::config::load_from_as(None, None, Some(src), p)
+        }));
+        let f5 = |a: &App| a.config.binds[&"f5".parse().unwrap()].label.clone();
+        let seen = |a: &App| -> Vec<String> {
+            let t: mlua::Table = a.config.lua.globals().get("seen").unwrap();
+            t.sequence_values::<String>().map(|v| v.unwrap()).collect()
+        };
+        let toasts = |a: &App| -> Vec<String> {
+            a.toast_layout()
+                .iter()
+                .map(|(t, _, _)| t.text.clone())
+                .collect()
+        };
+        a.run_action("profile p".parse().unwrap());
+        assert_eq!(a.config.profile.as_deref(), Some("p"));
+        assert_eq!(f5(&a), "help", "loaded again, with its setup");
+        assert_eq!(seen(&a), vec!["p<nil"], "the new config's hook hears it");
+        assert!(
+            toasts(&a).contains(&"profile p (reloaded)".to_string()),
+            "{:?}",
+            toasts(&a)
+        );
+        a.run_action(Action::ReloadConfig);
+        assert_eq!(
+            (a.config.profile.as_deref(), f5(&a).as_str()),
+            (Some("p"), "help"),
+            "a reload keeps it whole"
+        );
+        assert!(seen(&a).is_empty(), "and is no change");
+        a.run_action("profile plain".parse().unwrap());
+        assert_eq!(
+            (a.config.profile.as_deref(), f5(&a).as_str()),
+            (Some("plain"), "equalize"),
+            "leaving it reloads too"
+        );
+        assert_eq!(seen(&a), vec!["plain<p"]);
+        a.run_action("profile none".parse().unwrap());
+        assert_eq!(
+            seen(&a),
+            vec!["plain<p", "nil<plain"],
+            "between overlays, no reload"
+        );
+        a.status = None;
+        a.run_action("profile boom".parse().unwrap());
+        assert_eq!(
+            a.config.profile, None,
+            "a setup that fails keeps the config in use"
+        );
+        assert!(
+            a.status.as_deref().unwrap_or("").contains("config error"),
+            "{:?}",
+            a.status
+        );
+        a.run_action("profile nope".parse().unwrap());
+        assert!(
+            a.status
+                .as_deref()
+                .unwrap_or("")
+                .contains("no profile `nope`")
         );
     }
 

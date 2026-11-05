@@ -1146,6 +1146,11 @@ pub struct Profile {
     /// rest by this, and a later declaration of the same name wins.
     #[serde(skip)]
     source: Option<(String, u32)>,
+    /// `setup = function() ... end`: run after init.lua (and settings.toml)
+    /// in a load made for this profile, so a switch to or from it is a
+    /// reload (DESIGN.md, "A profile's setup is one more layer").
+    #[serde(skip)]
+    setup: Option<Rc<RegistryKey>>,
 }
 
 /// One declared profile, as `ranma.profiles()` answers: made once per load,
@@ -1156,6 +1161,8 @@ pub struct ProfileEntry {
     pub source: Option<String>,
     pub line: Option<u32>,
     pub declared: serde_json::Value,
+    /// It has a `setup`, so switching to or from it reloads the config.
+    pub reloads: bool,
 }
 
 impl Profile {
@@ -1899,16 +1906,7 @@ impl Config {
         let mut profile_layout = None;
         if let Some(name) = name {
             let Some(p) = self.profiles.get(name) else {
-                let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
-                known.sort_unstable();
-                return Err(format!(
-                    "no profile `{name}` (defined: {})",
-                    if known.is_empty() {
-                        "none".into()
-                    } else {
-                        known.join(", ")
-                    }
-                ));
+                return Err(self.unknown_profile(name));
             };
             profile_layout = p.set.layout;
             apply_settings(&mut settings, p.set.clone(), &format!("profile `{name}`"))?;
@@ -1931,6 +1929,27 @@ impl Config {
         self.profile = name.map(str::to_string);
         self.profile_layout = profile_layout;
         Ok(())
+    }
+
+    /// What a switch to a profile nobody declared says.
+    pub fn unknown_profile(&self, name: &str) -> String {
+        let mut known: Vec<&str> = self.profiles.keys().map(String::as_str).collect();
+        known.sort_unstable();
+        format!(
+            "no profile `{name}` (defined: {})",
+            if known.is_empty() {
+                "none".into()
+            } else {
+                known.join(", ")
+            }
+        )
+    }
+
+    /// The profile has a `setup`, so a switch to or from it is a reload: a
+    /// setup's changes are part of the load, not an overlay to take off.
+    pub fn profile_reloads(&self, name: Option<&str>) -> bool {
+        name.and_then(|n| self.profiles.get(n))
+            .is_some_and(|p| p.setup.is_some())
     }
 
     /// The layout a workspace whose own layout is `own` is laid out in: the
@@ -1957,6 +1976,7 @@ fn profile_entries(profiles: &HashMap<String, Profile>) -> Rc<[ProfileEntry]> {
             source: p.source.as_ref().map(|(s, _)| s.clone()),
             line: p.source.as_ref().map(|(_, l)| *l),
             declared: p.declared.clone(),
+            reloads: p.setup.is_some(),
         })
         .collect();
     v.sort_by(|a, b| a.name.cmp(&b.name));
@@ -2541,6 +2561,8 @@ pub const CAPABILITIES: &[&str] = &[
     "pane.state",
     "pane.style",
     "placement",
+    "profile.setup",
+    "profile.theme_base",
     "profiles",
     "rule.group",
     "rule.match",
@@ -3027,6 +3049,34 @@ fn install_api(
         "profile",
         lua.create_function(|lua, (name, value): (String, Value)| {
             let who = format!("ranma.profile(\"{name}\")");
+            // `setup` is a function, which neither the strict parse nor the
+            // copy kept for ranma.profiles() can hold: taken out first, from
+            // a shallow copy, so the caller's table is left as it was.
+            let mut setup = None;
+            let value = match value {
+                Value::Table(t) => {
+                    let copy = lua.create_table()?;
+                    for pair in t.pairs::<Value, Value>() {
+                        let (k, v) = pair?;
+                        copy.raw_set(k, v)?;
+                    }
+                    match copy.raw_get::<Value>("setup")? {
+                        Value::Nil => {}
+                        Value::Function(f) => {
+                            setup = Some(Rc::new(lua.create_registry_value(f)?));
+                            copy.raw_set("setup", Value::Nil)?;
+                        }
+                        other => {
+                            return Err(rt_err(format!(
+                                "{who}: setup must be a function (got {})",
+                                other.type_name()
+                            )));
+                        }
+                    }
+                    Value::Table(copy)
+                }
+                v => v,
+            };
             if let Value::Table(t) = &value {
                 normalize_titlebar(
                     lua,
@@ -3044,12 +3094,12 @@ fn install_api(
             let source = profile_source(lua);
             let mut def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
-                    "{who}: {e} (a profile takes set, bar, titlebar, toolbars and theme)"
+                    "{who}: {e} (a profile takes set, bar, titlebar, toolbars, theme and setup)"
                 ))
             })?;
             if def.set.theme.is_some() {
                 return Err(rt_err(format!(
-                    "{who}: a profile cannot change the theme; the theme is read once at load"
+                    "{who}: a profile's set cannot name the theme; use theme = {{ base = \"name\" }}, or ranma.set in its setup"
                 )));
             }
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
@@ -3059,6 +3109,7 @@ fn install_api(
             apply_settings(&mut probe, def.set.clone(), &format!("{who} set")).map_err(rt_err)?;
             def.declared = declared;
             def.source = source;
+            def.setup = setup;
             // A second declaration of a name replaces the first, as a later
             // ranma.set does: plugins load before init.lua, so the user's
             // word is final, and ranma.profiles() says whose won.
@@ -3767,6 +3818,7 @@ fn install_api(
                 t.set("active", active.as_deref() == Some(e.name.as_str()))?;
                 t.set("source", e.source.as_deref())?;
                 t.set("line", e.line)?;
+                t.set("reloads", e.reloads)?;
                 out.set(i + 1, t)?;
             }
             Ok(out)
@@ -3922,12 +3974,27 @@ fn install_api(
 
 /// Load the defaults, then `<config_dir>/init.lua` if it exists, then the theme.
 pub fn load(config_dir: Option<&Path>) -> Result<Config> {
-    load_dir(config_dir, crate::hako::dir().as_deref())
+    load_as(config_dir, None)
+}
+
+/// [`load`] for a profile: its `setup`, when it has one, runs after
+/// everything else the configuration is made of. The profile is not put in
+/// use; the caller does that (`Config::use_profile`).
+pub fn load_as(config_dir: Option<&Path>, profile: Option<&str>) -> Result<Config> {
+    load_dir_as(config_dir, crate::hako::dir().as_deref(), profile)
 }
 
 /// [`load`] with hako's directory given, or left out with `None` (tests, which
 /// must not pick up the machine's own clone).
 pub fn load_dir(config_dir: Option<&Path>, hako_dir: Option<&Path>) -> Result<Config> {
+    load_dir_as(config_dir, hako_dir, None)
+}
+
+fn load_dir_as(
+    config_dir: Option<&Path>,
+    hako_dir: Option<&Path>,
+    profile: Option<&str>,
+) -> Result<Config> {
     let user_file = config_dir
         .map(|d| d.join("init.lua"))
         .filter(|p| p.is_file());
@@ -3937,7 +4004,13 @@ pub fn load_dir(config_dir: Option<&Path>, hako_dir: Option<&Path>) -> Result<Co
         }
         None => None,
     };
-    load_full(config_dir, user_file, user_src.as_deref(), hako_dir)
+    load_full(
+        config_dir,
+        user_file,
+        user_src.as_deref(),
+        hako_dir,
+        profile,
+    )
 }
 
 /// [`load`] with the user source passed in, so tests need no files for it,
@@ -3947,7 +4020,17 @@ pub fn load_from(
     user_file: Option<PathBuf>,
     user_src: Option<&str>,
 ) -> Result<Config> {
-    load_full(config_dir, user_file, user_src, None)
+    load_full(config_dir, user_file, user_src, None, None)
+}
+
+/// [`load_from`] for a profile, as [`load_as`].
+pub fn load_from_as(
+    config_dir: Option<&Path>,
+    user_file: Option<PathBuf>,
+    user_src: Option<&str>,
+    profile: Option<&str>,
+) -> Result<Config> {
+    load_full(config_dir, user_file, user_src, None, profile)
 }
 
 /// The whole load. `hako_dir` is where hako is, or would be cloned to; `None`
@@ -3957,6 +4040,7 @@ pub fn load_full(
     user_file: Option<PathBuf>,
     user_src: Option<&str>,
     hako_dir: Option<&Path>,
+    profile: Option<&str>,
 ) -> Result<Config> {
     // Renames said by an earlier load (a theme preview) are not this one's.
     crate::renames::take();
@@ -4105,6 +4189,35 @@ pub fn load_full(
         b.set_table = file_set;
     }
 
+    // The profile's setup, last: over init.lua and over settings.toml, so a
+    // theme it sets wins over one choose_theme saved. What it sets is not
+    // the file's, so the settings panel goes on reading init.lua's values.
+    let setup = profile.and_then(|name| {
+        let b = lua
+            .app_data_ref::<Builder>()
+            .expect("builder installed above");
+        b.profiles
+            .get(name)
+            .and_then(|p| p.setup.clone())
+            .map(|k| (name, k))
+    });
+    if let Some((name, key)) = setup {
+        let kept = lua
+            .app_data_ref::<Builder>()
+            .expect("builder installed above")
+            .set_table
+            .clone();
+        let f: Function = lua
+            .registry_value(&key)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        watchdog
+            .run(LOAD_BUDGET, || f.call::<()>(()))
+            .map_err(|e| anyhow::anyhow!("ranma.profile(\"{name}\") setup: {e}"))?;
+        lua.app_data_mut::<Builder>()
+            .expect("builder installed above")
+            .set_table = kept;
+    }
+
     let mut builder = lua
         .remove_app_data::<Builder>()
         .expect("builder installed above");
@@ -4235,14 +4348,22 @@ pub fn load_full(
     // the first time the profile is used.
     for (name, p) in builder.profiles.iter_mut() {
         if let Some(t) = &p.theme {
+            // `base` names the theme file the profile is built over, instead
+            // of the one in use; the other keys go over it as before.
+            let mut t = t.clone();
+            let base = match t.remove("base") {
+                None => builder.settings.theme.clone(),
+                Some(toml::Value::String(b)) => b,
+                Some(v) => anyhow::bail!(
+                    "ranma.profile(\"{name}\"): theme.base must be a theme's name, not {}",
+                    v.type_str()
+                ),
+            };
             let mut overlay = panel.theme.clone();
-            theme::merge_into(&mut overlay, t.clone());
-            let (built, _) = theme::load_over(
-                &builder.settings.theme,
-                &theme::theme_dirs(config_dir),
-                Some(&overlay),
-            )
-            .with_context(|| format!("ranma.profile(\"{name}\"): theme"))?;
+            theme::merge_into(&mut overlay, t);
+            let (built, _) =
+                theme::load_over(&base, &theme::theme_dirs(config_dir), Some(&overlay))
+                    .with_context(|| format!("ranma.profile(\"{name}\"): theme"))?;
             p.built = Some(built);
         }
     }
@@ -5346,6 +5467,128 @@ mod tests {
         assert_eq!(e[0].declared["bar"]["right"][0], "mode");
         assert_eq!(e[0].declared["theme"]["border"]["style"], "none");
         assert!(e[0].declared.get("set").is_none(), "nothing of the first");
+    }
+
+    #[test]
+    fn a_profiles_theme_can_be_built_over_another_theme_file() {
+        let dir = config_tree(
+            "profile-base",
+            &[
+                ("themes/red.toml", "[colors]\nborder_active = \"#ff0000\"\n"),
+                (
+                    "init.lua",
+                    r#"ranma.profile("r", { theme = { base = "red", bar = { position = "hidden" } } })"#,
+                ),
+            ],
+        );
+        let mut cfg = load_dir(Some(&dir), None).unwrap();
+        let red = crate::theme::Color::Rgb(0xff, 0, 0);
+        let base = cfg.theme.colors.border_active;
+        assert_ne!(base, red);
+        cfg.use_profile(Some("r")).unwrap();
+        assert_eq!(cfg.theme.colors.border_active, red, "the file it names");
+        assert_eq!(
+            cfg.profile_entries[0].declared["theme"]["base"], "red",
+            "said as declared"
+        );
+        cfg.use_profile(None).unwrap();
+        assert_eq!(cfg.theme.colors.border_active, base, "and back");
+        for (src, needle) in [
+            (
+                r#"ranma.profile("r", { theme = { base = "nope" } })"#,
+                "nope",
+            ),
+            (
+                r#"ranma.profile("r", { theme = { base = 3 } })"#,
+                "theme.base must be a theme's name",
+            ),
+            (
+                r#"ranma.profile("r", { set = { theme = "red" } })"#,
+                "theme = { base",
+            ),
+        ] {
+            std::fs::write(dir.join("init.lua"), src).unwrap();
+            let Err(e) = load_dir(Some(&dir), None) else {
+                panic!("{src} loaded");
+            };
+            let e = format!("{e:#}");
+            assert!(e.contains(needle), "{src}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_profiles_setup_runs_last_in_a_load_made_for_it() {
+        let src = r#"
+            ranma.set { layout = "master" }
+            ranma.bind("f5", "equalize")
+            local def = {
+              set = { mouse = "hover" },
+              setup = function()
+                ranma.bind("f5", "help")
+                ranma.set { layout = "dwindle" }
+              end,
+            }
+            ranma.profile("p", def)
+            assert(def.setup, "the caller's table is left as it was")
+            ranma.profile("plain", {})
+        "#;
+        let cfg = load_from(None, None, Some(src)).unwrap();
+        assert_eq!(
+            bound(&cfg, "f5").as_deref(),
+            Some("equalize"),
+            "no profile: no setup"
+        );
+        assert_eq!(cfg.settings.layout, Layout::Master);
+        assert!(cfg.profile_reloads(Some("p")));
+        assert!(!cfg.profile_reloads(Some("plain")) && !cfg.profile_reloads(None));
+        let p = cfg.profile_entries.iter().find(|e| e.name == "p").unwrap();
+        assert!(p.reloads && p.declared.get("setup").is_none(), "{p:?}");
+        let mut cfg = load_from_as(None, None, Some(src), Some("p")).unwrap();
+        assert_eq!(
+            bound(&cfg, "f5").as_deref(),
+            Some("help"),
+            "setup has the last word"
+        );
+        assert_eq!(cfg.settings.layout, Layout::Dwindle);
+        cfg.use_profile(Some("p")).unwrap();
+        assert_eq!(
+            cfg.settings.mouse,
+            MouseMode::Hover,
+            "and its overlay goes on top"
+        );
+        let plain = load_from_as(None, None, Some(src), Some("plain")).unwrap();
+        assert_eq!(
+            bound(&plain, "f5").as_deref(),
+            Some("equalize"),
+            "no setup to run"
+        );
+        for (body, needle) in [
+            (
+                "setup = function() error('boom') end",
+                "ranma.profile(\"p\") setup",
+            ),
+            (
+                "setup = function() ranma.use_profile(nil) end",
+                "not at config load",
+            ),
+            ("setup = 3", "setup must be a function (got integer)"),
+        ] {
+            let src = format!("ranma.profile('p', {{ {body} }})");
+            let e = load_from_as(None, None, Some(&src), Some("p"))
+                .err()
+                .map(|e| format!("{e:#}"))
+                .unwrap_or_default();
+            assert!(e.contains(needle), "{body}: {e}");
+        }
+        assert!(
+            load_from(
+                None,
+                None,
+                Some("ranma.profile('p', { setup = function() error('boom') end })")
+            )
+            .is_ok(),
+            "a setup is run only for its own profile"
+        );
     }
 
     /// The mobile view is mobile.ranma's, which the default hako setup
@@ -6491,7 +6734,7 @@ mod tests {
     #[test]
     fn hako_is_set_up_with_the_default_specs_when_init_lua_says_nothing() {
         let hako = fake_hako("default");
-        let cfg = load_full(None, None, None, Some(&hako)).unwrap();
+        let cfg = load_full(None, None, None, Some(&hako), None).unwrap();
         assert_eq!(cfg.hako, crate::hako::State::Loaded(hako.clone()));
         assert_eq!(hako_calls(&cfg), 1);
         assert_eq!(first_spec(&cfg).as_deref(), Some(crate::hako::REPO));
@@ -6513,6 +6756,7 @@ mod tests {
             None,
             Some(r#"require("hako").setup({ "me/thing.ranma" }, { lockfile = "/tmp/x.json" })"#),
             Some(&hako),
+            None,
         )
         .unwrap();
         assert_eq!(hako_calls(&cfg), 1, "set up once, by init.lua");
@@ -6528,6 +6772,7 @@ mod tests {
             None,
             Some(r#"ranma.set { plugin_manager = "none" }"#),
             Some(&hako),
+            None,
         )
         .unwrap();
         assert_eq!(cfg.hako, crate::hako::State::Off);
@@ -6539,6 +6784,7 @@ mod tests {
             None,
             Some(r#"ranma.set { plugin_manager = "none" } require("hako")"#),
             Some(&hako),
+            None,
         )
         .err()
         .map(|e| format!("{e:#}"))
@@ -6552,7 +6798,7 @@ mod tests {
     #[test]
     fn a_missing_hako_is_reported_for_the_app_to_clone() {
         let nowhere = std::env::temp_dir().join("ranma-hako-missing-never-made");
-        let cfg = load_full(None, None, None, Some(&nowhere)).unwrap();
+        let cfg = load_full(None, None, None, Some(&nowhere), None).unwrap();
         assert_eq!(cfg.hako, crate::hako::State::Missing(nowhere));
         assert!(cfg.packages.is_empty());
         // Tests and `load_from` leave the manager out entirely.
@@ -6569,7 +6815,7 @@ mod tests {
                 "return { setup = function() error('no network') end }",
             )],
         );
-        let cfg = load_full(None, None, None, Some(&hako)).unwrap();
+        let cfg = load_full(None, None, None, Some(&hako), None).unwrap();
         let load = cfg
             .plugins
             .iter()

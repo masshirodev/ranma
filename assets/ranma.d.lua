@@ -275,7 +275,9 @@ function ranma.session(name, opts) end
 
 ---Overrides used over the base configuration while the profile is in use.
 ---@param name string
----@param def { set?: ranma.Settings, bar?: ranma.Bar, titlebar?: ranma.Titlebar, toolbars?: string[], theme?: table }
+---theme.base names a theme file to build over. setup runs last, in a load
+---made for the profile, so switching to or from one with it reloads.
+---@param def { set?: ranma.Settings, bar?: ranma.Bar, titlebar?: ranma.Titlebar, toolbars?: string[], theme?: table, setup?: fun() }
 function ranma.profile(name, def) end
 
 ---@class ranma.Toolbar
@@ -447,6 +449,7 @@ function ranma.use_profile(name) end
 ---@class ranma.ProfileInfo
 ---@field name string
 ---@field active boolean it is the profile in use
+---@field reloads boolean it has a setup: switching to or from it reloads
 ---@field source string? the file whose ranma.profile call declared it (the last, if several did)
 ---@field line integer? the line of that call
 ---@field set? table as declared

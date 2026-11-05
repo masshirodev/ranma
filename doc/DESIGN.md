@@ -3681,6 +3681,30 @@ SSH; the plugin then reads `ranma.client().outer` (below).
   whose won. `profile_change` (`profile`, `previous`) fires on every real
   change, a reload that drops the profile in use included, and not on a
   switch to the profile already in use.
+- **A profile's setup is one more layer** (2026-11-05). The overlay could
+  reach only `set`, `bar`, `titlebar`, `toolbars` and theme keys, so a
+  profile could not be another theme or change a bind. Two additions:
+  `theme = { base = "name" }`, built at load over that file instead of the
+  one in use, which stays an overlay; and `setup`, a function that changes
+  anything `init.lua` can. `setup` is not run on the live configuration,
+  because arbitrary Lua has no undo: leaving the profile could not give back
+  what `init.lua` set, which is the drift the overlay exists to prevent.
+  It runs instead **inside a load made for the profile**, last, after
+  `init.lua` and `settings.toml` (so a theme it sets wins over one
+  `choose_theme` saved, and the settings panel goes on showing the file's
+  values). A switch to or from such a profile is a reload, and leaving one is
+  a load without it, so going back is exact because every load is a fresh
+  Lua state. The cost, timers, badges, watches and plugin screens starting
+  over, lands only on the profiles that ask for it: every other switch is
+  still an overlay. **No confirm before such a switch**, though one was
+  weighed: panes and their programs survive a reload, saving `init.lua`
+  already pays the same cost unasked, the switches hooks make (mobile.ranma's
+  on `driver_change`) have nobody to ask, and switching back undoes it. A
+  toast says the switch reloaded, so a plugin screen that closed is not taken
+  for a bug. If a plugin ever holds state a reload would lose, the answer is
+  a way for it to say so, not a question on every switch. The owner named it
+  `exec` at first; `exec` is ranma's word for a shell command, so it is
+  `setup`, Neovim's (and hako's) for the same thing.
 - **Toolbars**: named rows of buttons, each a label and an action or a Lua
   function, `top`, `bottom` or `beside` the bar, `normal` or `large`.
 - **`send <keys>` and latching modifiers** (`latch ctrl`): what Gboard cannot
