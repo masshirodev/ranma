@@ -381,7 +381,7 @@ not listed here.
 - [x] Shadows under floats (c440)
 - [x] Pickers and toasts follow `border.style`, or `overlay_style` (c441)
 - [x] Scrollbar looks (c442)
-- [ ] Splash art from a file (c443)
+- [x] Splash art from a file (c443)
 - [ ] Caps per role, for modules and title pieces (c444)
 - [ ] Powerline bars: grounds, `style` on built-ins, groups, arrows, sides,
   cuts that keep caps, `center_min` (c445)

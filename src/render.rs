@@ -292,21 +292,7 @@ fn draw_background(f: &mut Frame, app: &App, area: Rect, art: &crate::art::Art) 
             if wide && x + 1 >= area.w {
                 continue;
             }
-            let mut style = Style::default().fg(color(cell.fg.unwrap_or(fg)));
-            if let Some(b) = cell.bg.or(bg) {
-                style = style.bg(color(b));
-            }
-            for (on, m) in [
-                (cell.bold, Modifier::BOLD),
-                (cell.dim, Modifier::DIM),
-                (cell.italic, Modifier::ITALIC),
-                (cell.underline, Modifier::UNDERLINED),
-                (cell.reverse, Modifier::REVERSED),
-            ] {
-                if on {
-                    style = style.add_modifier(m);
-                }
-            }
+            let style = art_style(cell, fg, bg);
             let mut tmp = [0u8; 4];
             buf[(area.x + x, area.y + y)]
                 .set_symbol(cell.ch.encode_utf8(&mut tmp))
@@ -315,8 +301,95 @@ fn draw_background(f: &mut Frame, app: &App, area: Rect, art: &crate::art::Art) 
     }
 }
 
+/// The splash with art for its logo: the art centred above the keys, in
+/// its own colours (`bar_accent` where it sets none). False when they do
+/// not fit, and the caller falls back.
+fn draw_splash_art(
+    f: &mut Frame,
+    app: &App,
+    area: Rect,
+    art: &crate::art::Art,
+    keys: &[(String, &str)],
+) -> bool {
+    use crate::splash::{self, Part};
+    let tips = splash::tips(keys);
+    let tips_w = tips.iter().map(splash::line_width).max().unwrap_or(0);
+    let gap = usize::from(!tips.is_empty());
+    let (w, h) = (area.w as usize, area.h as usize);
+    if art.width > w || tips_w > w || art.height() + gap + tips.len() > h {
+        return false;
+    }
+    let c = &app.config.theme.colors;
+    let top = area.y + ((h - art.height() - gap - tips.len()) / 2) as u16;
+    let left = area.x + ((w - art.width) / 2) as u16;
+    let buf = f.buffer_mut();
+    for (y, row) in art.rows.iter().enumerate() {
+        for (x, cell) in row.iter().enumerate() {
+            if cell.is_clear() || cell.ch == '\0' {
+                continue;
+            }
+            let mut tmp = [0u8; 4];
+            buf[(left + x as u16, top + y as u16)]
+                .set_symbol(cell.ch.encode_utf8(&mut tmp))
+                .set_style(art_style(cell, c.bar_accent, None));
+        }
+    }
+    let keys_x = area.x + area.w.saturating_sub(tips_w as u16) / 2;
+    let style = |p: Part| match p {
+        Part::Key => Style::default()
+            .fg(color(c.bar_fg))
+            .add_modifier(Modifier::BOLD),
+        _ => Style::default().fg(color(c.bar_dim)),
+    };
+    for (i, line) in tips.iter().enumerate() {
+        let y = top + (art.height() + gap + i) as u16;
+        let mut x = keys_x;
+        for (text, part) in line {
+            let room = area.right().saturating_sub(x) as usize;
+            let (nx, _) = buf.set_stringn(x, y, text, room, style(*part));
+            x = nx;
+        }
+    }
+    true
+}
+
+/// An art cell's style: its own colours and attributes, `fg` and `bg` where
+/// it sets none.
+fn art_style(cell: &crate::art::Cell, fg: theme::Color, bg: Option<theme::Color>) -> Style {
+    let mut style = Style::default().fg(color(cell.fg.unwrap_or(fg)));
+    if let Some(b) = cell.bg.or(bg) {
+        style = style.bg(color(b));
+    }
+    for (on, m) in [
+        (cell.bold, Modifier::BOLD),
+        (cell.dim, Modifier::DIM),
+        (cell.italic, Modifier::ITALIC),
+        (cell.underline, Modifier::UNDERLINED),
+        (cell.reverse, Modifier::REVERSED),
+    ] {
+        if on {
+            style = style.add_modifier(m);
+        }
+    }
+    style
+}
+
 fn draw_splash(f: &mut Frame, app: &App, area: Rect, keys: &[(String, &str)]) {
     use crate::splash::{self, Part};
+    // `splash.keys = false`: the logo (or the art) alone.
+    let keys = if app.config.theme.splash.keys {
+        keys
+    } else {
+        &[]
+    };
+    // The theme's art in the logo's place, the keys under it, when both fit;
+    // otherwise the logo's own fallbacks (the name, then nothing).
+    if let Some(art) = app.config.theme.splash_art.as_deref()
+        && app.config.theme.art.is_none()
+        && draw_splash_art(f, app, area, art, keys)
+    {
+        return;
+    }
     // Over a background the art is the picture: the keys alone, at the
     // bottom, where they cover the least of it.
     let under_art = app.config.theme.art.is_some();
@@ -2971,6 +3044,53 @@ mod tests {
         );
         let col: String = (0..4).map(|y| buf[(0, y)].symbol().to_string()).collect();
         assert_eq!(col, " ┃  ");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_splash_can_be_art_of_the_themes_own() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let dir = std::env::temp_dir().join(format!("ranma-render-splash-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::create_dir_all(dir.join("backgrounds")).unwrap();
+        std::fs::write(dir.join("backgrounds").join("cat.txt"), "/\\_/\\\n(o.o)\n").unwrap();
+        let load = |theme: &str| {
+            std::fs::write(dir.join("themes").join("t.toml"), theme).unwrap();
+            let config =
+                crate::config::load_from(Some(&dir), None, Some("ranma.set { theme = \"t\" }"))
+                    .unwrap();
+            let (tx, _rx) = std::sync::mpsc::channel();
+            crate::app::App::new(config, tx, 40, 10)
+        };
+        let keys = vec![("Enter".to_string(), "a shell")];
+        let draw = |app: &crate::app::App, w: u16, h: u16| {
+            let mut t = Terminal::new(TestBackend::new(w, h)).unwrap();
+            t.draw(|f| draw_splash(f, app, Rect::new(0, 0, w, h), &keys))
+                .unwrap();
+            rows(t.backend().buffer())
+        };
+        let app = load("[splash]\nart = \"cat\"\n");
+        let r = draw(&app, 20, 6);
+        assert!(r.iter().any(|l| l.contains("(o.o)")), "{r:?}");
+        assert!(r.iter().any(|l| l.contains("Enter")), "{r:?}");
+        // Too small for the art: the logo's own fallback, the name.
+        let r = draw(&app, 20, 3);
+        assert!(r.iter().any(|l| l.contains("ranma")), "{r:?}");
+        // No keys: the art alone.
+        let app = load("[splash]\nart = \"cat\"\nkeys = false\n");
+        let r = draw(&app, 20, 6);
+        assert!(!r.iter().any(|l| l.contains("Enter")), "{r:?}");
+        // A name that is no art is an error at load.
+        std::fs::write(
+            dir.join("themes").join("t.toml"),
+            "[splash]\nart = \"nope\"\n",
+        )
+        .unwrap();
+        assert!(
+            crate::config::load_from(Some(&dir), None, Some("ranma.set { theme = \"t\" }"))
+                .is_err()
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

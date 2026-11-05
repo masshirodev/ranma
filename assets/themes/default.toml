@@ -142,6 +142,12 @@ indicator = "none"
 # 0 left to right, 90 top to bottom, clockwise.
 gradient_angle = 0
 
+# An empty workspace (the splash setting): art in the logo's place, by name
+# or path as background.art takes it, and whether the keys show under it.
+# [splash]
+# art = "cat"
+# keys = true
+
 # A float's shadow, right of it and below it: off | shade (cells darkened
 # toward colors.shadow, faint without one) | char (░). Off here.
 # [floating]

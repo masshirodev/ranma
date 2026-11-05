@@ -3406,6 +3406,12 @@ one character each: the scrollbar's thumb (unset, the heavy line, \fB#\fR with \
 \fBcolors.scrollbar_thumb\fR, \fBscrollbar_track\fR
 their colours; unset, the border's
 .TP
+\fBsplash.art\fR
+in the logo's place on an empty workspace (the \fBsplash\fR setting): art by name or path, read as \fBbackground.art\fR is (plain, or coloured with SGR escapes), in its own colours and \fBbar_accent\fR where it sets none, the keys under it. Where it does not fit, the logo's fallbacks: the name in letters, then nothing. A name that is no art is an error at load. Unset, the logo. Not drawn over a background, where the art is the picture.
+.TP
+\fBsplash.keys\fR
+\fBtrue\fR (the default) shows the keys to start under the logo or the art; \fBfalse\fR, the logo or the art alone
+.TP
 \fBfloating.shadow\fR
 \fBoff\fR (the default), \fBshade\fR or \fBchar\fR: a shadow one cell right of a float and one row below it, each offset by one, as a desktop window casts. \fBshade\fR darkens the cells there halfway to \fBcolors.shadow\fR (faint, when that or their colours are unknown); \fBchar\fR draws \fB░\fR over them in \fBcolors.shadow\fR (unset, \fBbar_dim\fR). Floats and popups alike.
 .TP

@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `splash.art`: art of the theme's own in the empty workspace's logo place,
+  read as `background.art` is; `splash.keys = false` hides the keys under it.
+
 - `panes.scrollbar_thumb` and `scrollbar_track` (characters) with
   `colors.scrollbar_thumb` and `scrollbar_track`: the scrollbar's looks.
 

@@ -907,6 +907,12 @@ pub struct Theme {
     /// Floats' own looks beyond their border: a shadow.
     #[serde(default)]
     pub floating: Floating,
+    /// The empty workspace's looks (card c443).
+    #[serde(default)]
+    pub splash: SplashLooks,
+    /// `splash.art`, read and parsed as the theme loads.
+    #[serde(skip)]
+    pub splash_art: Option<std::sync::Arc<crate::art::Art>>,
     /// `[icons]`: a program's name (or a glob, `"*"` the fallback) to a
     /// glyph, for `{icon}` and the `icon` title piece (card c438).
     #[serde(default)]
@@ -926,6 +932,27 @@ impl Panes {
             self.padding_left,
         ]
         .map(|p| p.unwrap_or(self.padding))
+    }
+}
+
+/// `[splash]`: what an empty workspace shows, when the `splash` setting
+/// shows it (card c443).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct SplashLooks {
+    /// In place of the logo: art by name or path, read as `background.art`
+    /// is. Unset, the logo.
+    pub art: Option<String>,
+    /// The keys to start, under it.
+    pub keys: bool,
+}
+
+impl Default for SplashLooks {
+    fn default() -> SplashLooks {
+        SplashLooks {
+            art: None,
+            keys: true,
+        }
     }
 }
 
@@ -1589,14 +1616,19 @@ pub fn load_over_unset(
         bail!("{what}: panes.dim_unfocused must be 0-1, not {dim}");
     }
     check(&theme).map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
+    // Backgrounds sit beside the themes: ~/.config/ranma/backgrounds.
+    let art_dirs: Vec<PathBuf> = dirs
+        .iter()
+        .filter_map(|d| d.parent().map(|p| p.join("backgrounds")))
+        .collect();
     if let Some(name) = &theme.background.art {
-        // Backgrounds sit beside the themes: ~/.config/ranma/backgrounds.
-        let art_dirs: Vec<PathBuf> = dirs
-            .iter()
-            .filter_map(|d| d.parent().map(|p| p.join("backgrounds")))
-            .collect();
         let art = crate::art::Art::load(name, &art_dirs).with_context(|| what.clone())?;
         theme.art = Some(std::sync::Arc::new(art));
+    }
+    if let Some(name) = &theme.splash.art {
+        let art = crate::art::Art::load(name, &art_dirs)
+            .with_context(|| format!("{what}: splash.art"))?;
+        theme.splash_art = Some(std::sync::Arc::new(art));
     }
     Ok((theme, resolved))
 }
