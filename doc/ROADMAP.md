@@ -406,3 +406,22 @@ fixed in the code and is a setting or a bind now.
 - [x] One double-click window, and a setting for it (c432)
 - [x] Picker size from the theme (c433)
 - [x] An exec module's own timeout (c434)
+
+## 19. Over ssh, and a record of what went wrong
+
+From using milestones 17 and 18 at work, over ssh into the workstation
+(2026-11-05): the bar of a ranma inside, and errors that had nowhere to go.
+
+- [x] The expanded nested bar takes arrows and drops by priority (c458)
+- [x] `nested_bar = "inner"`: the host's own bar, its modules and look,
+  keeping this ranma's workspaces (c464)
+- [x] `nested_format = "theme"`: the bracketed workspaces in the theme's
+  formats (c465)
+- [x] A log of errors and events, `ranma logs`, the `logs` action and
+  `logs_open` (c460)
+- [x] An error clicked in the bar opens the log, an inner ranma's included
+  (c460, c461)
+
+Fixed on the way, in the CHANGELOG: a nested ranma vanishing from the outer
+bar (c448, c453), pill text in its role's colour (c449), `ranma.bar` naming
+a theme key's place (c459), caps with no ground drawn blank (c465).
