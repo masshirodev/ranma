@@ -1813,6 +1813,11 @@ terminal's cell size), and the cursor ends after them as kitty leaves it
 \fBI=\fR number with no id, a format it cannot read the size of) is answered
 \fBEINVAL\fR instead.
 .PP
+A pane reports its size in pixels, as kitty does (its TIOCGWINSZ and its
+answer to \fBCSI 14 t\fR), from the cell size of the terminal driving the screen;
+zero while that terminal reports none. Programs that place images ask for it
+first.
+.PP
 What ranma does with an image:
 .IP \(bu 2
 It answers the program's graphics query itself: OK when a terminal showing

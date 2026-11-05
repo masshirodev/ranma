@@ -239,6 +239,11 @@ commit log has the detail.
 
 ### Fixed
 
+- Plain `kitten icat` (and any program that asks for the window's size in
+  pixels first) drew nothing in a pane: panes reported a size of zero
+  pixels. They report the driving terminal's cell size now, as kitty does,
+  and hear it again when a terminal with another one attaches.
+
 - A pill with no caps (arrows, or a side with none) kept no padding: its
   text ran into the arrows and its neighbours. Its blanks are kept now. With
   arrows they are in the colour the arrows are drawn in, the mode chip's

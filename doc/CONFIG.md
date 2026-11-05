@@ -1290,6 +1290,11 @@ layout.
   `I=` number with no id, a format it cannot read the size of) is answered
   `EINVAL` instead.
 
+A pane reports its size in pixels, as kitty does (its TIOCGWINSZ and its
+answer to `CSI 14 t`), from the cell size of the terminal driving the screen;
+zero while that terminal reports none. Programs that place images ask for it
+first.
+
 What ranma does with an image:
 
 - It answers the program's graphics query itself: OK when a terminal showing

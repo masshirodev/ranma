@@ -2083,11 +2083,14 @@ impl App {
             }
             TermEvent::TextAreaSizeRequest(fmt) => {
                 let size = pane.size;
+                // In pixels, from the driving terminal's cell (zero while
+                // none has said), as the pane's TIOCGWINSZ reports it.
+                let (cw, ch) = crate::graphics::known_cell_px().unwrap_or((0, 0));
                 let reply = fmt(alacritty_terminal::event::WindowSize {
                     num_lines: size.rows,
                     num_cols: size.cols,
-                    cell_width: 0,
-                    cell_height: 0,
+                    cell_width: cw,
+                    cell_height: ch,
                 });
                 pane.write(reply.into_bytes());
             }
@@ -4990,6 +4993,14 @@ impl App {
 
     /// Where toasts go: in `toasts.position`'s corner, clear of the bar on
     /// whichever edge it is.
+    /// Every pane told its size again: the driving terminal's cell size
+    /// changed, and with it the pixels a pane reports.
+    pub fn resend_pane_sizes(&self) {
+        for pane in self.panes.values() {
+            pane.resend_size();
+        }
+    }
+
     pub fn toast_layout(&self) -> Vec<(&crate::toast::Toast, Rect, Vec<crate::toast::Line>)> {
         let (top, bottom) = match self.config.theme.bar.position {
             BarPosition::Top => (self.screen.y + 1, self.screen.bottom()),

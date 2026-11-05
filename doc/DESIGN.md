@@ -2357,6 +2357,15 @@ which each client measures (TIOCGWINSZ) and sends in its hello. The reader
 learns sizes from the transmissions it sees, so nothing is shared with the UI
 thread but the cell size.
 
+**A pane reports its size in pixels.** The same cell size goes into each
+pane's TIOCGWINSZ and its answer to `CSI 14 t`, as kitty reports its own
+window: a program that places images (plain `kitten icat`) asks for the
+window's pixels before it draws anything, and gave up on the zero ranma used
+to report (tmux's answer, kept from milestone 1 until 2026-11-05, when a
+capture of the images panel found plain `icat` refusing). Zero still, while
+no terminal has said, and a client with another cell size makes every pane
+hear its size again.
+
 **What ranma does is the transmission.** The APC is caught on the PTY path
 by the scanner that already finds OSC 133 (alacritty_terminal drops APCs),
 and it stays a cheap scan: a graphics command, mostly base64, is taken up

@@ -72,6 +72,14 @@ pub fn set_cell_px(w: u16, h: u16) {
     );
 }
 
+/// The cell size the driving terminal said, if one has: what a pane reports
+/// as its pixel size (TIOCGWINSZ, `CSI 14 t`).
+pub fn known_cell_px() -> Option<(u16, u16)> {
+    let v = CELL_PX.load(std::sync::atomic::Ordering::Relaxed);
+    let (w, h) = ((v >> 16) as u16, (v & 0xffff) as u16);
+    (w != 0 && h != 0).then_some((w, h))
+}
+
 /// The cell size, or a common one when no terminal said.
 fn cell_px() -> (u32, u32) {
     let v = CELL_PX.load(std::sync::atomic::Ordering::Relaxed);

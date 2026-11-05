@@ -432,13 +432,16 @@ impl Dimensions for Size {
 
 impl Size {
     fn window(self) -> WindowSize {
+        // The driving terminal's cell, so a pane reports its size in pixels
+        // as kitty does: programs that place images (plain `kitten icat`)
+        // need it before they draw anything. Zero while no terminal has said
+        // (one that does not report pixels), as tmux reports.
+        let (w, h) = crate::graphics::known_cell_px().unwrap_or((0, 0));
         WindowSize {
             num_lines: self.rows,
             num_cols: self.cols,
-            // Pixel sizes are unknown inside a terminal; programs that ask get zero,
-            // which is what tmux reports too.
-            cell_width: 0,
-            cell_height: 0,
+            cell_width: w,
+            cell_height: h,
         }
     }
 }
@@ -827,6 +830,12 @@ impl Pane {
         true
     }
 
+    /// Tell the program its size again, as it is: after the driving
+    /// terminal's cell size changed, the pixels it reports did too.
+    pub fn resend_size(&self) {
+        let _ = self.sender.send(Msg::Resize(self.size.window()));
+    }
+
     pub fn modes(&self) -> PaneModes {
         let mode = *self.term.lock().mode();
         PaneModes {
@@ -1169,6 +1178,18 @@ fn terminfo_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pane reports its size in pixels from the driving terminal's cell,
+    /// as kitty does, so a program that places images knows where it is.
+    /// (Every test that sets the cell sets 10×20: it is a process global.)
+    #[test]
+    fn a_panes_window_size_is_in_pixels_too() {
+        crate::graphics::set_cell_px(10, 20);
+        let w = Size { cols: 80, rows: 24 }.window();
+        assert_eq!((w.num_cols, w.num_lines), (80, 24));
+        assert_eq!((w.cell_width, w.cell_height), (10, 20));
+        assert_eq!(crate::graphics::known_cell_px(), Some((10, 20)));
+    }
 
     #[test]
     fn a_hangup_waits_for_the_exit_on_android_only() {

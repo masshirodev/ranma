@@ -881,7 +881,13 @@ fn drive(
     restart(term, buffer, hello.cols, hello.rows)?;
     app.host_colors = hello.colors.clone();
     if let Some((w, h)) = hello.cell_px {
+        let before = crate::graphics::known_cell_px();
         crate::graphics::set_cell_px(w, h);
+        // A terminal with another cell size: every pane's size in pixels
+        // changed, though its rows and columns may not have.
+        if before != Some((w, h)) {
+            app.resend_pane_sizes();
+        }
     }
     app.client_inside = hello.inside.clone();
     app.set_outer(hello.outer);
