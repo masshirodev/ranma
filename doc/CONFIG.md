@@ -1033,7 +1033,7 @@ top = "   "
 | `sync` | `⇉` while the pane takes synchronized input |
 | `badges` | the plugins' badges (`pane:badge`), each glyph and word in its role |
 | `index` | the pane's place in its workspace, from 1 |
-| `tabs` | in a group, its tabs, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and `title` is not drawn in a grouped pane (its tabs name it). Outside a group, nothing. |
+| `tabs` | in a group, its tabs by the theme's `[tabs]` formats, caps and separator, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and `title` is not drawn in a grouped pane (its tabs name it). Outside a group, nothing. |
 
 `sync` and `badges` show even when a config does not list them: the mark
 goes before `title` and the badges after it (at the left side's end when
@@ -2508,6 +2508,10 @@ colours only; a key set to a name shows the name there.
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `bar.module_padding_left`, `module_padding_right` | `0`-`4`: blank cells inside the left cap and the right one, on the module's ground. `0` by default. On a side with none, a filled chip that ends the module (the current workspace first in the list, with `chip_left`/`chip_right` set) has its own cap as the module's end, on the bar's ground, rather than the module's cap drawing a ring around it; a workspace there that is not current gives the blank its format starts or ends with to the module's cap, so the workspace hugs the edge either way and the module keeps its width. |
 | `bar.chip_left`, `chip_right` | drawn before and after every filled chip (the current workspace, a `pane_strip` tab, ` WM `), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a `workspace_current_format` without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default. |
+| `tabs.format`, `tabs.current_format` | a group's tab (see [Formats](#formats)): `{index}` its place in the group from 1, `{title}` its pane's title (or `shell`), `{program}`, `{cwd}`; the active tab's, unset, `format`. `" {title} "` by default. In the tab row and in the `tabs` title piece alike. |
+| `tabs.separator` | drawn between two tabs, in the `dim` style. Empty by default. |
+| `tabs.chip_left`, `tabs.chip_right` | drawn before and after every tab, in the tab's ground on the row's: `"\ue0b6"` and `"\ue0b4"` round each. Empty by default. |
+| `tabs.align` | `fill` (the default: the tabs share the row, each its label cut or padded to its share, as they always did), `left`, `center`, `right` (at their own widths, shared again when they do not fit). A touch-sized tab row keeps its own faces. |
 | `panes.dim_unfocused` | `0`-`1`: how far the text of unfocused panes fades toward its background (`0` is off, the default; `0.3` is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead. |
 | `panes.floating_bg` | an unfocused float's ground; unset, `inactive_bg`. A float with no edges on the same ground as the tiles under it runs into them. |
 | `panes.active_bg`, `inactive_bg` | the ground of the focused pane and of the others, wherever the program leaves the default background (tmux's `window-active-style` and `window-style`); unset, the terminal's own. Unfocused text fades toward `inactive_bg`. |

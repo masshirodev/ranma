@@ -1544,33 +1544,54 @@ fn draw_pane_number(f: &mut Frame, app: &App, view: &PaneView, label: &str) {
 /// Tabs share the row equally; a click maps back the same way (see App's mouse).
 fn draw_tab_bar(f: &mut Frame, app: &App, tb: &TabBar) {
     let c: &Colors = &app.config.theme.colors;
+    let st = &app.config.theme.styles;
+    let t = &app.config.theme.tabs;
+    let faces = app.tab_faces(tb);
     let buf = f.buffer_mut();
     // A tall (touch-sized) strip: its row's background under the gaps, the
-    // chips filled top to bottom, the titles on the middle row.
-    if tb.rect.h > 1 {
-        buf.set_style(rrect(tb.rect), Style::default().bg(color(c.bar_bg)));
-    }
+    // chips filled top to bottom, the titles on the middle row. A one-row
+    // strip under tabs that do not fill it: the bar's ground between them.
+    buf.set_style(rrect(tb.rect), Style::default().bg(color(c.bar_bg)));
     let mid = tb.rect.y + tb.rect.h / 2;
-    for (i, (id, (x0, x1))) in tb.tabs.iter().zip(tb.spans()).enumerate() {
-        let active = i == tb.active;
+    let tall = tb.rect.h > 1;
+    for (k, face) in faces.iter().enumerate() {
         let style = piece_style(
             c,
-            &app.config.theme.styles,
-            if active {
+            st,
+            if face.active {
                 bar::Style::TabActive
             } else {
                 bar::Style::TabInactive
             },
         );
-        let width = x1.saturating_sub(x0) as usize;
-        let label: String = format!(" {} ", app.chip_label(*id))
-            .chars()
-            .take(width)
-            .collect();
-        let padded = format!("{label:<width$}");
-        let face = RRect::new(x0, tb.rect.y, x1.saturating_sub(x0), tb.rect.h);
-        buf.set_style(face, style);
-        buf.set_stringn(x0, mid, &padded, width, style);
+        let width = face.x1.saturating_sub(face.x0);
+        let area = RRect::new(face.x0, tb.rect.y, width, tb.rect.h);
+        if tall {
+            let label: String = face.text.chars().take(width as usize).collect();
+            let padded = format!("{label:<w$}", w = width as usize);
+            buf.set_style(area, style);
+            buf.set_stringn(face.x0, mid, &padded, width as usize, style);
+            continue;
+        }
+        // The chip's caps in its ground, on the row's.
+        let cap = Style::default()
+            .fg(style.bg.unwrap_or(Color::Reset))
+            .bg(color(c.bar_bg));
+        let mut x = face.x0;
+        let mut put = |text: &str, s: Style, x: &mut u16| {
+            let w = text.width() as u16;
+            if *x < face.x1 {
+                buf.set_stringn(*x, tb.rect.y, text, (face.x1 - *x) as usize, s);
+            }
+            *x += w;
+        };
+        put(&t.chip_left, cap, &mut x);
+        put(&face.text, style, &mut x);
+        put(&t.chip_right, cap, &mut x);
+        if k + 1 < faces.len() && !t.separator.is_empty() {
+            let sep = piece_style(c, st, bar::Style::Dim).bg(color(c.bar_bg));
+            buf.set_stringn(face.x1, tb.rect.y, &t.separator, t.separator.width(), sep);
+        }
     }
 }
 

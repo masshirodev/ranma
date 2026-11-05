@@ -139,6 +139,16 @@ indicator = "none"
 # 0 left to right, 90 top to bottom, clockwise.
 gradient_angle = 0
 
+# A group's tabs, in its tab row and in the `tabs` title piece. Unset here on
+# purpose; these are what an unset key means.
+# [tabs]
+# format = " {title} "         {index} {title} {program} {cwd}
+# current_format = ...         the active tab's; unset, format
+# separator = ""               between two tabs
+# chip_left = ""               caps round each tab, in its ground
+# chip_right = ""
+# align = "fill"               fill | left | center | right
+
 [gaps]
 # Measured in cells. A terminal cell is roughly twice as tall as it is wide,
 # so outer gaps usually look best at horizontal = 2 * vertical.

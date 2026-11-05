@@ -2418,7 +2418,13 @@ impl App {
             return true;
         }
         if let Some(tb) = frame.tab_bars.iter().find(|t| t.rect.contains(x, y)) {
-            if let Some(p) = tb.tab_at(x).and_then(|i| tb.tabs.get(i)) {
+            if let Some(p) = self
+                .tab_faces(tb)
+                .iter()
+                .find(|f| x >= f.x0 && x < f.x1)
+                .map(|f| f.id)
+            {
+                let p = &p;
                 self.focus(*p);
                 self.relayout();
             }
@@ -4620,9 +4626,10 @@ impl App {
         // A pane's own title format can name them where the theme's does not.
         let fmt = &self.config.theme.border.title_format;
         let own = |v: &str| self.pane_looks.values().any(|(_, l)| l.uses(v));
+        let tabs = &self.config.theme.tabs;
         let (program, cwd) = (
-            fmt.uses("program") || own("program"),
-            fmt.uses("cwd") || own("cwd"),
+            fmt.uses("program") || own("program") || tabs.uses("program"),
+            fmt.uses("cwd") || own("cwd") || tabs.uses("cwd"),
         );
         let facts: HashMap<PaneId, (Option<String>, Option<String>)> = if program || cwd {
             let home = dirs::home_dir();

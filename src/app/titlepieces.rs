@@ -17,6 +17,40 @@ pub const URGENT_BADGES: u8 = 60;
 pub const INDEX: u8 = 70;
 pub const SYNC: u8 = 90;
 
+/// One tab of a tab row, laid out: its columns `[x0, x1)` (caps included),
+/// its label fitted to them, and its pane.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TabFace {
+    pub x0: u16,
+    pub x1: u16,
+    pub text: String,
+    pub active: bool,
+    pub id: PaneId,
+}
+
+/// `s` in `w` cells: cut with `…`, or padded with blanks.
+fn fit(s: &str, w: usize) -> String {
+    use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+    if s.width() <= w {
+        return format!("{s:<w$}", w = w - s.width() + s.chars().count());
+    }
+    let mut out = String::new();
+    let mut used = 0;
+    for c in s.chars() {
+        let cw = c.width().unwrap_or(0);
+        if used + cw + 1 > w {
+            break;
+        }
+        out.push(c);
+        used += cw;
+    }
+    if w > 0 {
+        out.push('…');
+        used += 1;
+    }
+    out + &" ".repeat(w.saturating_sub(used))
+}
+
 /// A role's pill: its caps, the blanks inside them, and its ground; a role
 /// with no ground of its own (or none at all) leaves a piece on the line.
 fn role_shape(st: Option<Style>) -> (crate::titlebar::Caps, (u8, u8), Ground) {
@@ -432,6 +466,101 @@ impl App {
         Item { forms }
     }
 
+    /// A tab's text, by the theme's `[tabs]` formats: `{index}` its place
+    /// in the group, `{title}` its pane's (or `shell`), `{program}`, `{cwd}`.
+    pub fn tab_label(&self, id: PaneId, index: usize, active: bool) -> String {
+        let t = &self.config.theme.tabs;
+        let fmt = match (&t.current_format, active) {
+            (Some(f), true) => f,
+            _ => &t.format,
+        };
+        let facts = self.pane_facts.get(&id);
+        fmt.render(|v| match v {
+            "index" => Some((index + 1).to_string()),
+            "title" => Some(self.chip_label(id)),
+            "program" => facts.and_then(|f| f.0.clone()),
+            "cwd" => facts.and_then(|f| f.1.clone()),
+            _ => None,
+        })
+    }
+
+    /// Where a tab row's tabs go (card c436): with `align = "fill"` (the
+    /// default) they share the row, each its label cut or padded to its
+    /// share, as tab rows always did; otherwise at their own widths, with
+    /// the separator between, at the row's start, centre or end, and shared
+    /// again when they do not fit. A tall (touch-sized) row keeps its
+    /// faces, a column apart, and its plain labels: the mobile handoff's.
+    pub fn tab_faces(&self, tb: &crate::layout::TabBar) -> Vec<TabFace> {
+        use unicode_width::UnicodeWidthStr;
+        let t = &self.config.theme.tabs;
+        if tb.rect.h > 1 {
+            return tb
+                .tabs
+                .iter()
+                .zip(tb.spans())
+                .enumerate()
+                .map(|(i, (id, (x0, x1)))| TabFace {
+                    x0,
+                    x1,
+                    text: format!(" {} ", self.chip_label(*id)),
+                    active: i == tb.active,
+                    id: *id,
+                })
+                .collect();
+        }
+        let n = tb.tabs.len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let caps = t.chip_left.width() + t.chip_right.width();
+        let sep = t.separator.width();
+        let labels: Vec<String> = tb
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, id)| self.tab_label(*id, i, i == tb.active))
+            .collect();
+        let natural: usize = labels.iter().map(|l| l.width() + caps).sum::<usize>() + sep * (n - 1);
+        let room = tb.rect.w as usize;
+        let face = |i: usize, x0: usize, x1: usize, label: &str| TabFace {
+            x0: x0 as u16,
+            x1: x1 as u16,
+            text: fit(label, (x1 - x0).saturating_sub(caps)),
+            active: i == tb.active,
+            id: tb.tabs[i],
+        };
+        if t.align == crate::theme::TabsAlign::Fill || natural > room {
+            let share = room.saturating_sub(sep * (n - 1));
+            return (0..n)
+                .map(|i| {
+                    let x0 = i * share / n + sep * i;
+                    let x1 = (i + 1) * share / n + sep * i;
+                    face(
+                        i,
+                        tb.rect.x as usize + x0,
+                        tb.rect.x as usize + x1,
+                        &labels[i],
+                    )
+                })
+                .collect();
+        }
+        let start = tb.rect.x as usize
+            + match t.align {
+                crate::theme::TabsAlign::Center => (room - natural) / 2,
+                crate::theme::TabsAlign::Right => room - natural,
+                _ => 0,
+            };
+        let mut x = start;
+        (0..n)
+            .map(|i| {
+                let w = labels[i].width() + caps;
+                let f = face(i, x, x + w, &labels[i]);
+                x += w + sep;
+                f
+            })
+            .collect()
+    }
+
     /// Whether the title row draws groups' tabs (`tabs` is listed): then a
     /// group has no tab row of its own (DESIGN.md, F1).
     pub fn tabs_in_title(&self) -> bool {
@@ -457,30 +586,46 @@ impl App {
         let Some((tabs, active)) = self.group_of(id) else {
             return Item::default();
         };
+        let t = &self.config.theme.tabs;
         let spans = |cut: bool| -> Vec<Span> {
-            tabs.iter()
-                .enumerate()
-                .map(|(i, t)| {
-                    let label = self.chip_label(*t);
-                    let label = if cut && label.chars().count() > 5 {
-                        format!("{}…", label.chars().take(4).collect::<String>())
-                    } else {
-                        label
-                    };
-                    let style = if i == active {
-                        Style::TabActive
-                    } else {
-                        Style::TabInactive
-                    };
-                    Span {
-                        text: format!(" {label} "),
-                        ink: Ink::Role(style),
+            let mut out = Vec::new();
+            for (i, pane) in tabs.iter().enumerate() {
+                let mut label = self.tab_label(*pane, i, i == active);
+                if cut && label.trim().chars().count() > 5 {
+                    let short: String = label.trim().chars().take(4).collect();
+                    label = format!(" {short}… ");
+                }
+                let style = if i == active {
+                    Style::TabActive
+                } else {
+                    Style::TabInactive
+                };
+                let ground = Ground::Role(style);
+                let mk = |text: String, ink: Ink| Span {
+                    text,
+                    ink,
+                    piece: n,
+                    tab: Some(*pane),
+                    ground,
+                };
+                if i > 0 && !t.separator.is_empty() {
+                    out.push(Span {
+                        text: t.separator.clone(),
+                        ink: Ink::Role(Style::Dim),
                         piece: n,
-                        tab: Some(*t),
+                        tab: None,
                         ground: Ground::Line,
-                    }
-                })
-                .collect()
+                    });
+                }
+                if !t.chip_left.is_empty() {
+                    out.push(mk(t.chip_left.clone(), Ink::Cap));
+                }
+                out.push(mk(label, Ink::Role(style)));
+                if !t.chip_right.is_empty() {
+                    out.push(mk(t.chip_right.clone(), Ink::Cap));
+                }
+            }
+            out
         };
         Item {
             forms: vec![
@@ -846,6 +991,46 @@ mod tests {
         let v = b.frame().views[0];
         press(&mut b, v.outer.x + 3, v.outer.y);
         assert_eq!(heard(&b).as_deref(), Some("border"));
+    }
+
+    #[test]
+    fn a_tab_row_takes_the_themes_formats_caps_and_alignment() {
+        let theme = |align: &str| {
+            format!(
+                "[tabs]\nformat = \"{{index}}:{{title}}\"\ncurrent_format = \"[[{{index}}]]\"\nseparator = \"|\"\nchip_left = \"(\"\nchip_right = \")\"\nalign = \"{align}\"\n"
+            )
+        };
+        let faces = |align: &str| {
+            let (mut a, dir) = app_themed(&format!("tabs-{align}"), &theme(align), "");
+            with_pane(&mut a, 1);
+            with_pane(&mut a, 2);
+            a.workspaces.get_mut(&1).unwrap().tree.toggle_group(2);
+            let f = a.frame();
+            let tb = f.tab_bars[0].clone();
+            let faces = a.tab_faces(&tb);
+            let _ = std::fs::remove_dir_all(&dir);
+            (tb, faces, a)
+        };
+        let (tb, f, _) = faces("left");
+        // "(1:shell)" and "([2])", the active one by current_format, a
+        // separator cell between.
+        assert_eq!(f[0].text, "1:shell");
+        assert_eq!(f[1].text, "[2]");
+        assert_eq!((f[0].x0 - tb.rect.x, f[0].x1 - tb.rect.x), (0, 9));
+        assert_eq!((f[1].x0 - tb.rect.x, f[1].x1 - tb.rect.x), (10, 15));
+        let (tb, f, _) = faces("right");
+        assert_eq!(f[1].x1, tb.rect.right());
+        let (tb, f, mut a) = faces("fill");
+        // Shared: each tab half the row, its label padded to its share.
+        assert_eq!(f[0].x0, tb.rect.x);
+        assert_eq!(f[1].x1, tb.rect.right());
+        assert!(f[0].text.starts_with("1:shell "));
+        // A click lands on the tab under it.
+        let (x, y) = (f[0].x0 + 1, tb.rect.y);
+        assert_eq!(a.focused(), Some(2));
+        let frame = a.frame();
+        assert!(a.click_chrome(&frame, x, y, false));
+        assert_eq!(a.focused(), Some(1));
     }
 
     #[test]

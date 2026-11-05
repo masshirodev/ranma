@@ -882,9 +882,62 @@ pub struct Theme {
     /// `normal`, `dim`, `accent` and `urgent` (`[roles.git]`).
     #[serde(default)]
     pub roles: std::collections::BTreeMap<String, RoleDef>,
+    /// A group's tabs: what each says and how they sit on their row.
+    #[serde(default)]
+    pub tabs: Tabs,
     /// `background.art`, read and parsed as the theme loads.
     #[serde(skip)]
     pub art: Option<std::sync::Arc<crate::art::Art>>,
+}
+
+/// `[tabs]`: a group's tabs, in its tab row or its title row (card c436),
+/// with the vocabulary the bar's workspaces have.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Tabs {
+    /// A tab's text: `{index}`, `{title}`, `{program}`, `{cwd}`.
+    pub format: Format,
+    /// The active tab's; unset, `format`.
+    pub current_format: Option<Format>,
+    /// Drawn between two tabs.
+    pub separator: String,
+    /// Drawn before and after every tab, in its ground on the row's.
+    pub chip_left: String,
+    pub chip_right: String,
+    pub align: TabsAlign,
+}
+
+impl Tabs {
+    /// Whether a tab's text names `{program}` or `{cwd}`, which ranma then
+    /// reads for the panes on screen.
+    pub fn uses(&self, var: &str) -> bool {
+        self.format.uses(var) || self.current_format.as_ref().is_some_and(|f| f.uses(var))
+    }
+}
+
+impl Default for Tabs {
+    fn default() -> Tabs {
+        Tabs {
+            format: Format::parse(" {title} ").expect("a valid format"),
+            current_format: None,
+            separator: String::new(),
+            chip_left: String::new(),
+            chip_right: String::new(),
+            align: TabsAlign::Fill,
+        }
+    }
+}
+
+/// Where a group's tabs sit on their row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TabsAlign {
+    /// The tabs share the row, as browsers' do: what tab rows always did.
+    #[default]
+    Fill,
+    Left,
+    Center,
+    Right,
 }
 
 /// What one pane looks like over the theme (DESIGN.md, "Looks a single pane
@@ -1655,6 +1708,19 @@ fn check(t: &Theme) -> Result<(), String> {
     t.bar
         .workspace_format
         .check("bar.workspace_format", &WORKSPACE_VARS)?;
+    t.tabs.format.check("tabs.format", &TITLE_VARS)?;
+    if let Some(f) = &t.tabs.current_format {
+        f.check("tabs.current_format", &TITLE_VARS)?;
+    }
+    for (key, s) in [
+        ("tabs.separator", &t.tabs.separator),
+        ("tabs.chip_left", &t.tabs.chip_left),
+        ("tabs.chip_right", &t.tabs.chip_right),
+    ] {
+        if s.chars().any(char::is_control) {
+            return Err(format!("{key}: no control characters"));
+        }
+    }
     t.bar
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;

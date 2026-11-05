@@ -1461,7 +1461,7 @@ the plugins' badges (\fBpane:badge\fR), each glyph and word in its role
 the pane's place in its workspace, from 1
 .TP
 \fBtabs\fR
-in a group, its tabs, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and \fBtitle\fR is not drawn in a grouped pane (its tabs name it). Outside a group, nothing.
+in a group, its tabs by the theme's \fB[tabs]\fR formats, caps and separator, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and \fBtitle\fR is not drawn in a grouped pane (its tabs name it). Outside a group, nothing.
 .PP
 \fBsync\fR and \fBbadges\fR show even when a config does not list them: the mark
 goes before \fBtitle\fR and the badges after it (at the left side's end when
@@ -3375,6 +3375,18 @@ drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerli
 .TP
 \fBbar.chip_left\fR, \fBchip_right\fR
 drawn before and after every filled chip (the current workspace, a \fBpane_strip\fR tab, \fBWM\fR), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a \fBworkspace_current_format\fR without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default.
+.TP
+\fBtabs.format\fR, \fBtabs.current_format\fR
+a group's tab (see Formats\fR): \fB{index}\fR its place in the group from 1, \fB{title}\fR its pane's title (or \fBshell\fR), \fB{program}\fR, \fB{cwd}\fR; the active tab's, unset, \fBformat\fR. \fB" {title} "\fR by default. In the tab row and in the \fBtabs\fR title piece alike.
+.TP
+\fBtabs.separator\fR
+drawn between two tabs, in the \fBdim\fR style. Empty by default.
+.TP
+\fBtabs.chip_left\fR, \fBtabs.chip_right\fR
+drawn before and after every tab, in the tab's ground on the row's: \fB"\eue0b6"\fR and \fB"\eue0b4"\fR round each. Empty by default.
+.TP
+\fBtabs.align\fR
+\fBfill\fR (the default: the tabs share the row, each its label cut or padded to its share, as they always did), \fBleft\fR, \fBcenter\fR, \fBright\fR (at their own widths, shared again when they do not fit). A touch\-sized tab row keeps its own faces.
 .TP
 \fBpanes.dim_unfocused\fR
 \fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.

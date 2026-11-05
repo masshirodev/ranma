@@ -15,6 +15,11 @@ commit log has the detail.
 
 ### Added
 
+- `[tabs]` in a theme: a group's tabs by `format` and `current_format`
+  (`{index}`, `{title}`, `{program}`, `{cwd}`), with a `separator`, caps
+  (`chip_left`, `chip_right`) and `align` (`fill`, as before, or `left`,
+  `center`, `right`), in the tab row and the `tabs` title piece alike.
+
 - State colours: `colors.state_urgent`, `state_synced`, `state_zoomed` and
   `state_scrolled` (with `_fg`) colour a pane's edges and filled title row
   while it is in that state, in that order, after WM mode. The default theme
