@@ -230,6 +230,13 @@ commit log has the detail.
   (`true`), or only those with Ctrl, Alt or Super and those that type no
   character (`"modified"`), instead of being swallowed. `ranma.has("mode.pass")`.
 
+### Changed
+
+- `colors.title_fg_active`, `title_fg_inactive`, `title_fg_floating` also
+  colour a title on the line (no `title_bg_*`), where they did nothing: a
+  dark border can carry a title that reads. A border in WM mode, urgent or
+  synced keeps its title in its own colour.
+
 ### Fixed
 
 - A pill with no caps (arrows, or a side with none) kept no padding: its

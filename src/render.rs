@@ -920,6 +920,22 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     };
     let border = border_colour(app, view, c);
     let edge = Style::default().fg(color(border));
+    // A title on the line (no ground of its own) takes the theme's
+    // `title_fg_*` for its state, as a filled row does, so a quiet border can
+    // carry a title that reads. A border in another colour than its state's
+    // (WM mode, urgent, synced) keeps the title in that colour: it says
+    // something.
+    let plain = if view.focused {
+        c.border_active
+    } else if view.floating {
+        c.border_floating
+    } else {
+        c.border_inactive
+    };
+    let title_ink = match title_state_colours(view, c) {
+        (None, Some(fg)) if border == plain => edge.fg(color(fg)),
+        _ => edge,
+    };
     let drawn = view.drawn();
     let mut sides = Borders::NONE;
     for (on, side) in [
@@ -966,7 +982,7 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
             .into_iter()
             .map(|(t, st)| {
                 let style = match st {
-                    EdgeStyle::Title => edge.add_modifier(modifier(attrs)),
+                    EdgeStyle::Title => title_ink.add_modifier(modifier(attrs)),
                     EdgeStyle::Border => edge,
                     EdgeStyle::Badge(role) => {
                         let fg = match role {
@@ -1008,12 +1024,13 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         } else {
             theme.styles.title
         };
-        let line =
-            Line::styled(text, edge.add_modifier(modifier(attrs))).alignment(match b.title_align {
+        let line = Line::styled(text, title_ink.add_modifier(modifier(attrs))).alignment(
+            match b.title_align {
                 theme::Align::Left => Alignment::Left,
                 theme::Align::Center => Alignment::Center,
                 theme::Align::Right => Alignment::Right,
-            });
+            },
+        );
         block = match b.title {
             TitlePosition::Bottom => block.title_bottom(line),
             _ => block.title_top(line),
@@ -3238,6 +3255,61 @@ mod tests {
         assert_eq!(b[(9, 0)].bg, Color::Rgb(0x22, 0x22, 0x22));
         // The row is not filled: the line keeps the border's colour.
         assert_eq!(b[(3, 0)].fg, Color::Rgb(0, 0, 0x11));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A title on the line takes `title_fg_*` for its state, so a quiet
+    /// border can carry a title that reads; a border coloured for something
+    /// else (WM mode, urgent) keeps its title in that colour.
+    #[test]
+    fn a_title_on_the_line_takes_title_fg() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app(
+            "title-ink",
+            r##"
+            [colors]
+            border_active = "#0000aa"
+            border_inactive = "#000011"
+            title_fg_active = "#eeeeee"
+            title_fg_inactive = "#888888"
+            mode_bg = "#ff0000"
+            "##,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let inner = outer.inset_sides(app.insets(false));
+        let view = |focused| PaneView {
+            id: 1,
+            outer,
+            inner,
+            focused,
+            floating: false,
+            pad: [0; 4],
+        };
+        let draw = |app: &crate::app::App, v: &PaneView| {
+            let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+            t.draw(|f| draw_border(f, app, v, " t ")).unwrap();
+            t.backend().buffer().clone()
+        };
+        let title_x = (0..12)
+            .find(|&x| draw(&app, &view(false))[(x, 0)].symbol() == "t")
+            .expect("the title is on the top line");
+        let b = draw(&app, &view(false));
+        assert_eq!(b[(title_x, 0)].fg, Color::Rgb(0x88, 0x88, 0x88));
+        assert_eq!(
+            b[(0, 1)].fg,
+            Color::Rgb(0, 0, 0x11),
+            "the line keeps the border's"
+        );
+        let b = draw(&app, &view(true));
+        assert_eq!(b[(title_x, 0)].fg, Color::Rgb(0xee, 0xee, 0xee));
+        // Urgent, and WM mode: the title in the border's colour.
+        app.set_states(1, true, false);
+        let b = draw(&app, &view(false));
+        assert_eq!(b[(title_x, 0)].fg, b[(0, 1)].fg);
+        app.set_states(1, false, false);
+        app.mode = crate::app::Mode::Wm;
+        let b = draw(&app, &view(true));
+        assert_eq!(b[(title_x, 0)].fg, Color::Rgb(0xff, 0, 0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

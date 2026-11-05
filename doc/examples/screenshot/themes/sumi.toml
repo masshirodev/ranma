@@ -18,6 +18,10 @@ mode_fg = "#141317"
 mode_bg = "#e0533d"
 module_bg = "#2a2724"
 module_fg = "#e8e1d3"
+module_accent = "#d9a55b"
+# The titles of the panes you are not in: the line stays quiet, the title
+# reads.
+title_fg_inactive = "#8a8173"
 
 ws_active_fg = "#141317"
 ws_active_bg = "#d9a55b"
@@ -82,7 +86,7 @@ inactive_bg = "#121114"
 [styles]
 mode = ["bold"]
 ws_active = ["bold"]
-title = ["dim"]
+title = []
 title_active = ["bold"]
 accent = ["bold"]
 toast = []

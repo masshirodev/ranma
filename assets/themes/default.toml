@@ -61,6 +61,7 @@ tab_inactive_bg = "#313244"
 
 # A filled title row: the ground and text of the row the title is on, for the
 # focused pane, the others, and an unfocused float (unset: its inactive one).
+# A title_fg_* with no title_bg_* colours only the title's text on the line.
 # Unset here on purpose: the row is the border line. A colour may name
 # another key of [colors] (title_bg_active = "tab_active_bg").
 # title_bg_active = ...    title_fg_active = ...

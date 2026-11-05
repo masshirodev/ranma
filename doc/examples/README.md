@@ -32,30 +32,36 @@ pieces on a real pane (`the_examples_title_pieces_run_on_a_real_pane` in
 
 The bar on top, every module a pill, the `sumi` theme (ink, washi paper and
 hinoki wood). Needs a [Nerd Font](https://www.nerdfonts.com/) in your terminal
-for the pill ends and the icons.
+for the pill ends and the icons. The README's screenshot, and the videos on
+[ranma.masshiro.pro](https://ranma.masshiro.pro), are recorded with exactly
+this configuration, in a real kitty, by
+[ranma-site](https://github.com/masshirodev/ranma-site)'s `capture/`.
 
 - `init.lua`: the bar's modules. `label` and `host` are small `ranma.module`s
   of its own; `workspaces`, `pane_strip`, `cpu`, `mem` are built in, the last
-  two with an icon in their `format`; `clock` is redefined with one.
+  two with an icon in their `format`; `clock` is redefined with one, in the
+  accent. And the toast: a command that ran five seconds or more on a
+  workspace you were not looking at says how it ended (a green `✓` or a red
+  `✗`), and where, from the `command_started` and `command_finished` hooks.
 - `themes/sumi.toml`: the colours, the bar on top, the pills
   (`bar.module_left`/`module_right`, with `module_padding_left`/`_right` inside them), the
   round current workspace and tabs inside them (`bar.chip_left`/`chip_right`),
-  the rounded borders with `{index} · {title}`, the gaps (none under the
-  panes), and the dimmed unfocused panes. The padding and chip keys need a
-  ranma from `main` after 2026-10-12 (or the release after 0.2.3); an older one
-  rejects the theme, as it rejects any key it does not know.
+  the rounded borders with `{index} · {title}` (the other panes' titles in
+  `title_fg_inactive`, so they read on a quiet line), the gaps (none under
+  the panes), the dimmed unfocused panes, and the `ok` role the toast's tick
+  is drawn in.
+
+The toast needs the shell to mark its commands, OSC 133 with the command line
+in the mark: the zsh lines under `command_finished` in `doc/CONFIG.md`
+("Hooks"). Without them nothing is said, and nothing else changes.
 
 What the screenshot shows that this does not:
 
-- **The toast.** A toast is one block of text in `toast_fg`: there is no
-  dimmed second line (`workspace 3 · vps`) and no coloured `✓`. The nearest
-  is a `command_finished` hook (`doc/CONFIG.md`, "Hooks"), which needs the
-  shell's OSC 133 marks and gives the duration and exit status, but not the
-  command line; `command_started` has that, so a hook keeps it per pane.
 - **The `ranma` label** is a fixed module here. The built-in `session` module
   shows the session's name only once there are two sessions.
-- **The contents of the panes** (nvim's statusline, the prompt) are those
-  programs' own configuration, not ranma's.
+- **The contents of the panes** (nvim's colours and statusline, the prompt)
+  are those programs' own configuration, not ranma's. ranma-site's
+  `capture/` has the ones the recordings use.
 
 ## `showcase/` — what a theme and `init.lua` can build now
 
