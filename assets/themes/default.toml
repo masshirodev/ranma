@@ -148,6 +148,13 @@ gradient_angle = 0
 # art = "cat"
 # keys = true
 
+# A list picker's width bounds and how many rows it shows at most; these are
+# what unset means.
+# [picker]
+# min_width = 44
+# max_width = 88
+# max_rows = 16
+
 # A float's shadow, right of it and below it: off | shade (cells darkened
 # toward colors.shadow, faint without one) | char (░). Off here.
 # [floating]

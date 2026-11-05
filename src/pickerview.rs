@@ -326,6 +326,8 @@ pub struct Spec {
     /// As narrow as its rows (a menu at the pointer), not the 44 a
     /// launcher takes.
     pub compact: bool,
+    /// Its width bounds and row count, from the theme.
+    pub bounds: Bounds,
 }
 
 impl Default for Spec {
@@ -349,6 +351,26 @@ impl Default for Spec {
             message: String::new(),
             text_w: 40,
             compact: false,
+            bounds: Bounds::default(),
+        }
+    }
+}
+
+/// How wide a list picker may be, and how many rows it shows at most: the
+/// theme's `[picker]` (card c433), the handoff's numbers by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bounds {
+    pub min_w: i32,
+    pub max_w: i32,
+    pub max_rows: i32,
+}
+
+impl Default for Bounds {
+    fn default() -> Bounds {
+        Bounds {
+            min_w: MIN_W,
+            max_w: MAX_W,
+            max_rows: MAX_ROWS,
         }
     }
 }
@@ -472,10 +494,11 @@ pub fn place(spec: &Spec, w: u16, avail: u16) -> Placed {
             Cols::Key => lead + ws.label as i32 + 3 + ws.key as i32 + 1,
             Cols::Help => lead + (ws.leader + ws.chord + 2 + ws.action) as i32 + opt(ws.detail) + 1,
         };
-        let min = if spec.compact { 0 } else { MIN_W };
-        let bw = min.max(content + 2).max(extra).min(MAX_W).min(fit);
+        let b = spec.bounds;
+        let min = if spec.compact { 0 } else { b.min_w };
+        let bw = min.max(content + 2).max(extra).min(b.max_w).min(fit);
         let rows = (spec.rows_open as i32)
-            .min(MAX_ROWS)
+            .min(b.max_rows)
             .min(3.max(a * 2 / 3 - 4))
             .max(1);
         let bh = (rows + 4).min(a);

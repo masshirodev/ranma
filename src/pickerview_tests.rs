@@ -494,3 +494,37 @@ fn cutting_keeps_the_ends_that_matter() {
     assert_eq!(round(3.5), 4);
     assert_eq!(round(2.52), 3);
 }
+
+#[test]
+fn the_themes_bounds_size_the_box() {
+    let rows: Vec<Row> = (0..30)
+        .map(|i| item(&format!("row {i}"), "", false))
+        .collect();
+    let base = Spec {
+        rows_open: 30,
+        matches: 30,
+        ..list(title("rows"), rows)
+    };
+    let p = place(&base, 200, 60);
+    let natural = p.w;
+    assert_eq!(p.rows, 16, "the handoff's 16 rows");
+    let with = |min_w, max_w, max_rows| {
+        place(
+            &Spec {
+                bounds: Bounds {
+                    min_w,
+                    max_w,
+                    max_rows,
+                },
+                ..base.clone()
+            },
+            200,
+            60,
+        )
+    };
+    // A floor above its content widens it; a ceiling below narrows it.
+    let p = with(natural + 13, 120, 24);
+    assert_eq!((p.w, p.rows), (natural + 13, 24));
+    let p = with(20, natural - 7, 5);
+    assert_eq!((p.w, p.rows), (natural - 7, 5));
+}

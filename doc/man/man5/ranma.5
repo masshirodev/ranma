@@ -3529,6 +3529,9 @@ in the logo's place on an empty workspace (the \fBsplash\fR setting): art by nam
 \fBsplash.keys\fR
 \fBtrue\fR (the default) shows the keys to start under the logo or the art; \fBfalse\fR, the logo or the art alone
 .TP
+\fBpicker.min_width\fR, \fBpicker.max_width\fR, \fBpicker.max_rows\fR
+a list picker's width bounds and the rows it shows at most (help, the palette, the switchers, plugins' pickers): \fB44\fR, \fB88\fR and \fB16\fR by default, the redrawn picker's. Wider on a wide screen, fewer rows on a laptop. Width 20\-400, \fBmax_width\fR not under \fBmin_width\fR; rows 3\-200. A screen too small for them still gets a picker that fits.
+.TP
 \fBfloating.shadow\fR
 \fBoff\fR (the default), \fBshade\fR or \fBchar\fR: a shadow one cell right of a float and one row below it, each offset by one, as a desktop window casts. \fBshade\fR darkens the cells there halfway to \fBcolors.shadow\fR (faint, when that or their colours are unknown); \fBchar\fR draws \fB░\fR over them in \fBcolors.shadow\fR (unset, \fBbar_dim\fR). Floats and popups alike.
 .TP

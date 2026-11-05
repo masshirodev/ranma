@@ -198,8 +198,14 @@ impl App {
         let p = self.picker.as_ref()?;
         let leader = self.config.settings.leader.to_string();
         let mode = p.palette_mode();
+        let pk = &self.config.theme.picker;
         let mut spec = Spec {
             title: vec![(noun(&p.title), TitleRole::Text)],
+            bounds: crate::pickerview::Bounds {
+                min_w: pk.min_width.into(),
+                max_w: pk.max_width.into(),
+                max_rows: pk.max_rows.into(),
+            },
             ..Spec::default()
         };
 

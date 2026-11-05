@@ -1032,6 +1032,9 @@ pub struct Theme {
     /// Floats' own looks beyond their border: a shadow.
     #[serde(default)]
     pub floating: Floating,
+    /// A list picker's size (card c433).
+    #[serde(default)]
+    pub picker: PickerLooks,
     /// The empty workspace's looks (card c443).
     #[serde(default)]
     pub splash: SplashLooks,
@@ -1077,6 +1080,26 @@ impl Default for SplashLooks {
         SplashLooks {
             art: None,
             keys: true,
+        }
+    }
+}
+
+/// `[picker]`: how wide a list picker may be and how many rows it shows.
+/// The defaults are the redrawn picker's handoff (`doc/handoffs/PICKER_MOCK.txt`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct PickerLooks {
+    pub min_width: u16,
+    pub max_width: u16,
+    pub max_rows: u16,
+}
+
+impl Default for PickerLooks {
+    fn default() -> PickerLooks {
+        PickerLooks {
+            min_width: 44,
+            max_width: 88,
+            max_rows: 16,
         }
     }
 }
@@ -2017,6 +2040,16 @@ fn check(t: &Theme) -> Result<(), String> {
         {
             return Err(format!("{k} must be one one-cell character, not `{c}`"));
         }
+    }
+    let pk = t.picker;
+    if !(20..=400).contains(&pk.min_width)
+        || !(pk.min_width..=400).contains(&pk.max_width)
+        || !(3..=200).contains(&pk.max_rows)
+    {
+        return Err(format!(
+            "picker: min_width 20-400, max_width from min_width to 400, max_rows 3-200 (not {}, {}, {})",
+            pk.min_width, pk.max_width, pk.max_rows
+        ));
     }
     let pad = t.panes.pad();
     if pad.iter().any(|p| *p > 8) {

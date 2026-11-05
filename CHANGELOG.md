@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `[picker]` in a theme: `min_width`, `max_width` and `max_rows` of list
+  pickers (44, 88 and 16 as before).
+
 - `mouse_double_click`: the double-click (and double-tap) window, in
   milliseconds, 400 as before.
 

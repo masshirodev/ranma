@@ -400,5 +400,5 @@ fixed in the code and is a setting or a bind now.
 - [x] Toasts: their corner and default timeout (c430)
 - [x] `buffers_kept` (c431)
 - [x] One double-click window, and a setting for it (c432)
-- [ ] Picker size from the theme (c433)
+- [x] Picker size from the theme (c433)
 - [ ] An exec module's own timeout (c434)
