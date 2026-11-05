@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- An exec module's own `timeout` (`ranma.module(name, { exec = ..., timeout =
+  20 })`), 5 seconds as before when it gives none.
+
 - `[picker]` in a theme: `min_width`, `max_width` and `max_rows` of list
   pickers (44, 88 and 16 as before).
 

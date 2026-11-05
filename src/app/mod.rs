@@ -4902,13 +4902,16 @@ impl App {
             return;
         };
         match &m.kind {
-            ModuleKind::Exec { command, .. } => {
+            ModuleKind::Exec {
+                command, timeout, ..
+            } => {
                 // One run at a time: a slow command skips ticks instead of piling up.
                 if self.module_running.insert(name.to_string()) {
                     bar::spawn_exec(
                         name.to_string(),
                         self.module_generation,
                         command.clone(),
+                        *timeout,
                         self.tx.clone(),
                     );
                 }

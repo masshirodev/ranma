@@ -1022,7 +1022,8 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 | Option | Meaning |
 | --- | --- |
 | `render` | A Lua function returning a string, or `{ text = "...", style = "..." }` with `style` one of `normal`, `dim`, `accent`, `urgent`, or a role the theme declares (`[roles.<name>]`, see [Themes](#themes)); a name the theme does not have is drawn as `unknown style` in the urgent style. `nil` hides the module. |
-| `exec` | A command run by `/bin/sh -c`, off ranma's own thread, killed (with anything it started) after 5 seconds. A slow command skips ticks instead of piling up. |
+| `exec` | A command run by `/bin/sh -c`, off ranma's own thread, killed (with anything it started) after `timeout` (5 seconds unless given). A slow command skips ticks instead of piling up. |
+| `timeout` | For `exec`: seconds a run may take before it is killed with what it started, 0.1-600; 5 by default. Longer for a slow network check, shorter for what should be instant. |
 | `format` | For `exec`: the text, with `%s` replaced by the output line. |
 | `interval` | Seconds between runs; required for `exec`. Aligned to the wall clock: `60` runs on the minute, not 60 s after ranma started. |
 | `style` | A role the module stands on: its ground and caps (see [The bar](#the-bar)). Every module takes it, built-in ones too. |

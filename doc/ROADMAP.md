@@ -401,4 +401,4 @@ fixed in the code and is a setting or a bind now.
 - [x] `buffers_kept` (c431)
 - [x] One double-click window, and a setting for it (c432)
 - [x] Picker size from the theme (c433)
-- [ ] An exec module's own timeout (c434)
+- [x] An exec module's own timeout (c434)

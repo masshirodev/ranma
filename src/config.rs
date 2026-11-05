@@ -738,6 +738,8 @@ pub enum ModuleKind {
         command: String,
         /// `%s` is replaced by the output line.
         format: Option<String>,
+        /// How long a run may take before it is killed (card c434).
+        timeout: std::time::Duration,
     },
     /// CPU usage since the last tick, from /proc/stat. `%s` is `12%`.
     Cpu { format: Option<String> },
@@ -3043,12 +3045,15 @@ fn install_api(
             if let Some(k) = keys
                 .iter()
                 .find(|k| {
-                    !["render", "exec", "format", "interval", "on_click", "nested", "style"]
-                        .contains(&k.as_str())
+                    ![
+                        "render", "exec", "format", "interval", "on_click", "nested", "style",
+                        "timeout",
+                    ]
+                    .contains(&k.as_str())
                 })
             {
                 return Err(rt_err(format!(
-                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, on_click, nested, style)"
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, timeout, on_click, nested, style)"
                 )));
             }
             let nested = ModuleNested::parse(&name, &opts)?;
@@ -3068,6 +3073,19 @@ fn install_api(
             let render: Option<Function> = opts.get("render")?;
             let exec: Option<String> = opts.get("exec")?;
             let format: Option<String> = opts.get("format")?;
+            let timeout: Option<f64> = opts.get("timeout")?;
+            if let Some(t) = timeout
+                && !(0.1..=600.0).contains(&t)
+            {
+                return Err(rt_err(format!(
+                    "ranma.module(\"{name}\"): timeout must be 0.1 to 600 seconds, not {t}"
+                )));
+            }
+            if timeout.is_some() && exec.is_none() {
+                return Err(rt_err(format!(
+                    "ranma.module(\"{name}\"): timeout is an exec module's: a command run past it is killed"
+                )));
+            }
             let kind = match (render, exec) {
                 (Some(f), None) => {
                     if format.is_some() {
@@ -3083,7 +3101,13 @@ fn install_api(
                             "ranma.module(\"{name}\"): an exec module needs an interval"
                         )));
                     }
-                    ModuleKind::Exec { command, format }
+                    ModuleKind::Exec {
+                        command,
+                        format,
+                        timeout: timeout
+                            .map(std::time::Duration::from_secs_f64)
+                            .unwrap_or(crate::bar::EXEC_TIMEOUT),
+                    }
                 }
                 _ => {
                     return Err(rt_err(format!(
@@ -4684,6 +4708,30 @@ mod tests {
     }
 
     #[test]
+    fn an_exec_module_takes_a_timeout_of_its_own() {
+        let cfg = with_user(
+            r#"ranma.module("slow", { exec = "sleep 1", interval = 60, timeout = 20 })
+               ranma.module("fast", { exec = "true", interval = 5 })"#,
+        )
+        .unwrap();
+        let t = |n: &str| match &cfg.modules[n].kind {
+            ModuleKind::Exec { timeout, .. } => *timeout,
+            _ => unreachable!(),
+        };
+        assert_eq!(t("slow"), std::time::Duration::from_secs(20));
+        assert_eq!(t("fast"), crate::bar::EXEC_TIMEOUT, "5 s unless it says");
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(
+            err(r#"ranma.module("x", { exec = "true", interval = 5, timeout = 0 })"#)
+                .contains("0.1 to 600")
+        );
+        assert!(
+            err(r#"ranma.module("x", { render = function() end, timeout = 5 })"#)
+                .contains("exec module")
+        );
+    }
+
+    #[test]
     fn the_double_click_window_is_one_setting() {
         let ms = |src: &str| {
             with_user(src)
@@ -5512,7 +5560,9 @@ mod tests {
         let e = with_user("ranma.module('workspaces', { label = 'title' })").unwrap_err();
         assert!(e.to_string().contains("label = \"title\""), "{e}");
         match &cfg.modules["load"].kind {
-            ModuleKind::Exec { command, format } => {
+            ModuleKind::Exec {
+                command, format, ..
+            } => {
                 assert_eq!(command, "cat /proc/loadavg");
                 assert_eq!(format.as_deref(), Some("L %s"));
             }

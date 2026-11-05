@@ -538,11 +538,17 @@ pub const EXEC_TIMEOUT: Duration = Duration::from_secs(5);
 /// The command runs in its own process group, and a timeout kills the group, not
 /// just the shell. Killing only the shell leaves any child it started holding the
 /// output pipe open, and the read never finishes (tuios #141).
-pub fn spawn_exec(name: String, generation: u64, command: String, tx: Sender<AppEvent>) {
+pub fn spawn_exec(
+    name: String,
+    generation: u64,
+    command: String,
+    timeout: Duration,
+    tx: Sender<AppEvent>,
+) {
     std::thread::Builder::new()
         .name(format!("module {name}"))
         .spawn(move || {
-            let text = run_command(&command, EXEC_TIMEOUT);
+            let text = run_command(&command, timeout);
             let _ = tx.send(AppEvent::Module {
                 name,
                 generation,
