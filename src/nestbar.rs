@@ -590,8 +590,11 @@ pub fn pieces_in(
         p.push(n);
         click_for(&p)
     };
+    // Inside brackets one space between items, whatever their formats
+    // carry: at the top a format is drawn as written.
+    let inside = level > 0;
     for (i, w) in set.ws.iter().enumerate() {
-        if !pad && i > 0 && fmt.is_none() {
+        if inside && i > 0 {
             out.push(Piece::new(" ", Style::Normal));
         }
         let cur = w.n == set.current;
@@ -615,14 +618,17 @@ pub fn pieces_in(
         }
         let urgent_here = w.urgent || nest.is_some_and(Report::any_urgent);
         let label = match (fmt, &w.name, keep_name) {
-            (Some(f), name, keep) => f.render(
-                &w.n.to_string(),
-                name.as_deref().filter(|_| keep),
-                cur,
-                urgent_here,
-                w.activity,
-                w.occ,
-            ),
+            (Some(f), name, keep) => {
+                let t = f.render(
+                    &w.n.to_string(),
+                    name.as_deref().filter(|_| keep),
+                    cur,
+                    urgent_here,
+                    w.activity,
+                    w.occ,
+                );
+                if inside { t.trim().to_string() } else { t }
+            }
             (None, Some(name), true) => format!("{}:{name}", w.n),
             _ => w.n.to_string(),
         };
@@ -665,7 +671,7 @@ pub fn pieces_in(
         }
     }
     if set.scratch {
-        if !pad && fmt.is_none() {
+        if inside {
             out.push(Piece::new(" ", Style::Normal));
         }
         // An ssh started in the scratchpad reaches a ranma like any pane: `S`
@@ -811,11 +817,15 @@ fn expanded(
         } else {
             Style::WsOccupied
         };
+        // Whole at the top, as the workspaces module draws a chip; inside
+        // brackets the item's own spacing is enough.
         let text = f.render(label, None, at.cur, false, false, true);
-        out.push(with(
-            Piece::new(format!("{}{sess}", text.trim_end()), style),
-            hold,
-        ));
+        let text = if level == 0 {
+            text
+        } else {
+            text.trim().to_string()
+        };
+        out.push(with(Piece::new(format!("{text}{sess}"), style), hold));
     } else if pad {
         let style = if at.cur {
             Style::WsActive
@@ -833,7 +843,18 @@ fn expanded(
         out.push(Piece::new(" ", Style::Normal));
     }
     out.push(with(Piece::new("[", Style::Dim), hold));
-    out.extend(pieces_in(n, level + 1, at.here, o, &p, fmt));
+    let mut inner = pieces_in(n, level + 1, at.here, o, &p, fmt);
+    // A format's own spacing (" ● ") between items, not against the
+    // brackets: `[● • ·]`, not `[ ● • · ]`.
+    if fmt.is_some() {
+        if let Some(first) = inner.first_mut() {
+            first.text = first.text.trim_start().to_string();
+        }
+        if let Some(last) = inner.last_mut() {
+            last.text = last.text.trim_end().to_string();
+        }
+    }
+    out.extend(inner);
     out.push(with(Piece::new("]", Style::Dim), hold));
     if pad || (fmt.is_some() && level == 0) {
         out.push(Piece::new(" ", Style::Normal));
@@ -1211,7 +1232,8 @@ mod tests {
     #[test]
     fn the_expanded_workspaces_take_the_themes_formats() {
         let f = |s: &str| crate::theme::Format::parse(s).unwrap();
-        let (cur, plain, empty) = (f(" ●{name}"), f(" •[{name}]"), f(" ·"));
+        // As sekai spells them: their own spacing on both sides.
+        let (cur, plain, empty) = (f(" ● "), f(" •[{name}] "), f(" · "));
         let fmt = WsFormats {
             current: &cur,
             plain: &plain,
@@ -1263,7 +1285,7 @@ mod tests {
             .iter()
             .map(|p| p.text.clone())
             .collect();
-        assert_eq!(text, " ●[ ● • ·] ", "{text:?}");
+        assert_eq!(text, " ● [● • ·] ", "{text:?}");
         // Without, as ever.
         let names: String = pieces(&outer, 0, true, &Opts::default(), &[])
             .iter()

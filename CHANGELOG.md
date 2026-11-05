@@ -17,7 +17,8 @@ commit log has the detail.
 
 - `ranma.module("workspaces", { nested_format = "theme" })`: the workspaces
   of a ranma inside (` 1 [1:nvim 2:logs] `) in the theme's workspace formats
-  instead, every level, dots and all.
+  instead, every level, dots and all: the top level as the formats are written,
+  inside the brackets one space between items (`● [● • ·]`).
 
 - `nested_bar = "inner"`: over ssh into a ranma, this ranma draws that one's
   own bar, its modules, groups, priorities and look (arrows, caps, roles),
