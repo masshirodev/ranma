@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- Copy mode's keys are binds: `ranma.bind(key, action, { mode = "copy" })` to
+  the new `copy_*` actions (`copy_move`, `copy_page`, `copy_select`,
+  `copy_yank`, `copy_search`, `copy_next`, `copy_prev`, `copy_exit`), the old
+  keys being the defaults; `ranma.unbind` and `unbind_all` take `{ mode =
+  "copy" }`.
+
 - Workspaces drawn as anything: `bar.workspace_empty_format`,
   `workspace_urgent_format` and `workspace_activity_format`, hover colours
   (`colors.ws_hover_fg` / `_bg`), and `show = N`. Any module takes a

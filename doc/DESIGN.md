@@ -1592,6 +1592,27 @@ the Windows one would overwrite what the person at that machine copied.
 `windows_clipboard = false` turns it off. Text only, line breaks kept as
 copied (the same bytes OSC 52 carries).
 
+**Copy mode's keys are binds** (2026-11-04, card c426). Every key in ranma
+was rebindable but copy mode's, a fixed `match` in `app/copy.rs`. Its
+commands are actions now (`copy_move <motion>`, `copy_page`, `copy_select`,
+`copy_yank`, `copy_search`, `copy_next`, `copy_prev`, `copy_exit`), so help
+and the palette list them, and its keys are binds in a table of their own:
+`ranma.bind(key, action, { mode = "copy" })`, with the old keys as the
+defaults in `assets/init.lua`. Decided with it:
+
+- **A table of its own**, not WM mode's: `y` copies in copy mode and does
+  whatever WM mode says outside it. `unbind_all()` leaves copy mode alone,
+  and `unbind_all({ mode = "copy" })` empties it, to start from nothing (an
+  emacs-style set, say).
+- **One key each**: no folders, no `global`, no `group`. Copy mode is a
+  short-lived mode of motions; a folder in it would be a mode inside a mode.
+- **The search prompt stays fixed**: typing, Backspace, Ctrl+u, Enter and
+  Esc edit a line, which is not a set of commands.
+- **Outside copy mode, a copy action enters it first**, so `copy_search
+  backward` bound in WM mode is a reverse search from where you are.
+- `mode = "copy"` is the only mode a bind names: a mode of your own takes
+  its keys in `ranma.mode`, as before.
+
 ### Links are hints, not clicks
 
 Picking a link from the keyboard (2026-09-29, from tuios's clickable links and

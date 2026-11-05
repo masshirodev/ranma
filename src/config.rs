@@ -1025,6 +1025,39 @@ impl Button {
     }
 }
 
+/// A bind's `mode` option: `"copy"`, copy mode's own keys, or nothing.
+/// Returns whether it is copy mode's, and the options without it.
+fn copy_mode_opt(
+    lua: &Lua,
+    who: &str,
+    keys: &str,
+    opts: Option<Table>,
+) -> mlua::Result<(bool, Option<Table>)> {
+    let Some(t) = opts else {
+        return Ok((false, None));
+    };
+    match t.get::<Value>("mode")? {
+        Value::Nil => Ok((false, Some(t))),
+        Value::String(m) if m.to_str()? == "copy" => {
+            let rest = lua.create_table()?;
+            for pair in t.pairs::<Value, Value>() {
+                let (k, v) = pair?;
+                if !matches!(&k, Value::String(s) if s.to_str().is_ok_and(|s| s == "mode")) {
+                    rest.set(k, v)?;
+                }
+            }
+            Ok((true, Some(rest)))
+        }
+        other => Err(rt_err(format!(
+            "{who}(\"{keys}\"): mode = {} (the one mode a bind names is \"copy\"; a mode of your own takes its keys in ranma.mode)",
+            match other {
+                Value::String(s) => format!("\"{}\"", s.to_string_lossy()),
+                v => v.type_name().to_string(),
+            }
+        ))),
+    }
+}
+
 /// Parse `ranma.title_piece`'s definition, strictly.
 fn parse_title_piece(lua: &Lua, name: &str, opts: &Table) -> mlua::Result<TitlePieceDef> {
     let who = format!("ranma.title_piece(\"{name}\")");
@@ -1465,6 +1498,7 @@ struct Builder {
     bar: BarLayout,
     titlebar: Option<TitleLayout>,
     title_pieces: HashMap<String, TitlePieceDef>,
+    copy_binds: HashMap<Chord, Bind>,
     modules: HashMap<String, ModuleDef>,
     module_styles: HashMap<String, String>,
     module_hover_styles: HashMap<String, String>,
@@ -1522,6 +1556,8 @@ pub struct Config {
     /// `ranma.titlebar` as `init.lua` left it, before any profile.
     base_titlebar: Option<TitleLayout>,
     pub title_pieces: HashMap<String, TitlePieceDef>,
+    /// Copy mode's keys (`ranma.bind(key, action, { mode = "copy" })`).
+    pub copy_binds: HashMap<Chord, Bind>,
     pub modules: HashMap<String, ModuleDef>,
     /// A module's `style`: the role it stands on, a pill of its ground.
     pub module_styles: HashMap<String, String>,
@@ -2282,8 +2318,33 @@ fn install_api(
         "bind",
         lua.create_function(
             |lua, (keys, action, opts): (String, Value, Option<Table>)| {
+                // `mode = "copy"`: a key of copy mode's own (card c426),
+                // in a table of its own; the rest of the options as ever.
+                let (copy, opts) = copy_mode_opt(lua, "ranma.bind", &keys, opts)?;
+                if copy && keys.split_whitespace().count() > 1 {
+                    return Err(rt_err(format!(
+                        "ranma.bind(\"{keys}\"): copy mode's keys are one key each, not a folder's"
+                    )));
+                }
                 let (path, bind, global) =
-                    parse_bind(lua, &keys, action, opts.as_ref(), "ranma.bind", true)?;
+                    parse_bind(lua, &keys, action, opts.as_ref(), "ranma.bind", !copy)?;
+                if copy {
+                    let [chord] = path.as_slice() else {
+                        return Err(rt_err(format!(
+                            "ranma.bind(\"{keys}\"): copy mode's keys are one key each, not a folder's"
+                        )));
+                    };
+                    if matches!(bind.action, BindAction::Folder(_)) {
+                        return Err(rt_err(format!(
+                            "ranma.bind(\"{keys}\"): copy mode has no folders"
+                        )));
+                    }
+                    lua.app_data_mut::<Builder>()
+                        .ok_or_else(loading_only)?
+                        .copy_binds
+                        .insert(*chord, bind);
+                    return Ok(());
+                }
                 let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
                 if let Some(g) = &bind.group
                     && !b.group_order.contains(g)
@@ -2501,7 +2562,19 @@ fn install_api(
 
     ranma.set(
         "unbind",
-        lua.create_function(|lua, keys: String| {
+        lua.create_function(|lua, (keys, opts): (String, Option<Table>)| {
+            let (copy, _) = copy_mode_opt(lua, "ranma.unbind", &keys, opts)?;
+            if copy {
+                let chord: Chord = keys
+                    .trim()
+                    .parse()
+                    .map_err(|e| rt_err(format!("ranma.unbind: key `{keys}`: {e}")))?;
+                lua.app_data_mut::<Builder>()
+                    .ok_or_else(loading_only)?
+                    .copy_binds
+                    .remove(&chord);
+                return Ok(());
+            }
             let path: Vec<Chord> = keys
                 .split_whitespace()
                 .map(|k| {
@@ -2525,8 +2598,13 @@ fn install_api(
 
     ranma.set(
         "unbind_all",
-        lua.create_function(|lua, ()| {
+        lua.create_function(|lua, opts: Option<Table>| {
+            let (copy, _) = copy_mode_opt(lua, "ranma.unbind_all", "", opts)?;
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+            if copy {
+                b.copy_binds.clear();
+                return Ok(());
+            }
             b.binds.clear();
             b.global_binds.clear();
             b.nested.clear();
@@ -3809,6 +3887,7 @@ pub fn load_full(
         base_titlebar: builder.titlebar.clone(),
         titlebar: builder.titlebar,
         title_pieces: builder.title_pieces,
+        copy_binds: builder.copy_binds,
         toolbars: builder.toolbars,
         toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,
@@ -4440,6 +4519,70 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn copy_modes_keys_are_binds_of_their_own() {
+        use crate::action::{CopyMotion, CopySelect};
+        let key = |k: &str| k.parse::<Chord>().unwrap();
+        let cfg = with_user("").unwrap();
+        let act = |cfg: &Config, k: &str| match cfg.copy_binds.get(&key(k)).map(|b| &b.action) {
+            Some(BindAction::Builtin(a)) => Some(a.clone()),
+            _ => None,
+        };
+        // The defaults are the keys copy mode always had.
+        assert_eq!(act(&cfg, "w"), Some(Action::CopyMove(CopyMotion::WordNext)));
+        assert_eq!(
+            act(&cfg, "shift+w"),
+            Some(Action::CopyMove(CopyMotion::BigWordNext))
+        );
+        assert_eq!(
+            act(&cfg, "ctrl+v"),
+            Some(Action::CopySelect(CopySelect::Block))
+        );
+        assert_eq!(act(&cfg, "escape"), Some(Action::CopyExit));
+        // Not WM mode's: `y` there is whatever the WM binds say.
+        let wm_y = match cfg.binds.get(&key("y")).map(|b| &b.action) {
+            Some(BindAction::Builtin(a)) => Some(a.clone()),
+            _ => None,
+        };
+        assert_ne!(wm_y, act(&cfg, "y"));
+        // Rebind, free one, or start from nothing.
+        let cfg = with_user(
+            r#"
+            ranma.bind("x", "copy_exit", { mode = "copy" })
+            ranma.unbind("q", { mode = "copy" })
+            "#,
+        )
+        .unwrap();
+        assert_eq!(act(&cfg, "x"), Some(Action::CopyExit));
+        assert_eq!(act(&cfg, "q"), None);
+        let cfg = with_user(r#"ranma.unbind_all({ mode = "copy" })"#).unwrap();
+        assert!(cfg.copy_binds.is_empty());
+        assert!(!cfg.binds.is_empty(), "WM mode's keys stay");
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(err(r#"ranma.bind("x", "copy_exit", { mode = "wm" })"#).contains("\"copy\""));
+        assert!(
+            err(r#"ranma.bind("x y", "copy_exit", { mode = "copy" })"#).contains("one key each")
+        );
+        assert!(
+            err(r#"ranma.bind("x", "copy_exit", { mode = "copy", global = true })"#)
+                .contains("global")
+        );
+        assert!(
+            err(r#"ranma.bind("x", "copy_move sideways", { mode = "copy" })"#)
+                .contains("word_next")
+        );
+        // The actions read back as they are written.
+        for a in [
+            "copy_move bigword_end",
+            "copy_page half_up",
+            "copy_select line",
+            "copy_search backward",
+            "copy_prev",
+        ] {
+            assert_eq!(a.parse::<Action>().unwrap().to_string(), a);
+        }
     }
 
     #[test]

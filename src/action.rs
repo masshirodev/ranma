@@ -190,6 +190,19 @@ pub enum Action {
     Settings,
     /// Keyboard scrollback and selection (vi keys) in the focused pane.
     CopyMode,
+    /// Copy mode's commands, its keys' actions (card c426): bound with
+    /// `ranma.bind(key, action, { mode = "copy" })`. Run outside copy mode,
+    /// each enters it first.
+    CopyMove(CopyMotion),
+    CopyPage(CopyPage),
+    CopySelect(CopySelect),
+    CopyYank,
+    CopySearch {
+        backward: bool,
+    },
+    CopyNext,
+    CopyPrev,
+    CopyExit,
     /// Label the links on the focused pane's screen; typing a label copies it,
     /// in capitals opens it.
     Hints,
@@ -376,6 +389,72 @@ pub enum ActionError {
 /// Every action by name, with what it takes: `<...>` is required, `[...]`
 /// optional, empty is nothing. The command palette lists these, so an action
 /// missing here can be bound but not found; a test holds the two together.
+/// Where `copy_move` goes: vi's motions, by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyMotion {
+    Left,
+    Down,
+    Up,
+    Right,
+    WordNext,
+    WordPrev,
+    WordEnd,
+    BigWordNext,
+    BigWordPrev,
+    BigWordEnd,
+    LineStart,
+    LineEnd,
+    FirstChar,
+    ScreenTop,
+    ScreenMiddle,
+    ScreenBottom,
+    Bracket,
+    Top,
+    Bottom,
+}
+
+impl CopyMotion {
+    pub const NAMES: [(&'static str, CopyMotion); 19] = [
+        ("left", CopyMotion::Left),
+        ("down", CopyMotion::Down),
+        ("up", CopyMotion::Up),
+        ("right", CopyMotion::Right),
+        ("word_next", CopyMotion::WordNext),
+        ("word_prev", CopyMotion::WordPrev),
+        ("word_end", CopyMotion::WordEnd),
+        ("bigword_next", CopyMotion::BigWordNext),
+        ("bigword_prev", CopyMotion::BigWordPrev),
+        ("bigword_end", CopyMotion::BigWordEnd),
+        ("line_start", CopyMotion::LineStart),
+        ("line_end", CopyMotion::LineEnd),
+        ("first_char", CopyMotion::FirstChar),
+        ("screen_top", CopyMotion::ScreenTop),
+        ("screen_middle", CopyMotion::ScreenMiddle),
+        ("screen_bottom", CopyMotion::ScreenBottom),
+        ("bracket", CopyMotion::Bracket),
+        ("top", CopyMotion::Top),
+        ("bottom", CopyMotion::Bottom),
+    ];
+    const ALL: &'static str = "left, down, up, right, word_next, word_prev, word_end, bigword_next, bigword_prev, bigword_end, line_start, line_end, first_char, screen_top, screen_middle, screen_bottom, bracket, top or bottom";
+}
+
+/// How far `copy_page` scrolls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyPage {
+    Up,
+    Down,
+    HalfUp,
+    HalfDown,
+}
+
+/// What `copy_select` selects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopySelect {
+    Char,
+    Line,
+    Block,
+}
+
 pub const CATALOGUE: &[(&str, &str)] = &[
     ("new_pane", "[left|right|up|down]"),
     ("close_pane", ""),
@@ -425,6 +504,17 @@ pub const CATALOGUE: &[(&str, &str)] = &[
     ("command_palette", ""),
     ("settings", ""),
     ("copy_mode", ""),
+    (
+        "copy_move",
+        "<left|down|up|right|word_next|word_prev|word_end|bigword_next|bigword_prev|bigword_end|line_start|line_end|first_char|screen_top|screen_middle|screen_bottom|bracket|top|bottom>",
+    ),
+    ("copy_page", "<up|down|half_up|half_down>"),
+    ("copy_select", "<char|line|block>"),
+    ("copy_yank", ""),
+    ("copy_search", "<forward|backward>"),
+    ("copy_next", ""),
+    ("copy_prev", ""),
+    ("copy_exit", ""),
     ("hints", ""),
     ("display_panes", ""),
     ("mode", "<name>"),
@@ -904,6 +994,83 @@ impl FromStr for Action {
             "command_palette" => no_arg(Action::CommandPalette),
             "settings" => no_arg(Action::Settings),
             "copy_mode" => no_arg(Action::CopyMode),
+            "copy_move" => {
+                let arg = first.ok_or(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: CopyMotion::ALL,
+                })?;
+                CopyMotion::NAMES
+                    .iter()
+                    .find(|(n, _)| *n == arg && second.is_none())
+                    .map(|(_, m)| Action::CopyMove(*m))
+                    .ok_or(ActionError::BadArg {
+                        action: name.into(),
+                        arg: rest.unwrap_or_default().into(),
+                        expected: CopyMotion::ALL,
+                    })
+            }
+            "copy_page" => {
+                const WHAT: &str = "up, down, half_up or half_down";
+                let p = match (first, second) {
+                    (Some("up"), None) => CopyPage::Up,
+                    (Some("down"), None) => CopyPage::Down,
+                    (Some("half_up"), None) => CopyPage::HalfUp,
+                    (Some("half_down"), None) => CopyPage::HalfDown,
+                    (None, _) => {
+                        return Err(ActionError::MissingArg {
+                            action: name.into(),
+                            expected: WHAT,
+                        });
+                    }
+                    _ => {
+                        return Err(ActionError::BadArg {
+                            action: name.into(),
+                            arg: rest.unwrap_or_default().into(),
+                            expected: WHAT,
+                        });
+                    }
+                };
+                Ok(Action::CopyPage(p))
+            }
+            "copy_select" => {
+                const WHAT: &str = "char, line or block";
+                let k = match (first, second) {
+                    (Some("char"), None) => CopySelect::Char,
+                    (Some("line"), None) => CopySelect::Line,
+                    (Some("block"), None) => CopySelect::Block,
+                    (None, _) => {
+                        return Err(ActionError::MissingArg {
+                            action: name.into(),
+                            expected: WHAT,
+                        });
+                    }
+                    _ => {
+                        return Err(ActionError::BadArg {
+                            action: name.into(),
+                            arg: rest.unwrap_or_default().into(),
+                            expected: WHAT,
+                        });
+                    }
+                };
+                Ok(Action::CopySelect(k))
+            }
+            "copy_yank" => no_arg(Action::CopyYank),
+            "copy_search" => match (first, second) {
+                (Some("forward"), None) => Ok(Action::CopySearch { backward: false }),
+                (Some("backward"), None) => Ok(Action::CopySearch { backward: true }),
+                (None, _) => Err(ActionError::MissingArg {
+                    action: name.into(),
+                    expected: "forward or backward",
+                }),
+                _ => Err(ActionError::BadArg {
+                    action: name.into(),
+                    arg: rest.unwrap_or_default().into(),
+                    expected: "forward or backward",
+                }),
+            },
+            "copy_next" => no_arg(Action::CopyNext),
+            "copy_prev" => no_arg(Action::CopyPrev),
+            "copy_exit" => no_arg(Action::CopyExit),
             "hints" => no_arg(Action::Hints),
             "display_panes" => no_arg(Action::DisplayPanes),
             "mode" => match (first, second) {
@@ -1198,6 +1365,42 @@ impl fmt::Display for Action {
             Action::CommandPalette => f.write_str("command_palette"),
             Action::Settings => f.write_str("settings"),
             Action::CopyMode => f.write_str("copy_mode"),
+            Action::CopyMove(m) => {
+                let n = CopyMotion::NAMES
+                    .iter()
+                    .find(|(_, x)| x == m)
+                    .map(|(n, _)| *n)
+                    .unwrap_or("left");
+                write!(f, "copy_move {n}")
+            }
+            Action::CopyPage(p) => write!(
+                f,
+                "copy_page {}",
+                match p {
+                    CopyPage::Up => "up",
+                    CopyPage::Down => "down",
+                    CopyPage::HalfUp => "half_up",
+                    CopyPage::HalfDown => "half_down",
+                }
+            ),
+            Action::CopySelect(k) => write!(
+                f,
+                "copy_select {}",
+                match k {
+                    CopySelect::Char => "char",
+                    CopySelect::Line => "line",
+                    CopySelect::Block => "block",
+                }
+            ),
+            Action::CopyYank => f.write_str("copy_yank"),
+            Action::CopySearch { backward } => write!(
+                f,
+                "copy_search {}",
+                if *backward { "backward" } else { "forward" }
+            ),
+            Action::CopyNext => f.write_str("copy_next"),
+            Action::CopyPrev => f.write_str("copy_prev"),
+            Action::CopyExit => f.write_str("copy_exit"),
             Action::Hints => f.write_str("hints"),
             Action::DisplayPanes => f.write_str("display_panes"),
             Action::Mode(n) => write!(f, "mode {n}"),

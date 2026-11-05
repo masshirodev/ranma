@@ -6,6 +6,8 @@
 //! it plus the clipboard: a yank goes to the host terminal as OSC 52, which kitty,
 //! foot, wezterm, alacritty and tmux all accept.
 
+use crate::action::Action;
+use crate::config::BindAction;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Boundary, Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
@@ -231,69 +233,106 @@ impl App {
         }
     }
 
-    fn vi_key(&mut self, id: PaneId, key: &KeyEvent) {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let motion = match key.code {
-            KeyCode::Char('h') | KeyCode::Left => Some(ViMotion::Left),
-            KeyCode::Char('j') | KeyCode::Down => Some(ViMotion::Down),
-            KeyCode::Char('k') | KeyCode::Up => Some(ViMotion::Up),
-            KeyCode::Char('l') | KeyCode::Right => Some(ViMotion::Right),
-            KeyCode::Char('w') if !ctrl => Some(ViMotion::SemanticRight),
-            KeyCode::Char('b') if !ctrl => Some(ViMotion::SemanticLeft),
-            KeyCode::Char('e') => Some(ViMotion::SemanticRightEnd),
-            KeyCode::Char('W') => Some(ViMotion::WordRight),
-            KeyCode::Char('B') => Some(ViMotion::WordLeft),
-            KeyCode::Char('E') => Some(ViMotion::WordRightEnd),
-            KeyCode::Char('0') | KeyCode::Home => Some(ViMotion::First),
-            KeyCode::Char('$') | KeyCode::End => Some(ViMotion::Last),
-            KeyCode::Char('^') => Some(ViMotion::FirstOccupied),
-            KeyCode::Char('H') => Some(ViMotion::High),
-            KeyCode::Char('M') => Some(ViMotion::Middle),
-            KeyCode::Char('L') => Some(ViMotion::Low),
-            KeyCode::Char('%') => Some(ViMotion::Bracket),
-            _ => None,
-        };
-        let pane = self.panes.get(&id).expect("checked");
-        if let Some(m) = motion {
-            let mut term = pane.term.lock();
-            term.vi_motion(m);
-            let p = term.vi_mode_cursor.point;
-            term.scroll_to_point(p);
+    /// A key in copy mode: what `ranma.bind(key, action, { mode = "copy" })`
+    /// gave it (card c426), the defaults being `assets/init.lua`'s; an
+    /// unbound key does nothing.
+    fn vi_key(&mut self, _id: PaneId, key: &KeyEvent) {
+        let Some(chord) = crate::input::chord_of(key) else {
             return;
+        };
+        let Some(bind) = self.config.copy_binds.get(&chord).map(|b| b.action.clone()) else {
+            return;
+        };
+        match bind {
+            BindAction::Builtin(a) => self.run_action(a),
+            BindAction::Lua(f) => match self.config.lua.registry_value::<mlua::Function>(&f) {
+                Ok(f) => {
+                    self.call_lua(|_| f.call::<()>(()));
+                }
+                Err(_) => self.status = Some("lua: bind function is gone".into()),
+            },
+            BindAction::Folder(_) => {}
         }
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => self.exit_copy_mode(),
-            KeyCode::Char('c') if ctrl => self.exit_copy_mode(),
-            KeyCode::Char('y') | KeyCode::Enter => self.yank(id),
-            KeyCode::Char('/') => self.enter_copy_mode(Some(false)),
-            KeyCode::Char('?') => self.enter_copy_mode(Some(true)),
-            KeyCode::Char('n') if !ctrl => self.search_again(id, false),
-            KeyCode::Char('N') => self.search_again(id, true),
-            KeyCode::Char('v') if ctrl => {
-                toggle_selection(&mut pane.term.lock(), SelectionType::Block)
-            }
-            KeyCode::Char('v') => toggle_selection(&mut pane.term.lock(), SelectionType::Simple),
-            KeyCode::Char('V') => toggle_selection(&mut pane.term.lock(), SelectionType::Lines),
-            KeyCode::Char('g') => {
+    }
+
+    /// One of copy mode's commands; outside copy mode it enters it first.
+    pub(super) fn copy_action(&mut self, a: Action) {
+        use crate::action::{CopyMotion as M, CopyPage, CopySelect};
+        if self.copy.is_none() {
+            self.enter_copy_mode(None);
+        }
+        let Some(id) = self.copy.as_ref().map(|c| c.pane) else {
+            return;
+        };
+        let Some(pane) = self.panes.get(&id) else {
+            self.exit_copy_mode();
+            return;
+        };
+        self.dirty = true;
+        match a {
+            Action::CopyMove(m) => {
                 let mut term = pane.term.lock();
-                let top = Point::new(term.topmost_line(), Column(0));
-                term.vi_goto_point(top);
+                let motion = match m {
+                    M::Left => Some(ViMotion::Left),
+                    M::Down => Some(ViMotion::Down),
+                    M::Up => Some(ViMotion::Up),
+                    M::Right => Some(ViMotion::Right),
+                    M::WordNext => Some(ViMotion::SemanticRight),
+                    M::WordPrev => Some(ViMotion::SemanticLeft),
+                    M::WordEnd => Some(ViMotion::SemanticRightEnd),
+                    M::BigWordNext => Some(ViMotion::WordRight),
+                    M::BigWordPrev => Some(ViMotion::WordLeft),
+                    M::BigWordEnd => Some(ViMotion::WordRightEnd),
+                    M::LineStart => Some(ViMotion::First),
+                    M::LineEnd => Some(ViMotion::Last),
+                    M::FirstChar => Some(ViMotion::FirstOccupied),
+                    M::ScreenTop => Some(ViMotion::High),
+                    M::ScreenMiddle => Some(ViMotion::Middle),
+                    M::ScreenBottom => Some(ViMotion::Low),
+                    M::Bracket => Some(ViMotion::Bracket),
+                    M::Top | M::Bottom => None,
+                };
+                match (motion, m) {
+                    (Some(v), _) => {
+                        term.vi_motion(v);
+                        let p = term.vi_mode_cursor.point;
+                        term.scroll_to_point(p);
+                    }
+                    (None, M::Top) => {
+                        let top = Point::new(term.topmost_line(), Column(0));
+                        term.vi_goto_point(top);
+                    }
+                    (None, _) => {
+                        let bottom = Point::new(term.bottommost_line(), Column(0));
+                        term.vi_goto_point(bottom);
+                    }
+                }
             }
-            KeyCode::Char('G') => {
-                let mut term = pane.term.lock();
-                let bottom = Point::new(term.bottommost_line(), Column(0));
-                term.vi_goto_point(bottom);
+            Action::CopyPage(p) => {
+                let (half, up) = match p {
+                    CopyPage::Up => (false, true),
+                    CopyPage::Down => (false, false),
+                    CopyPage::HalfUp => (true, true),
+                    CopyPage::HalfDown => (true, false),
+                };
+                page(&mut pane.term.lock(), half, up);
             }
-            KeyCode::Char('u' | 'b') | KeyCode::PageUp if ctrl || key.code == KeyCode::PageUp => {
-                page(&mut pane.term.lock(), key, true)
+            Action::CopySelect(k) => {
+                let ty = match k {
+                    CopySelect::Char => SelectionType::Simple,
+                    CopySelect::Line => SelectionType::Lines,
+                    CopySelect::Block => SelectionType::Block,
+                };
+                toggle_selection(&mut pane.term.lock(), ty);
             }
-            KeyCode::Char('d' | 'f') | KeyCode::PageDown
-                if ctrl || key.code == KeyCode::PageDown =>
-            {
-                page(&mut pane.term.lock(), key, false)
-            }
+            Action::CopyYank => self.yank(id),
+            Action::CopySearch { backward } => self.enter_copy_mode(Some(backward)),
+            Action::CopyNext => self.search_again(id, false),
+            Action::CopyPrev => self.search_again(id, true),
+            Action::CopyExit => self.exit_copy_mode(),
             _ => {}
         }
+        self.refresh_hits();
     }
 
     /// Copy the selection (or the current search match, when nothing is
@@ -427,11 +466,12 @@ fn toggle_selection(term: &mut Term<Proxy>, ty: SelectionType) {
 
 /// Half a page with Ctrl+u / Ctrl+d, a whole one with Ctrl+b / Ctrl+f and the
 /// page keys: the view and the cursor move together.
-fn page(term: &mut Term<Proxy>, key: &KeyEvent, up: bool) {
+fn page(term: &mut Term<Proxy>, half: bool, up: bool) {
     let rows = term.screen_lines() as i32;
-    let n = match key.code {
-        KeyCode::Char('u' | 'd') => rows / 2,
-        _ => rows.saturating_sub(1),
+    let n = if half {
+        rows / 2
+    } else {
+        rows.saturating_sub(1)
     }
     .max(1);
     term.scroll_display(Scroll::Delta(if up { n } else { -n }));

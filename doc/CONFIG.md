@@ -214,6 +214,7 @@ ranma.unbind_all()   -- drop every default, WM and global, and start from nothin
 | Option | Meaning |
 | --- | --- |
 | `exit` | Whether WM mode ends after the bind fires. Given, it decides alone, over `wm_mode.sticky` too: `{ exit = false }` keeps WM mode after a resize even with `sticky = false`, and `{ exit = true }` ends a sticky one. Left out, it follows the action (`new_pane`, `exec`, `scratchpad_toggle`, the switchers, `send_leader`, `exit_mode` and `quit` end the mode; everything else, and every Lua function, keeps it), and `sticky = false` ends the mode after any bind. |
+| `mode` | `"copy"`: a key of copy mode's own, in a table apart from WM mode's (see [Copy mode and search](#copy-mode-and-search)). One key each; no `global` or `group`. |
 | `global` | Bind the key **outside** WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are `alt+left/right/up/down` to focus a neighbouring pane and `alt+1`…`alt+0` to go to workspaces 1-10 (in WM mode, `alt+<digit>` moves the pane there instead), `alt+s` to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used `M-s` spell-word), `alt+shift+arrows` to move the focused pane, and `alt+shift+<digit>` to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (`alt+!`, `alt+@`, …) for the US and ABNT2 layouts; see the table in `--dump-config` to add another layout's. The leader itself cannot be global. |
 | `desc` | A short name for the bind in the which-key hint (up to 16 cells show), for an action as well as a Lua function: `{ desc = "status" }` reads better than `exec lazygit`. A Lua function has no action to be named by, so without it the hint calls it `lua` and help (`leader ?`) `<lua function>`; with it, both show the `desc`. |
 | `group` | The which-key heading the bind is listed under, up to 16 cells. A built-in group's name (`panes`, `history`, …) puts the row after that group's own; a new name makes a heading of its own, after `workspaces`, in the order the configuration first names them. Without it, a bind ranma knows goes in its usual group and anything else in `yours`. |
@@ -358,6 +359,13 @@ sent them, which it is not asked to.
 | `settings` | The settings panel: every option, edited in place and saved to `settings.toml`. `leader p`, or `:settings` in the palette. With the panel or a plugin's screen already open, it moves the keyboard between it and the panes instead. See [The settings panel](#the-settings-panel). |
 | `search` | Search the focused pane's history, most recent match first (see [Copy mode](#copy-mode-and-search)). |
 | `copy_mode` | Move through the focused pane's history with vi keys and copy from it. |
+| `copy_move <motion>` | In copy mode (entering it first): `left`, `down`, `up`, `right`, `word_next`, `word_prev`, `word_end`, `bigword_next`, `bigword_prev`, `bigword_end` (space-separated words), `line_start`, `line_end`, `first_char`, `screen_top`, `screen_middle`, `screen_bottom`, `bracket`, `top`, `bottom`. |
+| `copy_page <up\|down\|half_up\|half_down>` | In copy mode: a page, or half of one. |
+| `copy_select <char\|line\|block>` | In copy mode: start (or cancel) a selection of characters, lines or a block. |
+| `copy_yank` | Copy the selection (or the current match) and leave copy mode. |
+| `copy_search <forward\|backward>` | Search the history, from copy mode. |
+| `copy_next`, `copy_prev` | The next match in the search's direction, or the other way. |
+| `copy_exit` | Leave copy mode. |
 | `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` (`open` on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
 | `mode <name>` | Enter a mode declared with `ranma.mode`: WM mode with its keys. See [Modes](#modes--ranmamodename-def). |
 | `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile (`leader i`). |
@@ -477,7 +485,13 @@ match first. While the current match is on that bottom row (the line you just
 typed, often), the prompt takes the top row instead, so it never hides it. Every visible match is highlighted, the current one more strongly.
 `Enter` keeps you at the match in copy mode; `Esc` leaves.
 
-`copy_mode` (`leader [`) enters copy mode without searching. In copy mode:
+`copy_mode` (`leader [`) enters copy mode without searching. Its keys are
+binds of their own, `ranma.bind(key, action, { mode = "copy" })` to the
+`copy_*` actions (see [Actions](#actions)), so any of them can be rebound,
+freed with `ranma.unbind(key, { mode = "copy" })`, or all dropped with
+`ranma.unbind_all({ mode = "copy" })` to start from nothing; a key bound to
+nothing does nothing there. The search prompt's own editing (typing,
+Backspace, Ctrl+u, Enter, Esc) stays fixed. The defaults:
 
 | Keys | Do |
 | --- | --- |

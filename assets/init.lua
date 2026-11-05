@@ -355,6 +355,42 @@ ranma.bind(".", "rename_workspace")
 -- the next and previous match, q or Esc to leave.
 ranma.bind("/", "search")
 ranma.bind("[", "copy_mode")
+
+-- Copy mode's own keys: binds with { mode = "copy" }, one key each, to the
+-- copy_* actions (copy_move, copy_page, copy_select, copy_yank, copy_search,
+-- copy_next, copy_prev, copy_exit). Rebind any; ranma.unbind(key, { mode =
+-- "copy" }) frees one, ranma.unbind_all({ mode = "copy" }) all of them, to
+-- start copy mode from nothing. A key bound to nothing does nothing there.
+for keys, where in pairs {
+  h = "left", left = "left", j = "down", down = "down",
+  k = "up", up = "up", l = "right", right = "right",
+  w = "word_next", b = "word_prev", e = "word_end",
+  ["shift+w"] = "bigword_next", ["shift+b"] = "bigword_prev", ["shift+e"] = "bigword_end",
+  ["0"] = "line_start", home = "line_start", ["$"] = "line_end", ["end"] = "line_end",
+  ["^"] = "first_char", ["%"] = "bracket",
+  ["shift+h"] = "screen_top", ["shift+m"] = "screen_middle", ["shift+l"] = "screen_bottom",
+  g = "top", ["shift+g"] = "bottom",
+} do
+  ranma.bind(keys, "copy_move " .. where, { mode = "copy" })
+end
+for keys, how in pairs {
+  ["ctrl+u"] = "half_up", ["ctrl+d"] = "half_down",
+  ["ctrl+b"] = "up", ["ctrl+f"] = "down", pageup = "up", pagedown = "down",
+} do
+  ranma.bind(keys, "copy_page " .. how, { mode = "copy" })
+end
+ranma.bind("v", "copy_select char", { mode = "copy" })
+ranma.bind("shift+v", "copy_select line", { mode = "copy" })
+ranma.bind("ctrl+v", "copy_select block", { mode = "copy" })
+ranma.bind("y", "copy_yank", { mode = "copy" })
+ranma.bind("return", "copy_yank", { mode = "copy" })
+ranma.bind("/", "copy_search forward", { mode = "copy" })
+ranma.bind("?", "copy_search backward", { mode = "copy" })
+ranma.bind("n", "copy_next", { mode = "copy" })
+ranma.bind("shift+n", "copy_prev", { mode = "copy" })
+for _, key in ipairs { "q", "escape", "ctrl+c" } do
+  ranma.bind(key, "copy_exit", { mode = "copy" })
+end
 -- Links: o labels every link on the focused pane's screen (URLs in the text
 -- and OSC 8 links); type a label to copy that link, or type it in capitals
 -- to open it with xdg-open (open on macOS). Esc cancels.

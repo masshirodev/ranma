@@ -3616,6 +3616,14 @@ impl App {
             Action::Settings if self.slot_open() => self.toggle_slot_keys(),
             Action::Settings => self.open_settings(),
             Action::CopyMode => self.enter_copy_mode(None),
+            a @ (Action::CopyMove(_)
+            | Action::CopyPage(_)
+            | Action::CopySelect(_)
+            | Action::CopyYank
+            | Action::CopySearch { .. }
+            | Action::CopyNext
+            | Action::CopyPrev
+            | Action::CopyExit) => self.copy_action(a),
             Action::Hints => self.enter_hints(),
             Action::DisplayPanes => self.show_pane_numbers(),
             Action::Mode(name) => self.enter_user_mode(&name),

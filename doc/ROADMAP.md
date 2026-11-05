@@ -387,3 +387,18 @@ not listed here.
   cuts that keep caps, `center_min` (c445)
 - [x] Workspaces in any form, hover colours, `show = N`, `message` placed by the
   config (c446)
+
+## 18. Behaviour you set
+
+The behaviour half of the 2026-11-04 survey (cards c426 to c434): what was
+fixed in the code and is a setting or a bind now.
+
+- [x] Copy mode's keys are binds, its commands actions (c426)
+- [ ] `word_chars` (c427)
+- [ ] Hints: an alphabet and patterns of your own (c428)
+- [ ] `mouse_wheel_lines` (c429)
+- [ ] Toasts: their corner and default timeout (c430)
+- [ ] `buffers_kept` (c431)
+- [ ] One double-click window, and a setting for it (c432)
+- [ ] Picker size from the theme (c433)
+- [ ] An exec module's own timeout (c434)

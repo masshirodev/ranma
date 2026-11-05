@@ -100,6 +100,7 @@ function ranma.get(key) end
 ---@field global? boolean Looked up outside WM mode, before the program sees the key.
 ---@field desc? string A short name for the which-key hint, for an action or a function.
 ---@field group? string The which-key heading it is listed under: a built-in group's name or one of yours.
+---@field mode? "copy" A key of copy mode's own, to a copy_* action: one key each, no global or group.
 
 ---@class ranma.Folder
 ---@field folder string Its name: `+name` in the which-key hint, the heading inside it.
@@ -142,12 +143,14 @@ function ranma.mode(name, def) end
 ---@param opts? ranma.CommandOpts
 function ranma.command(name, fn, opts) end
 
----Drop a bind ("g s" drops one inside a folder).
+---Drop a bind ("g s" drops one inside a folder); { mode = "copy" } drops copy mode's.
 ---@param keys string
-function ranma.unbind(keys) end
+---@param opts? { mode?: "copy" }
+function ranma.unbind(keys, opts) end
 
----Drop every bind, to start from nothing.
-function ranma.unbind_all() end
+---Drop every bind, to start from nothing; { mode = "copy" } drops copy mode's only.
+---@param opts? { mode?: "copy" }
+function ranma.unbind_all(opts) end
 
 ---@alias ranma.Event
 ---| "pane_open"        # { pane, workspace }

@@ -341,6 +341,9 @@ ranma.unbind_all()   \-\- drop every default, WM and global, and start from noth
 \fBexit\fR
 Whether WM mode ends after the bind fires. Given, it decides alone, over \fBwm_mode.sticky\fR too: \fB{ exit = false }\fR keeps WM mode after a resize even with \fBsticky = false\fR, and \fB{ exit = true }\fR ends a sticky one. Left out, it follows the action (\fBnew_pane\fR, \fBexec\fR, \fBscratchpad_toggle\fR, the switchers, \fBsend_leader\fR, \fBexit_mode\fR and \fBquit\fR end the mode; everything else, and every Lua function, keeps it), and \fBsticky = false\fR ends the mode after any bind.
 .TP
+\fBmode\fR
+\fB"copy"\fR: a key of copy mode's own, in a table apart from WM mode's (see Copy mode and search\fR). One key each; no \fBglobal\fR or \fBgroup\fR.
+.TP
 \fBglobal\fR
 Bind the key \fBoutside\fR WM mode, with no leader. The program in the focused pane never sees that key, so keep global binds few. The defaults are \fBalt+left/right/up/down\fR to focus a neighbouring pane and \fBalt+1\fR…\fBalt+0\fR to go to workspaces 1\-10 (in WM mode, \fBalt+<digit>\fR moves the pane there instead), \fBalt+s\fR to show or hide the scratchpad (in WM mode it sends the pane there instead; it takes zsh's rarely used \fBM\-s\fR spell\-word), \fBalt+shift+arrows\fR to move the focused pane, and \fBalt+shift+<digit>\fR to send it to a workspace and follow. That last one is bound through the symbols Shift puts on the digits (\fBalt+!\fR, \fBalt+@\fR, …) for the US and ABNT2 layouts; see the table in \fB\-\-dump\-config\fR to add another layout's. The leader itself cannot be global.
 .TP
@@ -603,6 +606,27 @@ Search the focused pane's history, most recent match first (see Copy mode\fR).
 \fBcopy_mode\fR
 Move through the focused pane's history with vi keys and copy from it.
 .TP
+\fBcopy_move <motion>\fR
+In copy mode (entering it first): \fBleft\fR, \fBdown\fR, \fBup\fR, \fBright\fR, \fBword_next\fR, \fBword_prev\fR, \fBword_end\fR, \fBbigword_next\fR, \fBbigword_prev\fR, \fBbigword_end\fR (space\-separated words), \fBline_start\fR, \fBline_end\fR, \fBfirst_char\fR, \fBscreen_top\fR, \fBscreen_middle\fR, \fBscreen_bottom\fR, \fBbracket\fR, \fBtop\fR, \fBbottom\fR.
+.TP
+\fBcopy_page <up\e|down\e|half_up\e|half_down>\fR
+In copy mode: a page, or half of one.
+.TP
+\fBcopy_select <char\e|line\e|block>\fR
+In copy mode: start (or cancel) a selection of characters, lines or a block.
+.TP
+\fBcopy_yank\fR
+Copy the selection (or the current match) and leave copy mode.
+.TP
+\fBcopy_search <forward\e|backward>\fR
+Search the history, from copy mode.
+.TP
+\fBcopy_next\fR, \fBcopy_prev\fR
+The next match in the search's direction, or the other way.
+.TP
+\fBcopy_exit\fR
+Leave copy mode.
+.TP
 \fBhints\fR
 Label every link on the focused pane's screen (\fBleader o\fR): URLs in the text (\fBhttps\fR, \fBhttp\fR, \fBfile\fR, \fBftp\fR, \fBmailto\fR), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with \fBxdg\-open\fR (\fBopen\fR on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. \fBEsc\fR or a click cancels; the bar shows \fBLINK\fR meanwhile.
 .TP
@@ -778,7 +802,13 @@ match first. While the current match is on that bottom row (the line you just
 typed, often), the prompt takes the top row instead, so it never hides it. Every visible match is highlighted, the current one more strongly.
 \fBEnter\fR keeps you at the match in copy mode; \fBEsc\fR leaves.
 .PP
-\fBcopy_mode\fR (\fBleader [\fR) enters copy mode without searching. In copy mode:
+\fBcopy_mode\fR (\fBleader [\fR) enters copy mode without searching. Its keys are
+binds of their own, \fBranma.bind(key, action, { mode = "copy" })\fR to the
+\fBcopy_*\fR actions (see Actions\fR), so any of them can be rebound,
+freed with \fBranma.unbind(key, { mode = "copy" })\fR, or all dropped with
+\fBranma.unbind_all({ mode = "copy" })\fR to start from nothing; a key bound to
+nothing does nothing there. The search prompt's own editing (typing,
+Backspace, Ctrl+u, Enter, Esc) stays fixed. The defaults:
 .TP
 \fBh j k l\fR, arrows
 move
