@@ -286,6 +286,11 @@ Default: \fB"outer"\fR
 .br
 While the focus is in a ranma inside this one (over ssh): \fB"outer"\fR draws this bar, its modules showing that ranma's values by name; \fB"inner"\fR draws that ranma's own bar, its modules and look, keeping this one's workspaces (that one's in brackets), mode chip and position. See ranma inside ranma\fR.
 .TP
+\fBprofile\fR
+Default: unset
+.br
+The profile in use when ranma starts: a new server, or \fB\-\-standalone\fR. A reload and an upgrade keep the one in use, so switching to another (or to none) holds until the next start. It must be a declared profile (\fBranma.profile\fR, a plugin's), checked once every file has run. \fBranma.use_profile\fR does the switching from binds and hooks; at load it is an error.
+.TP
 \fBhint_alphabet\fR
 Default: \fB"asdfghjklqwertyuiopzxcvbnm"\fR
 .br
@@ -3149,6 +3154,9 @@ the base's, so a look that needs a theme and its pieces switches whole;
 while it is in use, instead of the base's. Both are checked when \fBinit.lua\fR loads, as
 strictly as the calls they mirror: a typo in a profile is a config error,
 not a surprise the first time a phone attaches.
+.IP \(bu 2
+\fBranma.set { profile = "main" }\fR starts ranma in \fBmain\fR (see the setting):
+\fBranma.use_profile\fR works from binds and hooks only, not at load.
 .IP \(bu 2
 Anything the profile does not name is the base's. Switching rebuilds the
 settings and bar from the base each time, so \fBranma.use_profile(nil)\fR (or the

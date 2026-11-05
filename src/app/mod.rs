@@ -799,6 +799,24 @@ impl App {
     /// say which, and why, so the drop is never silent. Longer than a usual
     /// toast: it may land while nobody is looking yet.
     fn report_plugin_failures(&mut self) {
+        // Running on the built-in defaults because init.lua did not load:
+        // said until it does (a reload that works dismisses it).
+        if let Some(e) = self.config.load_error.clone() {
+            crate::journal::error(format!(
+                "config error at start, on the built-in defaults: {e}"
+            ));
+            self.toast(
+                format!(
+                    "config error, running on the built-in defaults until init.lua loads: {}",
+                    e.lines().next().unwrap_or("")
+                ),
+                crate::toast::Level::Urgent,
+                Some(Duration::from_secs(3600)),
+            );
+        } else {
+            self.toasts
+                .dismiss_text_prefix("config error, running on the built-in defaults");
+        }
         let failed: Vec<(String, String)> = self
             .config
             .plugins
@@ -7771,6 +7789,27 @@ mod tests {
         assert_eq!(hello.1.click, None);
         assert_eq!("logs".parse::<Action>().unwrap(), Action::Logs);
         assert_eq!(Action::Logs.to_string(), "logs");
+    }
+
+    /// Started on the built-in defaults because init.lua did not load: an
+    /// urgent toast says so, and a configuration that loads dismisses it
+    /// (card c470).
+    #[test]
+    fn a_config_that_did_not_load_at_start_is_said() {
+        let mut config = crate::config::load_from(None, None, None).unwrap();
+        config.load_error = Some("init.lua:31: boom".into());
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut a = App::new(config, tx, 80, 24);
+        let said = |a: &App| {
+            a.toasts
+                .layout(crate::layout::Rect::new(0, 0, 200, 50), 0)
+                .iter()
+                .any(|(_, _, lines)| lines.concat().contains("built-in defaults"))
+        };
+        assert!(said(&a));
+        a.config.load_error = None;
+        a.report_plugin_failures();
+        assert!(!said(&a), "a config that loads takes it away");
     }
 
     #[test]

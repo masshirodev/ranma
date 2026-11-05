@@ -265,6 +265,10 @@ pub struct Settings {
     /// What ends a word for copy mode's word motions and a double click
     /// (alacritty's semantic escape characters; card c427).
     pub word_separators: String,
+    /// `profile`: the profile in use when a server (or a standalone ranma)
+    /// starts. Not on a reload or an upgrade, which keep the one in use
+    /// (card c470).
+    pub start_profile: Option<String>,
     /// A second press on the same cell within this is a double one (c432).
     pub mouse_double_click: std::time::Duration,
     /// Copies kept as paste buffers (card c431).
@@ -337,6 +341,7 @@ impl Default for Settings {
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
+            start_profile: None,
             logs_open: LogsOpen::Pager,
             nested_bar: NestedBar::Outer,
             buffers_kept: crate::app::buffers_kept_default(),
@@ -373,6 +378,7 @@ impl Default for Settings {
 #[serde(deny_unknown_fields)]
 struct SettingsPatch {
     leader: Option<String>,
+    profile: Option<String>,
     theme: Option<String>,
     plugin_manager: Option<PluginManager>,
     layout: Option<Layout>,
@@ -1879,6 +1885,9 @@ pub struct Config {
     /// What loaded but deserves a word: settings.toml naming an option
     /// nothing declares.
     pub warnings: Vec<String>,
+    /// Why `init.lua` did not load when ranma started: it runs on the
+    /// built-in defaults until a save makes it load (card c470).
+    pub load_error: Option<String>,
     /// Every option and the layers its value comes from (`crate::options`).
     pub values: Values,
     /// Stops a Lua call that runs too long; armed by every call into `lua`.
@@ -2470,6 +2479,9 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(o) = patch.logs_open {
         s.logs_open = o;
+    }
+    if let Some(p) = patch.profile {
+        s.start_profile = Some(p).filter(|p| !p.is_empty());
     }
     if let Some(b) = patch.nested_bar {
         s.nested_bar = b;
@@ -4444,6 +4456,26 @@ pub fn load_full(
             }
         }
     }
+    // The profile to start in must be one: checked once every file has
+    // declared its own (a plugin's profiles load after init.lua).
+    if let Some(p) = &builder.settings.start_profile
+        && !builder.profiles.contains_key(p)
+    {
+        let mut known: Vec<&String> = builder.profiles.keys().collect();
+        known.sort();
+        anyhow::bail!(
+            "ranma.set: profile = \"{p}\" is no declared profile ({})",
+            if known.is_empty() {
+                "none is declared".to_string()
+            } else {
+                known
+                    .iter()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+    }
     // A profile's theme keys go over settings.toml's [theme], over the
     // theme: checked now, so a typo is a config error and not a surprise
     // the first time the profile is used.
@@ -4569,6 +4601,7 @@ pub fn load_full(
         packages: builder.added,
         hako,
         warnings: crate::renames::take().into_iter().chain(warnings).collect(),
+        load_error: None,
         watchdog,
         jobs,
         user_events,
@@ -6681,6 +6714,35 @@ mod tests {
 
     /// The configurations in doc/examples are copied whole by readers, so one
     /// the strict parser rejects would fail on the first thing they try.
+    /// `ranma.set { profile = ... }` names a declared profile to start in,
+    /// checked once every file has declared its own (card c470).
+    #[test]
+    fn the_start_profile_must_be_declared() {
+        let cfg = with_user(
+            r#"ranma.profile("main", { set = { layout = "master" } })
+               ranma.set { profile = "main" }"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.settings.start_profile.as_deref(), Some("main"));
+        assert_eq!(cfg.profile, None, "the load itself is the base's");
+        let e = format!(
+            "{:#}",
+            with_user(r#"ranma.set { profile = "mian" }"#).unwrap_err()
+        );
+        assert!(
+            e.contains("profile = \"mian\" is no declared profile"),
+            "{e}"
+        );
+        // Declared after the call is fine: checked at the end.
+        assert!(
+            with_user(
+                r#"ranma.set { profile = "late" }
+                   ranma.profile("late", { set = { layout = "master" } })"#
+            )
+            .is_ok()
+        );
+    }
+
     #[test]
     fn logs_open_in_the_pager_unless_set_to_the_editor() {
         let cfg = with_user("").unwrap();

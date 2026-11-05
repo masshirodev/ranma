@@ -130,6 +130,10 @@ ranma.set {
   -- one's workspaces (with that ranma's in brackets), mode chip, bar position
   -- and its nested = "own" modules' values are kept either way.
   nested_bar = "outer",
+  -- The profile in use when ranma starts (a new server, or --standalone): a
+  -- reload and an upgrade keep the one in use. Unset, none. It must be declared
+  -- (ranma.profile, or a plugin's); ranma.use_profile is for binds and hooks.
+  -- profile = "main",
   -- Milliseconds a second press on the same cell has to count as a double
   -- click: double@ mouse binds, a word's selection, a touch double tap.
   mouse_double_click = 400,

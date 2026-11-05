@@ -769,13 +769,48 @@ fn main() -> ExitCode {
     }
 
     let dir = config::config_dir();
-    let cfg = match config::load(dir.as_deref()) {
+    let mut cfg = match config::load(dir.as_deref()) {
         Ok(cfg) => cfg,
+        // `--check-config` fails, as `install.sh` asks it to. Anything else
+        // starts on the built-in defaults and says why at once (card c470):
+        // a mistake in init.lua must never leave you without ranma, at a
+        // plain shell whose message the terminal's first frame clears. The
+        // config directory is watched all the same, so the save that fixes
+        // it loads it.
         Err(e) => {
             eprintln!("ranma: config error: {e:#}");
-            return ExitCode::FAILURE;
+            if cli.check_config {
+                return ExitCode::FAILURE;
+            }
+            match config::load_from(None, None, None) {
+                Ok(mut d) => {
+                    d.load_error = Some(format!("{e:#}"));
+                    d
+                }
+                Err(_) => return ExitCode::FAILURE,
+            }
         }
     };
+    // A new server, or a standalone ranma, starts in the profile `profile`
+    // names; a resumed one (an upgrade) and a reload keep the one in use.
+    let starting = matches!(&cli.command, Some(Command::Server { resume: None, .. }))
+        || (cli.command.is_none() && cli.standalone);
+    if starting
+        && cfg.profile.is_none()
+        && let Some(p) = cfg.settings.start_profile.clone()
+    {
+        // Its setup runs in the load; its set, bar and theme go over it.
+        let loaded = config::load_as(dir.as_deref(), Some(&p)).and_then(|mut c| {
+            c.use_profile(Some(&p)).map_err(anyhow::Error::msg)?;
+            Ok(c)
+        });
+        match loaded {
+            Ok(c) => cfg = c,
+            Err(e) => cfg
+                .warnings
+                .push(format!("profile {p} did not load: {e:#}")),
+        }
+    }
 
     if cli.check_config {
         match &cfg.source {
@@ -811,9 +846,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // The config was loaded (and so checked) above: an error there exits 1
-    // before a server is involved, and a shell startup that runs ranma falls
-    // back to a plain shell with the message on screen.
+    // The config was loaded (and so checked) above: `--check-config` exits 1
+    // on an error; anything else runs on the built-in defaults with the error
+    // shown (card c470), rather than leave a shell without ranma.
     let result = match (&cli.command, cli.standalone) {
         (
             Some(Command::Server {

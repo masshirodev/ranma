@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `ranma.set { profile = "main" }`: the profile in use when ranma starts. A
+  reload and an upgrade keep the one in use.
+
 - `colors.module_dim`, `module_accent`, `module_urgent`: a module's styled
   text on its pill, as `module_fg` is its plain text, so a plugin's accent
   reads on a pill without changing `bar_accent` everywhere.
@@ -224,6 +227,11 @@ commit log has the detail.
   character (`"modified"`), instead of being swallowed. `ranma.has("mode.pass")`.
 
 ### Fixed
+
+- A mistake in `init.lua` no longer keeps ranma from starting (a shell that
+  starts it fell back to a plain one): it starts on the built-in defaults, an
+  urgent toast says why until a fixed `init.lua` loads, and the error is in
+  the log. `--check-config` still fails, so `install.sh` still refuses.
 
 - A role's `fg` is optional (`[roles.sys]` with only a `bg` failed with
   "missing field `fg`"): unset, its text is plain text where it stands,

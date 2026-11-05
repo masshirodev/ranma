@@ -809,7 +809,15 @@ only while in WM mode.
   idle cost), saves are debounced by 150 ms because editors write in several steps,
   and the config is rebuilt in a fresh Lua state and swapped in only if it loads.
   Otherwise the old one stays and the error is shown in the bar. Never crash on a
-  bad config.
+  bad config. **At start too** (2026-11-05, card c470): with no old config to
+  keep, ranma exited, and a shell that starts it fell back to a plain shell
+  whose message the terminal's first frame cleared. Now it starts on the
+  built-in defaults, says why in an urgent toast that stays until a config
+  loads, logs it whole, and the watched directory loads the fixed `init.lua`
+  on the save that fixes it. `--check-config` still fails, which is what
+  `install.sh` asks it. And `ranma.set { profile = "..." }` is the profile a
+  start begins in (`ranma.use_profile` at load is refused: a load is not a
+  switch); a reload and an upgrade keep the one in use, so a switch holds.
 - **Lua at run time** (actions, notify, toast, state, client, profiles) exists
   only while ranma is calling into Lua, so a config cannot act on a window
   manager that does not exist yet. Actions a hook runs can fire more hooks; the

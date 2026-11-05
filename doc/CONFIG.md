@@ -191,6 +191,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `mouse_wheel_lines` | `3` | Lines one notch of the wheel scrolls (1-50): through a pane's scrollback, in copy mode, and as that many arrow keys to a full-screen program that takes no mouse (less, man). A program that takes the mouse gets the wheel as it is. |
 | `logs_open` | `"pager"` | What the `logs` action, and a click on an error in the bar, opens ranma's log in: `"pager"` (`less`, at its end) or `"editor"` (`$VISUAL`, else `$EDITOR`, else `vi`, on its last line), in a float. See [The log](#the-log). |
 | `nested_bar` | `"outer"` | While the focus is in a ranma inside this one (over ssh): `"outer"` draws this bar, its modules showing that ranma's values by name; `"inner"` draws that ranma's own bar, its modules and look, keeping this one's workspaces (that one's in brackets), mode chip and position. See [ranma inside ranma](#ranma-inside-ranma). |
+| `profile` | unset | The profile in use when ranma starts: a new server, or `--standalone`. A reload and an upgrade keep the one in use, so switching to another (or to none) holds until the next start. It must be a declared profile (`ranma.profile`, a plugin's), checked once every file has run. `ranma.use_profile` does the switching from binds and hooks; at load it is an error. |
 | `hint_alphabet` | `"asdfghjklqwertyuiopzxcvbnm"` | The letters hint labels (`hints`, `leader o`) are made of, easiest to reach first: Colemak's `"arstneiodh…"`, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open. |
 | `hint_urls` | `true` | Hints label URLs in the text. Links a program marks (OSC 8) are always labelled; `ranma.hint_pattern` adds your own targets. |
 | `word_separators` | ``",│`|:\"' ()[]{}<>\t"`` | What ends a word for copy mode's word motions (`w`, `b`, `e`) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload. |
@@ -2411,6 +2412,8 @@ your own for the phone takes another name, or replaces that one.
   while it is in use, instead of the base's. Both are checked when `init.lua` loads, as
   strictly as the calls they mirror: a typo in a profile is a config error,
   not a surprise the first time a phone attaches.
+- `ranma.set { profile = "main" }` starts ranma in `main` (see the setting):
+  `ranma.use_profile` works from binds and hooks only, not at load.
 - Anything the profile does not name is the base's. Switching rebuilds the
   settings and bar from the base each time, so `ranma.use_profile(nil)` (or the
   `profile none` action) gives back exactly what `init.lua` set, and switching
