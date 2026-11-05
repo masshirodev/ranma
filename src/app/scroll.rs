@@ -399,7 +399,7 @@ impl App {
         let ws = self.active();
         let area = self.workspace_area();
         let s = &self.config.settings;
-        let b = self.insets(false);
+        let b = self.text_insets(false);
         let lay = ws.tree.strip_layout(
             area,
             self.config.theme.gaps.inner,
@@ -468,7 +468,8 @@ impl App {
         self.strip_frame(&mut f, |id, outer, floating| PaneView {
             id,
             outer,
-            inner: outer.inset_sides(self.insets(floating)),
+            inner: outer.inset_sides(self.text_insets(floating)),
+            pad: self.config.theme.panes.pad(),
             focused: false,
             floating,
         });

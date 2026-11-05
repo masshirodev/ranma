@@ -3397,6 +3397,9 @@ drawn before and after every tab, in the tab's ground on the row's: \fB"\eue0b6"
 \fBpanes.dim_unfocused\fR
 \fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.
 .TP
+\fBpanes.padding\fR
+blank cells between a pane's edges and its text, on every side, \fB0\fR\-\fB8\fR; \fBpadding_top\fR, \fBpadding_right\fR, \fBpadding_bottom\fR, \fBpadding_left\fR set one side over it. \fB0\fR by default. The program gets the smaller size, the padding is drawn in the pane's ground, and a press in it is the pane's, never a border to drag. With no right edge, the scrollbar sits in the right padding. A ranma inside drawing its own frame gets none.
+.TP
 \fBpanes.floating_bg\fR
 an unfocused float's ground; unset, \fBinactive_bg\fR. A float with no edges on the same ground as the tiles under it runs into them.
 .TP

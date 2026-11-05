@@ -1066,6 +1066,45 @@ mod tests {
     }
 
     #[test]
+    fn padding_stands_between_the_edges_and_the_text() {
+        let (mut a, dir) = app_themed(
+            "padding",
+            "[border]\nedges = [\"top\"]\n[panes]\npadding = 1\npadding_top = 0\n",
+            "",
+        );
+        with_pane(&mut a, 1);
+        let f = a.frame();
+        let v = f.views[0];
+        // The top edge, then no top padding; a cell each other side.
+        assert_eq!(v.pad, [0, 1, 1, 1]);
+        assert_eq!(
+            (v.inner.x, v.inner.y, v.inner.right(), v.inner.bottom()),
+            (
+                v.outer.x + 1,
+                v.outer.y + 1,
+                v.outer.right() - 1,
+                v.outer.bottom() - 1
+            )
+        );
+        // Padding where an edge is not drawn is not read as an edge.
+        let d = v.drawn();
+        assert!(d.top && !d.left && !d.right && !d.bottom, "{d:?}");
+        // And a press in it is the pane's, not a border to drag.
+        assert!(a.border_hit(&f, v.outer.x, v.outer.y + 2).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+        // At most 8 cells a side.
+        let dir = std::env::temp_dir().join(format!("ranma-pad-big-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("p.toml"), "[panes]\npadding_left = 9\n").unwrap();
+        let err = format!(
+            "{:#}",
+            crate::theme::load("p", std::slice::from_ref(&dir)).unwrap_err()
+        );
+        assert!(err.contains("at most 8"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_pane_is_urgent_until_focused_and_zoomed_while_it_fills() {
         let mut a = app("");
         with_pane(&mut a, 1);

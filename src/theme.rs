@@ -894,6 +894,19 @@ pub struct Theme {
     pub art: Option<std::sync::Arc<crate::art::Art>>,
 }
 
+impl Panes {
+    /// The padding on each side, `[top, right, bottom, left]`.
+    pub fn pad(&self) -> [u16; 4] {
+        [
+            self.padding_top,
+            self.padding_right,
+            self.padding_bottom,
+            self.padding_left,
+        ]
+        .map(|p| p.unwrap_or(self.padding))
+    }
+}
+
 /// `[tabs]`: a group's tabs, in its tab row or its title row (card c436),
 /// with the vocabulary the bar's workspaces have.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -1299,6 +1312,18 @@ pub struct Panes {
     /// edges on the tiles' own ground runs into them.
     #[serde(default)]
     pub floating_bg: Option<Color>,
+    /// Blank cells between a pane's edge and its text, on every side
+    /// (card c439); a side's own over it.
+    #[serde(default)]
+    pub padding: u16,
+    #[serde(default)]
+    pub padding_top: Option<u16>,
+    #[serde(default)]
+    pub padding_right: Option<u16>,
+    #[serde(default)]
+    pub padding_bottom: Option<u16>,
+    #[serde(default)]
+    pub padding_left: Option<u16>,
     /// A thumb on the right border for where the view is in the history.
     #[serde(default)]
     pub scrollbar: Scrollbar,
@@ -1759,6 +1784,13 @@ fn check(t: &Theme) -> Result<(), String> {
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
     check_edges(&t.border)?;
+    let pad = t.panes.pad();
+    if pad.iter().any(|p| *p > 8) {
+        return Err(format!(
+            "panes.padding: at most 8 cells a side, not {}",
+            pad.iter().max().copied().unwrap_or(0)
+        ));
+    }
     check_corner("border.title_corner_left", &t.border.title_corner_left)?;
     check_corner("border.title_corner_right", &t.border.title_corner_right)?;
     let custom = t.border.style == BorderStyle::Custom

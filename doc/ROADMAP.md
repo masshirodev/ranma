@@ -377,7 +377,7 @@ not listed here.
   never `mode_bg` (c437)
 - [x] Group tab bars: formats, separators, caps (c436)
 - [x] `[icons]` and `{icon}` (c438)
-- [ ] Pane padding, the scrollbar in it (c439)
+- [x] Pane padding, the scrollbar in it (c439)
 - [ ] Shadows under floats (c440)
 - [ ] Pickers and toasts follow `border.style` (c441)
 - [ ] Scrollbar looks (c442)

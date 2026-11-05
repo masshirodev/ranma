@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- `panes.padding` (and a side's own, `padding_left` and so on): blank cells
+  between a pane's edges and its text, in the pane's ground. With no right
+  edge, the scrollbar sits in the right padding.
+
 - `[icons]` in a theme: a glyph per program (by name, glob, or `"*"`), shown
   by `{icon}` in title, tab and workspace formats and by the `icon` title
   piece.

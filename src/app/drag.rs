@@ -116,7 +116,8 @@ impl App {
         let Some(v) = self.pane_at(frame, x, y) else {
             return self.beside_hit(frame, x, y);
         };
-        if v.inner.contains(x, y) {
+        // The text and the padding round it are the pane's, not its border.
+        if v.body().contains(x, y) {
             return None;
         }
         let o = v.outer;

@@ -423,9 +423,9 @@ fn draw_pane(
     };
     let buf = f.buffer_mut();
     // The pane's ground under everything, so cells the grid does not reach
-    // (a resize on its way) show it too.
+    // (a resize on its way) show it too, and the padding round the text.
     if let Some(g) = ground {
-        buf.set_style(rrect(inner), Style::default().bg(color(g)));
+        buf.set_style(rrect(view.body()), Style::default().bg(color(g)));
     }
 
     for indexed in content.display_iter {
@@ -636,9 +636,10 @@ fn draw_peek(f: &mut Frame, app: &App, p: &crate::app::Peek) {
     let view = PaneView {
         id: p.id,
         outer: p.full,
-        inner: p.full.inset_sides(app.insets(false)),
+        inner: p.full.inset_sides(app.text_insets(false)),
         focused: false,
         floating: false,
+        pad: app.config.theme.panes.pad(),
     };
     let Ok(mut t) = ratatui::Terminal::new(TestBackend::new(p.full.w, p.full.h));
     let title = app.border_title(p.id);
@@ -1440,7 +1441,9 @@ fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintSta
 fn draw_scrollbar(f: &mut Frame, app: &App, view: &PaneView, pane: &crate::pane::Pane) {
     use crate::theme::Scrollbar;
     let mode = app.config.theme.panes.scrollbar;
-    if mode == Scrollbar::Off || !view.drawn().right {
+    // On the right edge; with none, in the right padding (F12).
+    let in_padding = !view.drawn().right && view.pad[1] > 0;
+    if mode == Scrollbar::Off || !(view.drawn().right || in_padding) {
         return;
     }
     let (history, offset, rows) = {
@@ -1457,9 +1460,23 @@ fn draw_scrollbar(f: &mut Frame, app: &App, view: &PaneView, pane: &crate::pane:
     }
     let inner = view.inner;
     let (at, len) = theme::thumb(inner.h, rows, history, offset);
-    let x = view.outer.x + view.outer.w - 1;
+    let x = if in_padding {
+        inner.right()
+    } else {
+        view.outer.x + view.outer.w - 1
+    };
     let buf = f.buffer_mut();
-    let edge = buf[(x, inner.y)].style();
+    let edge = if in_padding {
+        let c = app.colors();
+        let colour = if view.focused {
+            c.border_active
+        } else {
+            c.border_inactive
+        };
+        Style::default().fg(color(colour))
+    } else {
+        buf[(x, inner.y)].style()
+    };
     let b = &app.config.theme.border;
     let style = if view.floating { b.floating() } else { b.style };
     let glyph = if style == BorderStyle::Ascii {
@@ -2562,6 +2579,7 @@ mod tests {
             inner: outer.inset_sides(app.insets(false)),
             focused: false,
             floating: false,
+            pad: [0; 4],
         };
         // Only the top and the left take a cell.
         assert_eq!(tile.inner, crate::layout::Rect::new(1, 1, 11, 3));
@@ -2631,6 +2649,7 @@ mod tests {
             inner: outer.inset_sides(app.insets(false)),
             focused: true,
             floating: false,
+            pad: [0; 4],
         };
         let draw = |app: &crate::app::App, view: &PaneView| {
             let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
@@ -2693,6 +2712,7 @@ mod tests {
             inner: outer.inset_sides(app.insets(false)),
             focused: false,
             floating: false,
+            pad: [0; 4],
         };
         let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
         t.draw(|f| draw_border(f, &app, &view, "")).unwrap();
@@ -2736,6 +2756,7 @@ mod tests {
             inner: outer.inset_sides(app.insets(false)),
             focused: false,
             floating: false,
+            pad: [0; 4],
         };
         let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
         t.draw(|f| draw_border(f, &app, &view, "")).unwrap();
@@ -2773,6 +2794,7 @@ mod tests {
             inner,
             focused,
             floating: false,
+            pad: [0; 4],
         };
         let draw = |app: &crate::app::App, v: &PaneView| {
             let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
@@ -2812,6 +2834,7 @@ mod tests {
             inner: outer.inset_sides(app.insets(false)),
             focused: true,
             floating: false,
+            pad: [0; 4],
         };
         let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
         t.draw(|f| draw_border(f, &app, &view, " t ")).unwrap();

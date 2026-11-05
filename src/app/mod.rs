@@ -109,6 +109,9 @@ pub struct PaneView {
     pub inner: Rect,
     pub focused: bool,
     pub floating: bool,
+    /// Blank cells between its edges and its text (`panes.padding`),
+    /// `[top, right, bottom, left]`: `inner` is inside them.
+    pub pad: [u16; 4],
 }
 
 /// The title row draws the groups' tabs: each group's tab row goes back to
@@ -137,6 +140,20 @@ fn give_back_tab_rows(f: &mut Frame, sides: [u16; 4]) {
     f.tab_bars = kept;
 }
 
+impl PaneView {
+    /// Inside its edges: its text and the padding round it.
+    pub fn body(&self) -> Rect {
+        let [t, r, b, l] = self.pad;
+        let i = self.inner;
+        Rect::new(
+            i.x.saturating_sub(l),
+            i.y.saturating_sub(t),
+            i.w + l + r,
+            i.h + t + b,
+        )
+    }
+}
+
 /// Which sides of a pane have a border drawn on them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Drawn {
@@ -150,7 +167,7 @@ impl PaneView {
     /// The sides its border is drawn on: wherever the inner area stands in
     /// from the outer one (`border.edges`; none for a frameless pane).
     pub fn drawn(&self) -> Drawn {
-        let (o, i) = (self.outer, self.inner);
+        let (o, i) = (self.outer, self.body());
         Drawn {
             top: i.y > o.y,
             right: i.right() < o.right(),
@@ -984,18 +1001,28 @@ impl App {
         self.config.theme.border.insets(floating)
     }
 
+    /// The edges and the padding, `[top, right, bottom, left]`: what a pane
+    /// gives up to show its text.
+    pub fn text_insets(&self, floating: bool) -> [u16; 4] {
+        let (e, p) = (self.insets(floating), self.config.theme.panes.pad());
+        [0, 1, 2, 3].map(|i| e[i] + p[i])
+    }
+
     pub fn frame(&self) -> Frame {
         let mut f = Frame::default();
         let area = self.workspace_area();
         let gap = self.config.theme.gaps.inner;
-        let (tile, float) = (self.insets(false), self.insets(true));
+        let pad = self.config.theme.panes.pad();
+        let with_pad = |s: [u16; 4]| [0, 1, 2, 3].map(|i| s[i] + pad[i]);
+        let (tile, float) = (with_pad(self.insets(false)), with_pad(self.insets(true)));
         let focused = self.focused();
         let frameless = self.frameless();
         let view = |id, outer: Rect, floating| {
-            let sides = match (Some(id) == frameless, floating) {
-                (true, _) => [0; 4],
-                (false, true) => float,
-                (false, false) => tile,
+            // A frameless pane is a ranma inside drawing its own frame.
+            let (sides, pad) = match (Some(id) == frameless, floating) {
+                (true, _) => ([0; 4], [0; 4]),
+                (false, true) => (float, pad),
+                (false, false) => (tile, pad),
             };
             PaneView {
                 id,
@@ -1003,6 +1030,7 @@ impl App {
                 inner: outer.inset_sides(sides),
                 focused: Some(id) == focused,
                 floating,
+                pad,
             }
         };
 
