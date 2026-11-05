@@ -379,7 +379,7 @@ not listed here.
 - [x] `[icons]` and `{icon}` (c438)
 - [x] Pane padding, the scrollbar in it (c439)
 - [x] Shadows under floats (c440)
-- [ ] Pickers and toasts follow `border.style` (c441)
+- [x] Pickers and toasts follow `border.style`, or `overlay_style` (c441)
 - [ ] Scrollbar looks (c442)
 - [ ] Splash art from a file (c443)
 - [ ] Caps per role, for modules and title pieces (c444)

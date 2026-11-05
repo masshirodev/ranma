@@ -496,6 +496,10 @@ pub struct Border {
     /// Floats' sides; unset, `edges`.
     #[serde(default)]
     pub floating_edges: Option<Vec<Edge>>,
+    /// What draws over the panes (pickers, sheets, toasts, the settings
+    /// panel and plugin screens) is framed with; unset, `style` (card c441).
+    #[serde(default)]
+    pub overlay_style: Option<BorderStyle>,
     pub title: TitlePosition,
     pub title_align: Align,
     pub title_format: Format,
@@ -529,6 +533,11 @@ pub enum TitleGround {
 }
 
 impl Border {
+    /// The style what draws over the panes is framed with.
+    pub fn overlay(&self) -> BorderStyle {
+        self.overlay_style.unwrap_or(self.style)
+    }
+
     /// The style a float's (or a popup's) border takes.
     pub fn floating(&self) -> BorderStyle {
         self.floating_style.unwrap_or(self.style)
@@ -1821,7 +1830,8 @@ fn check(t: &Theme) -> Result<(), String> {
     check_corner("border.title_corner_left", &t.border.title_corner_left)?;
     check_corner("border.title_corner_right", &t.border.title_corner_right)?;
     let custom = t.border.style == BorderStyle::Custom
-        || t.border.floating_style == Some(BorderStyle::Custom);
+        || t.border.floating_style == Some(BorderStyle::Custom)
+        || t.border.overlay_style == Some(BorderStyle::Custom);
     if let Some(Chars::Sides(sides)) = &t.border.chars {
         check_sides(sides)?;
     } else if custom {

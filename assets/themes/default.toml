@@ -107,6 +107,9 @@ state_urgent = "#fab387"
 style = "rounded"
 # Floats and popups; unset, the same as style.
 # floating_style = "double"
+# Pickers, sheets, toasts, the settings panel and plugin screens; unset, the
+# same as style (rounded when that is none).
+# overlay_style = "rounded"
 # With style = "custom": top-left, top-right, bottom-left, bottom-right,
 # horizontal, vertical.
 # chars = "╭╮╰╯─│"

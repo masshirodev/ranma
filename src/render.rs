@@ -114,9 +114,10 @@ fn style_set(b: &theme::Border, style: BorderStyle) -> Option<border::Set<'_>> {
 }
 
 /// A box that is always framed (a picker, a sheet, a toast): the theme's
-/// border, rounded when it has none.
+/// overlay style (`border.overlay_style`, else `style`), rounded when that
+/// is none.
 fn frame_set(b: &theme::Border) -> border::Set<'_> {
-    border_set(b, b.style).unwrap_or(border::ROUNDED)
+    border_set(b, b.overlay()).unwrap_or(border::ROUNDED)
 }
 
 fn rrect(r: Rect) -> RRect {
@@ -1977,7 +1978,7 @@ fn draw_tooltip(f: &mut Frame, app: &App, frame: &crate::app::Frame) {
         None => (0, screen.height),
     };
     let b = &app.config.theme.border;
-    let lines = Lines::of(b.style, b.six_chars());
+    let lines = Lines::of(b.overlay(), b.six_chars());
     let mut grid = crate::settings::Grid::new(screen.width, screen.height);
     crate::screen::draw_tooltip(
         &mut grid,
@@ -2194,7 +2195,7 @@ fn draw_picker(f: &mut Frame, app: &App, _p: &Picker) {
     let drawn = crate::pickerview::draw_at(
         &mut canvas,
         &spec,
-        &Glyphs::of(theme.border.style, theme.border.six_chars()),
+        &Glyphs::of(theme.border.overlay(), theme.border.six_chars()),
         placed,
     );
     let cursor_bg = picker_cursor_bg(c, &app.host_colors);
@@ -2869,6 +2870,22 @@ mod tests {
         app.mode = crate::app::Mode::Wm;
         let b = draw(&app, &view(true));
         assert_eq!(b[(0, 1)].fg, Color::Rgb(0xff, 0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn what_draws_over_the_panes_has_a_style_of_its_own() {
+        let (app, dir) = themed_app(
+            "overlay",
+            "[border]\nstyle = \"none\"\noverlay_style = \"thick\"\n",
+        );
+        let b = &app.config.theme.border;
+        assert_eq!(b.overlay(), BorderStyle::Thick);
+        assert_eq!(frame_set(b).top_left, "┏");
+        let _ = std::fs::remove_dir_all(&dir);
+        // Unset: the panes' style, rounded when that is none.
+        let (app, dir) = themed_app("overlay-unset", "[border]\nstyle = \"none\"\n");
+        assert_eq!(frame_set(&app.config.theme.border).top_left, "╭");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

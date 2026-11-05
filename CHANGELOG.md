@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `border.overlay_style`: the frame of pickers, sheets, toasts, the settings
+  panel and plugin screens, apart from the panes' `border.style`.
+
 - `floating.shadow` (`shade` or `char`) and `colors.shadow`: floats and
   popups cast a shadow, a cell right of them and a row below.
 

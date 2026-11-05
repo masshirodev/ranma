@@ -2497,6 +2497,7 @@ colours only; a key set to a name shows the name there.
 | `border.title_ground` | `row` (the default): `title_bg_*` fills the whole title row. `pieces`: the row stays a line, the title stands on `title_bg_*` between the corners as a pill of its own, and `ranma.titlebar`'s groups and pieces in a role with a ground are pills of theirs. |
 | `border.title_corner_left`, `title_corner_right` | one character each (empty by default), drawn in the corner cells of a filled title row, in the row's ground over whatever lies behind the pane (`colors.background_bg`, else the terminal's): `"\ue0b6"` and `"\ue0b4"` round it like a window's top. On a side with no edge the corner takes the row's end cell and the title starts after it. Not drawn on a row that is not filled. |
 | `border.floating_style` | floats and popups (`ranma popup`); unset, `style` |
+| `border.overlay_style` | what draws over the panes: pickers, sheets, toasts, the settings panel and plugin screens; unset, `style` (rounded when that is `none`). A theme whose panes have no border, or only a title row, still frames these as it likes. |
 | `border.title` | where a pane's title goes: `top`, `bottom`, `off` |
 | `border.title_align` | `left`, `center`, `right` |
 | `border.title_format` | the title's text (see [Formats](#formats)): `{title}` (its name, else what its program set), `{index}` (its place in the workspace, from 1), `{program}` (the program in its foreground), `{cwd}` (its directory, `~` for home), `{icon}` (its program's glyph from `[icons]`). `" {title} "` by default. |
