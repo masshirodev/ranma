@@ -1395,7 +1395,12 @@ impl PaneLooks {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RoleDef {
-    pub fg: Color,
+    /// Its text. Unset, the text a module would have where it stands: the
+    /// pill's (`module_fg`, else `bar_fg`) on a ground, else `bar_fg`
+    /// (card c469). Nothing in a theme is required: a role named only for
+    /// its ground is a role.
+    #[serde(default)]
+    pub fg: Option<Color>,
     /// Unset: the module's own ground.
     #[serde(default)]
     pub bg: Option<Color>,
@@ -2186,6 +2191,42 @@ mod tests {
         dir
     }
 
+    /// Nothing in a theme is required: every section present and empty
+    /// loads, and so does a role that names only its ground (card c469).
+    /// A field added without a fallback fails here, not in someone's theme.
+    #[test]
+    fn every_section_empty_loads_and_a_role_needs_no_fg() {
+        let dir = tmp_dir("empty-sections");
+        let sections = [
+            "colors",
+            "border",
+            "gaps",
+            "bar",
+            "bar.left",
+            "bar.center",
+            "bar.right",
+            "panes",
+            "background",
+            "palette",
+            "styles",
+            "splash",
+            "picker",
+            "floating",
+            "tabs",
+            "icons",
+            "roles.bare",
+        ];
+        let src: String = sections.iter().map(|s| format!("[{s}]\n")).collect();
+        std::fs::write(dir.join("t.toml"), &src).unwrap();
+        let t = load("t", std::slice::from_ref(&dir)).unwrap_or_else(|e| panic!("{e:#}\n{src}"));
+        assert_eq!(t.roles["bare"].fg, None);
+        std::fs::write(dir.join("g.toml"), "[roles.sys]\nbg = \"#9ccf8a\"\n").unwrap();
+        let g = load("g", std::slice::from_ref(&dir)).unwrap();
+        assert_eq!(g.roles["sys"].fg, None);
+        assert_eq!(g.roles["sys"].bg, Some(Color::Rgb(0x9c, 0xcf, 0x8a)));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn builtin_default_loads() {
         let t = load("default", &[]).unwrap();
@@ -2271,7 +2312,7 @@ mod tests {
         assert_eq!(
             t.roles["git"],
             RoleDef {
-                fg: Color::Rgb(255, 136, 0),
+                fg: Some(Color::Rgb(255, 136, 0)),
                 bg: None,
                 styles: Attrs::bold(),
                 left: None,

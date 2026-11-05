@@ -7535,7 +7535,7 @@ mod tests {
         ));
         assert_eq!(a.config.module_styles["session"], "sys");
         // Plain text on the pill is in the role's fg: the pill's text colour.
-        let sys = |p: &Piece| matches!(p.style, Style::Role(r) if r.fg == crate::theme::Color::Rgb(0xee, 0xee, 0xee));
+        let sys = |p: &Piece| matches!(p.style, Style::Role(r) if r.fg == Some(crate::theme::Color::Rgb(0xee, 0xee, 0xee)));
         assert!(
             sys(&pieces[1].1) && sys(&pieces[3].1),
             "{:?}",
@@ -8671,7 +8671,7 @@ mod tests {
         let lua = mlua::Lua::new();
         let mut roles = std::collections::BTreeMap::new();
         let git = crate::theme::RoleDef {
-            fg: crate::theme::Color::Rgb(1, 2, 3),
+            fg: Some(crate::theme::Color::Rgb(1, 2, 3)),
             bg: None,
             styles: crate::theme::Attrs::bold(),
             left: None,

@@ -2444,6 +2444,20 @@ Decided:
 - Under `theme_colors = "outer"`, a pane's own colours still win over the
   outer's: they were asked for about that pane.
 
+### Nothing in a theme is required (2026-11-05)
+
+A theme is merged over the built-in default, so a key it leaves out is the
+default's; sections the default leaves out (`[splash]`, `[picker]`,
+`[floating]`, `[tabs]`) fill in their own. The one table with no parent is
+one the theme names itself, `[roles.<name>]`, and its `fg` was required:
+`[roles.sys]` with only a `bg` failed to load (the owner: "this colors
+should all regress to the parent no?"). An audit of every theme struct
+found it the only required value. It is optional now (card c469), its
+text falling back to what a module's plain text would be where it stands,
+and `every_section_empty_loads_and_a_role_needs_no_fg` loads a theme of
+every section empty, so a field added without a fallback fails in the
+tests and not in someone's theme.
+
 ### Title bars a theme can build (2026-11-04)
 
 The question was whether a theme could make a pane's top edge look like a

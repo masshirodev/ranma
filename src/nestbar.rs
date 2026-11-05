@@ -1915,7 +1915,7 @@ mod tests {
     fn modules_go_out_by_style_name_and_come_back_in_this_theme() {
         use crate::theme::{Attrs, Color};
         let git = RoleDef {
-            fg: Color::Rgb(255, 136, 0),
+            fg: Some(Color::Rgb(255, 136, 0)),
             bg: None,
             styles: Attrs::bold(),
             left: None,

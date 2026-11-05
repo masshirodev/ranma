@@ -225,6 +225,11 @@ commit log has the detail.
 
 ### Fixed
 
+- A role's `fg` is optional (`[roles.sys]` with only a `bg` failed with
+  "missing field `fg`"): unset, its text is plain text where it stands,
+  `module_fg` on a pill. Nothing else in a theme was required, and a test
+  now loads a theme of every section empty so nothing becomes so.
+
 - Over ssh with `nested_bar = "inner"`: the workspaces of the ranma inside
   expand wherever its bar puts the workspaces (the centre too, not only the
   left); this ranma's own timed modules in that bar tick (the desk's clock

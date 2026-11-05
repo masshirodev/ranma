@@ -1879,6 +1879,8 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
                         bar::Style::Dim => c.module_dim,
                         bar::Style::Accent => c.module_accent,
                         bar::Style::Urgent => c.module_urgent,
+                        // A role with no text of its own reads as plain text.
+                        bar::Style::Role(r) if r.fg.is_none() => c.module_fg,
                         _ => None,
                     };
                     if let Some(fg) = on_pill {
@@ -2434,7 +2436,13 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
     };
     match s {
         bar::Style::Role(r) => {
-            let s = fg(r.fg, r.styles);
+            // No text of its own: a module's plain text where it stands
+            // (on its own ground, the pill's; elsewhere set where drawn).
+            let text = r.fg.unwrap_or(match r.bg {
+                Some(_) => c.module_fg.unwrap_or(c.bar_fg),
+                None => c.bar_fg,
+            });
+            let s = fg(text, r.styles);
             match r.bg {
                 Some(bg) => s.bg(color(bg)),
                 None => s,
@@ -2867,6 +2875,36 @@ mod tests {
             Color::Rgb(0xff, 0xff, 0xff),
             "unset: the bar's, as before"
         );
+    }
+
+    /// A role with no `fg`: its text in its pill as plain text would be
+    /// (`module_fg`), not an error (card c469).
+    #[test]
+    fn a_role_with_no_fg_reads_as_plain_text_on_its_pill() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (mut app, dir) = themed_app_with(
+            "rolenofg",
+            "[colors]\nmodule_fg = \"#111111\"\n[bar]\nmodule_left = \"(\"\nmodule_right = \")\"\n[roles.sys]\nbg = \"#9ccf8a\"\n",
+            r#"ranma.module("m", { style = "sys", render = function() return "SYS" end })
+               ranma.bar { left = { "m" }, center = {}, right = {} }"#,
+        );
+        app.render_state_modules();
+        let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+        t.draw(|f| {
+            let area = f.area();
+            draw_bar(f, &app, Rect::new(0, area.height - 1, area.width, 1));
+        })
+        .unwrap();
+        let buf = t.backend().buffer();
+        let row = rows(buf).last().unwrap().clone();
+        let x = row[..row.find("SYS").unwrap()].chars().count() as u16;
+        assert_eq!(buf[(x, 9)].fg, Color::Rgb(0x11, 0x11, 0x11), "{row:?}");
+        assert_eq!(
+            buf[(x, 9)].bg,
+            Color::Rgb(0x9c, 0xcf, 0x8a),
+            "on its own ground"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// With arrows the pills abut and have no caps: a module still stands
