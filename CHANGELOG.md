@@ -228,6 +228,9 @@ commit log has the detail.
 
 ### Fixed
 
+- A pill with no caps (arrows, or a side with none) kept no padding: its
+  text ran into the arrows and its neighbours. Its blanks are kept now.
+
 - With `nested_bar = "inner"`, whose value a module shows (the host's or
   the desk's) is the host's `nested` choice, not this ranma's: a host
   module on `follow` showed this ranma's own clock when that was `"own"`.

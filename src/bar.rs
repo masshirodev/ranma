@@ -276,7 +276,11 @@ pub fn boxed_in(
     cap_style: Style,
     pad_style: Style,
 ) -> Segment {
-    if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
+    // Nothing to add: no caps and no blanks. Pills that abut with arrows
+    // have no caps but do have their blanks, which were lost here, and the
+    // text ran into the arrows (card c473).
+    if (left.is_empty() && right.is_empty() && pad_left == 0 && pad_right == 0) || width(&seg) == 0
+    {
         return seg;
     }
     let mut seg = seg;
@@ -753,11 +757,12 @@ mod tests {
             boxed(Vec::new(), "(", ")", 1, 1).is_empty(),
             "an empty module takes no room"
         );
-        assert_eq!(
-            boxed(seg("x"), "", "", 2, 2),
-            seg("x"),
-            "no caps, no ground"
-        );
+        // No caps: a square pill (arrows, a side with none), its blanks kept
+        // so its text does not run into its neighbours (card c473).
+        let square = boxed(seg("x"), "", "", 2, 2);
+        let square: Vec<(&str, bool)> = square.iter().map(|p| (p.text.as_str(), p.boxed)).collect();
+        assert_eq!(square, vec![("  ", true), ("x", true), ("  ", true)]);
+        assert_eq!(boxed(seg("x"), "", "", 0, 0), seg("x"), "nothing to add");
         let padded: String = boxed(seg("x"), "(", ")", 2, 1)
             .iter()
             .map(|p| p.text.as_str())
