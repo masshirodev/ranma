@@ -843,7 +843,8 @@ terminal so it can tell where you clicked:
 a tile by it and drop it on another tile, and it lands on the side of that tile
 the pointer is on (top, bottom, left or right half, outlined while dragging); drag
 a float by it to move the float. Every other border resizes: between two tiles it
-moves their shared edge, on a float's right or bottom edge it sizes the float.
+moves their shared edge, and on a float it moves the edge grabbed (left, right or
+bottom, or both of a bottom corner's) while the opposite edge stays put.
 Programs are resized once, when the button is released. (With `border.style =
 "none"` there are no borders to grab; the keyboard still does all of it.)
 
@@ -866,7 +867,8 @@ another session (those two only when it has panes), and the workspace switcher.
 A left click just goes there, as before.
 
 In WM mode the mouse always belongs to ranma: click to focus, drag a floating pane
-anywhere with the left button, resize it with the right. `mouse = "off"` limits ranma to
+anywhere with the left button, resize it with the right (from the corner nearest
+the pointer). `mouse = "off"` limits ranma to
 exactly that, and leaves the mouse to your terminal the rest of the time.
 
 ### Mouse binds — `ranma.mouse(spec, action)`

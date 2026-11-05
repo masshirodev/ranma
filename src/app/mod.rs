@@ -137,6 +137,8 @@ enum Drag {
     Resize {
         id: PaneId,
         start: Rect,
+        /// The edges the drag moves; the others stay put.
+        grip: drag::Grip,
         x: u16,
         y: u16,
     },
@@ -2605,6 +2607,7 @@ impl App {
                 MouseButton::Right => Some(Drag::Resize {
                     id: v.id,
                     start: v.outer,
+                    grip: drag::Grip::nearest(v.outer, x, y),
                     x,
                     y,
                 }),
@@ -5453,6 +5456,48 @@ mod tests {
         a.workspaces.get_mut(&1).unwrap().focused = Some(1);
         a.run_action(Action::ClosePane);
         assert!(!a.workspaces[&1].contains(1), "pane 1 closed");
+    }
+
+    #[test]
+    fn dragging_a_floats_bottom_left_corner_grows_it_to_the_left() {
+        use crossterm::event::{
+            KeyModifiers as K, MouseButton as B, MouseEvent as M, MouseEventKind as E,
+        };
+        let ev = |kind, x, y| M {
+            kind,
+            column: x,
+            row: y,
+            modifiers: K::NONE,
+        };
+        let mut a = app(None);
+        for id in [1, 2] {
+            with_pane(&mut a, id);
+        }
+        a.toggle_floating_pane(2);
+        let outer = |a: &App| a.frame().views.iter().find(|v| v.id == 2).unwrap().outer;
+        let o = outer(&a);
+        let (x, y) = (o.x, o.bottom() - 1);
+        a.handle_mouse(ev(E::Down(B::Left), x, y));
+        a.handle_mouse(ev(E::Drag(B::Left), x - 4, y));
+        a.handle_mouse(ev(E::Up(B::Left), x - 4, y));
+        let r = outer(&a);
+        assert_eq!(r.right(), o.right(), "the right edge stays where it was");
+        assert_eq!(r.x, o.x - 4, "the left edge follows the pointer");
+        assert_eq!((r.y, r.h), (o.y, o.h), "a sideways drag keeps the height");
+
+        // The left border, mid-height, holds only the left edge.
+        let o = r;
+        let (x, y) = (o.x, o.y + o.h / 2);
+        a.handle_mouse(ev(E::Down(B::Left), x, y));
+        a.handle_mouse(ev(E::Drag(B::Left), x + 3, y + 2));
+        a.handle_mouse(ev(E::Up(B::Left), x + 3, y + 2));
+        let r = outer(&a);
+        assert_eq!((r.x, r.right()), (o.x + 3, o.right()));
+        assert_eq!(
+            (r.y, r.h),
+            (o.y, o.h),
+            "the left border does not size the height"
+        );
     }
 
     #[test]

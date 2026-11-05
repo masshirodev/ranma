@@ -4,7 +4,9 @@
 //! border** is its title bar and moves it; its **other borders** resize. For a
 //! tile, moving means drag-and-drop: drop it on another tile and it lands on the
 //! side of that tile the pointer is on, shown by an outline while dragging. For a
-//! tile, resizing moves the edge it shares with its neighbour. Programs are
+//! tile, resizing moves the edge it shares with its neighbour. For a float,
+//! resizing moves the edges that were grabbed (left, right, bottom, or a bottom
+//! corner's two) and leaves the opposite ones where they are. Programs are
 //! resized once, when the button is released, not on every mouse event.
 
 use std::time::{Duration, Instant};
@@ -35,7 +37,76 @@ pub(super) enum BorderHit {
     FloatResize {
         id: PaneId,
         outer: Rect,
+        grip: Grip,
     },
+}
+
+/// Which edges of a float a resize drag holds, per axis: `-1` the left (top)
+/// edge, `1` the right (bottom) one, `0` neither, so that axis keeps its size.
+/// The edges not held stay put: dragging the bottom-left corner leftwards grows
+/// the float to the left, not to the right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Grip {
+    pub h: i8,
+    pub v: i8,
+}
+
+impl Grip {
+    /// The corner nearest the pointer, for a resize begun anywhere in the float
+    /// (WM mode's right drag), the way desktop window managers pick one.
+    pub(crate) fn nearest(outer: Rect, x: u16, y: u16) -> Grip {
+        Grip {
+            h: if x < outer.x + outer.w / 2 { -1 } else { 1 },
+            v: if y < outer.y + outer.h / 2 { -1 } else { 1 },
+        }
+    }
+}
+
+/// Smallest float a resize drag leaves: room for a title and a line of text.
+const MIN_FLOAT_W: i32 = 10;
+const MIN_FLOAT_H: i32 = 3;
+
+/// `start` with the edges `grip` holds moved by the pointer's travel (`dx`,
+/// `dy`), kept inside `area` and no smaller than the minimum. A held edge stops
+/// at the area's border and at the minimum size; the edge opposite it never moves.
+pub(crate) fn resized_float(start: Rect, area: Rect, grip: Grip, dx: i32, dy: i32) -> Rect {
+    // One axis: the new start and length.
+    fn axis(lo: u16, len: u16, a_lo: u16, a_hi: u16, held: i8, d: i32, min: i32) -> (i32, i32) {
+        let (lo, hi, a_lo, a_hi) = (lo as i32, (lo + len) as i32, a_lo as i32, a_hi as i32);
+        match held {
+            1 => {
+                let end = (hi + d).min(a_hi).max(lo + min);
+                (lo, end - lo)
+            }
+            -1 => {
+                let start = (lo + d).max(a_lo).min(hi - min);
+                (start, hi - start)
+            }
+            _ => (lo, hi - lo),
+        }
+    }
+    let (x, w) = axis(
+        start.x,
+        start.w,
+        area.x,
+        area.right(),
+        grip.h,
+        dx,
+        MIN_FLOAT_W,
+    );
+    let (y, h) = axis(
+        start.y,
+        start.h,
+        area.y,
+        area.bottom(),
+        grip.v,
+        dy,
+        MIN_FLOAT_H,
+    );
+    let u = |n: i32| n.clamp(0, u16::MAX as i32) as u16;
+    // A float already against the border with no room for the minimum gets
+    // pushed back inside, as before.
+    Rect::new(u(x), u(y), u(w), u(h)).clamp_into(area)
 }
 
 impl App {
@@ -54,10 +125,24 @@ impl App {
                     dx: x - o.x,
                     dy: 0,
                 })
-            } else if x + 1 == o.right() || y + 1 == o.bottom() {
-                Some(BorderHit::FloatResize { id: v.id, outer: o })
             } else {
-                None
+                // Every other border resizes from where it was grabbed; a
+                // bottom corner holds two edges.
+                let grip = Grip {
+                    h: if x == o.x {
+                        -1
+                    } else if x + 1 == o.right() {
+                        1
+                    } else {
+                        0
+                    },
+                    v: if y + 1 == o.bottom() { 1 } else { 0 },
+                };
+                (grip != Grip { h: 0, v: 0 }).then_some(BorderHit::FloatResize {
+                    id: v.id,
+                    outer: o,
+                    grip,
+                })
             };
         }
         if y == o.y {
@@ -118,11 +203,12 @@ impl App {
                 self.focus(id);
                 Drag::Move { id, dx, dy }
             }
-            BorderHit::FloatResize { id, outer } => {
+            BorderHit::FloatResize { id, outer, grip } => {
                 self.focus(id);
                 Drag::Resize {
                     id,
                     start: outer,
+                    grip,
                     x,
                     y,
                 }
@@ -153,13 +239,13 @@ impl App {
             Some(Drag::Resize {
                 id,
                 start,
+                grip,
                 x: x0,
                 y: y0,
             }) => {
-                let w = (start.w as i32 + x as i32 - x0 as i32).max(10) as u16;
-                let h = (start.h as i32 + y as i32 - y0 as i32).max(3) as u16;
+                let (dx, dy) = (x as i32 - x0 as i32, y as i32 - y0 as i32);
                 if let Some(r) = self.active_mut().float_rect_mut(id) {
-                    *r = Rect::new(start.x, start.y, w, h).clamp_into(area);
+                    *r = resized_float(start, area, grip, dx, dy);
                 }
                 self.dirty = true;
             }
@@ -393,6 +479,72 @@ mod tests {
         assert_eq!(drop_side(r, 30, 28), Dir::Down);
         assert_eq!(drop_half(r, Dir::Down), Rect::new(10, 20, 40, 10));
         assert_eq!(drop_half(r, Dir::Right), Rect::new(30, 10, 20, 20));
+    }
+
+    #[test]
+    fn a_float_resizes_from_the_edges_it_was_grabbed_by() {
+        let area = Rect::new(0, 1, 80, 22);
+        let start = Rect::new(20, 5, 30, 10);
+        let g = |h, v| Grip { h, v };
+        // Bottom-left corner, dragged left and down: grows left and down, the
+        // right and top edges where they were. It used to grow to the right.
+        let r = resized_float(start, area, g(-1, 1), -5, 2);
+        assert_eq!(r, Rect::new(15, 5, 35, 12));
+        assert_eq!(r.right(), start.right());
+        // Bottom-right corner keeps its old behaviour.
+        assert_eq!(
+            resized_float(start, area, g(1, 1), 5, 2),
+            Rect::new(20, 5, 35, 12)
+        );
+        // The left edge alone: the height is untouched whatever the pointer does.
+        assert_eq!(
+            resized_float(start, area, g(-1, 0), 4, 9),
+            Rect::new(24, 5, 26, 10)
+        );
+        // The bottom edge alone: the width likewise.
+        assert_eq!(
+            resized_float(start, area, g(0, 1), 9, -3),
+            Rect::new(20, 5, 30, 7)
+        );
+        // The top edge (a right drag near the top): the bottom stays put.
+        assert_eq!(
+            resized_float(start, area, g(1, -1), 0, -2),
+            Rect::new(20, 3, 30, 12)
+        );
+    }
+
+    #[test]
+    fn a_held_edge_stops_at_the_minimum_and_the_area() {
+        let area = Rect::new(0, 1, 80, 22);
+        let start = Rect::new(20, 5, 30, 10);
+        let g = |h, v| Grip { h, v };
+        // Shrunk past the minimum: the opposite edge still does not move.
+        assert_eq!(
+            resized_float(start, area, g(-1, 1), 100, -100),
+            Rect::new(40, 5, 10, 3)
+        );
+        assert_eq!(
+            resized_float(start, area, g(1, -1), -100, 100),
+            Rect::new(20, 12, 10, 3)
+        );
+        // Dragged past the area's border: the edge stops there.
+        assert_eq!(
+            resized_float(start, area, g(-1, 1), -100, 100),
+            Rect::new(0, 5, 50, 18)
+        );
+        assert_eq!(
+            resized_float(start, area, g(1, -1), 100, -100),
+            Rect::new(20, 1, 60, 14)
+        );
+    }
+
+    #[test]
+    fn a_right_drag_takes_the_nearest_corner() {
+        let o = Rect::new(20, 5, 30, 10);
+        assert_eq!(Grip::nearest(o, 21, 13), Grip { h: -1, v: 1 });
+        assert_eq!(Grip::nearest(o, 48, 13), Grip { h: 1, v: 1 });
+        assert_eq!(Grip::nearest(o, 21, 6), Grip { h: -1, v: -1 });
+        assert_eq!(Grip::nearest(o, 48, 6), Grip { h: 1, v: -1 });
     }
 
     fn selected(anchor: (i32, usize), point: (i32, usize)) -> String {

@@ -62,6 +62,12 @@ commit log has the detail.
 
 ### Fixed
 
+- Resizing a float with the mouse moves the edges you grab. Its bottom-left
+  corner dragged left used to grow the float to the right, since every resize
+  moved the right and bottom edges; now the right edge stays put. The left
+  border resizes too (it did nothing), and WM mode's right drag resizes from
+  the corner nearest the pointer, as desktop window managers do.
+
 - An update no longer fails for good after upstream's history is rewritten.
   `main` was rewritten on 2026-10-30, and every update clone made before then
   failed with "Not possible to fast-forward". `ranma update` and `leader U` now
