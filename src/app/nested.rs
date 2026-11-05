@@ -490,7 +490,8 @@ impl App {
                     .report_of(v.id)
                     .filter(|r| r.v >= nestbar::EDGE_SINCE)?;
                 let host = self.nest_host(v.id);
-                let on_border = v.inner != v.outer;
+                let d = v.drawn();
+                let on_border = if top { d.top } else { d.bottom };
                 let (rect, place) = if on_border {
                     (v.outer, nestbar::on_edge as PlaceFn)
                 } else {

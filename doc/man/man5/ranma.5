@@ -1224,7 +1224,9 @@ a float by it to move the float. Every other border resizes: between two tiles i
 moves their shared edge, and on a float it moves the edge grabbed (left, right or
 bottom, or both of a bottom corner's) while the opposite edge stays put.
 Programs are resized once, when the button is released. (With \fBborder.style =
-"none"\fR there are no borders to grab; the keyboard still does all of it.)
+"none"\fR there are no borders to grab; the keyboard still does all of it.) A
+side the theme does not draw (\fBborder.edges\fR) is grabbed in the gap beside it,
+when \fBgaps.inner\fR leaves one; with no gap, the keyboard resizes it.
 .PP
 \fBA right click opens the pane's menu\fR: on its border or title bar, or in
 its text when its program does not use the mouse (a shell at its prompt, say).
@@ -3175,7 +3177,13 @@ two colours or more: the border runs through them along \fBborder.gradient_angle
 \fBrounded\fR, \fBplain\fR, \fBthick\fR, \fBdouble\fR, \fBascii\fR (\fB+ \- \e|\fR), \fBcustom\fR, \fBnone\fR
 .TP
 \fBborder.chars\fR
-with \fBcustom\fR: six one\-cell characters, top\-left, top\-right, bottom\-left, bottom\-right, horizontal, vertical (\fB"┏┓┗┛━┃"\fR)
+with \fBcustom\fR: six one\-cell characters, top\-left, top\-right, bottom\-left, bottom\-right, horizontal, vertical (\fB"┏┓┗┛━┃"\fR). Or a table giving sides their own, over any style: \fB[border.chars]\fR with \fBtop = "╭─╮"\fR and \fBbottom = "╰─╯"\fR (left corner, fill, right corner) and \fBleft = "▏"\fR, \fBright = "▕"\fR (one character each), every side optional and the style's own where unset. With \fBcustom\fR and only a table, the sides it leaves out are plain. The fill may be a space. Pickers, sheets and the settings panel frame themselves with the six\-character string only.
+.TP
+\fBborder.edges\fR
+which sides of a pane are drawn: a list of \fBtop\fR, \fBright\fR, \fBbottom\fR, \fBleft\fR; all four by default. A pane gives a cell only to each side drawn, so \fB["top"]\fR is a title row over the text with nothing beside or under it. The side \fBborder.title\fR is on must be in the list, a side may be listed once, and an empty list is an error (no border at all is \fBstyle = "none"\fR). A side not drawn has no scrollbar or arrow. Whether panes have sides is the layout's, so this is the theme's and never one pane's.
+.TP
+\fBborder.floating_edges\fR
+the same, for floats and popups; unset, \fBedges\fR
 .TP
 \fBborder.floating_style\fR
 floats and popups (\fBranma popup\fR); unset, \fBstyle\fR

@@ -399,7 +399,7 @@ impl App {
         let ws = self.active();
         let area = self.workspace_area();
         let s = &self.config.settings;
-        let b = self.border();
+        let b = self.insets(false);
         let lay = ws.tree.strip_layout(
             area,
             self.config.theme.gaps.inner,
@@ -417,7 +417,7 @@ impl App {
                     f.views.push(view(*id, at(*r, x0 + r.x as i32), false));
                 }
                 for (id, r) in hidden {
-                    f.hidden.push((*id, at(*r, x0 + r.x as i32).inset(b, b)));
+                    f.hidden.push((*id, at(*r, x0 + r.x as i32).inset_sides(b)));
                 }
                 for tb in &col.layout.tab_bars {
                     let mut tb = tb.clone();
@@ -429,7 +429,7 @@ impl App {
             // Off screen or peeking, each pane keeps its size.
             for (id, r) in col.layout.visible.iter().chain(hidden) {
                 f.hidden
-                    .push((*id, Rect::new(0, r.y, r.w, r.h).inset(b, b)));
+                    .push((*id, Rect::new(0, r.y, r.w, r.h).inset_sides(b)));
             }
             if x1 <= left || x0 >= right {
                 continue;
@@ -468,7 +468,7 @@ impl App {
         self.strip_frame(&mut f, |id, outer, floating| PaneView {
             id,
             outer,
-            inner: outer.inset(self.border(), self.border()),
+            inner: outer.inset_sides(self.insets(floating)),
             focused: false,
             floating,
         });

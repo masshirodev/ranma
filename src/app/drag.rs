@@ -113,7 +113,9 @@ impl App {
     /// The border under the pointer, if the press is on one: the topmost pane
     /// there decides, and a press inside a pane is not a border.
     pub(super) fn border_hit(&self, frame: &Frame, x: u16, y: u16) -> Option<BorderHit> {
-        let v: PaneView = self.pane_at(frame, x, y)?;
+        let Some(v) = self.pane_at(frame, x, y) else {
+            return self.beside_hit(frame, x, y);
+        };
         if v.inner.contains(x, y) {
             return None;
         }
@@ -170,6 +172,62 @@ impl App {
                 id: v.id,
                 split: Split::Vertical,
             });
+        }
+        None
+    }
+
+    /// A press just outside a side whose border is not drawn
+    /// (`border.edges`): in the gap beside it, that side is the handle
+    /// (DESIGN.md, "Title bars a theme can build"). With no gap there is no
+    /// cell outside it, and the keys resize. The topmost pane wins.
+    fn beside_hit(&self, frame: &Frame, x: u16, y: u16) -> Option<BorderHit> {
+        let rects = self.tile_rects(frame);
+        for v in frame.views.iter().rev() {
+            let (o, d) = (v.outer, v.drawn());
+            let rows = y >= o.y && y < o.bottom();
+            let cols = x >= o.x && x < o.right();
+            let right = !d.right && x == o.right() && (rows || (!d.bottom && y == o.bottom()));
+            let left = !d.left && x + 1 == o.x && (rows || (!d.bottom && y == o.bottom()));
+            let below = !d.bottom && y == o.bottom() && (cols || right || left);
+            if !(right || left || below) {
+                continue;
+            }
+            if self.active().is_floating(v.id) {
+                let grip = Grip {
+                    h: if right {
+                        1
+                    } else if left {
+                        -1
+                    } else {
+                        0
+                    },
+                    v: i8::from(below),
+                };
+                return Some(BorderHit::FloatResize {
+                    id: v.id,
+                    outer: o,
+                    grip,
+                });
+            }
+            let has = |dir| layout::neighbour(&rects, v.id, dir);
+            if right && has(Dir::Right).is_some() {
+                return Some(BorderHit::TileEdge {
+                    id: v.id,
+                    split: Split::Horizontal,
+                });
+            }
+            if left && let Some(l) = has(Dir::Left) {
+                return Some(BorderHit::TileEdge {
+                    id: l,
+                    split: Split::Horizontal,
+                });
+            }
+            if below && has(Dir::Down).is_some() {
+                return Some(BorderHit::TileEdge {
+                    id: v.id,
+                    split: Split::Vertical,
+                });
+            }
         }
         None
     }

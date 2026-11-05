@@ -91,6 +91,16 @@ style = "rounded"
 # With style = "custom": top-left, top-right, bottom-left, bottom-right,
 # horizontal, vertical.
 # chars = "╭╮╰╯─│"
+# Or each side its own, over any style (top and bottom: left corner, fill,
+# right corner; left and right: one character), as a table at the end of
+# [border]:
+#   [border.chars]
+#   top = "▛▀▜"
+#   left = "▏"
+# Which sides are drawn: top, right, bottom, left (all four unset). A pane
+# gives a cell only to the sides drawn; the side the title is on must be one.
+# edges = ["top"]
+# floating_edges = ["top", "right", "bottom", "left"]
 # Where a pane's title goes on its border: top | bottom | off.
 title = "top"
 # left | center | right

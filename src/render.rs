@@ -51,6 +51,34 @@ pub fn modifier(a: Attrs) -> Modifier {
 
 /// The characters a border style draws with; `None` draws no border.
 fn border_set(b: &theme::Border, style: BorderStyle) -> Option<border::Set<'_>> {
+    let mut set = style_set(b, style)?;
+    // A table of sides goes over whatever the style drew (R2).
+    if let Some(s) = b.side_chars() {
+        fn three(t: &str) -> [&str; 3] {
+            let mut out = ["", "", ""];
+            for (slot, (i, ch)) in out.iter_mut().zip(t.char_indices()) {
+                *slot = &t[i..i + ch.len_utf8()];
+            }
+            out
+        }
+        if let Some(t) = s.top.as_deref() {
+            [set.top_left, set.horizontal_top, set.top_right] = three(t);
+        }
+        if let Some(t) = s.bottom.as_deref() {
+            [set.bottom_left, set.horizontal_bottom, set.bottom_right] = three(t);
+        }
+        if let Some(l) = s.left.as_deref() {
+            set.vertical_left = l;
+        }
+        if let Some(r) = s.right.as_deref() {
+            set.vertical_right = r;
+        }
+    }
+    Some(set)
+}
+
+/// The characters a style draws with, before `border.chars`' sides.
+fn style_set(b: &theme::Border, style: BorderStyle) -> Option<border::Set<'_>> {
     Some(match style {
         BorderStyle::None => return None,
         BorderStyle::Rounded => border::ROUNDED,
@@ -67,6 +95,8 @@ fn border_set(b: &theme::Border, style: BorderStyle) -> Option<border::Set<'_>> 
             horizontal_top: "-",
             horizontal_bottom: "-",
         },
+        // A table of sides with no six-character string: plain under it.
+        BorderStyle::Custom if b.six_chars().is_none() => border::PLAIN,
         BorderStyle::Custom => {
             let [tl, tr, bl, br, h, v] = b.custom_chars();
             border::Set {
@@ -601,18 +631,17 @@ fn draw_peek(f: &mut Frame, app: &App, p: &crate::app::Peek) {
     let Some(pane) = app.panes.get(&p.id) else {
         return;
     };
-    let b = app.border();
     let view = PaneView {
         id: p.id,
         outer: p.full,
-        inner: p.full.inset(b, b),
+        inner: p.full.inset_sides(app.insets(false)),
         focused: false,
         floating: false,
     };
     let Ok(mut t) = ratatui::Terminal::new(TestBackend::new(p.full.w, p.full.h));
     let title = app.border_title(p.id);
     if t.draw(|tf| {
-        if b > 0 {
+        if view.inner != view.outer {
             draw_border(tf, app, &view, &title);
         }
         draw_pane(tf, app, &view, pane);
@@ -657,7 +686,7 @@ fn draw_peek(f: &mut Frame, app: &App, p: &crate::app::Peek) {
         }
     }
     // The title, moved into view: right-aligned before the corner.
-    if p.cut_left > 0 && b > 0 && !title.trim().is_empty() && p.outer.w > 4 {
+    if p.cut_left > 0 && view.inner.y > view.outer.y && !title.trim().is_empty() && p.outer.w > 4 {
         let text = format!(" {} ", title.trim());
         let room = p.outer.w as usize - 2;
         let text: String = text.chars().take(room).collect();
@@ -742,6 +771,7 @@ fn gradient_at(stops: &[crate::hostcolors::Rgb], t: f32) -> Color {
 fn gradient_edge(
     f: &mut Frame,
     r: crate::layout::Rect,
+    drawn: crate::app::Drawn,
     edge: Color,
     stops: &[theme::Color],
     angle: u16,
@@ -776,7 +806,12 @@ fn gradient_edge(
     let buf = f.buffer_mut();
     for y in r.y..r.y + r.h {
         for x in r.x..r.x + r.w {
-            let on_edge = y == r.y || y == r.y + r.h - 1 || x == r.x || x == r.x + r.w - 1;
+            // Only the sides drawn: elsewhere the cell is the pane's text,
+            // which may well be in the border's colour.
+            let on_edge = (drawn.top && y == r.y)
+                || (drawn.bottom && y == r.y + r.h - 1)
+                || (drawn.left && x == r.x)
+                || (drawn.right && x == r.x + r.w - 1);
             if !on_edge || x >= screen.right() || y >= screen.bottom() {
                 continue;
             }
@@ -813,8 +848,20 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         (false, _, false) => c.border_inactive,
     };
     let edge = Style::default().fg(color(border));
+    let drawn = view.drawn();
+    let mut sides = Borders::NONE;
+    for (on, side) in [
+        (drawn.top, Borders::TOP),
+        (drawn.right, Borders::RIGHT),
+        (drawn.bottom, Borders::BOTTOM),
+        (drawn.left, Borders::LEFT),
+    ] {
+        if on {
+            sides |= side;
+        }
+    }
     let mut block = Block::default()
-        .borders(Borders::ALL)
+        .borders(sides)
         .border_set(set)
         .border_style(edge);
     let mark = if app.is_synced(view.id) { "⇉ " } else { "" };
@@ -913,6 +960,7 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         gradient_edge(
             f,
             r,
+            drawn,
             color(border),
             stops,
             b.gradient_angle,
@@ -922,12 +970,18 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
     if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
         let buf = f.buffer_mut();
         let (mx, my) = (r.x + r.w / 2, r.y + r.h / 2);
-        let mut arrows = vec![(r.x, my, "▶"), (r.right() - 1, my, "◀")];
-        // Not over the title's edge.
-        if b.title != TitlePosition::Top {
+        let mut arrows = Vec::new();
+        // On the sides drawn, and not over the title's edge.
+        if drawn.left {
+            arrows.push((r.x, my, "▶"));
+        }
+        if drawn.right {
+            arrows.push((r.right() - 1, my, "◀"));
+        }
+        if drawn.top && b.title != TitlePosition::Top {
             arrows.push((mx, r.y, "▼"));
         }
-        if b.title != TitlePosition::Bottom {
+        if drawn.bottom && b.title != TitlePosition::Bottom {
             arrows.push((mx, r.bottom() - 1, "▲"));
         }
         for (x, y, a) in arrows {
@@ -1010,7 +1064,7 @@ fn draw_hints(f: &mut Frame, app: &App, view: &PaneView, h: &crate::app::HintSta
 fn draw_scrollbar(f: &mut Frame, app: &App, view: &PaneView, pane: &crate::pane::Pane) {
     use crate::theme::Scrollbar;
     let mode = app.config.theme.panes.scrollbar;
-    if mode == Scrollbar::Off || view.inner.w == view.outer.w {
+    if mode == Scrollbar::Off || !view.drawn().right {
         return;
     }
     let (history, offset, rows) = {
@@ -1454,7 +1508,7 @@ fn draw_tooltip(f: &mut Frame, app: &App, frame: &crate::app::Frame) {
         None => (0, screen.height),
     };
     let b = &app.config.theme.border;
-    let lines = Lines::of(b.style, b.chars.as_deref());
+    let lines = Lines::of(b.style, b.six_chars());
     let mut grid = crate::settings::Grid::new(screen.width, screen.height);
     crate::screen::draw_tooltip(
         &mut grid,
@@ -1671,7 +1725,7 @@ fn draw_picker(f: &mut Frame, app: &App, _p: &Picker) {
     let drawn = crate::pickerview::draw_at(
         &mut canvas,
         &spec,
-        &Glyphs::of(theme.border.style, theme.border.chars.as_deref()),
+        &Glyphs::of(theme.border.style, theme.border.six_chars()),
         placed,
     );
     let cursor_bg = picker_cursor_bg(c, &app.host_colors);
@@ -2059,6 +2113,94 @@ mod tests {
         assert_eq!(landed(true), vec![(1, 1)]);
     }
 
+    /// An app on a theme of its own, in a config directory made for it.
+    fn themed_app(tag: &str, theme: &str) -> (crate::app::App, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("ranma-render-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::write(dir.join("themes").join("t.toml"), theme).unwrap();
+        let src = "ranma.set { theme = \"t\" }";
+        let config = crate::config::load_from(Some(&dir), None, Some(src)).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        (crate::app::App::new(config, tx, 40, 10), dir)
+    }
+
+    fn rows(b: &ratatui::buffer::Buffer) -> Vec<String> {
+        (0..b.area.height)
+            .map(|y| {
+                (0..b.area.width)
+                    .map(|x| b[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_border_draws_only_the_edges_the_theme_names() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (app, dir) = themed_app(
+            "edges",
+            r##"
+            [colors]
+            border_inactive = "#090909"
+            border_inactive_gradient = ["#000000", "#ffffff"]
+            [border]
+            edges = ["top", "left"]
+            floating_edges = ["top", "right", "bottom", "left"]
+            title = "top"
+            indicator = "arrows"
+            [border.chars]
+            top = "▛▀▜"
+            left = "▏"
+            "##,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 4);
+        let tile = PaneView {
+            id: 1,
+            outer,
+            inner: outer.inset_sides(app.insets(false)),
+            focused: false,
+            floating: false,
+        };
+        // Only the top and the left take a cell.
+        assert_eq!(tile.inner, crate::layout::Rect::new(1, 1, 11, 3));
+        let draw = |view: &PaneView| {
+            let mut t = Terminal::new(TestBackend::new(12, 4)).unwrap();
+            t.draw(|f| {
+                // The pane's text, in the border's very colour: a gradient
+                // must not take it for an edge.
+                let text = Style::default().fg(Color::Rgb(9, 9, 9));
+                for y in 0..4 {
+                    f.buffer_mut().set_string(0, y, "xxxxxxxxxxxx", text);
+                }
+                draw_border(f, &app, view, " t ");
+            })
+            .unwrap();
+            t.backend().buffer().clone()
+        };
+        let b = draw(&tile);
+        let r = rows(&b);
+        assert_eq!(
+            r[0], "▛ t ▀▀▀▀▀▀▀▀",
+            "the top's own fill, no right corner: {r:?}"
+        );
+        assert_eq!(r[1], "▏xxxxxxxxxxx", "{r:?}");
+        assert_eq!(r[3], "▏xxxxxxxxxxx", "no bottom edge: {r:?}");
+        // The right column is text, and keeps the text's colour.
+        assert_eq!(b[(11, 2)].fg, Color::Rgb(9, 9, 9));
+        // A float takes its own edges: all four, the style's sides under the
+        // table's.
+        let float = PaneView {
+            inner: outer.inset_sides(app.insets(true)),
+            floating: true,
+            ..tile
+        };
+        let r = rows(&draw(&float));
+        assert_eq!(r[0], "▛ t ▀▀▀▀▀▀▀▜", "{r:?}");
+        assert_eq!(r[3], "╰──────────╯", "{r:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_gradient_runs_along_its_angle_one_colour_per_cell() {
         use crate::hostcolors::{HostColors, Rgb};
@@ -2091,7 +2233,13 @@ mod tests {
                 );
                 let stops = [theme::Color::Rgb(0, 0, 0), theme::Color::Rgb(100, 0, 0)];
                 let r = crate::layout::Rect::new(0, 0, 11, 4);
-                gradient_edge(f, r, edge, &stops, angle, &HostColors::default());
+                let all = crate::app::Drawn {
+                    top: true,
+                    right: true,
+                    bottom: true,
+                    left: true,
+                };
+                gradient_edge(f, r, all, edge, &stops, angle, &HostColors::default());
             })
             .unwrap();
             t.backend().buffer().clone()
@@ -2119,6 +2267,12 @@ mod tests {
             gradient_edge(
                 f,
                 crate::layout::Rect::new(0, 0, 5, 3),
+                crate::app::Drawn {
+                    top: true,
+                    right: true,
+                    bottom: true,
+                    left: true,
+                },
                 edge,
                 &stops,
                 0,

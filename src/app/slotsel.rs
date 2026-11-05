@@ -172,12 +172,12 @@ impl App {
         let bar_y = self.bar_rect().map(|r| r.y);
         if let Some(st) = self.settings_panel() {
             let b = &st.theme.border;
-            let lines = Lines::of(b.style, b.chars.as_deref());
+            let lines = Lines::of(b.style, b.six_chars());
             return Some(st.panel.draw(w, h, bar_y, &lines, b.style));
         }
         let ps = self.plugin_screen()?;
         let b = &self.config.theme.border;
-        let lines = Lines::of(b.style, b.chars.as_deref());
+        let lines = Lines::of(b.style, b.six_chars());
         Some(ps.screen.draw(w, h, bar_y, &lines, b.style))
     }
 

@@ -23,7 +23,7 @@ use crate::input;
 use crate::layout::{self, PaneId, Placement, Preset, Rect, Split, TabBar};
 use crate::pane::{AppEvent, Pane, Size, SpawnOptions};
 use crate::render::CursorState;
-use crate::theme::{BarPosition, BorderStyle};
+use crate::theme::BarPosition;
 use crate::workspace::Workspace;
 
 mod buffers;
@@ -108,6 +108,29 @@ pub struct PaneView {
     pub inner: Rect,
     pub focused: bool,
     pub floating: bool,
+}
+
+/// Which sides of a pane have a border drawn on them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drawn {
+    pub top: bool,
+    pub right: bool,
+    pub bottom: bool,
+    pub left: bool,
+}
+
+impl PaneView {
+    /// The sides its border is drawn on: wherever the inner area stands in
+    /// from the outer one (`border.edges`; none for a frameless pane).
+    pub fn drawn(&self) -> Drawn {
+        let (o, i) = (self.outer, self.inner);
+        Drawn {
+            top: i.y > o.y,
+            right: i.right() < o.right(),
+            bottom: i.bottom() < o.bottom(),
+            left: i.x > o.x,
+        }
+    }
 }
 
 /// Everything a frame needs to know about where things go.
@@ -909,26 +932,29 @@ impl App {
         self.workspace_area().centered(80, 80)
     }
 
-    pub fn border(&self) -> u16 {
-        match self.config.theme.border.style {
-            BorderStyle::None => 0,
-            _ => 1,
-        }
+    /// The cells a border takes off each side of a tile or a float,
+    /// `[top, right, bottom, left]` (`border.edges`, `floating_edges`).
+    pub fn insets(&self, floating: bool) -> [u16; 4] {
+        self.config.theme.border.insets(floating)
     }
 
     pub fn frame(&self) -> Frame {
         let mut f = Frame::default();
         let area = self.workspace_area();
         let gap = self.config.theme.gaps.inner;
-        let b = self.border();
+        let (tile, float) = (self.insets(false), self.insets(true));
         let focused = self.focused();
         let frameless = self.frameless();
         let view = |id, outer: Rect, floating| {
-            let b = if Some(id) == frameless { 0 } else { b };
+            let sides = match (Some(id) == frameless, floating) {
+                (true, _) => [0; 4],
+                (false, true) => float,
+                (false, false) => tile,
+            };
             PaneView {
                 id,
                 outer,
-                inner: outer.inset(b, b),
+                inner: outer.inset_sides(sides),
                 focused: Some(id) == focused,
                 floating,
             }
@@ -955,7 +981,7 @@ impl App {
                     }
                     for (id, r) in &ws.floating {
                         if *id != fid {
-                            f.hidden.push((*id, r.clamp_into(area).inset(b, b)));
+                            f.hidden.push((*id, r.clamp_into(area).inset_sides(float)));
                         }
                     }
                 }
@@ -981,7 +1007,7 @@ impl App {
                             f.views.push(view(id, body, false));
                         } else {
                             // Sized as if shown: switching does not resize it.
-                            f.hidden.push((id, body.inset(b, b)));
+                            f.hidden.push((id, body.inset_sides(tile)));
                         }
                     }
                     for (id, r) in &ws.floating {
@@ -992,12 +1018,12 @@ impl App {
                     f.views.push(view(fid, area, false));
                     for (id, r) in lay.visible.iter().chain(&lay.hidden) {
                         if *id != fid {
-                            f.hidden.push((*id, r.inset(b, b)));
+                            f.hidden.push((*id, r.inset_sides(tile)));
                         }
                     }
                     for (id, r) in &ws.floating {
                         if *id != fid {
-                            f.hidden.push((*id, r.clamp_into(area).inset(b, b)));
+                            f.hidden.push((*id, r.clamp_into(area).inset_sides(float)));
                         }
                     }
                 }
@@ -1006,7 +1032,7 @@ impl App {
                         f.views.push(view(id, r, false));
                     }
                     f.hidden
-                        .extend(lay.hidden.iter().map(|(id, r)| (*id, r.inset(b, b))));
+                        .extend(lay.hidden.iter().map(|(id, r)| (*id, r.inset_sides(tile))));
                     f.tab_bars = lay.tab_bars;
                     for (id, r) in &ws.floating {
                         f.views.push(view(*id, r.clamp_into(area), true));
@@ -5330,6 +5356,7 @@ pub(super) fn cursor_style(c: CursorState) -> SetCursorStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::BorderStyle;
 
     fn app(user: Option<&str>) -> App {
         let config = crate::config::load_from(None, None, user).unwrap();
@@ -6295,6 +6322,46 @@ mod tests {
                 row.trim_end().to_string()
             })
             .collect()
+    }
+
+    #[test]
+    fn the_gap_beside_an_undrawn_edge_resizes() {
+        let mut a = themed(
+            "gap-edge",
+            "[border]\nedges = [\"top\"]\n[gaps]\ninner = 1\nouter_horizontal = 0\nouter_vertical = 0\n",
+            "",
+        );
+        with_pane_in(&mut a, 1, 1);
+        with_pane_in(&mut a, 1, 2);
+        let f = a.frame();
+        let v1 = *f.views.iter().find(|v| v.id == 1).unwrap();
+        // No side or bottom edge: the text runs to the outer rect's sides.
+        assert_eq!(
+            (v1.inner.x, v1.inner.right(), v1.inner.y),
+            (v1.outer.x, v1.outer.right(), v1.outer.y + 1)
+        );
+        // The column of gap just right of pane 1 is its right edge's handle.
+        let hit = a.border_hit(&f, v1.outer.right(), v1.outer.y + 2);
+        assert!(
+            matches!(
+                hit,
+                Some(drag::BorderHit::TileEdge {
+                    id: 1,
+                    split: crate::layout::Split::Horizontal
+                })
+            ),
+            "the gap beside the undrawn edge"
+        );
+        // A press in pane 1's last column is its text, not a border.
+        assert!(
+            a.border_hit(&f, v1.outer.right() - 1, v1.outer.y + 2)
+                .is_none()
+        );
+        // The top edge is drawn: it moves the tile, as always.
+        assert!(matches!(
+            a.border_hit(&f, v1.outer.x + 2, v1.outer.y),
+            Some(drag::BorderHit::TileTitle { id: 1 })
+        ));
     }
 
     /// A theme file in a fresh config directory, and an app using it.

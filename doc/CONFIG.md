@@ -846,7 +846,9 @@ a float by it to move the float. Every other border resizes: between two tiles i
 moves their shared edge, and on a float it moves the edge grabbed (left, right or
 bottom, or both of a bottom corner's) while the opposite edge stays put.
 Programs are resized once, when the button is released. (With `border.style =
-"none"` there are no borders to grab; the keyboard still does all of it.)
+"none"` there are no borders to grab; the keyboard still does all of it.) A
+side the theme does not draw (`border.edges`) is grabbed in the gap beside it,
+when `gaps.inner` leaves one; with no gap, the keyboard resizes it.
 
 **A right click opens the pane's menu**: on its border or title bar, or in
 its text when its program does not use the mouse (a shell at its prompt, say).
@@ -2385,7 +2387,9 @@ colours only; a key set to a name shows the name there.
 | `colors.border_active_gradient`, `border_inactive_gradient`, `border_floating_gradient` | two colours or more: the border runs through them along `border.gradient_angle` instead of being one colour, spread over each pane's own border, one colour per cell (a terminal cannot shade inside a cell, so a short border shows the steps). Not while the focused border is in the WM-mode colour. A colour the host terminal did not report (an index or `default` with no answer) leaves that border one colour. Unset, the one colour. |
 | `border.gradient_angle` | `0`-`359` degrees: `0` left to right, `90` top to bottom, clockwise. A row counts as two columns, so `45` runs corner to corner as it looks. `0` by default. |
 | `border.style` | `rounded`, `plain`, `thick`, `double`, `ascii` (`+ - \|`), `custom`, `none` |
-| `border.chars` | with `custom`: six one-cell characters, top-left, top-right, bottom-left, bottom-right, horizontal, vertical (`"┏┓┗┛━┃"`) |
+| `border.chars` | with `custom`: six one-cell characters, top-left, top-right, bottom-left, bottom-right, horizontal, vertical (`"┏┓┗┛━┃"`). Or a table giving sides their own, over any style: `[border.chars]` with `top = "╭─╮"` and `bottom = "╰─╯"` (left corner, fill, right corner) and `left = "▏"`, `right = "▕"` (one character each), every side optional and the style's own where unset. With `custom` and only a table, the sides it leaves out are plain. The fill may be a space. Pickers, sheets and the settings panel frame themselves with the six-character string only. |
+| `border.edges` | which sides of a pane are drawn: a list of `top`, `right`, `bottom`, `left`; all four by default. A pane gives a cell only to each side drawn, so `["top"]` is a title row over the text with nothing beside or under it. The side `border.title` is on must be in the list, a side may be listed once, and an empty list is an error (no border at all is `style = "none"`). A side not drawn has no scrollbar or arrow. Whether panes have sides is the layout's, so this is the theme's and never one pane's. |
+| `border.floating_edges` | the same, for floats and popups; unset, `edges` |
 | `border.floating_style` | floats and popups (`ranma popup`); unset, `style` |
 | `border.title` | where a pane's title goes: `top`, `bottom`, `off` |
 | `border.title_align` | `left`, `center`, `right` |

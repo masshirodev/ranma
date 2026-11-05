@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- `border.edges` and `border.floating_edges`: which sides of a pane have a
+  border, so a theme can draw a title row and nothing else. A pane gives a
+  cell only to the sides drawn; a side left out is grabbed in the gap beside
+  it. `[border.chars]` as a table gives sides their own characters (`top =
+  "▛▀▜"`, `left = "▏"`) over any style; the six-character string still works.
+
 - A theme colour can name another key in `[colors]`
   (`border_floating = "bar_accent"`) and takes its value, followed after
   inheritance, so a matugen template sets the base roles and the rest follow.

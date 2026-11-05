@@ -326,6 +326,95 @@ pub enum Align {
     Right,
 }
 
+/// One side of a pane's border (`border.edges`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Edge {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+impl Edge {
+    pub const ALL: [Edge; 4] = [Edge::Top, Edge::Right, Edge::Bottom, Edge::Left];
+
+    fn name(self) -> &'static str {
+        match self {
+            Edge::Top => "top",
+            Edge::Right => "right",
+            Edge::Bottom => "bottom",
+            Edge::Left => "left",
+        }
+    }
+}
+
+fn all_edges() -> Vec<Edge> {
+    Edge::ALL.to_vec()
+}
+
+/// `border.chars`: the six characters of a `custom` border as one string,
+/// or a table giving each side its own (DESIGN.md, "Title bars a theme can
+/// build", R2): `top` and `bottom` are three characters (left corner, fill,
+/// right corner), `left` and `right` one. Each side of the table is
+/// optional and goes over the style's own.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Chars {
+    Six(String),
+    Sides(SideChars),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SideChars {
+    pub top: Option<String>,
+    pub bottom: Option<String>,
+    pub left: Option<String>,
+    pub right: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for Chars {
+    /// By hand rather than an untagged enum, so a misspelt side is an error
+    /// naming it, not "did not match any variant".
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Str(String),
+            Table(std::collections::BTreeMap<String, toml::Value>),
+        }
+        let raw = Raw::deserialize(d)
+            .map_err(|_| D::Error::custom("border.chars is six characters or a table of sides"))?;
+        let table = match raw {
+            Raw::Str(s) => return Ok(Chars::Six(s)),
+            Raw::Table(t) => t,
+        };
+        let mut sides = SideChars::default();
+        for (k, v) in table {
+            let slot = match k.as_str() {
+                "top" => &mut sides.top,
+                "bottom" => &mut sides.bottom,
+                "left" => &mut sides.left,
+                "right" => &mut sides.right,
+                _ => {
+                    return Err(D::Error::custom(format!(
+                        "border.chars: unknown side `{k}` (top, bottom, left, right)"
+                    )));
+                }
+            };
+            match v {
+                toml::Value::String(s) => *slot = Some(s),
+                _ => {
+                    return Err(D::Error::custom(format!(
+                        "border.chars.{k} must be a string"
+                    )));
+                }
+            }
+        }
+        Ok(Chars::Sides(sides))
+    }
+}
+
 /// When a pane's right border shows where its view is in the history
 /// (tmux's `pane-scrollbars`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -356,9 +445,17 @@ pub struct Border {
     #[serde(default)]
     pub floating_style: Option<BorderStyle>,
     /// With `custom`: top-left, top-right, bottom-left, bottom-right,
-    /// horizontal, vertical (`"╭╮╰╯─│"`).
+    /// horizontal, vertical (`"╭╮╰╯─│"`); or a table of sides, over any
+    /// style (see [`Chars`]).
     #[serde(default)]
-    pub chars: Option<String>,
+    pub chars: Option<Chars>,
+    /// Which sides are drawn; all four by default. The theme's, never a
+    /// pane's: the edges decide the inner area, which is the layout's.
+    #[serde(default = "all_edges")]
+    pub edges: Vec<Edge>,
+    /// Floats' sides; unset, `edges`.
+    #[serde(default)]
+    pub floating_edges: Option<Vec<Edge>>,
     pub title: TitlePosition,
     pub title_align: Align,
     pub title_format: Format,
@@ -375,10 +472,46 @@ impl Border {
         self.floating_style.unwrap_or(self.style)
     }
 
+    /// The sides drawn on a tile, or on a float.
+    pub fn edges(&self, floating: bool) -> &[Edge] {
+        match (&self.floating_edges, floating) {
+            (Some(e), true) => e,
+            _ => &self.edges,
+        }
+    }
+
+    /// The cells a pane's border takes off each side, `[top, right, bottom,
+    /// left]` as `Rect::inset_sides` takes them: one for each side drawn,
+    /// none with `style = "none"`.
+    pub fn insets(&self, floating: bool) -> [u16; 4] {
+        if self.style == BorderStyle::None {
+            return [0; 4];
+        }
+        let e = self.edges(floating);
+        [Edge::Top, Edge::Right, Edge::Bottom, Edge::Left].map(|s| u16::from(e.contains(&s)))
+    }
+
+    /// `chars` when it is the six-character string: what screens, sheets
+    /// and the picker frame themselves with. A table of sides is the panes'.
+    pub fn six_chars(&self) -> Option<&str> {
+        match &self.chars {
+            Some(Chars::Six(c)) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// The per-side table of `chars`, when it is one.
+    pub fn side_chars(&self) -> Option<&SideChars> {
+        match &self.chars {
+            Some(Chars::Sides(s)) => Some(s),
+            _ => None,
+        }
+    }
+
     /// `chars` as the six strings a border set is made of.
     pub fn custom_chars(&self) -> [&str; 6] {
         let mut out = ["+", "+", "+", "+", "-", "|"];
-        if let Some(c) = &self.chars {
+        if let Some(Chars::Six(c)) = &self.chars {
             for (slot, (i, ch)) in out.iter_mut().zip(c.char_indices()) {
                 *slot = &c[i..i + ch.len_utf8()];
             }
@@ -807,9 +940,11 @@ impl PaneLooks {
             border_inactive_gradient => colors.border_inactive_gradient,
             border_floating_gradient => colors.border_floating_gradient,
             floating_style => border.floating_style,
-            border_chars => border.chars,
             active_bg => panes.active_bg,
             inactive_bg => panes.inactive_bg,
+        }
+        if let Some(c) = &self.border_chars {
+            t.border.chars = Some(Chars::Six(c.clone()));
         }
         if self.border_chars.is_some() && self.border_style.is_none() {
             t.border.style = BorderStyle::Custom;
@@ -1264,6 +1399,71 @@ fn resolve_color_names(colors: &mut toml::Table) -> Result<(), String> {
     Ok(())
 }
 
+/// `edges` and `floating_edges`: a side at most once, at least one side
+/// (none is `style = "none"`, the one way to say it), and the side the
+/// title is on among them.
+fn check_edges(b: &Border) -> Result<(), String> {
+    for (key, edges) in [
+        ("border.edges", Some(&b.edges)),
+        ("border.floating_edges", b.floating_edges.as_ref()),
+    ] {
+        let Some(edges) = edges else { continue };
+        if edges.is_empty() {
+            return Err(format!(
+                "{key} is empty: a border with no sides is style = \"none\""
+            ));
+        }
+        for (i, e) in edges.iter().enumerate() {
+            if edges[..i].contains(e) {
+                return Err(format!("{key} lists `{}` twice", e.name()));
+            }
+        }
+        let title_edge = match b.title {
+            TitlePosition::Top => Some(Edge::Top),
+            TitlePosition::Bottom => Some(Edge::Bottom),
+            TitlePosition::Off => None,
+        };
+        if let Some(t) = title_edge
+            && !edges.contains(&t)
+        {
+            return Err(format!(
+                "{key} leaves out `{0}`, where border.title puts the title: add it, or set border.title to the side that is drawn or to \"off\"",
+                t.name()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// A table of sides: `top` and `bottom` three one-cell characters, `left`
+/// and `right` one.
+fn check_sides(s: &SideChars) -> Result<(), String> {
+    use unicode_width::UnicodeWidthChar;
+    for (side, chars, n, what) in [
+        (
+            "top",
+            &s.top,
+            3,
+            "three one-cell characters: left corner, fill, right corner",
+        ),
+        (
+            "bottom",
+            &s.bottom,
+            3,
+            "three one-cell characters: left corner, fill, right corner",
+        ),
+        ("left", &s.left, 1, "one one-cell character"),
+        ("right", &s.right, 1, "one one-cell character"),
+    ] {
+        if let Some(c) = chars
+            && (c.chars().count() != n || c.chars().any(|ch| ch.width() != Some(1)))
+        {
+            return Err(format!("border.chars.{side} must be {what}, not `{c}`"));
+        }
+    }
+    Ok(())
+}
+
 /// What serde cannot see: placeholders by key, and `chars` where `custom`
 /// needs them.
 fn check(t: &Theme) -> Result<(), String> {
@@ -1313,12 +1513,17 @@ fn check(t: &Theme) -> Result<(), String> {
     t.bar
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
+    check_edges(&t.border)?;
     let custom = t.border.style == BorderStyle::Custom
         || t.border.floating_style == Some(BorderStyle::Custom);
-    if custom {
+    if let Some(Chars::Sides(sides)) = &t.border.chars {
+        check_sides(sides)?;
+    } else if custom {
         match &t.border.chars {
-            None => return Err("border style `custom` needs border.chars".into()),
-            Some(c) => {
+            None | Some(Chars::Sides(_)) => {
+                return Err("border style `custom` needs border.chars".into());
+            }
+            Some(Chars::Six(c)) => {
                 use unicode_width::UnicodeWidthChar;
                 let n = c.chars().count();
                 if n != 6 || c.chars().any(|ch| ch.width() != Some(1)) {
@@ -1621,6 +1826,52 @@ mod tests {
             load("ansi", dirs).unwrap().colors.bar_fg,
             Color::Indexed(12)
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn edges_and_their_characters_are_checked() {
+        let dir = tmp_dir("edges");
+        let dirs = std::slice::from_ref(&dir);
+        let err = |body: &str| {
+            std::fs::write(dir.join("e.toml"), body).unwrap();
+            format!("{:#}", load("e", dirs).unwrap_err())
+        };
+        assert!(err("[border]\nedges = []\n").contains("style = \"none\""));
+        assert!(err("[border]\nedges = [\"top\", \"top\"]\n").contains("twice"));
+        assert!(err("[border]\nedges = [\"left\"]\n").contains("leaves out `top`"));
+        let e = err("[border]\ntitle = \"bottom\"\nfloating_edges = [\"top\"]\n");
+        assert!(
+            e.contains("border.floating_edges leaves out `bottom`"),
+            "{e}"
+        );
+        assert!(err("[border]\nedges = [\"middle\"]\n").contains("middle"));
+        assert!(err("[border.chars]\ntop = \"──\"\n").contains("border.chars.top"));
+        assert!(err("[border.chars]\nleft = \"││\"\n").contains("border.chars.left"));
+        assert!(err("[border.chars]\nmiddle = \"│\"\n").contains("unknown side `middle`"));
+        assert!(
+            err("[border]\nstyle = \"custom\"\n").contains("needs border.chars"),
+            "custom still needs characters"
+        );
+        // A table is enough for custom, over plain.
+        std::fs::write(
+            dir.join("ok.toml"),
+            "[border]\nstyle = \"custom\"\nedges = [\"top\"]\n[border.chars]\ntop = \"╭─╮\"\n",
+        )
+        .unwrap();
+        let b = load("ok", dirs).unwrap().border;
+        assert_eq!(b.insets(false), [1, 0, 0, 0]);
+        assert_eq!(
+            b.insets(true),
+            [1, 0, 0, 0],
+            "floats follow edges when unset"
+        );
+        assert_eq!(b.six_chars(), None);
+        // The default: all four sides, and none at all with style none.
+        let mut d = load("default", &[]).unwrap().border;
+        assert_eq!(d.insets(false), [1; 4]);
+        d.style = BorderStyle::None;
+        assert_eq!(d.insets(true), [0; 4]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
