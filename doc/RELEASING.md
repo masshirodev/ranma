@@ -114,8 +114,10 @@ and `index.html`. The site is rebuilt whole every time, so there is no branch
 to keep; three releases is how far back a user can still downgrade.
 
 **The website**, ranma.masshiro.pro, is not the Pages site and holds none
-of these files. A `v*` tag redeploys it (`.github/workflows/site.yml`) so it
-shows the new version; [`WEBSITE.md`](WEBSITE.md).
+of these files. It is built from its own repository,
+[ranma-site](https://github.com/masshirodev/ranma-site), which reads this one:
+its daily run shows a new release by the next morning, or run it at once
+after tagging: `gh workflow run ci -R masshirodev/ranma-site`.
 
 **The signing key** is a dedicated ed25519 key, "ranma packages",
 fingerprint `91193BB09A931FAEA274C4F30792F721B44E7B30`, without a passphrase

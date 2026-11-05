@@ -1,6 +1,6 @@
 # ranma
 
-![ranma: nvim in a large pane beside a shell running tests and a tail of pacman.log, the bar on top with workspaces, the focused workspace's panes and system modules, and a toast for a finished build](doc/screenshot.png)
+![ranma: nvim in a large pane beside a shell running tests and a tail of pacman.log, the bar on top with workspaces, the focused workspace's panes and system modules, and a toast for a finished build](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/screenshot.png)
 
 A tiling window manager for the terminal: i3's container tree and Hyprland's
 dwindle placement, where every window is a PTY. Sessions, workspaces, a floating
@@ -11,7 +11,7 @@ Named for the 欄間, the carved transom panel above sliding doors.
 
 **Website:** [ranma.masshiro.pro](https://ranma.masshiro.pro).
 
-![ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a second workspace and back, a toast from `ranma notify`, and the which-key hint WM mode shows when it waits](doc/demo.gif)
+![ranma in motion: nvim, btop and a git log tiled by the dwindle layout, the leader stepping through layouts, a float over the tiling, a second workspace and back, a toast from `ranma notify`, and the which-key hint WM mode shows when it waits](https://raw.githubusercontent.com/masshirodev/ranma-site/main/readme/demo.gif)
 
 **Status:** a daily driver. Every milestone of
 [`doc/ROADMAP.md`](doc/ROADMAP.md), 0-13, is done (one plugin primitive aside):
@@ -216,8 +216,7 @@ and `man ranma-keys` (the default keys). They are generated and committed in
 - [`doc/TESTING.md`](doc/TESTING.md): what to run, and what each check proves
 - [`doc/RELEASING.md`](doc/RELEASING.md): cutting a release, and every channel it reaches
 - [`doc/examples/`](doc/examples): whole configurations to copy, the screenshot's among them
-- [`scripts/demo/README.md`](scripts/demo/README.md): re-recording the gif above
-- [`doc/WEBSITE.md`](doc/WEBSITE.md): the website, [ranma.masshiro.pro](https://ranma.masshiro.pro), and how it deploys
+- [ranma-site](https://github.com/masshirodev/ranma-site): the website, [ranma.masshiro.pro](https://ranma.masshiro.pro), and the screenshot and recordings above, kept apart so a clone of ranma carries none of them
 
 ## How it's built
 

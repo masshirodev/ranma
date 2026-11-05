@@ -305,13 +305,14 @@ contributor's pull request, or a push with a skip flag. The release workflow
 `compat` job runs `scripts/compat.sh` with the binary it is about to publish
 against the latest release, before anything is published.
 
-## The website — `site/`
+## The website
 
-The site's own checks (`npm run lint`, `npm test` for the build at a 95% floor,
-`npm run test:e2e` for the page in Playwright) run in
-`.github/workflows/site.yml` on any change that touches it, and gate its
-deploy. They don't run in the hooks: the site is separate from the binary, and
-a Rust change can't break it. [`WEBSITE.md`](WEBSITE.md), "Tests".
+The website is not in this repository: it is
+[ranma-site](https://github.com/masshirodev/ranma-site), with its own checks.
+It quotes `doc/examples/screenshot/` by line and pins the first line of each
+excerpt, so an edit there that moves the quoted lines fails the site's build
+(not this repository's). Run its build against your checkout before pushing
+such an edit: `RANMA_DIR=$PWD yarn --cwd ../ranma-site run build`.
 
 ## Packages — `packaging/test/`
 

@@ -9,7 +9,7 @@ repository = "https://github.com/masshirodev/ranma"
 readme = "README.md"
 keywords = ["terminal", "tiling", "window-manager", "multiplexer", "tui"]
 categories = ["command-line-utilities"]
-exclude = ["doc/briefs/", "doc/handoffs/", "doc/screenshot.png", "doc/demo.gif", "doc/examples/screenshot/", "scripts/", ".githooks/", ".github/", "packaging/", "flake.nix", "flake.lock"]
+exclude = ["doc/briefs/", "doc/handoffs/", "doc/examples/screenshot/", "scripts/", ".githooks/", ".github/", "packaging/", "flake.nix", "flake.lock"]
 
 [dependencies]
 alacritty_terminal = "0.26"
