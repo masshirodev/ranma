@@ -34,12 +34,25 @@ impl App {
             return;
         };
         let rows = visible_rows(pane);
-        let links = hints::find_links(&rows);
+        let s = &self.config.settings;
+        let patterns: Vec<regex::Regex> = self
+            .config
+            .hint_patterns
+            .iter()
+            .map(|p| p.regex.clone())
+            .collect();
+        let links = hints::find_targets(
+            &rows,
+            &hints::Targets {
+                urls: s.hint_urls,
+                patterns: &patterns,
+            },
+        );
         if links.is_empty() {
             self.status = Some("no links on screen".into());
             return;
         }
-        let labels = hints::labels(links.len());
+        let labels = hints::labels_in(links.len(), &s.hint_alphabet);
         self.hints = Some(HintState {
             pane: id,
             links: labels.into_iter().zip(links).collect(),
@@ -79,11 +92,42 @@ impl App {
         let h = self.hints.as_ref().expect("checked above");
         if let Some((_, link)) = h.links.iter().find(|(l, _)| *l == h.typed) {
             let (target, open, pane) = (link.target.clone(), h.open, h.pane);
+            let pattern = link.pattern;
             self.hints = None;
-            self.pick_link(&target, open, pane);
+            match pattern
+                .and_then(|k| self.config.hint_patterns.get(k))
+                .map(|p| p.action.clone())
+            {
+                Some(action) if !open => self.pick_pattern(&target, action, pane),
+                _ => self.pick_link(&target, open, pane),
+            }
         } else if !h.links.iter().any(|(l, _)| l.starts_with(h.typed.as_str())) {
             self.status = Some(format!("no link labelled {}", h.typed));
             self.hints = None;
+        }
+    }
+
+    /// A pattern's hint, picked in lower case: what its `action` says.
+    fn pick_pattern(&mut self, target: &str, action: crate::config::HintAction, pane: PaneId) {
+        use crate::config::HintAction;
+        match action {
+            HintAction::Copy => self.pick_link(target, false, pane),
+            HintAction::Open => self.pick_link(target, true, pane),
+            HintAction::Paste => {
+                self.focus(pane);
+                self.paste(target.to_string());
+            }
+            HintAction::Lua(key) => {
+                if let Ok(f) = self.config.lua.registry_value::<mlua::Function>(&key) {
+                    let text = target.to_string();
+                    self.call_lua(|lua| {
+                        let t = lua.create_table()?;
+                        t.set("text", text)?;
+                        t.set("pane", pane)?;
+                        f.call::<()>(t)
+                    });
+                }
+            }
         }
     }
 

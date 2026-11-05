@@ -84,6 +84,11 @@ ranma.set {
   -- or a URL with : or = in it is cut there. Take a character out to keep it
   -- in words. alacritty's own set.
   word_separators = ",│`|:\"' ()[]{}<>\t",
+  -- Hints (leader o): the letters labels are made of, easiest first, and
+  -- whether URLs in the text are labelled (links a program marks always are).
+  -- ranma.hint_pattern(regex, { action }) adds targets of your own.
+  hint_alphabet = "asdfghjklqwertyuiopzxcvbnm",
+  hint_urls = true,
 
   wm_mode = {
     -- true: WM mode stays on until Esc or Enter (or an action that ends it, like

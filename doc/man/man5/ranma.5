@@ -258,6 +258,16 @@ Default: \fB10000\fR
 .br
 Scrollback per pane.
 .TP
+\fBhint_alphabet\fR
+Default: \fB"asdfghjklqwertyuiopzxcvbnm"\fR
+.br
+The letters hint labels (\fBhints\fR, \fBleader o\fR) are made of, easiest to reach first: Colemak's \fB"arstneiodh…"\fR, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open.
+.TP
+\fBhint_urls\fR
+Default: \fBtrue\fR
+.br
+Hints label URLs in the text. Links a program marks (OSC 8) are always labelled; \fBranma.hint_pattern\fR adds your own targets.
+.TP
 \fBword_separators\fR
 \fB",│`|:\e"' ()[]{}<>\et"\fR | What ends a word for copy mode's word motions (\fBw\fR, \fBb\fR, \fBe\fR) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload.
 .TP
@@ -631,7 +641,7 @@ The next match in the search's direction, or the other way.
 Leave copy mode.
 .TP
 \fBhints\fR
-Label every link on the focused pane's screen (\fBleader o\fR): URLs in the text (\fBhttps\fR, \fBhttp\fR, \fBfile\fR, \fBftp\fR, \fBmailto\fR), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with \fBxdg\-open\fR (\fBopen\fR on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. \fBEsc\fR or a click cancels; the bar shows \fBLINK\fR meanwhile.
+Label every link on the focused pane's screen (\fBleader o\fR): URLs in the text (\fBhttps\fR, \fBhttp\fR, \fBfile\fR, \fBftp\fR, \fBmailto\fR), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with \fBxdg\-open\fR (\fBopen\fR on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. \fBEsc\fR or a click cancels; the bar shows \fBLINK\fR meanwhile. Labels are drawn from \fBhint_alphabet\fR, single letters while they last, then pairs of its first nine. \fBhint_urls = false\fR leaves URLs in the text out (OSC 8 links stay). \fBranma.hint_pattern(regex, { action })\fR labels more: what the regex (Rust's \fBregex\fR syntax, matched on each line, never across the cells a link or an earlier pattern took) finds, such as paths, commit hashes or a board's card ids. Typed in lower case, its label runs \fBaction\fR: \fB"copy"\fR (the default), \fB"open"\fR, \fB"paste"\fR (typed into the pane), or a function given \fB{ text, pane }\fR; in capitals it opens. A regex that does not compile is an error at load.
 .TP
 \fBmode <name>\fR
 Enter a mode declared with \fBranma.mode\fR: WM mode with its keys. See Modes\fR.
@@ -3260,6 +3270,9 @@ a theme's \fB[palette]\fR
 .TP
 \fBtheme.roles\fR
 a theme's \fB[roles.<name>]\fR
+.TP
+\fBhint_pattern\fR
+\fBranma.hint_pattern\fR, \fBhint_alphabet\fR and \fBhint_urls\fR
 .TP
 \fBpane.state\fR
 a pane handle's \fBindex\fR, \fBzoomed\fR, \fBsynced\fR and \fBurgent\fR

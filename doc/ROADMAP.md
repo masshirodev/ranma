@@ -395,7 +395,7 @@ fixed in the code and is a setting or a bind now.
 
 - [x] Copy mode's keys are binds, its commands actions (c426)
 - [x] `word_separators` (c427)
-- [ ] Hints: an alphabet and patterns of your own (c428)
+- [x] Hints: an alphabet and patterns of your own (c428)
 - [ ] `mouse_wheel_lines` (c429)
 - [ ] Toasts: their corner and default timeout (c430)
 - [ ] `buffers_kept` (c431)

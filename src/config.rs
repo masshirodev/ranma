@@ -265,6 +265,10 @@ pub struct Settings {
     /// What ends a word for copy mode's word motions and a double click
     /// (alacritty's semantic escape characters; card c427).
     pub word_separators: String,
+    /// The letters hint labels are made of, easiest first (card c428).
+    pub hint_alphabet: String,
+    /// Hints label URLs in the text (OSC 8 links always).
+    pub hint_urls: bool,
     pub wm_mode_sticky: bool,
     /// How long WM mode waits before showing the which-key hint; `None` is off.
     pub wm_mode_hint: Option<std::time::Duration>,
@@ -317,6 +321,8 @@ impl Default for Settings {
             shell: None,
             scrollback_lines: 10_000,
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
+            hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
+            hint_urls: true,
             wm_mode_sticky: true,
             wm_mode_hint: Some(std::time::Duration::from_millis(500)),
             wm_mode_hint_at: HintAt::Bar,
@@ -358,6 +364,8 @@ struct SettingsPatch {
     shell: Option<String>,
     scrollback_lines: Option<usize>,
     word_separators: Option<String>,
+    hint_alphabet: Option<String>,
+    hint_urls: Option<bool>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
     updates: Option<UpdateMode>,
@@ -1030,6 +1038,25 @@ impl Button {
     }
 }
 
+/// `ranma.hint_pattern(regex, { action })`: more for hints to label
+/// (card c428): paths, hashes, a board's card ids.
+#[derive(Debug, Clone)]
+pub struct HintPattern {
+    pub regex: regex::Regex,
+    pub action: HintAction,
+}
+
+/// What picking a pattern's hint does; capitals always open.
+#[derive(Debug, Clone)]
+pub enum HintAction {
+    Copy,
+    Open,
+    /// Typed into the pane, as a paste.
+    Paste,
+    /// Called with `{ text, pane }`.
+    Lua(Rc<RegistryKey>),
+}
+
 /// A bind's `mode` option: `"copy"`, copy mode's own keys, or nothing.
 /// Returns whether it is copy mode's, and the options without it.
 fn copy_mode_opt(
@@ -1504,6 +1531,7 @@ struct Builder {
     titlebar: Option<TitleLayout>,
     title_pieces: HashMap<String, TitlePieceDef>,
     copy_binds: HashMap<Chord, Bind>,
+    hint_patterns: Vec<HintPattern>,
     modules: HashMap<String, ModuleDef>,
     module_styles: HashMap<String, String>,
     module_hover_styles: HashMap<String, String>,
@@ -1563,6 +1591,8 @@ pub struct Config {
     pub title_pieces: HashMap<String, TitlePieceDef>,
     /// Copy mode's keys (`ranma.bind(key, action, { mode = "copy" })`).
     pub copy_binds: HashMap<Chord, Bind>,
+    /// `ranma.hint_pattern`s, in the order declared.
+    pub hint_patterns: Vec<HintPattern>,
     pub modules: HashMap<String, ModuleDef>,
     /// A module's `style`: the role it stands on, a pill of its ground.
     pub module_styles: HashMap<String, String>,
@@ -2147,6 +2177,22 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
         }
         s.word_separators = w;
     }
+    if let Some(a) = patch.hint_alphabet {
+        let mut seen = std::collections::HashSet::new();
+        if a.chars().count() < 2
+            || !a
+                .chars()
+                .all(|c| c.is_lowercase() && c.is_alphabetic() && seen.insert(c))
+        {
+            return Err(format!(
+                "{who}: hint_alphabet `{a}`: two lowercase letters at least, none twice (capitals open what a label picks)"
+            ));
+        }
+        s.hint_alphabet = a;
+    }
+    if let Some(u) = patch.hint_urls {
+        s.hint_urls = u;
+    }
     if let Some(w) = patch.wm_mode {
         if let Some(sticky) = w.sticky {
             s.wm_mode_sticky = sticky;
@@ -2254,6 +2300,7 @@ pub const CAPABILITIES: &[&str] = &[
     "action.toolbar_target",
     "action.unname_workspace",
     "border.gradient",
+    "hint_pattern",
     "hook.before_close",
     "hook.float_change",
     "hook.layout_change",
@@ -2680,6 +2727,46 @@ fn install_api(
                 .map_err(|e| rt_err(format!("ranma.titlebar: {e}")))?;
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             apply_titlebar(&mut b.titlebar, patch);
+            Ok(())
+        })?,
+    )?;
+
+    ranma.set(
+        "hint_pattern",
+        lua.create_function(|lua, (pattern, opts): (String, Option<Table>)| {
+            let who = format!("ranma.hint_pattern(\"{pattern}\")");
+            let regex = regex::Regex::new(&pattern)
+                .map_err(|e| rt_err(format!("{who}: {e}")))?;
+            let mut action = HintAction::Copy;
+            if let Some(t) = opts {
+                for pair in t.pairs::<String, Value>() {
+                    let (k, v) = pair?;
+                    action = match (k.as_str(), v) {
+                        ("action", Value::String(s)) => match s.to_str()?.as_ref() {
+                            "copy" => HintAction::Copy,
+                            "open" => HintAction::Open,
+                            "paste" => HintAction::Paste,
+                            other => {
+                                return Err(rt_err(format!(
+                                    "{who}: action = \"{other}\" (expected \"copy\", \"open\", \"paste\" or a function)"
+                                )));
+                            }
+                        },
+                        ("action", Value::Function(f)) => {
+                            HintAction::Lua(Rc::new(lua.create_registry_value(f)?))
+                        }
+                        (k, _) => {
+                            return Err(rt_err(format!(
+                                "{who}: unknown option `{k}` (expected action)"
+                            )));
+                        }
+                    };
+                }
+            }
+            lua.app_data_mut::<Builder>()
+                .ok_or_else(loading_only)?
+                .hint_patterns
+                .push(HintPattern { regex, action });
             Ok(())
         })?,
     )?;
@@ -3901,6 +3988,7 @@ pub fn load_full(
         titlebar: builder.titlebar,
         title_pieces: builder.title_pieces,
         copy_binds: builder.copy_binds,
+        hint_patterns: builder.hint_patterns,
         toolbars: builder.toolbars,
         toolbars_shown: builder.toolbars_shown,
         profiles: builder.profiles,
@@ -4532,6 +4620,28 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn hint_letters_and_patterns_are_read_strictly() {
+        let cfg = with_user(
+            r#"
+            ranma.set { hint_alphabet = "arstneio", hint_urls = false }
+            ranma.hint_pattern("c[0-9]+", { action = "paste" })
+            ranma.hint_pattern("[0-9a-f]{7}", { action = function(e) end })
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.settings.hint_alphabet, "arstneio");
+        assert!(!cfg.settings.hint_urls);
+        assert!(matches!(cfg.hint_patterns[0].action, HintAction::Paste));
+        assert!(matches!(cfg.hint_patterns[1].action, HintAction::Lua(_)));
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        assert!(err(r#"ranma.set { hint_alphabet = "aa" }"#).contains("none twice"));
+        assert!(err(r#"ranma.set { hint_alphabet = "AB" }"#).contains("lowercase"));
+        assert!(err(r#"ranma.hint_pattern("(")"#).contains("hint_pattern"));
+        assert!(err(r#"ranma.hint_pattern("x", { action = "fly" })"#).contains("expected"));
+        assert!(err(r#"ranma.hint_pattern("x", { colour = "red" })"#).contains("unknown option"));
     }
 
     #[test]

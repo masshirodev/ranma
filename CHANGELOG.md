@@ -15,6 +15,11 @@ commit log has the detail.
 
 ### Added
 
+- Hints take `hint_alphabet` (labels for any layout), `hint_urls`, and
+  `ranma.hint_pattern(regex, { action })`: paths, hashes or card ids labelled
+  beside links, picked to copy, open, paste or call a function.
+  `ranma.has("hint_pattern")`.
+
 - `word_separators`: what ends a word for copy mode's word motions and a
   double click, alacritty's set by default.
 

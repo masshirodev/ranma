@@ -183,6 +183,8 @@ Each call changes only the fields it names; call it as often as you like.
 | `splash` | `true` | An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to `help` lists every bind. It is drawn in `bar_accent` (the logo), `bar_fg` (the keys) and `bar_dim`; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. `false` leaves an empty workspace blank. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
+| `hint_alphabet` | `"asdfghjklqwertyuiopzxcvbnm"` | The letters hint labels (`hints`, `leader o`) are made of, easiest to reach first: Colemak's `"arstneiodh…"`, say. Lowercase letters, none twice, two at least: capitals are how a label asks to open. |
+| `hint_urls` | `true` | Hints label URLs in the text. Links a program marks (OSC 8) are always labelled; `ranma.hint_pattern` adds your own targets. |
 | `word_separators` | ``",│`|:\"' ()[]{}<>\t"`` | What ends a word for copy mode's word motions (`w`, `b`, `e`) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot, except one bound with `{ exit = false }`). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
@@ -367,7 +369,7 @@ sent them, which it is not asked to.
 | `copy_search <forward\|backward>` | Search the history, from copy mode. |
 | `copy_next`, `copy_prev` | The next match in the search's direction, or the other way. |
 | `copy_exit` | Leave copy mode. |
-| `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` (`open` on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. |
+| `hints` | Label every link on the focused pane's screen (`leader o`): URLs in the text (`https`, `http`, `file`, `ftp`, `mailto`), whole even when wrapped onto the next row, and links programs made with OSC 8. Type a label to copy that link to the clipboard; type it in capitals to open it with `xdg-open` (`open` on macOS) instead. Opening happens where the ranma server runs, so from a terminal that came over SSH it copies instead and says so. `Esc` or a click cancels; the bar shows ` LINK ` meanwhile. Labels are drawn from `hint_alphabet`, single letters while they last, then pairs of its first nine. `hint_urls = false` leaves URLs in the text out (OSC 8 links stay). `ranma.hint_pattern(regex, { action })` labels more: what the regex (Rust's `regex` syntax, matched on each line, never across the cells a link or an earlier pattern took) finds, such as paths, commit hashes or a board's card ids. Typed in lower case, its label runs `action`: `"copy"` (the default), `"open"`, `"paste"` (typed into the pane), or a function given `{ text, pane }`; in capitals it opens. A regex that does not compile is an error at load. |
 | `mode <name>` | Enter a mode declared with `ranma.mode`: WM mode with its keys. See [Modes](#modes--ranmamodename-def). |
 | `display_panes` | Number the panes on screen, large (tmux's `display-panes`): type a number to focus that pane. With ten or more, numbers have two digits (`01`). Any other key or a click puts them away without passing the key on; the bar shows ` PANE ` meanwhile (`leader i`). |
 | `pipe_pane [off\|command line]` | Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's `pipe-pane`). Bare, it toggles a log at `~/.local/state/ranma/logs/pane<ID>-<YYYYMMDD-HHMMSS>.log` (UTC); with a command line, the output goes into that command's stdin (`pipe_pane cat >> ~/build.log`, `pipe_pane grep --line-buffered error > ~/errors`), run by `sh -c` in the pane's directory; `off` stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. Bare, it is `leader x l`. |
@@ -2463,6 +2465,7 @@ the spelling against this table:
 | `rule.style` | a window rule's `style` |
 | `theme.palette` | a theme's `[palette]` |
 | `theme.roles` | a theme's `[roles.<name>]` |
+| `hint_pattern` | `ranma.hint_pattern`, `hint_alphabet` and `hint_urls` |
 | `pane.state` | a pane handle's `index`, `zoomed`, `synced` and `urgent` |
 | `titlebar` | `ranma.titlebar`, `ranma.title_piece`, and a profile's `titlebar` |
 | `toast.on_click` | `ranma.toast`'s `on_click` |

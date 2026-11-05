@@ -370,6 +370,22 @@ pub fn builtin() -> Vec<Opt> {
             "Lines of scrollback kept per pane.",
         ),
         opt(
+            "hint_alphabet",
+            "general",
+            "Hint letters",
+            Kind::Text,
+            Init,
+            "The letters hint labels are made of, easiest to reach first.",
+        ),
+        opt(
+            "hint_urls",
+            "general",
+            "Hint URLs",
+            Kind::Bool,
+            Init,
+            "Hints label URLs in the text, as well as links and your patterns.",
+        ),
+        opt(
             "word_separators",
             "general",
             "Word separators",

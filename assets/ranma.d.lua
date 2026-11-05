@@ -229,6 +229,13 @@ function ranma.titlebar(titlebar) end
 ---@field interval? number Seconds between runs of render, while a pane showing it is on screen.
 ---@field priority? integer 0-100: how long it stays as the pane narrows (40 by default; close is 70 in the docs).
 
+---Something more for hints (leader o) to label: what the regex matches on a
+---line. A label typed in lower case runs `action` (copy unless given); in
+---capitals it opens.
+---@param regex string
+---@param opts? { action?: "copy"|"open"|"paste"|fun(e: { text: string, pane: integer }) }
+function ranma.hint_pattern(regex, opts) end
+
 ---Define a piece of the title row.
 ---@param name string
 ---@param def ranma.TitlePiece
