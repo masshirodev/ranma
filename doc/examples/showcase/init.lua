@@ -31,8 +31,9 @@ ranma.title_piece("dir", {
   priority = 25,
   style = "dim",
   render = function(p)
-    if not p or not p.cwd then return nil end
-    return " " .. (p.cwd:match("[^/]+$") or "/") .. " "
+    local cwd = p and p:cwd() -- a method: p.cwd is the function itself
+    if not cwd then return nil end
+    return " " .. (cwd:match("[^/]+$") or "/") .. " "
   end,
 })
 

@@ -960,7 +960,9 @@ the centre while it is up.
 
 **Groups.** A table inside a side is one pill:
 `right = { "load", { "cpu", "mem", "clock", style = "sys" } }`. Its modules
-keep their own text styles and clicks, with `bar.group_separator` between them
+keep their clicks, and their own text styles where they set one (a
+module's `{ text, style = "urgent" }`); their plain text is in the role's
+`fg`, the pill's text colour, with `bar.group_separator` between them
 on the pill's ground; the pill stands on the ground of the role `style` names,
 between that role's caps (`[roles.sys]` `left`, `right`), else the bar's. A
 whole side in one pill is a side holding one group. Groups do not nest. The
@@ -969,7 +971,8 @@ large bar keeps each module's own chip and ignores the grouping.
 **A module's ground.** `ranma.module(name, { style = "role" })`, for any
 module, built-in ones included (`ranma.module("cpu", { style = "cpu" })`),
 stands it on that role's ground, between the role's caps: a pill of its own
-colour. A role the theme does not have is an error at load.
+colour, its plain text in the role's `fg` (and `styles`). A role the theme
+does not have is an error at load.
 
 **A narrow bar.** What goes when the bar is too narrow for everything is
 yours to say. `priority` (0-100), on any module, built-in ones included,

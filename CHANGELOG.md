@@ -189,6 +189,14 @@ commit log has the detail.
 
 ### Fixed
 
+- A bar pill's plain text is in its role's `fg` (`[roles.sys] fg = ...`),
+  the pill's text colour: it was drawn in `module_fg` or `bar_fg`, whatever
+  the role said. Text a module styles itself keeps its own colour.
+
+- The showcase example's `dir` title piece failed on every pane
+  (`p.cwd` is a method, `p:cwd()`). The examples' title pieces are now run
+  on a real pane in a test, not only loaded.
+
 - A ranma inside another, over ssh, could vanish from the outer bar (its
   workspaces gone) and stay gone: the outer reads its reports only while
   the pane's title carries ranma's mark, and the inner sent that title only

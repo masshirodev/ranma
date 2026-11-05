@@ -5322,6 +5322,13 @@ impl App {
                         bar::boxed_in(s, (&l, &rt), pads, Style::RoleCap(r), Style::Role(r));
                     for p in &mut out {
                         p.ground = r.bg;
+                        // Plain text on a role's ground is in that role's
+                        // `fg` and attributes: the pill's text colour. Text
+                        // a module styled itself (dim, accent, urgent, its
+                        // own role) keeps its own.
+                        if p.style == Style::Normal {
+                            p.style = Style::Role(r);
+                        }
                     }
                     out
                 }
@@ -6986,6 +6993,31 @@ mod tests {
             Style::GroupSep(Some(crate::theme::Color::Rgb(0x65, 0x43, 0x21)))
         ));
         assert_eq!(a.config.module_styles["session"], "sys");
+        // Plain text on the pill is in the role's fg: the pill's text colour.
+        let sys = |p: &Piece| matches!(p.style, Style::Role(r) if r.fg == crate::theme::Color::Rgb(0xee, 0xee, 0xee));
+        assert!(
+            sys(&pieces[1].1) && sys(&pieces[3].1),
+            "{:?}",
+            pieces[1].1.style
+        );
+        // Text a module styled itself keeps its own colour on the pill.
+        let mut b = themed(
+            "groups-own",
+            "[roles.sys]\nfg = \"#eeeeee\"\nbg = \"#222222\"\n",
+            r#"
+            ranma.module("u", { render = function() return { text = "U", style = "urgent" } end })
+            ranma.bar { left = { { "u", style = "sys" } }, center = {}, right = {} }
+            "#,
+        );
+        b.render_state_modules();
+        let u = b
+            .bar_pieces(40)
+            .into_iter()
+            .find(|(_, p)| p.text == "U")
+            .unwrap()
+            .1;
+        assert_eq!(u.style, Style::Urgent);
+        assert_eq!(u.ground, Some(crate::theme::Color::Rgb(0x22, 0x22, 0x22)));
         // An unknown role is an error at load, for a module and a group.
         let dir = std::env::temp_dir().join(format!("ranma-groups-bad-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -7862,6 +7894,43 @@ mod tests {
     }
 
     /// A click passed to a ranma in a pane is what lets its request in.
+    /// The examples' title pieces run, on a real pane, without an error:
+    /// `examples_load` only loads them, and a piece that fails does so
+    /// only when it is drawn (the showcase's `p.cwd:match`, 2026-11-05).
+    #[test]
+    fn the_examples_title_pieces_run_on_a_real_pane() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("doc/examples");
+        for entry in std::fs::read_dir(&root).unwrap() {
+            let dir = entry.unwrap().path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let config = crate::config::load(Some(&dir)).unwrap();
+            if config.titlebar.is_none() {
+                continue;
+            }
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut a = App::new(config, tx, 100, 20);
+            a.layouts_dir = None;
+            a.run_action("exec sleep 5".parse().unwrap());
+            let id = a.focused().unwrap();
+            pump(&mut a, &rx, |a| a.panes.contains_key(&id));
+            a.run_title_pieces(None);
+            let failed: Vec<_> = a
+                .piece_values
+                .iter()
+                .filter(|(_, seg)| seg.iter().any(|p| p.text.ends_with(": error")))
+                .map(|((n, _), _)| n.clone())
+                .collect();
+            assert!(failed.is_empty(), "{}: {failed:?}", dir.display());
+            assert!(
+                a.piece_values.keys().any(|(_, p)| *p == id),
+                "{}: the pieces ran on the pane",
+                dir.display()
+            );
+        }
+    }
+
     #[test]
     fn a_click_into_an_inner_ranma_lets_its_open_here_in() {
         use crossterm::event::{KeyModifiers as K, MouseButton as B, MouseEventKind as E};

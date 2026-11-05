@@ -1386,7 +1386,9 @@ the centre while it is up.
 .PP
 \fBGroups.\fR A table inside a side is one pill:
 \fBright = { "load", { "cpu", "mem", "clock", style = "sys" } }\fR. Its modules
-keep their own text styles and clicks, with \fBbar.group_separator\fR between them
+keep their clicks, and their own text styles where they set one (a
+module's \fB{ text, style = "urgent" }\fR); their plain text is in the role's
+\fBfg\fR, the pill's text colour, with \fBbar.group_separator\fR between them
 on the pill's ground; the pill stands on the ground of the role \fBstyle\fR names,
 between that role's caps (\fB[roles.sys]\fR \fBleft\fR, \fBright\fR), else the bar's. A
 whole side in one pill is a side holding one group. Groups do not nest. The
@@ -1395,7 +1397,8 @@ large bar keeps each module's own chip and ignores the grouping.
 \fBA module's ground.\fR \fBranma.module(name, { style = "role" })\fR, for any
 module, built\-in ones included (\fBranma.module("cpu", { style = "cpu" })\fR),
 stands it on that role's ground, between the role's caps: a pill of its own
-colour. A role the theme does not have is an error at load.
+colour, its plain text in the role's \fBfg\fR (and \fBstyles\fR). A role the theme
+does not have is an error at load.
 .PP
 \fBA narrow bar.\fR What goes when the bar is too narrow for everything is
 yours to say. \fBpriority\fR (0\-100), on any module, built\-in ones included,

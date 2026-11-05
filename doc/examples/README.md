@@ -24,7 +24,9 @@ Two things decide whether you see it:
   one. `ranma kill example` ends it when you are done.
 
 A test loads every one of them (`examples_load` in `src/config.rs`), so they
-cannot drift from what the parser accepts.
+cannot drift from what the parser accepts, and another runs their title
+pieces on a real pane (`the_examples_title_pieces_run_on_a_real_pane` in
+`src/app/mod.rs`), since a Lua mistake there shows only when one is drawn.
 
 ## `screenshot/` — the README's screenshot
 
