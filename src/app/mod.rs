@@ -283,6 +283,9 @@ pub struct App {
     /// The title piece with a `hover_style` under the pointer: its pane and
     /// its place in the row.
     piece_hover: Option<(PaneId, usize)>,
+    /// The panes' states the pieces were last run on (urgent, synced,
+    /// zoomed): a change runs them again.
+    piece_states: u64,
     /// What to call back when the picker or prompt a plugin opened closes.
     lua_ui: Option<crate::luaui::Hooks>,
     /// Panes that printed since they were last idle: when the burst began and
@@ -455,6 +458,10 @@ pub struct App {
     return_focus: HashMap<PaneId, PaneId>,
     /// Panes marked for synchronized input (see `typed`).
     synced: HashSet<PaneId>,
+    /// Panes that rang the bell, or went quiet under `monitor_silence`,
+    /// while not focused: urgent until focused (`pane.urgent`, the state
+    /// colours).
+    urgent_panes: HashSet<PaneId>,
     /// Labelled links over the focused pane, waiting for a label (see `hints`).
     hints: Option<HintState>,
     /// The `ranma.mode` WM mode is in, if one is: its keys are looked up.
@@ -559,6 +566,7 @@ impl App {
             piece_values: HashMap::new(),
             piece_due: HashMap::new(),
             piece_hover: None,
+            piece_states: 0,
             lua_ui: None,
             activity: HashMap::new(),
             idle_due: None,
@@ -642,6 +650,7 @@ impl App {
             ended: Default::default(),
             return_focus: HashMap::new(),
             synced: HashSet::new(),
+            urgent_panes: HashSet::new(),
             hints: None,
             numbers: None,
             user_mode: None,
@@ -1752,6 +1761,13 @@ impl App {
 
     fn after_event(&mut self) {
         self.status_without_a_bar();
+        // A pane is urgent until it is the one you are in.
+        if let Some(f) = self.focused()
+            && self.urgent_panes.remove(&f)
+        {
+            self.dirty = true;
+        }
+        self.rerun_pieces_on_states();
         self.note_shown_modules();
         // A strip's view follows focus however it moved: a click, a hook, a
         // switcher. Relaid out, since what is on screen changed.
@@ -1879,6 +1895,10 @@ impl App {
                 self.note_screen(id);
             }
             TermEvent::Bell => {
+                if self.focused() != Some(id) {
+                    self.urgent_panes.insert(id);
+                    self.dirty = true;
+                }
                 let (workspace, title) = (self.workspace_of(id), self.label_of(id));
                 self.emit(HookEvent::Bell, |t| {
                     t.set("pane", id)?;
@@ -2966,6 +2986,26 @@ impl App {
     pub fn synced_here(&self) -> usize {
         let ws = self.active();
         self.synced.iter().filter(|p| ws.contains(**p)).count()
+    }
+
+    /// It rang the bell (or went quiet) since it was last focused.
+    pub fn is_urgent(&self, id: PaneId) -> bool {
+        self.urgent_panes.contains(&id)
+    }
+
+    /// It fills its workspace (`fullscreen`).
+    pub fn is_zoomed(&self, id: PaneId) -> bool {
+        let Some(n) = self.locate(id) else {
+            return false;
+        };
+        let ws = match n {
+            SCRATCHPAD => &self.scratch,
+            n => match self.workspaces.get(&n) {
+                Some(ws) => ws,
+                None => return false,
+            },
+        };
+        ws.fullscreen && ws.focused == Some(id)
     }
 
     pub fn is_synced(&self, id: PaneId) -> bool {
@@ -4103,6 +4143,10 @@ impl App {
                 crate::toast::Level::Normal,
                 None,
             );
+            if self.focused() != Some(id) {
+                self.urgent_panes.insert(id);
+                self.dirty = true;
+            }
             if !self.visible.contains(&id)
                 && let Some(n) = self
                     .locate(id)

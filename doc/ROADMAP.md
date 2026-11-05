@@ -370,7 +370,7 @@ not listed here.
   `panes.floating_bg`
 - [x] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`,
   priorities and the handoff's ladder; `tabs`, `index` built in; profiles carry it
-- [ ] Pane handles: `index`, `zoomed`, `synced`, `urgent`
+- [x] Pane handles: `index`, `zoomed`, `synced`, `urgent`
 - [ ] `title_ground = "pieces"`: pills on the row, from roles
 - [ ] The `title` mouse target
 - [ ] State colours: `state_*` and `state_*_fg`, one precedence, `state_urgent`

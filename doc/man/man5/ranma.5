@@ -2049,6 +2049,18 @@ Its name if it has one, else its title.
 \fBcols\fR, \fBrows\fR
 Its size.
 .TP
+\fBindex\fR
+Its place in its workspace, from 1 (what \fB{index}\fR and the \fBindex\fR title piece show).
+.TP
+\fBzoomed\fR
+It fills its workspace (\fBfullscreen\fR).
+.TP
+\fBsynced\fR
+It takes synchronized input.
+.TP
+\fBurgent\fR
+It rang the bell, or went quiet under \fBmonitor_silence\fR, while you were in another pane; it stops being urgent when you focus it. A title piece reading these runs again when they change.
+.TP
 \fBvars\fR
 A table of your own for this pane: every handle on the pane gets the same one. It lasts until the pane closes or the config reloads; for anything longer, use a store\fR.
 .PP
@@ -3170,6 +3182,9 @@ a theme's \fB[palette]\fR
 .TP
 \fBtheme.roles\fR
 a theme's \fB[roles.<name>]\fR
+.TP
+\fBpane.state\fR
+a pane handle's \fBindex\fR, \fBzoomed\fR, \fBsynced\fR and \fBurgent\fR
 .TP
 \fBtitlebar\fR
 \fBranma.titlebar\fR, \fBranma.title_piece\fR, and a profile's \fBtitlebar\fR

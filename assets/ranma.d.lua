@@ -445,6 +445,10 @@ function ranma.use_profile(name) end
 ---@field title string
 ---@field cols integer
 ---@field rows integer
+---@field index integer? Its place in its workspace, from 1.
+---@field zoomed boolean It fills its workspace.
+---@field synced boolean It takes synchronized input.
+---@field urgent boolean It rang the bell (or went quiet) since it was last focused.
 ---@field vars table A table of your own for this pane.
 local Pane = {}
 

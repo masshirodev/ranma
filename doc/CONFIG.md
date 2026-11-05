@@ -1507,6 +1507,10 @@ look at its text:
 | `visible`, `floating` | On screen now; in the floating layer. |
 | `title` | Its name if it has one, else its title. |
 | `cols`, `rows` | Its size. |
+| `index` | Its place in its workspace, from 1 (what `{index}` and the `index` title piece show). |
+| `zoomed` | It fills its workspace (`fullscreen`). |
+| `synced` | It takes synchronized input. |
+| `urgent` | It rang the bell, or went quiet under `monitor_silence`, while you were in another pane; it stops being urgent when you focus it. A title piece reading these runs again when they change. |
 | `vars` | A table of your own for this pane: every handle on the pane gets the same one. It lasts until the pane closes or the config reloads; for anything longer, use a [store](#a-plugins-state--ranmastorename). |
 
 Reading is live, from the pane's terminal. **Lines are numbered from the top of
@@ -2409,6 +2413,7 @@ the spelling against this table:
 | `rule.style` | a window rule's `style` |
 | `theme.palette` | a theme's `[palette]` |
 | `theme.roles` | a theme's `[roles.<name>]` |
+| `pane.state` | a pane handle's `index`, `zoomed`, `synced` and `urgent` |
 | `titlebar` | `ranma.titlebar`, `ranma.title_piece`, and a profile's `titlebar` |
 | `toast.on_click` | `ranma.toast`'s `on_click` |
 

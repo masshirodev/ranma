@@ -73,6 +73,33 @@ impl App {
         }
     }
 
+    /// A pane's state a piece may show (`pane.urgent`, `synced`, `zoomed`)
+    /// changed since they last ran: run them again. Bells and fullscreen do
+    /// not pass through the state-driven modules' triggers.
+    pub(super) fn rerun_pieces_on_states(&mut self) {
+        use std::hash::{Hash, Hasher};
+        if self.config.titlebar.is_none() {
+            return;
+        }
+        let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
+        ids.sort_unstable();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for id in ids {
+            (
+                id,
+                self.is_urgent(id),
+                self.is_synced(id),
+                self.is_zoomed(id),
+            )
+                .hash(&mut h);
+        }
+        let now = h.finish();
+        if now != self.piece_states {
+            self.piece_states = now;
+            self.run_title_pieces(None);
+        }
+    }
+
     /// The timed pieces the title row shows are due now.
     pub(super) fn schedule_pieces(&mut self, now: Instant) {
         self.piece_due = match &self.config.titlebar {
@@ -614,6 +641,23 @@ mod tests {
         assert_eq!(a.piece_values.get(&("who".into(), 1)), Some(&Vec::new()));
         assert_eq!(a.piece_values.get(&("who".into(), 2)), Some(&Vec::new()));
         assert_eq!(row_text(&a, 1, 20), "");
+    }
+
+    #[test]
+    fn a_pane_is_urgent_until_focused_and_zoomed_while_it_fills() {
+        let mut a = app("");
+        with_pane(&mut a, 1);
+        with_pane(&mut a, 2);
+        a.urgent_panes.insert(1);
+        assert!(a.is_urgent(1));
+        assert!(!a.is_zoomed(2));
+        a.workspaces.get_mut(&1).unwrap().fullscreen = true;
+        assert!(a.is_zoomed(2), "the focused one fills it");
+        assert!(!a.is_zoomed(1));
+        a.focus(1);
+        a.after_event();
+        assert!(!a.is_urgent(1), "seen");
+        assert_eq!(a.pane_index(2), Some(2));
     }
 
     #[test]

@@ -241,6 +241,10 @@ impl App {
                     cols: p.size.cols,
                     rows: p.size.rows,
                     input_waiting: Some(p.input_waiting.clone()),
+                    index: self.pane_index(id),
+                    zoomed: self.is_zoomed(id),
+                    synced: self.is_synced(id),
+                    urgent: self.is_urgent(id),
                     ..PaneEntry::new(id, p.pid, &p.term)
                 })
             })

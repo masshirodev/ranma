@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- A pane handle's `index`, `zoomed`, `synced` and `urgent`; a pane is urgent
+  when it rings the bell or goes quiet while you are in another one, until
+  you focus it. `ranma.has("pane.state")`.
+
 - `ranma.titlebar` and `ranma.title_piece`: a pane's title row as pieces on
   three sides. Built in are `title`, `sync`, `badges`, `index` and `tabs` (a
   group's tabs, drawn in its row, which then has no tab row of its own); your

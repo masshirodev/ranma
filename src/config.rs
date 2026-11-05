@@ -2070,6 +2070,7 @@ pub const CAPABILITIES: &[&str] = &[
     "open_here",
     "pane.alt_screen",
     "pane.cursor",
+    "pane.state",
     "pane.style",
     "placement",
     "rule.group",

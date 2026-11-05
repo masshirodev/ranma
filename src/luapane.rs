@@ -42,6 +42,14 @@ pub struct PaneEntry {
     pub term: Weak<FairMutex<Term<Proxy>>>,
     /// The pane's `input_waiting` (see `pane::Pane`), for `:cursor()`.
     pub input_waiting: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Its place in its workspace, from 1 (the `index` piece, `{index}`).
+    pub index: Option<usize>,
+    /// It fills its workspace.
+    pub zoomed: bool,
+    /// It takes synchronized input.
+    pub synced: bool,
+    /// It rang the bell, or went quiet, since it was last focused.
+    pub urgent: bool,
 }
 
 impl PaneEntry {
@@ -60,6 +68,10 @@ impl PaneEntry {
             pid,
             term: Arc::downgrade(term),
             input_waiting: None,
+            index: None,
+            zoomed: false,
+            synced: false,
+            urgent: false,
         }
     }
 }
@@ -147,6 +159,10 @@ impl UserData for Handle {
         f.add_field_method_get("title", |_, h| Ok(h.0.title.clone()));
         f.add_field_method_get("cols", |_, h| Ok(h.0.cols));
         f.add_field_method_get("rows", |_, h| Ok(h.0.rows));
+        f.add_field_method_get("index", |_, h| Ok(h.0.index));
+        f.add_field_method_get("zoomed", |_, h| Ok(h.0.zoomed));
+        f.add_field_method_get("synced", |_, h| Ok(h.0.synced));
+        f.add_field_method_get("urgent", |_, h| Ok(h.0.urgent));
         f.add_field_method_get("vars", |lua, h| vars(lua, h.0.id));
     }
 
