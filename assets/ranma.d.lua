@@ -205,6 +205,11 @@ function ranma.bar(bar) end
 ---@field interval? number Seconds between runs (required for exec).
 ---@field timeout? number For exec: seconds a run may take before it is killed (5 by default).
 ---@field nested? "follow"|"own"|"hide" Whose value it shows while the focus is in a ranma inside this one.
+---@field style? string The role it stands on: a pill of that role's ground.
+---@field hover_style? string The role of its text while the pointer is over it.
+---@field priority? integer 0-100: on a bar too narrow for everything, the lowest goes first, whole. Unset, never dropped, only cut.
+---@field min_width? integer|string Cells (or "N%" of the bar) its text is padded to.
+---@field max_width? integer|string Cells (or "N%" of the bar) its text is cut to, with an ellipsis.
 
 ---Define a bar module, or configure a built-in one.
 ---@param name string

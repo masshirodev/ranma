@@ -387,6 +387,8 @@ not listed here.
   cuts that keep caps, `center_min` (c445)
 - [x] Workspaces in any form, hover colours, `show = N`, `message` placed by the
   config (c446)
+- [x] A narrow bar drops modules by `priority`; `min_width` / `max_width`
+  (cells or a share of the bar) (c447)
 
 ## 18. Behaviour you set
 

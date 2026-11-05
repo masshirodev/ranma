@@ -1397,6 +1397,33 @@ module, built\-in ones included (\fBranma.module("cpu", { style = "cpu" })\fR),
 stands it on that role's ground, between the role's caps: a pill of its own
 colour. A role the theme does not have is an error at load.
 .PP
+\fBA narrow bar.\fR What goes when the bar is too narrow for everything is
+yours to say. \fBpriority\fR (0\-100), on any module, built\-in ones included,
+and on a group (\fB{ "cpu", "mem", style = "sys", priority = 30 }\fR): while
+the bar does not fit, the lowest goes, whole, from whichever side it is on
+(a tie, the leftmost), before anything is cut. A module with no priority
+is never dropped, only cut with \fB…\fR as above, so with none set nothing
+changes. Give what you glance at a high one and the rest low:
+.PP
+.RS 4
+.nf
+ranma.module("workspaces", { priority = 90 })
+ranma.module("clock", { priority = 80 })
+ranma.module("load", { priority = 10 })
+ranma.module("title", { max_width = "30%" })
+.fi
+.RE
+.PP
+\fBmax_width\fR holds a module's text to that many cells, or a share of the
+bar (\fB"30%"\fR), cut with \fB…\fR: a long title stops taking the room it could.
+\fBmin_width\fR pads it to that many, so a reading that changes width (\fBcpu
+9%\fR to \fBcpu 10%\fR) does not move what is beside it. Both act on the
+module's own text, inside its pill, and a module showing nothing stays
+hidden. The large bar draws a group's modules apart, and each gives way at
+its own priority, else the group's. The workspaces of a ranma inside one,
+when they are expanded, are fitted their own way and do not drop by
+priority.
+.PP
 \fBsize = "large"\fR makes the bar three rows, for a touch screen: the text sits on
 the middle row, and the mode, workspace and strip chips are at least five
 columns wide, a column apart, filled top to bottom so a thumb can hit them.
@@ -1498,6 +1525,12 @@ A role the module stands on: its ground and caps (see The bar\fR). Every module 
 .TP
 \fBhover_style\fR
 The role its text takes while the pointer is over it. Every module takes it.
+.TP
+\fBpriority\fR
+\fB0\fR\-\fB100\fR: how long it stays as the bar narrows, the lowest dropped first, whole (see A narrow bar\fR). Unset, it is never dropped, only cut. Every module takes it.
+.TP
+\fBmin_width\fR, \fBmax_width\fR
+Cells, or a share of the bar (\fB"30%"\fR), its text is padded to and cut to (with \fB…\fR). Every module takes them.
 .TP
 \fBon_click\fR
 A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable.

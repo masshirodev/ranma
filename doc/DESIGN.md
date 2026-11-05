@@ -2632,6 +2632,28 @@ Listed on a side, a message takes no room while there is none, and when
 one arrives it pushes into the centre, since the centre gets what the
 sides leave (B10).
 
+**A narrow bar drops what matters least (2026-11-05, card c447).** A bar
+too wide for its terminal was cut: the right side kept whole, the left
+cut with `…`, the centre given the gap. Nothing said what mattered, so on a
+laptop half-screen the clock or the workspaces were cut as readily as a
+load average. The owner first asked for a maximum share per group; a cap
+alone does not keep anything (on a narrow bar every group is held to its
+share and still cut) and wastes room on a wide one. What keeps the
+important things is priority, the rule title rows already had
+(`titlebar::lay_out`): a module or a bar group with a `priority` (0-100)
+goes whole, lowest first and across all three sides (a tie, the leftmost:
+left, centre, right), until the bar fits. A module with none is never
+dropped, only cut as before, so a config that sets nothing draws as it
+did. Dropping comes first, then `center_min` and the cut. A share of the
+bar is still the right tool for what grows (a long title, a message), so
+`max_width` (cells or `"30%"`, of the bar) cuts a module's own text with
+`…`, and `min_width` pads it, so a reading that changes width does not move
+its neighbours. Both are per module, on its text, inside its pill's caps;
+a group's members each keep theirs. The large bar ungroups, so there each
+module gives way at its own priority, else its group's. The nested
+workspaces' expansion (`nestbar::fit_nested`) still cuts as before: its
+room is shared out there, and priority does not reach it yet.
+
 ### Mouse binds (2026-10-13)
 
 The mouse did what ranma decided (focus, drag a border, a menu on the right

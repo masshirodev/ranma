@@ -44,11 +44,14 @@ ranma.titlebar {
 
 -- The bar --------------------------------------------------------------------
 
--- Modules stand on a role's ground; a group shares one pill.
-ranma.module("session", { style = "where" })
-ranma.module("title", { style = "where" })
-ranma.module("workspaces", { show = 6, label = "number", hover_style = "lit" })
-ranma.module("cpu", { format = "\u{f4bc} %s", interval = 2 })
+-- Modules stand on a role's ground; a group shares one pill. On a narrow
+-- terminal the lowest priority goes first, whole: the sys pill (20), then
+-- the session (40); the dots (90) and the clock (80) stay. The title never
+-- takes more than 30% of the bar, however long it is.
+ranma.module("session", { style = "where", priority = 40 })
+ranma.module("title", { style = "where", max_width = "30%" })
+ranma.module("workspaces", { show = 6, label = "number", hover_style = "lit", priority = 90 })
+ranma.module("cpu", { format = "\u{f4bc} %s", interval = 2, min_width = 7 })
 ranma.module("mem", { format = "\u{f035b} %s" })
 ranma.module("load", {
   interval = 5,
@@ -60,6 +63,7 @@ ranma.module("clock", {
   interval = 60,
   nested = "own",
   style = "time",
+  priority = 80,
   render = function() return "\u{f43a} " .. os.date("%H:%M") end,
 })
 
@@ -70,7 +74,7 @@ ranma.bar {
   center = { "workspaces" },
   center_min = 20,
   -- One green pill for the machine, one blue for the time.
-  right = { { "cpu", "mem", "load", style = "sys" }, "clock" },
+  right = { { "cpu", "mem", "load", style = "sys", priority = 20 }, "clock" },
 }
 
 -- Hints and copy mode ------------------------------------------------------

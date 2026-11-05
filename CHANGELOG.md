@@ -15,6 +15,13 @@ commit log has the detail.
 
 ### Added
 
+- Bar modules give way by `priority` (`ranma.module("load", { priority = 20
+  })`, and a bar group's `{ "cpu", "mem", priority = 30 }`): on a bar too
+  narrow for everything, the lowest goes whole, on whichever side, before
+  anything is cut. `max_width` (cells, or `"30%"` of the bar) cuts a
+  module's text, a long title say, and `min_width` pads it so a changing
+  reading does not shift its neighbours. Unset, a bar draws as before.
+
 - An exec module's own `timeout` (`ranma.module(name, { exec = ..., timeout =
   20 })`), 5 seconds as before when it gives none.
 

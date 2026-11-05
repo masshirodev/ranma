@@ -838,6 +838,90 @@ impl TitleLayout {
     }
 }
 
+/// A width on the bar: cells, or a share of the bar's (`"40%"`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarWidth {
+    Cells(u16),
+    Percent(u8),
+}
+
+impl BarWidth {
+    /// In cells, on a bar `cols` wide.
+    pub fn cells(self, cols: u16) -> usize {
+        match self {
+            BarWidth::Cells(n) => n as usize,
+            BarWidth::Percent(p) => cols as usize * p as usize / 100,
+        }
+    }
+
+    /// Cells, when it does not depend on the bar's width.
+    fn fixed(self) -> Option<u16> {
+        match self {
+            BarWidth::Cells(n) => Some(n),
+            BarWidth::Percent(_) => None,
+        }
+    }
+
+    fn parse(who: &str, key: &str, v: &Value) -> mlua::Result<Self> {
+        let bad = || {
+            rt_err(format!(
+                "{who}: {key} is a number of cells (1-500) or a share of the bar (\"1%\"-\"100%\")"
+            ))
+        };
+        match v {
+            Value::Integer(n) if (1..=500).contains(n) => Ok(BarWidth::Cells(*n as u16)),
+            Value::String(s) => {
+                let s = s.to_str()?;
+                let p: u8 = s
+                    .strip_suffix('%')
+                    .and_then(|n| n.trim().parse().ok())
+                    .filter(|p| (1..=100).contains(p))
+                    .ok_or_else(bad)?;
+                Ok(BarWidth::Percent(p))
+            }
+            _ => Err(bad()),
+        }
+    }
+}
+
+/// How a module fits a bar too narrow for everything (card c447):
+/// `priority`, how long it stays whole (the lowest goes first; unset, it is
+/// never dropped, only cut), and the width its own text is held to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ModuleFit {
+    pub priority: Option<u8>,
+    pub min_width: Option<BarWidth>,
+    pub max_width: Option<BarWidth>,
+}
+
+impl ModuleFit {
+    fn parse(who: &str, opts: &Table) -> mlua::Result<Self> {
+        let get = |k: &str| opts.get::<Value>(k);
+        let width = |k: &str| -> mlua::Result<Option<BarWidth>> {
+            match get(k)? {
+                Value::Nil => Ok(None),
+                v => BarWidth::parse(who, k, &v).map(Some),
+            }
+        };
+        Ok(ModuleFit {
+            priority: match get("priority")? {
+                Value::Nil => None,
+                v => Some(priority_of(&format!("{who}:"), &v)?),
+            },
+            min_width: width("min_width")?,
+            max_width: width("max_width")?,
+        })
+    }
+}
+
+/// A `priority`, 0-100.
+fn priority_of(who: &str, v: &Value) -> mlua::Result<u8> {
+    match v {
+        Value::Integer(n) if (0..=100).contains(n) => Ok(*n as u8),
+        _ => Err(rt_err(format!("{who} priority is a number 0-100"))),
+    }
+}
+
 /// One entry of a titlebar side: a piece, or a group of pieces that stand
 /// in one pill (`{ "float", "zoom", "close", style = "buttons" }`), on the
 /// ground and between the caps of the role it names (DESIGN.md, F6).
@@ -847,6 +931,9 @@ pub enum TitleEntry {
     Group {
         pieces: Vec<String>,
         style: Option<String>,
+        /// On the bar: how long the group stays as the bar narrows (card
+        /// c447). A titlebar's groups narrow piece by piece and take none.
+        priority: Option<u8>,
     },
 }
 
@@ -869,6 +956,7 @@ impl<'de> Deserialize<'de> for TitleEntry {
         struct Group {
             pieces: Vec<String>,
             style: Option<String>,
+            priority: Option<u8>,
         }
         #[derive(Deserialize)]
         #[serde(untagged)]
@@ -884,10 +972,12 @@ impl<'de> Deserialize<'de> for TitleEntry {
                 Raw::List(pieces) => TitleEntry::Group {
                     pieces,
                     style: None,
+                    priority: None,
                 },
                 Raw::Group(g) => TitleEntry::Group {
                     pieces: g.pieces,
                     style: g.style,
+                    priority: g.priority,
                 },
             },
         )
@@ -898,6 +988,16 @@ impl<'de> Deserialize<'de> for TitleEntry {
 /// "b", style = "x" }` is a list with a key on the side, which reaches
 /// serde as the list alone. Checked here, strictly, as it is rewritten.
 fn normalize_titlebar(lua: &Lua, who: &str, value: &Value) -> mlua::Result<()> {
+    normalize_entries(lua, who, value, false)
+}
+
+/// [`normalize_titlebar`] for the bar, whose groups also take a `priority`
+/// (card c447).
+fn normalize_bar(lua: &Lua, who: &str, value: &Value) -> mlua::Result<()> {
+    normalize_entries(lua, who, value, true)
+}
+
+fn normalize_entries(lua: &Lua, who: &str, value: &Value, bar: bool) -> mlua::Result<()> {
     let Value::Table(t) = value else {
         return Ok(());
     };
@@ -910,15 +1010,24 @@ fn normalize_titlebar(lua: &Lua, who: &str, value: &Value) -> mlua::Result<()> {
             let Value::Table(e) = v else { continue };
             let mut pieces = Vec::new();
             let mut style = None;
+            let mut priority = None;
             for item in e.pairs::<Value, Value>() {
                 match item? {
                     (Value::Integer(_), Value::String(n)) => pieces.push(n.to_str()?.to_string()),
                     (Value::String(s), Value::String(v)) if s.to_str()? == "style" => {
                         style = Some(v.to_str()?.to_string());
                     }
+                    (Value::String(s), v) if bar && s.to_str()? == "priority" => {
+                        priority = Some(priority_of(&format!("{who}: {side}: a group's"), &v)?);
+                    }
                     (Value::String(s), _) => {
                         return Err(rt_err(format!(
-                            "{who}: {side}: a group takes names and `style`, not `{}`",
+                            "{who}: {side}: a group takes names{}, not `{}`",
+                            if bar {
+                                ", `style` and `priority`"
+                            } else {
+                                " and `style`"
+                            },
                             s.to_str()?
                         )));
                     }
@@ -939,6 +1048,9 @@ fn normalize_titlebar(lua: &Lua, who: &str, value: &Value) -> mlua::Result<()> {
             g.set("pieces", lua.create_sequence_from(pieces)?)?;
             if let Some(st) = style {
                 g.set("style", st)?;
+            }
+            if let Some(p) = priority {
+                g.set("priority", p)?;
             }
             entries.set(k, g)?;
         }
@@ -1562,6 +1674,7 @@ struct Builder {
     modules: HashMap<String, ModuleDef>,
     module_styles: HashMap<String, String>,
     module_hover_styles: HashMap<String, String>,
+    module_fits: HashMap<String, ModuleFit>,
     workspaces_shown: u8,
     workspaces_numbers_only: bool,
     workspaces_nested: NestedWorkspaces,
@@ -1625,6 +1738,8 @@ pub struct Config {
     pub module_styles: HashMap<String, String>,
     /// A module's `hover_style`: the role of its text under the pointer.
     pub module_hover_styles: HashMap<String, String>,
+    /// A module's `priority`, `min_width` and `max_width` (card c447).
+    pub module_fits: HashMap<String, ModuleFit>,
     /// The workspaces module shows 1 to this many even when empty (`show`:
     /// "occupied" 0, "all" 10, or a number).
     pub workspaces_shown: u8,
@@ -2771,7 +2886,7 @@ fn install_api(
     ranma.set(
         "bar",
         lua.create_function(|lua, value: Value| {
-            normalize_titlebar(lua, "ranma.bar", &value)?;
+            normalize_bar(lua, "ranma.bar", &value)?;
             let patch: BarPatch = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
@@ -2854,7 +2969,7 @@ fn install_api(
                     &format!("{who} titlebar"),
                     &t.get::<Value>("titlebar")?,
                 )?;
-                normalize_titlebar(lua, &format!("{who} bar"), &t.get::<Value>("bar")?)?;
+                normalize_bar(lua, &format!("{who} bar"), &t.get::<Value>("bar")?)?;
             }
             let def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
@@ -2930,6 +3045,29 @@ fn install_api(
                     .insert(name.clone(), style);
             }
             keys.retain(|k| k != "hover_style");
+            // How it fits a narrow bar, for any module (card c447).
+            {
+                let who = format!("ranma.module(\"{name}\")");
+                let fit = ModuleFit::parse(&who, &opts)?;
+                let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
+                if fit != ModuleFit::default() {
+                    let at = b.module_fits.entry(name.clone()).or_default();
+                    at.priority = fit.priority.or(at.priority);
+                    at.min_width = fit.min_width.or(at.min_width);
+                    at.max_width = fit.max_width.or(at.max_width);
+                }
+                if let (Some(lo), Some(hi)) = b
+                    .module_fits
+                    .get(&name)
+                    .map_or((None, None), |f| (f.min_width, f.max_width))
+                    && lo.fixed().zip(hi.fixed()).is_some_and(|(lo, hi)| lo > hi)
+                {
+                    return Err(rt_err(format!(
+                        "{who}: min_width is wider than max_width"
+                    )));
+                }
+            }
+            keys.retain(|k| !["priority", "min_width", "max_width"].contains(&k.as_str()));
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
@@ -2940,8 +3078,8 @@ fn install_api(
                 };
                 if let Some(k) = keys.iter().find(|k| !allowed.contains(&k.as_str())) {
                     return Err(rt_err(format!(
-                        "ranma.module(\"{name}\"): `{name}` is built in and takes {}; `{k}` is not one",
-                        if allowed.is_empty() { "no options".to_string() } else { format!("only {}", allowed.join(", ")) }
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes only {}, hover_style, priority, min_width, max_width; `{k}` is not one",
+                        allowed.join(", ")
                     )));
                 }
                 if name == "workspaces"
@@ -3024,7 +3162,7 @@ fn install_api(
                     .find(|k| !["interval", "format", "nested", "style"].contains(&k.as_str()))
                 {
                     return Err(rt_err(format!(
-                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format, nested, style; `{k}` is not one"
+                        "ranma.module(\"{name}\"): `{name}` is built in and takes only interval, format, nested, style, hover_style, priority, min_width, max_width; `{k}` is not one"
                     )));
                 }
                 let interval = opts.get::<Option<f64>>("interval")?;
@@ -3053,7 +3191,7 @@ fn install_api(
                 })
             {
                 return Err(rt_err(format!(
-                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, timeout, on_click, nested, style)"
+                    "ranma.module(\"{name}\"): unknown option `{k}` (expected render, exec, format, interval, timeout, on_click, nested, style, hover_style, priority, min_width, max_width)"
                 )));
             }
             let nested = ModuleNested::parse(&name, &opts)?;
@@ -4088,6 +4226,7 @@ pub fn load_full(
         modules: builder.modules,
         module_styles: builder.module_styles,
         module_hover_styles: builder.module_hover_styles,
+        module_fits: builder.module_fits,
         workspaces_shown: builder.workspaces_shown,
         workspaces_numbers_only: builder.workspaces_numbers_only,
         workspaces_nested: builder.workspaces_nested,
@@ -4965,14 +5104,16 @@ mod tests {
             g.right,
             vec![TitleEntry::Group {
                 pieces: vec!["a".into(), "b".into()],
-                style: Some("accent".into())
+                style: Some("accent".into()),
+                priority: None
             }]
         );
         assert_eq!(
             g.left,
             vec![TitleEntry::Group {
                 pieces: vec!["title".into()],
-                style: None
+                style: None,
+                priority: None
             }]
         );
         assert!(
@@ -6048,6 +6189,69 @@ mod tests {
     /// The configurations in doc/examples are copied whole by readers, so one
     /// the strict parser rejects would fail on the first thing they try.
     #[test]
+    fn a_module_takes_a_priority_and_widths_and_a_bar_group_a_priority() {
+        let cfg = with_user(
+            r#"
+            ranma.module("title", { priority = 30, max_width = "40%" })
+            ranma.module("cpu", { min_width = 8 })
+            ranma.module("cpu", { priority = 5 })
+            ranma.bar { right = { { "cpu", "mem", priority = 20 } } }
+            "#,
+        )
+        .unwrap();
+        let fit = |n: &str| cfg.module_fits[n];
+        assert_eq!(fit("title").priority, Some(30));
+        assert_eq!(fit("title").max_width, Some(BarWidth::Percent(40)));
+        assert_eq!(BarWidth::Percent(40).cells(80), 32);
+        assert_eq!(
+            fit("cpu"),
+            ModuleFit {
+                priority: Some(5),
+                min_width: Some(BarWidth::Cells(8)),
+                max_width: None
+            },
+            "a later call keeps what it does not name"
+        );
+        assert_eq!(
+            cfg.bar.right,
+            vec![TitleEntry::Group {
+                pieces: vec!["cpu".into(), "mem".into()],
+                style: None,
+                priority: Some(20)
+            }]
+        );
+        for (src, want) in [
+            (
+                r#"ranma.module("cpu", { priority = 101 })"#,
+                "priority is a number 0-100",
+            ),
+            (
+                r#"ranma.module("cpu", { max_width = "0%" })"#,
+                "max_width is a number of cells",
+            ),
+            (
+                r#"ranma.module("cpu", { max_width = "40" })"#,
+                "max_width is a number of cells",
+            ),
+            (
+                r#"ranma.module("cpu", { min_width = 0 })"#,
+                "min_width is a number of cells",
+            ),
+            (
+                r#"ranma.module("cpu", { min_width = 9, max_width = 4 })"#,
+                "min_width is wider than max_width",
+            ),
+            (
+                r#"ranma.titlebar { right = { { "title", priority = 3 } } }"#,
+                "not `priority`",
+            ),
+        ] {
+            let e = format!("{:#}", with_user(src).unwrap_err());
+            assert!(e.contains(want), "{src}: {e}");
+        }
+    }
+
+    #[test]
     fn examples_load() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("doc/examples");
         let mut seen = 0;
@@ -6082,6 +6286,10 @@ mod tests {
         assert_eq!(show.hint_patterns.len(), 3);
         assert_eq!(show.theme.border.edges, [crate::theme::Edge::Top]);
         assert_eq!(names(&show.bar.center), ["workspaces"]);
+        assert_eq!(
+            show.module_fits["title"].max_width,
+            Some(BarWidth::Percent(30))
+        );
     }
 
     #[test]

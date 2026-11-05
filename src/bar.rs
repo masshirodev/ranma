@@ -419,6 +419,38 @@ fn truncate(mut pieces: Vec<Piece>, max: usize) -> Vec<Piece> {
     out
 }
 
+/// A module's own text held between `min` and `max` cells (card c447): cut
+/// with `…` past `max`, padded with blanks up to `min` so a number that
+/// changes does not move what is beside it. A module showing nothing stays
+/// hidden.
+pub fn sized(seg: Segment, min: Option<usize>, max: Option<usize>) -> Segment {
+    let w = width(&seg);
+    if w == 0 {
+        return seg;
+    }
+    let mut seg = match max {
+        Some(max) if w > max => truncate(seg, max),
+        _ => seg,
+    };
+    let w = width(&seg);
+    if let Some(min) = min.filter(|m| *m > w) {
+        // Blank in the module's text role, never a chip's ground (a
+        // current workspace would grow).
+        let style = match seg.last().map(|p| p.style) {
+            Some(Style::Role(r)) => Style::Role(r),
+            _ => Style::Normal,
+        };
+        let mut pad = Piece::new(" ".repeat(min - w), style);
+        if let Some(last) = seg.last() {
+            pad.module.clone_from(&last.module);
+            pad.ground = last.ground;
+            pad.click = last.click;
+        }
+        seg.push(pad);
+    }
+    seg
+}
+
 /// The width of a side once joined.
 pub fn joined_width(segments: &[Segment], sep: &str) -> usize {
     width(&join(segments, sep))

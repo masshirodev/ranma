@@ -208,6 +208,7 @@ impl App {
                     TitleEntry::Group {
                         pieces: names,
                         style,
+                        ..
                     } => {
                         let members: Vec<Item> = names
                             .iter()

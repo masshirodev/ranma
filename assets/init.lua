@@ -541,6 +541,15 @@ ranma.module("title", { nested = "hide" })
 --   ranma.title_piece("close", { text = " ✕ ", action = "close_pane", priority = 70 })
 --   ranma.titlebar { left = { "title" }, right = { "close" } }
 
+-- A narrow bar: any module, built-in or yours, can say how it fits. priority
+-- (0-100): on a bar too narrow for everything, the lowest goes first, whole,
+-- from whichever side; one with none is only ever cut with "…". A bar group
+-- takes one too: { "cpu", "mem", priority = 30 }. max_width cuts its text
+-- (cells, or "30%" of the bar), min_width pads it so it does not jiggle.
+--   ranma.module("title", { max_width = "30%" })
+--   ranma.module("workspaces", { priority = 90 })
+--   ranma.module("load", { priority = 10, min_width = 6 })
+
 -- cpu and mem take interval and format ("%s" is the reading):
 --   ranma.module("cpu", { interval = 1, format = "CPU %s" })
 --   ranma.bar { right = { "cpu", "mem", "update", "datetime" } }

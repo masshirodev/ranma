@@ -75,13 +75,15 @@ Milestones 17 and 18 in one config, for trying them out. Needs a Nerd Font.
   and float/zoom/close buttons in one pill on the right, close kept longest
   as a pane narrows. The bar with mode, session, title and `message` on the
   left, six dots in the centre (`center_min`), and cpu, mem and load in one
-  pill (a group). `word_separators`, `hint_alphabet`, `mouse_wheel_lines`,
+  pill (a group). Priorities say what a narrow terminal drops first (the
+  sys pill, then the session; the dots and the clock stay), and the title
+  is held to 30% of the bar (`max_width = "30%"`). `word_separators`, `hint_alphabet`, `mouse_wheel_lines`,
   `mouse_double_click`, `buffers_kept`, `toasts`, three `ranma.hint_pattern`s
   and a few copy-mode binds.
 
 Things to try in it: open a few panes (`leader t`) and drag the
 window narrower to watch the title bars give way; click a title bar's
-buttons; `leader alt+Enter` to zoom (green bar); float a pane (`leader w`) for the
+buttons, and the bar drop its sys pill; `leader alt+Enter` to zoom (green bar); float a pane (`leader w`) for the
 frame and shadow; ring a bell in a pane you then leave
 (`sleep 2; printf '\a'`) for the urgent colour; hover the dots; `leader o`
 over `git log --oneline` for the hash hints.

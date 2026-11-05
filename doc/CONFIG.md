@@ -971,6 +971,31 @@ module, built-in ones included (`ranma.module("cpu", { style = "cpu" })`),
 stands it on that role's ground, between the role's caps: a pill of its own
 colour. A role the theme does not have is an error at load.
 
+**A narrow bar.** What goes when the bar is too narrow for everything is
+yours to say. `priority` (0-100), on any module, built-in ones included,
+and on a group (`{ "cpu", "mem", style = "sys", priority = 30 }`): while
+the bar does not fit, the lowest goes, whole, from whichever side it is on
+(a tie, the leftmost), before anything is cut. A module with no priority
+is never dropped, only cut with `…` as above, so with none set nothing
+changes. Give what you glance at a high one and the rest low:
+
+```lua
+ranma.module("workspaces", { priority = 90 })
+ranma.module("clock", { priority = 80 })
+ranma.module("load", { priority = 10 })
+ranma.module("title", { max_width = "30%" })
+```
+
+`max_width` holds a module's text to that many cells, or a share of the
+bar (`"30%"`), cut with `…`: a long title stops taking the room it could.
+`min_width` pads it to that many, so a reading that changes width (`cpu
+9%` to `cpu 10%`) does not move what is beside it. Both act on the
+module's own text, inside its pill, and a module showing nothing stays
+hidden. The large bar draws a group's modules apart, and each gives way at
+its own priority, else the group's. The workspaces of a ranma inside one,
+when they are expanded, are fitted their own way and do not drop by
+priority.
+
 `size = "large"` makes the bar three rows, for a touch screen: the text sits on
 the middle row, and the mode, workspace and strip chips are at least five
 columns wide, a column apart, filled top to bottom so a thumb can hit them.
@@ -1028,6 +1053,8 @@ ranma.module("where", { render = function() return "ws " .. ranma.state().worksp
 | `interval` | Seconds between runs; required for `exec`. Aligned to the wall clock: `60` runs on the minute, not 60 s after ranma started. |
 | `style` | A role the module stands on: its ground and caps (see [The bar](#the-bar)). Every module takes it, built-in ones too. |
 | `hover_style` | The role its text takes while the pointer is over it. Every module takes it. |
+| `priority` | `0`-`100`: how long it stays as the bar narrows, the lowest dropped first, whole (see [A narrow bar](#the-bar)). Unset, it is never dropped, only cut. Every module takes it. |
+| `min_width`, `max_width` | Cells, or a share of the bar (`"30%"`), its text is padded to and cut to (with `…`). Every module takes them. |
 | `on_click` | A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable. |
 | `nested` | Whose value it shows while the focused pane runs a ranma inside this one (over ssh): `"follow"` (default) shows that ranma's module of the same name when it has one, and this one's otherwise; `"own"` always shows this one's (a clock); `"hide"` follows, but shows nothing when the ranma inside has no module of that name (something about the focused pane, which is wrong about a pane running ssh). See [ranma inside ranma](#ranma-inside-ranma). |
 

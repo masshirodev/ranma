@@ -5272,6 +5272,7 @@ impl App {
     /// takes the centre while it is up.
     pub fn bar_pieces(&self, cols: u16) -> Vec<(u16, Piece)> {
         let chrome = self.chrome();
+        let cols = cols.min(chrome.bar_room);
         let large = chrome.bar_size == crate::toolbar::Size::Large;
         // Chips a thumb can hit: padded to five columns and a column apart.
         let theme_bar = &self.config.theme.bar;
@@ -5351,8 +5352,20 @@ impl App {
             Some(Style::Role(r)) => Some(r),
             _ => None,
         };
-        let raw = |n: &String| {
+        // Its text held to `min_width` / `max_width` (card c447).
+        let fitted = |n: &String| {
             let s = self.segment(n);
+            match self.config.module_fits.get(n) {
+                Some(f) if f.min_width.is_some() || f.max_width.is_some() => bar::sized(
+                    s,
+                    f.min_width.map(|w| w.cells(cols)),
+                    f.max_width.map(|w| w.cells(cols)),
+                ),
+                _ => s,
+            }
+        };
+        let raw = |n: &String| {
+            let s = fitted(n);
             if large && matches!(n.as_str(), "mode" | "workspaces" | "pane_strip") {
                 bar::enlarge(s)
             } else {
@@ -5398,7 +5411,7 @@ impl App {
             let sep = role.and_then(|r| r.separator);
             let mut inner: Segment = Vec::new();
             for n in names {
-                let s = chips(named(n, self.segment(n)), shape);
+                let s = chips(named(n, fitted(n)), shape);
                 if bar::width(&s) == 0 {
                     continue;
                 }
@@ -5453,24 +5466,54 @@ impl App {
             }
             vec![out]
         };
-        let side_in = |entries: &[config::TitleEntry], which: Side| -> Vec<Segment> {
+        // A side's entries, each with the priority it gives way at (card
+        // c447): a module's own, a group's. None is never dropped.
+        let entries_in = |entries: &[config::TitleEntry], which: Side| -> Vec<Entry> {
             let shape = theme_bar.shape(which);
-            let segs: Vec<Segment> = entries
+            entries
                 .iter()
                 .flat_map(|e| match e {
-                    config::TitleEntry::Piece(n) => vec![seg_in(n, &shape)],
-                    config::TitleEntry::Group { pieces, style } => group(pieces, style, &shape),
+                    config::TitleEntry::Piece(n) => vec![(
+                        seg_in(n, &shape),
+                        self.config.module_fits.get(n).and_then(|f| f.priority),
+                    )],
+                    config::TitleEntry::Group {
+                        pieces,
+                        style,
+                        priority,
+                    } => {
+                        let segs = group(pieces, style, &shape);
+                        // The large bar ungroups: each module gives way
+                        // at its own priority, else the group's.
+                        segs.into_iter()
+                            .zip(pieces)
+                            .map(|(s, n)| {
+                                let own = large
+                                    .then(|| {
+                                        self.config.module_fits.get(n).and_then(|f| f.priority)
+                                    })
+                                    .flatten();
+                                (s, own.or(*priority))
+                            })
+                            .collect()
+                    }
                 })
-                .collect();
+                .collect()
+        };
+        let finish = |entries: &[Entry], which: Side| -> Vec<Segment> {
+            let shape = theme_bar.shape(which);
+            let segs: Vec<Segment> = entries.iter().map(|(s, _)| s.clone()).collect();
             if shape.join == Join::Arrows && !large {
                 arrows(segs, which, &shape.arrow)
             } else {
                 segs
             }
         };
+        let side_in = |entries: &[config::TitleEntry], which: Side| {
+            finish(&entries_in(entries, which), which)
+        };
         let side = |entries: &[config::TitleEntry]| side_in(entries, Side::Left);
         let bar = &self.config.bar;
-        let cols = cols.min(chrome.bar_room);
         // A message of this ranma's, else one from a nested ranma that draws
         // no bar of its own, the deepest first.
         let status = self.status.clone().or_else(|| {
@@ -5482,11 +5525,15 @@ impl App {
         // A message takes the centre, unless the config put `message`
         // somewhere: then it shows there and the centre stays.
         let placed = bar.all().any(|n| n == "message");
-        let center = match &status {
-            Some(msg) if !placed => vec![wrap(vec![Piece::new(msg.clone(), Style::Accent)])],
-            _ => side_in(&bar.center, Side::Center),
+        let center_entries: Vec<Entry> = match &status {
+            Some(msg) if !placed => {
+                vec![(wrap(vec![Piece::new(msg.clone(), Style::Accent)]), None)]
+            }
+            _ => entries_in(&bar.center, Side::Center),
         };
-        let right = side_in(&bar.right, Side::Right);
+        let center = finish(&center_entries, Side::Center);
+        let right_entries = entries_in(&bar.right, Side::Right);
+        let right = finish(&right_entries, Side::Right);
         // Chips a column apart, whatever the theme's separator: the large
         // bar's spacing is the design's (the handoff's section 06).
         let sep = if large {
@@ -5524,13 +5571,34 @@ impl App {
                 );
             }
         }
-        let mut left = side(&bar.left);
-        let mut right = right;
+        let left_entries = entries_in(&bar.left, Side::Left);
+        let in_bar = chrome.strip == crate::chrome::Strip::InBar;
+        // Left-aligned, as the strip's own row draws them, not centred.
+        let strip_chips = in_bar.then(|| wrap(self.segment("pane_strip")));
+        // The folded strip goes after the left side (below), and takes its
+        // room there.
+        let strip_room = match &strip_chips {
+            Some(chips) if !large && bar::width(chips) > 0 => {
+                use unicode_width::UnicodeWidthStr;
+                bar::width(chips) + sep.width()
+            }
+            _ => 0,
+        };
+        // While the bar does not fit, the lowest priority goes whole, across
+        // the three sides (card c447); what has none is only ever cut.
+        let mut sides = [left_entries, center_entries, right_entries];
+        drop_by_priority(&mut sides, cols as usize, |entries, i| {
+            let which = [Side::Left, Side::Center, Side::Right][i];
+            let w = bar::joined_width(&finish(entries, which), sep);
+            if i == 0 { w + strip_room } else { w }
+        });
+        let [left_entries, center_entries, right_entries] = sides;
+        let mut left = finish(&left_entries, Side::Left);
+        let center = finish(&center_entries, Side::Center);
+        let mut right = finish(&right_entries, Side::Right);
         // The monocle strip folded into the bar (see `chrome`): its chips after
         // the workspaces where they fit, else one `2/4 nvim` chip at the end.
-        if chrome.strip == crate::chrome::Strip::InBar {
-            // Left-aligned, as the strip's own row draws them, not centred.
-            let chips = wrap(self.segment("pane_strip"));
+        if let Some(chips) = strip_chips {
             let mut with = left.clone();
             with.push(chips.clone());
             let width = |segs: &[Segment]| -> usize {
@@ -5823,6 +5891,39 @@ pub(super) fn cursor_style(c: CursorState) -> SetCursorStyle {
         (CursorShape::Underline, false) => SetCursorStyle::SteadyUnderScore,
         (_, true) => SetCursorStyle::BlinkingBlock,
         (_, false) => SetCursorStyle::SteadyBlock,
+    }
+}
+
+/// A bar entry: its pill, and the priority it gives way at (card c447).
+type Entry = (Segment, Option<u8>);
+
+/// Drop entries whole, lowest priority first (a tie, the leftmost: left
+/// side, centre, right), until the three sides fit in `cols` with a cell
+/// between those that show. `width` is a side's width as drawn. Entries
+/// without a priority stay, to be cut as before.
+fn drop_by_priority(
+    sides: &mut [Vec<Entry>; 3],
+    cols: usize,
+    width: impl Fn(&[Entry], usize) -> usize,
+) {
+    loop {
+        let ws: Vec<usize> = (0..3).map(|i| width(&sides[i], i)).collect();
+        let shown = ws.iter().filter(|w| **w > 0).count();
+        if ws.iter().sum::<usize>() + shown.saturating_sub(1) <= cols {
+            return;
+        }
+        let lowest = sides
+            .iter()
+            .enumerate()
+            .flat_map(|(i, side)| {
+                side.iter()
+                    .enumerate()
+                    .filter(|(_, (s, _))| bar::width(s) > 0)
+                    .filter_map(move |(k, (_, p))| p.map(|p| (p, i, k)))
+            })
+            .min();
+        let Some((_, i, k)) = lowest else { return };
+        sides[i].remove(k);
     }
 }
 
@@ -7065,6 +7166,72 @@ mod tests {
             .collect();
         assert!(row.contains("MIDDLE"), "{row}");
         assert!(row.contains('…'), "the left is cut instead: {row}");
+    }
+
+    #[test]
+    fn the_lowest_priority_module_goes_whole_before_anything_is_cut() {
+        let mut a = app(Some(
+            r#"
+            ranma.module("a", { priority = 60, render = function() return "AAAAAAAAAA" end })
+            ranma.module("b", { priority = 20, render = function() return "BBBBBBBBBB" end })
+            ranma.module("c", { render = function() return "CCCCCCCCCC" end })
+            ranma.module("d", { render = function() return "DDDDDDDDDD" end })
+            ranma.module("e", { priority = 40, render = function() return "EEEEEEEEEE" end })
+            ranma.bar { left = { "a", "b" }, center = { "c" }, right = { { "d", "e", priority = 10 } } }
+            "#,
+        ));
+        a.render_state_modules();
+        let row = |cols| -> String {
+            a.bar_pieces(cols)
+                .iter()
+                .map(|(_, p)| p.text.clone())
+                .collect()
+        };
+        let wide = row(120);
+        assert!(
+            ["AAA", "BBB", "CCC", "DDD", "EEE"]
+                .iter()
+                .all(|m| wide.contains(m)),
+            "{wide}"
+        );
+        // The group (10) goes first, whole, though it is on the right.
+        let r = row(45);
+        assert!(!r.contains('D') && !r.contains('E'), "{r}");
+        assert!(r.contains("BBBBBBBBBB") && !r.contains('…'), "{r}");
+        // Then b (20); c has none and is never dropped.
+        let r = row(25);
+        assert!(
+            r.contains("AAAAAAAAAA") && r.contains("CCCCCCCCCC") && !r.contains('B'),
+            "{r}"
+        );
+        // With nothing left to drop, what remains is cut as before.
+        let r = row(8);
+        assert!(r.contains('…'), "{r}");
+    }
+
+    #[test]
+    fn a_modules_text_is_held_between_its_min_and_max_width() {
+        let mut a = app(Some(
+            r#"
+            ranma.module("long", { max_width = "25%", render = function() return string.rep("x", 70) end })
+            ranma.module("short", { min_width = 6, max_width = 40, render = function() return "ab" end })
+            ranma.bar { left = { "long" }, center = {}, right = { "short" } }
+            "#,
+        ));
+        a.render_state_modules();
+        let pieces = a.bar_pieces(80);
+        let width = |m: &str| -> usize {
+            use unicode_width::UnicodeWidthStr;
+            pieces
+                .iter()
+                .filter(|(_, p)| p.module.as_deref() == Some(m))
+                .map(|(_, p)| p.text.width())
+                .sum()
+        };
+        assert_eq!(width("long"), 20, "a quarter of 80");
+        assert_eq!(width("short"), 6, "padded to its minimum");
+        let row: String = pieces.iter().map(|(_, p)| p.text.clone()).collect();
+        assert!(row.contains("x…"), "{row}");
     }
 
     #[test]
