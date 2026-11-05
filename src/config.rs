@@ -3045,9 +3045,10 @@ fn install_api(
         })?,
     )?;
 
+    let theme_dirs = theme::theme_dirs(config_dir);
     ranma.set(
         "profile",
-        lua.create_function(|lua, (name, value): (String, Value)| {
+        lua.create_function(move |lua, (name, value): (String, Value)| {
             let who = format!("ranma.profile(\"{name}\")");
             // `setup` is a function, which neither the strict parse nor the
             // copy kept for ranma.profiles() can hold: taken out first, from
@@ -3107,6 +3108,27 @@ fn install_api(
             // is an error at load and not when the profile is first used.
             let mut probe = b.settings.clone();
             apply_settings(&mut probe, def.set.clone(), &format!("{who} set")).map_err(rt_err)?;
+            // The theme keys, checked here too and not only once the whole
+            // configuration has run: an error at the call is the caller's to
+            // catch (profiles.ranma loads each file under pcall), where one at
+            // the end takes the whole configuration with it. Over the named
+            // base, or the built-in theme, since the one in use is not known
+            // until init.lua has run.
+            if let Some(t) = &def.theme {
+                let mut t = t.clone();
+                let base = match t.remove("base") {
+                    None => "default".to_string(),
+                    Some(toml::Value::String(b)) => b,
+                    Some(v) => {
+                        return Err(rt_err(format!(
+                            "{who}: theme.base must be a theme's name, not {}",
+                            v.type_str()
+                        )));
+                    }
+                };
+                theme::load_over(&base, &theme_dirs, Some(&t))
+                    .map_err(|e| rt_err(format!("{who}: theme: {e:#}")))?;
+            }
             def.declared = declared;
             def.source = source;
             def.setup = setup;
@@ -5514,6 +5536,32 @@ mod tests {
             let e = format!("{e:#}");
             assert!(e.contains(needle), "{src}: {e}");
         }
+    }
+
+    /// A profile's theme is checked at the ranma.profile call, so a caller
+    /// that loads profiles from files (profiles.ranma) catches a bad one
+    /// there and loads the rest, where an error at the end of the load took
+    /// the whole configuration with it.
+    #[test]
+    fn a_bad_profile_theme_is_an_error_at_the_call() {
+        let cfg = with_user(
+            r#"
+            local ok, err = pcall(function()
+              ranma.profile("bad", { theme = { border = { nope = 1 } } })
+            end)
+            assert(not ok and tostring(err):find("nope"), tostring(err))
+            ok, err = pcall(function() ranma.profile("far", { theme = { base = "nosuch" } }) end)
+            assert(not ok and tostring(err):find("nosuch"), tostring(err))
+            ranma.profile("good", { theme = { border = { style = "none" } } })
+            "#,
+        )
+        .unwrap();
+        let names: Vec<&str> = cfg
+            .profile_entries
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(names, ["good"]);
     }
 
     #[test]

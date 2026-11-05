@@ -201,6 +201,11 @@ commit log has the detail.
 
 ### Fixed
 
+- A profile's theme keys are checked at the `ranma.profile` call, not only
+  once the whole configuration has run: a bad one is an error there, which
+  a `pcall` catches, instead of failing the load (at start, every terminal
+  dropping to a plain shell).
+
 - The settings panel drew `word_separators`' tab as it was, a control
   character on screen (a debug build panicked on it). Text values show
   their control characters escaped (`\t`), and are read back when typed

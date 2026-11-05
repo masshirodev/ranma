@@ -3065,7 +3065,9 @@ profile is: the frame, which \fBset\fR cannot reach, as in
 \fBbase\fR among them names another theme file to build over instead of the
 one in use (\fBtheme = { base = "latte", border = { style = "none" } }\fR), so
 a profile can be a different theme and not only keys over yours.
-They are checked when \fBinit.lua\fR loads, as strictly as a theme file;
+They are checked at the \fBranma.profile\fR call, as strictly as a theme file
+(so \fBpcall\fR around one catches a bad theme, as it does a bad \fBset\fR), and
+again over the theme in use once \fBinit.lua\fR has run;
 \fBbar\fR what \fBranma.bar\fR takes; \fBtitlebar\fR what \fBranma.titlebar\fR takes, over
 the base's, so a look that needs a theme and its pieces switches whole;
 \fBtoolbars\fR the names of the toolbars shown

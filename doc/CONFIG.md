@@ -2339,7 +2339,9 @@ your own for the phone takes another name, or replaces that one.
   `base` among them names another theme file to build over instead of the
   one in use (`theme = { base = "latte", border = { style = "none" } }`), so
   a profile can be a different theme and not only keys over yours.
-  They are checked when `init.lua` loads, as strictly as a theme file;
+  They are checked at the `ranma.profile` call, as strictly as a theme file
+  (so `pcall` around one catches a bad theme, as it does a bad `set`), and
+  again over the theme in use once `init.lua` has run;
   `bar` what `ranma.bar` takes; `titlebar` what `ranma.titlebar` takes, over
   the base's, so a look that needs a theme and its pieces switches whole;
   `toolbars` the names of the toolbars shown
