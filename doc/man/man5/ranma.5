@@ -1811,7 +1811,8 @@ as the image needs (its \fBc\fR/\fBr\fR, else its size in pixels over the
 terminal's cell size), and the cursor ends after them as kitty leaves it
 (\fBC=1\fR keeps it where it was). An image whose size ranma cannot learn (an
 \fBI=\fR number with no id, a format it cannot read the size of) is answered
-\fBEINVAL\fR instead.
+\fBEINVAL\fR instead. An image sent to be shown with neither an id nor a
+number (plain \fBkitten icat\fR sends them so) gets an id of ranma's own.
 .PP
 A pane reports its size in pixels, as kitty does (its TIOCGWINSZ and its
 answer to \fBCSI 14 t\fR), from the cell size of the terminal driving the screen;

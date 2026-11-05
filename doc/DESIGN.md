@@ -2364,7 +2364,10 @@ window's pixels before it draws anything, and gave up on the zero ranma used
 to report (tmux's answer, kept from milestone 1 until 2026-11-05, when a
 capture of the images panel found plain `icat` refusing). Zero still, while
 no terminal has said, and a client with another cell size makes every pane
-hear its size again.
+hear its size again. The same capture found icat's images anonymous
+(`a=T` with no `i` and no `I`), which the reader passed on unplaced; it gives
+them an id of its own now, from `0xFF000000` up, out of the way of the
+small ids programs pick.
 
 **What ranma does is the transmission.** The APC is caught on the PTY path
 by the scanner that already finds OSC 133 (alacritty_terminal drops APCs),

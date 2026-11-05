@@ -1288,7 +1288,8 @@ layout.
   terminal's cell size), and the cursor ends after them as kitty leaves it
   (`C=1` keeps it where it was). An image whose size ranma cannot learn (an
   `I=` number with no id, a format it cannot read the size of) is answered
-  `EINVAL` instead.
+  `EINVAL` instead. An image sent to be shown with neither an id nor a
+  number (plain `kitten icat` sends them so) gets an id of ranma's own.
 
 A pane reports its size in pixels, as kitty does (its TIOCGWINSZ and its
 answer to `CSI 14 t`), from the cell size of the terminal driving the screen;

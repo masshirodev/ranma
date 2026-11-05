@@ -95,7 +95,15 @@ pub struct Placer {
     /// Each image's size in pixels, by the program's id, as its
     /// transmission said.
     sizes: HashMap<u32, (u32, u32)>,
+    /// Ids given to images sent with none (plain `kitten icat`), counted up
+    /// from [`ANONYMOUS`].
+    anonymous: u32,
 }
+
+/// Where the ids ranma gives anonymous images start: high, out of the way of
+/// the small ids programs choose for themselves. Per pane, as the program's
+/// own ids are.
+const ANONYMOUS: u32 = 0xFF00_0000;
 
 impl Placer {
     /// A graphics command from the pane: the command to hand on (rewritten
@@ -105,7 +113,19 @@ impl Placer {
             return (body.to_vec(), None);
         };
         let action = cmd.action();
-        let id = cmd.num("i").filter(|i| *i != 0);
+        let mut id = cmd.num("i").filter(|i| *i != 0);
+        // Transmit-and-display with neither an id nor a number: an anonymous
+        // image, as plain `kitten icat` sends one. kitty shows it where the
+        // cursor is; to place it in the pane it needs an id, so it gets one
+        // of ranma's own, and stays quiet, as kitty answers nothing for an
+        // image with no id.
+        if action == 'T' && id.is_none() && cmd.num("I").is_none() && cmd.get("U") != Some("1") {
+            self.anonymous = self.anonymous.wrapping_add(1);
+            let minted = ANONYMOUS | (self.anonymous & 0x00FF_FFFF);
+            cmd.set("i", minted);
+            cmd.set("q", 2);
+            id = Some(minted);
+        }
         if matches!(action, 't' | 'T')
             && let Some(id) = id
             && let Some(size) = image_size(&cmd)
@@ -928,6 +948,35 @@ mod tests {
         assert!(text.is_none());
         // Unknown size, nothing to go on: left for the app to refuse.
         assert!(p.place(b"Ga=p,i=77").1.is_none());
+    }
+
+    /// Plain `kitten icat` sends `a=T` with neither an id nor a number. It
+    /// gets an id of ranma's own, is placed as any direct placement is, and
+    /// stays quiet; the next anonymous one gets another id.
+    #[test]
+    fn an_anonymous_image_gets_an_id_and_is_placed() {
+        set_cell_px(10, 20);
+        let mut p = Placer::default();
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend(40u32.to_be_bytes());
+        png.extend(40u32.to_be_bytes());
+        let first = format!("Ga=T,q=1,f=100,s=40,v=40;{}", base64(&png));
+        let (body, text) = p.place(first.as_bytes());
+        let body = text_of(&body);
+        let id = ANONYMOUS | 1;
+        assert!(
+            body.starts_with(&format!("Ga=T,q=2,f=100,s=40,v=40,i={id},U=1,c=4,r=2;")),
+            "{body}"
+        );
+        let text = String::from_utf8(text.unwrap()).unwrap();
+        assert_eq!(text.matches(PLACEHOLDER).count(), 8, "4 x 2 cells");
+        let (body, _) = p.place(first.as_bytes());
+        assert!(text_of(&body).contains(&format!("i={}", ANONYMOUS | 2)));
+        // A number, or a virtual placement, is the program's to name.
+        let (body, _) = p.place(b"Ga=T,I=5,f=24,s=10,v=10;AAAA");
+        assert!(!text_of(&body).contains("i="));
+        let (body, _) = p.place(b"Ga=T,U=1,f=24,s=10,v=10;AAAA");
+        assert!(!text_of(&body).contains("i="));
     }
 
     #[test]

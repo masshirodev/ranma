@@ -239,10 +239,13 @@ commit log has the detail.
 
 ### Fixed
 
-- Plain `kitten icat` (and any program that asks for the window's size in
-  pixels first) drew nothing in a pane: panes reported a size of zero
-  pixels. They report the driving terminal's cell size now, as kitty does,
-  and hear it again when a terminal with another one attaches.
+- Plain `kitten icat` drew nothing in a pane, for two reasons. Panes
+  reported a size of zero pixels, and a program that places images asks for
+  it first: they report the driving terminal's cell size now, as kitty does,
+  and hear it again when a terminal with another one attaches. And icat
+  sends its image with neither an id nor a number, which ranma passed on
+  unplaced: such an image gets an id of ranma's own now, and is placed at
+  the cursor like any other.
 
 - A pill with no caps (arrows, or a side with none) kept no padding: its
   text ran into the arrows and its neighbours. Its blanks are kept now. With
