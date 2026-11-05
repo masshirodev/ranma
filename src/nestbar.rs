@@ -722,31 +722,26 @@ pub fn expands(set: &Report, expand_all: bool) -> bool {
         || (set.scratch_nest.is_some() && (expand_all || set.scratch_shown))
 }
 
-/// The bar with nested workspaces: the left side is `before`, the workspaces
-/// of `set`, then `after`, stepped down the ladder until it fits beside the
-/// right side; the centre (`center`) gets what is left, and is left out when
-/// that would cut it below `floor` (`TITLE_FLOOR` for the title). With
-/// nothing to expand this is `bar::fit` over today's pieces, exactly.
+/// The bar with nested workspaces: the left side is what `left` builds
+/// round the workspaces of `set` (the modules before and after them, as one
+/// side: its pills, its arrows), stepped down the ladder until it fits
+/// beside the right side; the centre (`center`) gets what is left, and is
+/// left out when that would cut it below `floor` (`TITLE_FLOOR` for the
+/// title). With nothing to expand this is `bar::fit` over today's pieces,
+/// exactly.
 #[allow(clippy::too_many_arguments)]
 pub fn fit_nested(
-    before: &[Segment],
+    left: &dyn Fn(Segment) -> Vec<Segment>,
     set: &Report,
-    after: &[Segment],
     center: &[Segment],
     right: &[Segment],
     sep: &str,
     cols: u16,
     expand_all: bool,
-    wrap: &dyn Fn(Segment) -> Segment,
     floor: usize,
 ) -> Vec<(u16, Piece)> {
-    let build = |o: &Opts| -> Vec<Segment> {
-        let mut left: Vec<Segment> = before.to_vec();
-        // The nested workspaces are one module: one pair of caps around them.
-        left.push(wrap(pieces(set, 0, true, o, &[])));
-        left.extend(after.iter().cloned());
-        left
-    };
+    // The nested workspaces are one module: one pill, one pair of caps.
+    let build = |o: &Opts| -> Vec<Segment> { left(pieces(set, 0, true, o, &[])) };
     if !expands(set, expand_all) {
         return crate::bar::fit(&build(&Opts::default()), center, right, sep, cols);
     }
@@ -1058,15 +1053,13 @@ mod tests {
         ];
         let center: Vec<Segment> = vec![vec![Piece::new(TITLE, Style::Normal)]];
         let placed = fit_nested(
-            &[vec![Piece::new(" ⧉ ", Style::Dim)]],
+            &|ws| vec![vec![Piece::new(" ⧉ ", Style::Dim)], ws],
             set,
-            &[],
             &center,
             &right,
             "  ",
             cols,
             expand_all,
-            &|s| s,
             TITLE_FLOOR,
         );
         let mut row = vec![' '; cols as usize];

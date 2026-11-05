@@ -2663,9 +2663,21 @@ bar is still the right tool for what grows (a long title, a message), so
 `…`, and `min_width` pads it, so a reading that changes width does not move
 its neighbours. Both are per module, on its text, inside its pill's caps;
 a group's members each keep theirs. The large bar ungroups, so there each
-module gives way at its own priority, else its group's. The nested
-workspaces' expansion (`nestbar::fit_nested`) still cuts as before: its
-room is shared out there, and priority does not reach it yet.
+module gives way at its own priority, else its group's.
+
+With a nested ranma's workspaces expanded (`nestbar::fit_nested`, the
+outer bar over ssh) the left side was built apart at first: the modules
+before and after the workspaces finished as two sides, each with its own
+arrow run, the workspaces between them wrapped in the centre's shape, and
+nothing dropped by priority, so over ssh, the most crowded bar, neither
+c445's arrows nor c447's priorities held (card c458). Now `bar_pieces`
+gives `fit_nested` a closure that builds the whole left side from its
+entries round the workspaces at each step of the ladder: one arrow run,
+the workspaces in the left side's shape and in the workspaces module's
+role. Modules go by priority before the ladder starts, measured with the
+workspaces at its first (fullest) step: what the config said matters
+little goes before the workspaces lose their names, which are part of
+what the user is looking at. The workspaces are never dropped.
 
 ### Mouse binds (2026-10-13)
 

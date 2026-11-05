@@ -5588,10 +5588,6 @@ impl App {
                 segs
             }
         };
-        let side_in = |entries: &[config::TitleEntry], which: Side| {
-            finish(&entries_in(entries, which), which)
-        };
-        let side = |entries: &[config::TitleEntry]| side_in(entries, Side::Left);
         let bar = &self.config.bar;
         // A message of this ranma's, else one from a nested ranma that draws
         // no bar of its own, the deepest first.
@@ -5610,9 +5606,7 @@ impl App {
             }
             _ => entries_in(&bar.center, Side::Center),
         };
-        let center = finish(&center_entries, Side::Center);
         let right_entries = entries_in(&bar.right, Side::Right);
-        let right = finish(&right_entries, Side::Right);
         // Chips a column apart, whatever the theme's separator: the large
         // bar's spacing is the design's (the handoff's section 06).
         let sep = if large {
@@ -5631,16 +5625,60 @@ impl App {
             let set = self.own_report();
             let expand_all = self.config.workspaces_nested == config::NestedWorkspaces::All;
             if crate::nestbar::expands(&set, expand_all) {
+                // The expanded workspaces in the workspaces module's place,
+                // as the module itself stands: the left side's shape, its
+                // role, its arrows across the whole side (card c458).
+                let shape = theme_bar.shape(Side::Left);
+                let ws_name = "workspaces".to_string();
+                let expansion = |ws: Segment| -> Segment {
+                    wrap_in(
+                        chips(named(&ws_name, ws), &shape),
+                        role_of("workspaces"),
+                        &shape,
+                    )
+                };
+                let is_ws =
+                    |s: &Segment| s.iter().any(|p| p.module.as_deref() == Some("workspaces"));
+                // Modules go by priority before the workspaces lose their
+                // names: measured with the workspaces at their fullest.
+                // They are never dropped themselves.
+                let fullest = crate::nestbar::ladder(expand_all)
+                    .first()
+                    .map(|o| crate::nestbar::pieces(&set, 0, true, o, &[]))
+                    .unwrap_or_default();
+                let mut left_entries = entries_in(&bar.left[..at], Side::Left);
+                left_entries.push((expansion(fullest), None));
+                left_entries.extend(entries_in(&bar.left[at + 1..], Side::Left));
+                let mut sides = [left_entries, center_entries, right_entries];
+                drop_by_priority(&mut sides, cols as usize, |entries, i| {
+                    let which = [Side::Left, Side::Center, Side::Right][i];
+                    bar::joined_width(&finish(entries, which), sep)
+                });
+                let [left_entries, center_entries, right_entries] = sides;
+                let center = finish(&center_entries, Side::Center);
+                let right = finish(&right_entries, Side::Right);
+                let left = |ws: Segment| -> Vec<Segment> {
+                    let ws = expansion(ws);
+                    let entries: Vec<Entry> = left_entries
+                        .iter()
+                        .map(|(s, p)| {
+                            if is_ws(s) {
+                                (ws.clone(), *p)
+                            } else {
+                                (s.clone(), *p)
+                            }
+                        })
+                        .collect();
+                    finish(&entries, Side::Left)
+                };
                 return crate::nestbar::fit_nested(
-                    &side(&bar.left[..at]),
+                    &left,
                     &set,
-                    &side(&bar.left[at + 1..]),
                     &center,
                     &right,
                     sep,
                     cols,
                     expand_all,
-                    &wrap,
                     // A message is never left out; the title may be.
                     if status.is_some() {
                         0
@@ -10292,6 +10330,72 @@ mod tests {
         let id = a.focused().unwrap();
         pump(&mut a, &rx, |a| a.panes[&id].hosts_ranma());
         (a, id)
+    }
+
+    /// The expanded bar of an inner ranma's workspaces is laid out as the
+    /// left side is without one: arrows across the whole side, and modules
+    /// dropped by priority before anything is cut (card c458).
+    #[test]
+    fn the_expanded_nested_bar_takes_arrows_and_priorities() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let dir = std::env::temp_dir().join(format!("ranma-nested-arrows-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::write(
+            dir.join("themes").join("t.toml"),
+            "[colors]\nmodule_bg = \"#222222\"\n[bar]\njoin = \"arrows\"\n[bar.left]\narrow = \">\"\n",
+        )
+        .unwrap();
+        let src = r#"
+            ranma.set { theme = "t" }
+            ranma.module("lo", { priority = 10, render = function() return "LOWLOWLOW" end })
+            ranma.module("hi", { render = function() return "HIGH" end })
+            ranma.bar { left = { "lo", "workspaces", "hi" }, center = {}, right = {} }
+        "#;
+        let config = crate::config::load_from(Some(&dir), None, Some(src)).unwrap();
+        let mut a = App::new(config, tx, 100, 10);
+        let set = format!(
+            "exec printf '\\033]2;{}inner\\007'; sleep 5",
+            crate::pane::NESTED_MARKER
+        );
+        a.run_action(set.parse().unwrap());
+        let id = a.focused().unwrap();
+        pump(&mut a, &rx, |a| a.panes[&id].hosts_ranma());
+        let r = crate::nestbar::Report::parse(&format!(
+            r#"{{"v":{},"current":1,"ws":[{{"n":1,"name":"one","occ":true}},{{"n":2,"name":"two","occ":true}}]}}"#,
+            crate::nestbar::PROTOCOL
+        ))
+        .unwrap();
+        a.reports.insert(id, r);
+        a.render_state_modules();
+        let row = |a: &App, cols| -> String {
+            a.bar_pieces(cols)
+                .iter()
+                .map(|(_, p)| p.text.clone())
+                .collect()
+        };
+        let wide = row(&a, 100);
+        assert!(wide.contains("[1:one 2:two]"), "expanded: {wide}");
+        assert!(
+            wide.contains("LOWLOWLOW") && wide.contains("HIGH"),
+            "{wide}"
+        );
+        // One run of arrows over the side: one after each of its three pills.
+        let arrows = a
+            .bar_pieces(100)
+            .iter()
+            .filter(|(_, p)| matches!(p.style, Style::Arrow(..)))
+            .count();
+        assert_eq!(arrows, 3, "{wide}");
+        // Crowded: the low module goes whole, the workspaces keep their
+        // names and the module with no priority stays.
+        let narrow = row(&a, (wide.trim_end().chars().count() - 4) as u16);
+        assert!(!narrow.contains("LOW"), "{narrow}");
+        assert!(
+            narrow.contains("[1:one 2:two]") && narrow.contains("HIGH"),
+            "{narrow}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -1426,9 +1426,10 @@ bar (\fB"30%"\fR), cut with \fB…\fR: a long title stops taking the room it cou
 9%\fR to \fBcpu 10%\fR) does not move what is beside it. Both act on the
 module's own text, inside its pill, and a module showing nothing stays
 hidden. The large bar draws a group's modules apart, and each gives way at
-its own priority, else the group's. The workspaces of a ranma inside one,
-when they are expanded, are fitted their own way and do not drop by
-priority.
+its own priority, else the group's. With the workspaces of a ranma inside
+one expanded (\fB1 [1:nvim 2:logs]\fR, over ssh), modules go by priority
+first, measured with those workspaces named in full, then the names give
+way, then anything is cut: the workspaces themselves are never dropped.
 .PP
 \fBsize = "large"\fR makes the bar three rows, for a touch screen: the text sits on
 the middle row, and the mode, workspace and strip chips are at least five

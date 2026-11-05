@@ -201,6 +201,11 @@ commit log has the detail.
 
 ### Fixed
 
+- With an inner ranma's workspaces expanded in the bar (over ssh), modules
+  now drop by `priority` as elsewhere, before the workspaces' names give
+  way, and `join = "arrows"` draws one run across the whole side, the
+  workspaces included; they were pills, and nothing was dropped.
+
 - Every directory linked into the top of the config directory is watched
   behind its link, not only `themes/`, `lua/`, `plugin/` and `pack/`: a
   linked `profiles/` (profiles.ranma) or a folder `init.lua` reads reloads
