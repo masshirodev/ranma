@@ -23,7 +23,7 @@ pushed after the first brief):
 - `doc/examples/screenshot/`: the pill bar in the README's screenshot, the
   look that exists today.
 
-For Claude Design. **This continues `doc/briefs/TITLE_BARS.md`**, which you
+For Claude Design. **This continues `doc/briefs/done/TITLE_BARS.md`**, which you
 already have: the same task, the same rules (terminal cells only, colours
 named by theme role, a theme that sets none of the new keys looks as today),
 and the same hand-back. Put it in the same design, next to the title bars.

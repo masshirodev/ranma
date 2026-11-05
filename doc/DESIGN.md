@@ -2314,7 +2314,7 @@ drag; and nothing let Lua write into the border the way `ranma.module`
 writes into the bar.
 
 Proposed the same day, then tested before any code by a design handoff
-(`doc/briefs/TITLE_BARS.md`, answered in `doc/handoffs/TITLE_BARS_MOCK.txt`).
+(`doc/briefs/done/TITLE_BARS.md`, answered in `doc/handoffs/done/TITLE_BARS_MOCK.txt`).
 The designer built three looks (Window, Pills, Quiet) with only the
 proposed keys and listed what they could not express: twelve findings
 (F1-F12), four renames (R1-R4) and four drops (D1-D4). The handoff's
@@ -2519,7 +2519,7 @@ powerline bar. The code showed four reasons (`bar::boxed`, `bar::join`,
 role's `bg` coloured only its text cells; a pill held one module; a cap
 always stood on `bar_bg`, never on its neighbour's ground; and both sides
 had the same caps, with the separator plain `dim` text. The design
-addendum (`doc/briefs/TITLE_BARS_ADDENDUM.md`, answered in the same
+addendum (`doc/briefs/done/TITLE_BARS_ADDENDUM.md`, answered in the same
 handoff) drew four bars (grouped pills, classic powerline, one pill per
 side, dots) and found ten more things (B1-B10).
 

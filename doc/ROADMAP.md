@@ -358,11 +358,11 @@ macOS, not native Windows" records what differs.
 The 2026-11-04 survey: a theme should be able to build a look (a GUI title
 bar, say), not only recolour ranma's. DESIGN.md, "Title bars a theme can
 build" and "Powerline bars: grounds, groups and arrows", settled from the
-design handoff (`doc/handoffs/TITLE_BARS_MOCK.txt`). Cards c435 to c446 on
+design handoff (`doc/handoffs/done/TITLE_BARS_MOCK.txt`). Cards c435 to c446 on
 the board; c426 to c434 are the behaviour half of the same survey and are
 not listed here.
 
-- [x] Design: `doc/briefs/TITLE_BARS.md` and its addendum, one handoff;
+- [x] Design: `doc/briefs/done/TITLE_BARS.md` and its addendum, one handoff;
   the proposal settled from it (F1-F12, R1-R4, D1-D4, B1-B10)
 - [x] A colour may name another colour role (F9)
 - [x] `border.edges`, `floating_edges`, `[border.chars]` per edge
