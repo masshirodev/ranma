@@ -1266,8 +1266,11 @@ ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
 A spec is \fB[ctrl+][alt+][shift+]EVENT@TARGET\fR. Events: \fBleft\fR, \fBmiddle\fR,
 \fBright\fR, \fBdouble\fR (a second left press on the same cell within 400 ms),
 \fBwheel_up\fR, \fBwheel_down\fR. Targets: \fBpane\fR (a pane's text), \fBborder\fR (its
-border and title edge), \fBbackground\fR (where no pane is: the gaps, an empty
-workspace, around floats). The action is an action as a bind takes it, or a
+border, the title row included where no \fBtitle\fR bind is), \fBtitle\fR (the row
+the title is on, but its buttons: title pieces\fR
+with an action keep their presses), \fBbackground\fR (where no pane is: the
+gaps, an empty workspace, around floats). \fBranma.mouse("double@title",
+"toggle_floating")\fR floats a window the way a desktop does. The action is an action as a bind takes it, or a
 function, which gets \fB{ pane, x, y, workspace }\fR (\fBpane\fR is \fBnil\fR on the
 background).
 .PP
@@ -1277,7 +1280,7 @@ in every mode, and takes it: it does not also reach the program or start a
 drag. Two things stay with their owners and are refused at load, saying why:
 a bind in a pane's text without \fBctrl\fR or \fBalt\fR (plain presses and the wheel
 there are its program's, and Shift is the terminal's own selection), and a
-plain \fBleft@border\fR, which moves and resizes panes. The bar and tab bars keep
+plain \fBleft@border\fR or \fBleft@title\fR, which move and resize panes. The bar and tab bars keep
 their own clicks (a module's \fBon_click\fR). A later \fBranma.mouse\fR for the same
 spec replaces the earlier. With a bind on \fBalt+…@pane\fR, the \fBclick\fR hook no
 longer hears that combination.

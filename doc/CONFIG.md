@@ -887,8 +887,11 @@ ranma.mouse("right@background", function(e) ranma.action("pane_switcher") end)
 A spec is `[ctrl+][alt+][shift+]EVENT@TARGET`. Events: `left`, `middle`,
 `right`, `double` (a second left press on the same cell within 400 ms),
 `wheel_up`, `wheel_down`. Targets: `pane` (a pane's text), `border` (its
-border and title edge), `background` (where no pane is: the gaps, an empty
-workspace, around floats). The action is an action as a bind takes it, or a
+border, the title row included where no `title` bind is), `title` (the row
+the title is on, but its buttons: [title pieces](#title-bars--ranmatitlebar-and-ranmatitle_piece)
+with an action keep their presses), `background` (where no pane is: the
+gaps, an empty workspace, around floats). `ranma.mouse("double@title",
+"toggle_floating")` floats a window the way a desktop does. The action is an action as a bind takes it, or a
 function, which gets `{ pane, x, y, workspace }` (`pane` is `nil` on the
 background).
 
@@ -898,7 +901,7 @@ in every mode, and takes it: it does not also reach the program or start a
 drag. Two things stay with their owners and are refused at load, saying why:
 a bind in a pane's text without `ctrl` or `alt` (plain presses and the wheel
 there are its program's, and Shift is the terminal's own selection), and a
-plain `left@border`, which moves and resizes panes. The bar and tab bars keep
+plain `left@border` or `left@title`, which move and resize panes. The bar and tab bars keep
 their own clicks (a module's `on_click`). A later `ranma.mouse` for the same
 spec replaces the earlier. With a bind on `alt+…@pane`, the `click` hook no
 longer hears that combination.

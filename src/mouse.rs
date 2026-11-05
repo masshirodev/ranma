@@ -24,8 +24,12 @@ pub enum Event {
 pub enum Target {
     /// A pane's text.
     Pane,
-    /// A pane's border (its title edge included).
+    /// A pane's border (its title edge included, where nothing more
+    /// precise is bound).
     Border,
+    /// A pane's title row, but its buttons: heard before `Border`, which it
+    /// falls back to (DESIGN.md, "Title bars a theme can build").
+    Title,
     /// Where no pane is: the gaps, an empty workspace, around floats.
     Background,
 }
@@ -40,7 +44,7 @@ pub struct Spec {
 }
 
 const EVENTS: &str = "left, middle, right, double, wheel_up, wheel_down";
-const TARGETS: &str = "pane, border, background";
+const TARGETS: &str = "pane, border, title, background";
 
 impl FromStr for Spec {
     type Err = String;
@@ -52,6 +56,7 @@ impl FromStr for Spec {
         let target = match target {
             "pane" => Target::Pane,
             "border" => Target::Border,
+            "title" => Target::Title,
             "background" => Target::Background,
             t => return Err(format!("`{s}`: no target `{t}` ({TARGETS})")),
         };
@@ -98,6 +103,11 @@ impl FromStr for Spec {
                 "`{s}`: a plain left press on a border moves or resizes the pane; give a modifier, or use double"
             ));
         }
+        if target == Target::Title && event == Event::Left && !(ctrl || alt || shift) {
+            return Err(format!(
+                "`{s}`: a plain left press on a title row moves the pane (and runs its buttons); give a modifier, or use double"
+            ));
+        }
         Ok(spec)
     }
 }
@@ -105,6 +115,16 @@ impl FromStr for Spec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_title_row_is_a_target_and_its_plain_left_press_is_the_drag() {
+        let s: Spec = "double@title".parse().unwrap();
+        assert_eq!(s.target, Target::Title);
+        assert!("ctrl+left@title".parse::<Spec>().is_ok());
+        let e = "left@title".parse::<Spec>().unwrap_err();
+        assert!(e.contains("moves the pane"), "{e}");
+        assert!("x@bar".parse::<Spec>().unwrap_err().contains("title"));
+    }
 
     #[test]
     fn specs_parse_strictly_and_leave_others_what_is_theirs() {

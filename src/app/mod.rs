@@ -2301,23 +2301,35 @@ impl App {
         let (target, pane) = match self.pane_at(&frame, x, y) {
             Some(v) if v.inner.contains(x, y) && self.hosts_inner_ranma(v.id) => return false,
             Some(v) if v.inner.contains(x, y) => (Target::Pane, Some(v.id)),
+            // A title row's button is its own: no bind hears a press there.
+            Some(_) if self.on_button(&frame, x, y) => return false,
+            Some(v) if crate::render::title_span(self, &v).is_some_and(|(row, ..)| row == y) => {
+                (Target::Title, Some(v.id))
+            }
             Some(v) => (Target::Border, Some(v.id)),
             None => (Target::Background, None),
         };
-        let spec = crate::mouse::Spec {
+        let spec = |target| crate::mouse::Spec {
             ctrl: m.modifiers.contains(K::CONTROL),
             alt: m.modifiers.contains(K::ALT),
             shift: m.modifiers.contains(K::SHIFT),
             event,
             target,
         };
-        let Some(action) = self
-            .config
-            .mouse_binds
-            .iter()
-            .find(|(s, _)| *s == spec)
-            .map(|(_, a)| a.clone())
-        else {
+        let find = |target| {
+            self.config
+                .mouse_binds
+                .iter()
+                .find(|(s, _)| *s == spec(target))
+                .map(|(_, a)| a.clone())
+        };
+        // The title row is the border's too: a border bind hears it when no
+        // title bind does, as it did before there were title binds.
+        let found = match target {
+            Target::Title => find(Target::Title).or_else(|| find(Target::Border)),
+            t => find(t),
+        };
+        let Some(action) = found else {
             return false;
         };
         if let Some(id) = pane {

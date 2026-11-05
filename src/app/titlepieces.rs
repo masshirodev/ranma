@@ -535,6 +535,18 @@ impl App {
         })
     }
 
+    /// The pointer is on a title row's button (a piece with an action, or a
+    /// group's tab).
+    pub(super) fn on_button(&self, frame: &Frame, x: u16, y: u16) -> bool {
+        self.span_at(frame, x, y).is_some_and(|(_, s)| {
+            s.tab.is_some()
+                || self
+                    .piece_name(s.piece)
+                    .and_then(|n| self.config.title_pieces.get(n))
+                    .is_some_and(|d| d.click.is_some())
+        })
+    }
+
     /// A plain left press on a button runs it and takes the press; every
     /// other cell of the row is still the move drag.
     pub(super) fn click_title_piece(&mut self, frame: &Frame, x: u16, y: u16) -> bool {
@@ -786,6 +798,54 @@ mod tests {
         // No real pane: no title, so no pill at all, not an empty one.
         assert!(crate::titlebar::lay_out(&row, 20).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_title_bind_hears_the_row_and_a_border_bind_stands_in_for_it() {
+        use crossterm::event::{
+            KeyModifiers as K, MouseButton as B, MouseEvent as M, MouseEventKind as E,
+        };
+        let press = |a: &mut App, x: u16, y: u16| {
+            // Twice on one cell: a double click.
+            for _ in 0..2 {
+                a.handle_mouse(M {
+                    kind: E::Down(B::Left),
+                    column: x,
+                    row: y,
+                    modifiers: K::NONE,
+                });
+                a.handle_mouse(M {
+                    kind: E::Up(B::Left),
+                    column: x,
+                    row: y,
+                    modifiers: K::NONE,
+                });
+            }
+        };
+        let mut a = app(r#"
+            ranma.mouse("double@title", function(e) heard = "title" end)
+            ranma.mouse("double@border", function(e) heard = "border" end)
+        "#);
+        with_pane(&mut a, 1);
+        let v = a.frame().views[0];
+        let heard = |a: &App| {
+            a.config
+                .lua
+                .globals()
+                .get::<Option<String>>("heard")
+                .unwrap()
+        };
+        press(&mut a, v.outer.x + 3, v.outer.y);
+        assert_eq!(heard(&a).as_deref(), Some("title"));
+        // A side edge is the border's, title bind or not.
+        press(&mut a, v.outer.x, v.outer.y + 2);
+        assert_eq!(heard(&a).as_deref(), Some("border"));
+        // With only a border bind, it hears the title row too, as before.
+        let mut b = app(r#"ranma.mouse("double@border", function(e) heard = "border" end)"#);
+        with_pane(&mut b, 1);
+        let v = b.frame().views[0];
+        press(&mut b, v.outer.x + 3, v.outer.y);
+        assert_eq!(heard(&b).as_deref(), Some("border"));
     }
 
     #[test]

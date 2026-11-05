@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- A `title` target for mouse binds: the title row but its buttons, heard
+  before `border`, which hears it when no title bind does
+  (`ranma.mouse("double@title", "toggle_floating")`).
+
 - Pills on the title row: a table in a `ranma.titlebar` side is a group drawn
   as one pill on its role's ground, between the role's own caps (`[roles.x]`
   now takes `left`, `right`, `padding_left`, `padding_right`). With
