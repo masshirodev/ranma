@@ -42,6 +42,8 @@ pub enum Style {
     TabPeek,
     /// `bar.module_left` or `module_right`: the edge of a module's ground.
     Cap,
+    /// A module's edge in its role's own ground (card c444).
+    RoleCap(crate::theme::RoleDef),
     /// `bar.chip_left` or `chip_right`: the edge of a filled chip, in that
     /// chip's ground on whatever it sits on.
     ChipCap(Chip),
@@ -233,6 +235,25 @@ pub fn stretch(seg: Segment, spare: usize) -> Segment {
 /// so the workspace hugs the edge either way and the module keeps its width
 /// whichever workspace is current.
 pub fn boxed(seg: Segment, left: &str, right: &str, pad_left: u8, pad_right: u8) -> Segment {
+    boxed_in(
+        seg,
+        (left, right),
+        (pad_left, pad_right),
+        Style::Cap,
+        Style::Normal,
+    )
+}
+
+/// [`boxed`], with the caps drawn in `cap` and the blanks inside them in
+/// `pad`: a module in a role with a ground of its own is a pill of that
+/// ground (card c444).
+pub fn boxed_in(
+    seg: Segment,
+    (left, right): (&str, &str),
+    (pad_left, pad_right): (u8, u8),
+    cap_style: Style,
+    pad_style: Style,
+) -> Segment {
     if (left.is_empty() && right.is_empty()) || width(&seg) == 0 {
         return seg;
     }
@@ -266,10 +287,10 @@ pub fn boxed(seg: Segment, left: &str, right: &str, pad_left: u8, pad_right: u8)
     };
     let own_left = chip_end(left, pad_left, seg.first());
     let own_right = chip_end(right, pad_right, seg.last());
-    let cap = |t: &str| Piece::new(t, Style::Cap);
+    let cap = |t: &str| Piece::new(t, cap_style);
     let pad = |n: u8| Piece {
         boxed: true,
-        ..Piece::new(" ".repeat(n as usize), Style::Normal)
+        ..Piece::new(" ".repeat(n as usize), pad_style)
     };
     let last = seg.len() - 1;
     let mut out = Vec::with_capacity(seg.len() + 4);

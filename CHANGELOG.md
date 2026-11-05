@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- A bar module in a role with a `bg` is a pill of that ground: its caps (the
+  role's own `left` / `right`, else the bar's) and padding are drawn in it,
+  so each module can be a pill of its own colour.
+
 - `splash.art`: art of the theme's own in the empty workspace's logo place,
   read as `background.art` is; `splash.keys = false` hides the keys under it.
 

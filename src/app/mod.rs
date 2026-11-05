@@ -5171,13 +5171,47 @@ impl App {
             } else {
                 bar::rounded(s, &theme_bar.chip_left, &theme_bar.chip_right)
             };
-            bar::boxed(
-                s,
-                &theme_bar.module_left,
-                &theme_bar.module_right,
-                theme_bar.module_padding_left,
-                theme_bar.module_padding_right,
-            )
+            // A module in a role with a ground of its own is a pill of that
+            // ground, between the role's caps (else the bar's).
+            let role = s
+                .iter()
+                .find(|p| !p.text.is_empty())
+                .and_then(|p| match p.style {
+                    Style::Role(r) if r.bg.is_some() => Some(r),
+                    _ => None,
+                });
+            match role {
+                Some(r) => {
+                    let own = r.left.is_some() || r.right.is_some();
+                    let (l, rt) = if own {
+                        (
+                            r.left.map(String::from).unwrap_or_default(),
+                            r.right.map(String::from).unwrap_or_default(),
+                        )
+                    } else {
+                        (
+                            theme_bar.module_left.clone(),
+                            theme_bar.module_right.clone(),
+                        )
+                    };
+                    let pads = if own {
+                        (r.padding_left, r.padding_right)
+                    } else {
+                        (
+                            theme_bar.module_padding_left,
+                            theme_bar.module_padding_right,
+                        )
+                    };
+                    bar::boxed_in(s, (&l, &rt), pads, Style::RoleCap(r), Style::Role(r))
+                }
+                None => bar::boxed(
+                    s,
+                    &theme_bar.module_left,
+                    &theme_bar.module_right,
+                    theme_bar.module_padding_left,
+                    theme_bar.module_padding_right,
+                ),
+            }
         };
         let seg = |n: &String| {
             let s = self.segment(n);
@@ -6554,6 +6588,46 @@ mod tests {
         let config = crate::config::load_from(Some(&dir), None, Some(&src)).unwrap();
         let (tx, _rx) = std::sync::mpsc::channel();
         App::new(config, tx, 60, 6)
+    }
+
+    #[test]
+    fn a_module_in_a_role_with_a_ground_is_a_pill_of_that_ground() {
+        let a = themed(
+            "role-pill",
+            r##"
+            [colors]
+            module_bg = "#313244"
+            [bar]
+            module_left = "("
+            module_right = ")"
+            [roles.git]
+            fg = "#eeeeee"
+            bg = "#a6e3a1"
+            left = "<"
+            right = ">"
+            padding_left = 1
+            [roles.plain]
+            fg = "#eeeeee"
+            "##,
+            r#"
+            ranma.module("git", { render = function() return { text = "main", style = "git" } end })
+            ranma.module("calm", { render = function() return { text = "x", style = "plain" } end })
+            ranma.bar { left = { "git", "calm" }, center = {}, right = {} }
+            "#,
+        );
+        let mut a = a;
+        a.render_state_modules();
+        let pieces = a.bar_pieces(60);
+        let texts: Vec<&str> = pieces.iter().map(|(_, p)| p.text.as_str()).collect();
+        // Its own caps and blank; the role without a ground keeps the bar's.
+        assert!(texts.starts_with(&["<", " ", "main", ">"]), "{texts:?}");
+        assert!(texts.contains(&"("), "{texts:?}");
+        let cap = &pieces[0].1;
+        assert!(matches!(cap.style, Style::RoleCap(r) if r.bg.is_some()));
+        assert!(
+            matches!(pieces[1].1.style, Style::Role(_)),
+            "the blank on the role's ground"
+        );
     }
 
     #[test]

@@ -1860,11 +1860,14 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
                 | bar::Style::TabInactive
                 | bar::Style::TabPeek
                 | bar::Style::Cap
+                | bar::Style::RoleCap(_)
         );
         let mut style = piece_style(c, st, piece.style);
-        // These carry their own background; the rest sit on the module's
-        // ground (between its caps) or the bar's.
-        if !filled {
+        // These carry their own background, and so does a role with a
+        // ground of its own (card c444); the rest sit on the module's ground
+        // (between its caps) or the bar's.
+        let own_ground = matches!(piece.style, bar::Style::Role(r) if r.bg.is_some());
+        if !filled && !own_ground {
             match (piece.boxed, c.module_bg) {
                 (true, Some(ground)) => {
                     style = style.bg(color(ground));
@@ -2425,6 +2428,9 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
             None => fg(c.ws_active_bg, st.ws_active),
         },
         // A module's edge: its ground's colour on the bar's.
+        bar::Style::RoleCap(r) => Style::default()
+            .fg(color(r.bg.unwrap_or(c.bar_bg)))
+            .bg(color(c.bar_bg)),
         bar::Style::Cap => Style::default()
             .fg(color(c.module_bg.unwrap_or(c.bar_bg)))
             .bg(color(c.bar_bg)),
