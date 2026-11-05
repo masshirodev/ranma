@@ -590,13 +590,20 @@ pub fn pieces_in(
         p.push(n);
         click_for(&p)
     };
-    // Inside brackets one space between items, whatever their formats
-    // carry: at the top a format is drawn as written.
+    // Inside brackets, items with names are a space apart; in the theme's
+    // formats they are drawn as written (their own spacing is the look),
+    // with a space only where two would touch.
     let inside = level > 0;
-    for (i, w) in set.ws.iter().enumerate() {
-        if inside && i > 0 {
+    let gap = |out: &mut Segment, next: &str| {
+        let touching = out
+            .last()
+            .is_some_and(|p: &Piece| !p.text.ends_with(char::is_whitespace))
+            && !next.starts_with(char::is_whitespace);
+        if inside && (fmt.is_none() || touching) && !out.is_empty() {
             out.push(Piece::new(" ", Style::Normal));
         }
+    };
+    for w in set.ws.iter() {
         let cur = w.n == set.current;
         let here = on_path && cur;
         let nest = w.nest.as_deref();
@@ -613,25 +620,24 @@ pub fn pieces_in(
                 cur,
                 here,
             };
+            gap(&mut out, "x");
             expanded(&mut out, &at, n, level, o, path, fmt);
             continue;
         }
         let urgent_here = w.urgent || nest.is_some_and(Report::any_urgent);
         let label = match (fmt, &w.name, keep_name) {
-            (Some(f), name, keep) => {
-                let t = f.render(
-                    &w.n.to_string(),
-                    name.as_deref().filter(|_| keep),
-                    cur,
-                    urgent_here,
-                    w.activity,
-                    w.occ,
-                );
-                if inside { t.trim().to_string() } else { t }
-            }
+            (Some(f), name, keep) => f.render(
+                &w.n.to_string(),
+                name.as_deref().filter(|_| keep),
+                cur,
+                urgent_here,
+                w.activity,
+                w.occ,
+            ),
             (None, Some(name), true) => format!("{}:{name}", w.n),
             _ => w.n.to_string(),
         };
+        gap(&mut out, &label);
         // The count goes with the name when the ladder drops names.
         let inside = nest
             .filter(|_| keep_name && w.name.is_some())
@@ -671,9 +677,7 @@ pub fn pieces_in(
         }
     }
     if set.scratch {
-        if inside {
-            out.push(Piece::new(" ", Style::Normal));
-        }
+        gap(&mut out, "S");
         // An ssh started in the scratchpad reaches a ranma like any pane: `S`
         // holds it as a workspace would.
         let here = on_path && set.scratch_shown;
@@ -817,14 +821,8 @@ fn expanded(
         } else {
             Style::WsOccupied
         };
-        // Whole at the top, as the workspaces module draws a chip; inside
-        // brackets the item's own spacing is enough.
+        // As written, as the workspaces module draws a chip.
         let text = f.render(label, None, at.cur, false, false, true);
-        let text = if level == 0 {
-            text
-        } else {
-            text.trim().to_string()
-        };
         out.push(with(Piece::new(format!("{text}{sess}"), style), hold));
     } else if pad {
         let style = if at.cur {
@@ -843,18 +841,7 @@ fn expanded(
         out.push(Piece::new(" ", Style::Normal));
     }
     out.push(with(Piece::new("[", Style::Dim), hold));
-    let mut inner = pieces_in(n, level + 1, at.here, o, &p, fmt);
-    // A format's own spacing (" ● ") between items, not against the
-    // brackets: `[● • ·]`, not `[ ● • · ]`.
-    if fmt.is_some() {
-        if let Some(first) = inner.first_mut() {
-            first.text = first.text.trim_start().to_string();
-        }
-        if let Some(last) = inner.last_mut() {
-            last.text = last.text.trim_end().to_string();
-        }
-    }
-    out.extend(inner);
+    out.extend(pieces_in(n, level + 1, at.here, o, &p, fmt));
     out.push(with(Piece::new("]", Style::Dim), hold));
     if pad || (fmt.is_some() && level == 0) {
         out.push(Piece::new(" ", Style::Normal));
@@ -1285,13 +1272,32 @@ mod tests {
             .iter()
             .map(|p| p.text.clone())
             .collect();
-        assert_eq!(text, " ● [● • ·] ", "{text:?}");
+        // As written: the holder whole, the items with their own spacing.
+        assert_eq!(text, " ● [ ●  •  · ] ", "{text:?}");
+        // Formats with no spacing of their own get a space where two touch,
+        // the scratchpad's `S` after the last included.
+        let (cur, plain) = (f("{n}"), f("{n}"));
+        let tight = WsFormats {
+            current: &cur,
+            plain: &plain,
+            urgent: None,
+            activity: None,
+            empty: None,
+        };
+        if let Some(n) = outer.ws[0].nest.as_mut() {
+            n.scratch = true;
+        }
+        let text: String = pieces_in(&outer, 0, true, &Opts::default(), &[], Some(&tight))
+            .iter()
+            .map(|p| p.text.clone())
+            .collect();
+        assert_eq!(text, "1[1 2 3 S] ", "{text:?}");
         // Without, as ever.
         let names: String = pieces(&outer, 0, true, &Opts::default(), &[])
             .iter()
             .map(|p| p.text.clone())
             .collect();
-        assert!(names.contains("[1 2 3]"), "{names:?}");
+        assert!(names.contains("[1 2 3 S]"), "{names:?}");
     }
 
     const TITLE: &str = "✳Features to yank from tuios";
