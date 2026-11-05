@@ -189,6 +189,12 @@ commit log has the detail.
 
 ### Fixed
 
+- A ranma inside another, over ssh, could vanish from the outer bar (its
+  workspaces gone) and stay gone: the outer reads its reports only while
+  the pane's title carries ranma's mark, and the inner sent that title only
+  when it changed, so a title lost at the outer was never sent again. Every
+  report now carries the title again.
+
 - Resizing a float with the mouse moves the edges you grab. Its bottom-left
   corner dragged left used to grow the float to the right, since every resize
   moved the right and bottom edges; now the right edge stays put. The left

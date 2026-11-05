@@ -388,6 +388,17 @@ impl App {
             r.colors = None;
         }
         if self.last_report.as_ref() != Some(&r) {
+            // The title goes again with every report: the outer takes a
+            // report only while the pane's title carries the mark, and the
+            // title is otherwise sent only when it changes, so one the outer
+            // lost (overwritten there) left every report after it ignored
+            // until the focused pane's title happened to change. Seen
+            // 2026-11-05 over ssh: the workspaces gone from the outer bar
+            // until another terminal attached and the redraw re-sent it.
+            if !self.host_title.is_empty() {
+                self.host_out
+                    .push(format!("\x1b]2;{}\x07", self.host_title).into_bytes());
+            }
             self.host_out.push(nestbar::report_osc(&r));
             self.last_report = Some(r);
         }

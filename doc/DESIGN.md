@@ -2965,6 +2965,20 @@ marks itself engaged (`⧉ ranma+`), and an outer ranma passes the outer leader 
 to an engaged one instead of stopping. Marks travel through pane output, so a key
 pressed in the same instant as the one before can arrive ahead of the mark.
 
+**The title goes with every report** (2026-11-05). The outer takes an
+inner's report (its workspaces, modules, colours) only while the pane's
+title carries the mark, so that a ranma that ended leaves nothing behind.
+The inner sent its title only when it changed, and the report whenever
+anything in it did. An outer that lost the title, overwritten by whatever
+wrote to it there, then ignored every report after it until the focused
+pane's title happened to change: the inner's workspaces were gone from
+the outer bar, over ssh, until another terminal attached to the server and
+its redraw sent the title again. What overwrote it was not found. Now the
+title goes again before every report the inner sends, so a lost one is
+back within a report (seconds, with any module ticking). It is a few
+dozen bytes, only to a ranma around this one, and only when the report
+changed.
+
 **The pointer follows the keys** (2026-10-13): in the text of a pane that
 holds a ranma, the outer's Ctrl/Alt `click` hook, `hover` hook and `@pane`
 mouse binds stand aside, and the press goes down as the program's mouse

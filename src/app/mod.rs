@@ -7739,6 +7739,34 @@ mod tests {
         }
     }
 
+    /// The outer takes a report only while the pane's title carries the
+    /// mark, so the title goes with every report: one the outer lost comes
+    /// back with the next report, not only when the title next changes.
+    #[test]
+    fn every_report_carries_the_title_again() {
+        let mut a = app(None);
+        with_pane(&mut a, 1);
+        a.set_outer(Some(crate::nestbar::PROTOCOL));
+        a.announce();
+        a.report_outward();
+        let osc = |a: &App| String::from_utf8_lossy(&a.host_out.concat()).into_owned();
+        let first = osc(&a);
+        let mark = format!("\x1b]2;{}", crate::pane::NESTED_MARKER);
+        assert!(first.contains(&mark), "{first:?}");
+        assert!(first.contains(";report;"), "{first:?}");
+        // The title unchanged, a new report: the title again before it.
+        a.host_out.clear();
+        a.status = Some("changed".into());
+        a.report_outward();
+        let next = osc(&a);
+        let (t, r) = (next.find(&mark), next.find(";report;"));
+        assert!(t.is_some() && t < r, "the title, then the report: {next:?}");
+        // Nothing new to report: nothing sent at all.
+        a.host_out.clear();
+        a.report_outward();
+        assert!(a.host_out.is_empty());
+    }
+
     /// Inside another ranma, `paste_image` is the outer one's to do: the
     /// clipboard is on the machine at the keyboard. This one only asks.
     #[test]
