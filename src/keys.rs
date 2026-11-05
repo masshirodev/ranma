@@ -147,6 +147,9 @@ impl fmt::Display for Chord {
             }
         }
         match self.key {
+            // A control character is written as its escape: the name is
+            // drawn ("ctrl+x is not bound"), and a cell must never hold one.
+            Key::Char(c) if c.is_control() => write!(f, "{}", c.escape_debug()),
             Key::Char(c) => write!(f, "{c}"),
             Key::F(n) => write!(f, "f{n}"),
             other => write!(f, "{}", format!("{other:?}").to_ascii_lowercase()),
@@ -160,6 +163,15 @@ mod tests {
 
     fn c(s: &str) -> Chord {
         s.parse().unwrap()
+    }
+
+    #[test]
+    fn a_control_character_key_is_named_by_its_escape() {
+        let ch = Chord {
+            key: Key::Char('\u{10}'),
+            mods: Default::default(),
+        };
+        assert_eq!(ch.to_string(), "\\u{10}");
     }
 
     #[test]

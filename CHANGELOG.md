@@ -201,6 +201,11 @@ commit log has the detail.
 
 ### Fixed
 
+- The settings panel drew `word_separators`' tab as it was, a control
+  character on screen (a debug build panicked on it). Text values show
+  their control characters escaped (`\t`), and are read back when typed
+  over, so a value saved unchanged stays unchanged.
+
 - An upgrade in place (`ranma update`, `install.sh`) wiped every pane's
   title a moment after restoring it, until its program set one again. A
   ranma inside one (over ssh) does that only when its title changes, so

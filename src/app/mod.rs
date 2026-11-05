@@ -6977,6 +6977,24 @@ mod tests {
         );
     }
 
+    /// word_separators' default holds a tab, which the settings panel drew
+    /// as it was: a control character in a cell, which a debug build panics
+    /// on (ratatui's cell_width) and a release build sends to the terminal.
+    #[test]
+    fn the_settings_panel_draws_no_control_character() {
+        let mut a = app(None);
+        a.screen = crate::layout::Rect::new(0, 0, 140, 60);
+        a.run_action(Action::Settings);
+        for _ in 0..3 {
+            let rows = screen(&a);
+            let bad: Vec<&String> = rows
+                .iter()
+                .filter(|r| r.chars().any(|c| c.is_control()))
+                .collect();
+            assert!(bad.is_empty(), "{bad:?}");
+        }
+    }
+
     #[test]
     fn a_profiles_layout_wins_over_a_workspaces_own_until_it_goes() {
         let mut a = app(Some(

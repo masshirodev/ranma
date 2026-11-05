@@ -384,14 +384,81 @@ fn trim_float(n: f64) -> String {
     }
 }
 
+/// A text value as the panel shows it and takes it typed: a control
+/// character written as an escape (`\t`, `\n`, `\r`, `\u{1b}`) and a
+/// backslash as `\\`, since a cell holding a control character is drawn
+/// wrong (word_separators' default holds a tab). [`unescape`] reads it back,
+/// so a value typed over unchanged is saved unchanged.
+pub fn escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// What [`escape`] wrote, read back. A backslash before anything it does not
+/// write stays a backslash, so a path typed as it is keeps its own.
+pub fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some('\\') => out.push('\\'),
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('u') => {
+                let rest: String = chars.clone().skip(1).collect();
+                let code = rest
+                    .strip_prefix('{')
+                    .and_then(|r| r.split_once('}'))
+                    .and_then(|(hex, _)| u32::from_str_radix(hex, 16).ok().map(|n| (n, hex.len())))
+                    .and_then(|(n, len)| char::from_u32(n).map(|ch| (ch, len)));
+                match code {
+                    Some((ch, len)) => {
+                        out.push(ch);
+                        // `u`, `{`, the digits and `}`.
+                        for _ in 0..len + 3 {
+                            chars.next();
+                        }
+                        continue;
+                    }
+                    None => {
+                        out.push('\\');
+                        continue;
+                    }
+                }
+            }
+            _ => {
+                out.push('\\');
+                continue;
+            }
+        }
+        chars.next();
+    }
+    out
+}
+
 /// A value as the panel writes it.
 pub fn fmt_value(o: &Opt, v: &V) -> String {
     let unset = || o.unset.clone().unwrap_or_else(|| "unset".into());
     match (&o.kind, v) {
         (Kind::Int { .. } | Kind::Float { .. }, _) => fmt_num(o, v),
         (Kind::Bool, Some(Value::Boolean(b))) => if *b { "on" } else { "off" }.into(),
-        (Kind::Text, Some(Value::String(s))) => format!("\"{s}\""),
-        (_, Some(Value::String(s))) => s.clone(),
+        (Kind::Text, Some(Value::String(s))) => format!("\"{}\"", escape(s)),
+        (_, Some(Value::String(s))) => escape(s),
         (_, Some(other)) => other.to_string(),
         (_, None) => unset(),
     }
@@ -400,6 +467,7 @@ pub fn fmt_value(o: &Opt, v: &V) -> String {
 /// The value as a bare string, for typing over (no quotes, no units).
 fn edit_text(o: &Opt, v: &V) -> String {
     match v {
+        Some(Value::String(s)) if matches!(o.kind, Kind::Text) => escape(s),
         Some(Value::String(s)) => s.clone(),
         Some(Value::Integer(n)) => n.to_string(),
         Some(Value::Float(f)) => trim_float(*f),
@@ -1099,7 +1167,8 @@ impl Panel {
                 "off" | "false" => Ok(Some(Value::Boolean(false))),
                 _ => Err("on or off".into()),
             },
-            Kind::ThemeName | Kind::Text => Ok(Some(Value::String(text.clone()))),
+            Kind::Text => Ok(Some(Value::String(unescape(&text)))),
+            Kind::ThemeName => Ok(Some(Value::String(text.clone()))),
         };
         match parsed {
             Ok(v) => {
@@ -1922,6 +1991,21 @@ mod tests {
     use super::*;
 
     const MOCK: &str = include_str!("../doc/handoffs/done/SETTINGS_PANEL_MOCK.txt");
+
+    #[test]
+    fn a_text_value_is_shown_escaped_and_read_back_whole() {
+        let v = ",│`|:\"' ()[]{}<>\t";
+        assert_eq!(escape(v), ",│`|:\"' ()[]{}<>\\t");
+        for v in [v, "a\\b", "x\ny\r\u{1b}z\u{7}", "C:\\path\\tmp", "", "\\"] {
+            assert!(!escape(v).chars().any(char::is_control), "{v:?}");
+            assert_eq!(unescape(&escape(v)), v, "{v:?}");
+        }
+        // Typed by hand: an escape it does not know is the text typed.
+        assert_eq!(
+            unescape(r"\q \u{zz} \u{110000} \"),
+            r"\q \u{zz} \u{110000} \"
+        );
+    }
 
     /// The scene `title` of the handoff's rendering, row by row.
     fn mock(title: &str) -> Vec<String> {
