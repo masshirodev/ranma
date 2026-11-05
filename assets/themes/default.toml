@@ -139,6 +139,11 @@ indicator = "none"
 # 0 left to right, 90 top to bottom, clockwise.
 gradient_angle = 0
 
+# A float's shadow, right of it and below it: off | shade (cells darkened
+# toward colors.shadow, faint without one) | char (░). Off here.
+# [floating]
+# shadow = "off"
+
 # A glyph per program, for {icon} (title, tab and workspace formats) and the
 # icon title piece: its name, a glob, or "*" for any other. None here.
 # [icons]

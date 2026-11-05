@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `floating.shadow` (`shade` or `char`) and `colors.shadow`: floats and
+  popups cast a shadow, a cell right of them and a row below.
+
 - `panes.padding` (and a side's own, `padding_left` and so on): blank cells
   between a pane's edges and its text, in the pane's ground. With no right
   edge, the scrollbar sits in the right padding.

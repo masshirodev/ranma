@@ -145,6 +145,10 @@ pub fn draw(f: &mut Frame, app: &App) -> Option<CursorState> {
     }
 
     for view in &frame.views {
+        // Over what is under the float, under any float drawn after it.
+        if view.floating {
+            draw_shadow(f, app, view.outer);
+        }
         // Floats and the scratchpad cover what is under them; without clearing,
         // the tiles' cells would show through wherever the float's are blank.
         if view.floating {
@@ -1126,6 +1130,57 @@ fn title_pill_colours(
     } else {
         (color(bg), color(fg.unwrap_or(border)))
     })
+}
+
+/// A float's shadow (`floating.shadow`, card c440): the column right of it
+/// and the row below it, each offset by one, as a desktop window's casts.
+/// `shade` darkens the cells there, halfway to `colors.shadow` (the faint
+/// attribute when that or the cell's colours are unknown); `char` draws `░`
+/// over them.
+fn draw_shadow(f: &mut Frame, app: &App, r: crate::layout::Rect) {
+    use crate::theme::Shadow;
+    let theme = &app.config.theme;
+    let mode = theme.floating.shadow;
+    if mode == Shadow::Off || r.w == 0 || r.h == 0 {
+        return;
+    }
+    let shade = theme.colors.shadow.map(color);
+    let ink = shade.unwrap_or(color(theme.colors.bar_dim));
+    let buf = f.buffer_mut();
+    let area = buf.area;
+    let cells = (r.y + 1..=r.bottom())
+        .map(|y| (r.right(), y))
+        .chain((r.x + 1..r.right()).map(|x| (x, r.bottom())));
+    for (x, y) in cells {
+        if x >= area.right() || y >= area.bottom() {
+            continue;
+        }
+        let cell = &mut buf[(x, y)];
+        match mode {
+            Shadow::Char => {
+                cell.set_symbol("░");
+                cell.set_fg(ink);
+            }
+            Shadow::Shade => match (shade, cell.fg, cell.bg) {
+                (Some(Color::Rgb(sr, sg, sb)), fg, bg) => {
+                    let half = |c: Color| match c {
+                        Color::Rgb(r, g, b) => Color::Rgb(
+                            ((r as u16 + sr as u16) / 2) as u8,
+                            ((g as u16 + sg as u16) / 2) as u8,
+                            ((b as u16 + sb as u16) / 2) as u8,
+                        ),
+                        _ => Color::Rgb(sr, sg, sb),
+                    };
+                    cell.set_fg(half(fg));
+                    cell.set_bg(half(bg));
+                }
+                _ => {
+                    cell.modifier |= Modifier::DIM;
+                }
+            },
+            Shadow::Off => {}
+        }
+    }
 }
 
 /// The colour of a pane's border now. In WM mode (or with a latched
@@ -2815,6 +2870,52 @@ mod tests {
         let b = draw(&app, &view(true));
         assert_eq!(b[(0, 1)].fg, Color::Rgb(0xff, 0, 0));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_float_casts_a_shadow_right_and_below() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let float = crate::layout::Rect::new(1, 1, 4, 3);
+        let draw = |theme: &str, tag: &str| {
+            let (app, dir) = themed_app(tag, theme);
+            let mut t = Terminal::new(TestBackend::new(8, 6)).unwrap();
+            t.draw(|f| {
+                let under = Style::default()
+                    .fg(Color::Rgb(200, 200, 200))
+                    .bg(Color::Rgb(100, 100, 100));
+                for y in 0..6 {
+                    f.buffer_mut().set_string(0, y, "xxxxxxxx", under);
+                }
+                draw_shadow(f, &app, float);
+            })
+            .unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            t.backend().buffer().clone()
+        };
+        let b = draw("[floating]\nshadow = \"char\"\n", "shadow-char");
+        let r = rows(&b);
+        // Right of it from its second row, below it from its second column.
+        assert_eq!(r[1], "xxxxxxxx");
+        assert_eq!(r[2], "xxxxx░xx");
+        assert_eq!(r[4], "xx░░░░xx");
+        let b = draw(
+            "[colors]\nshadow = \"#000000\"\n[floating]\nshadow = \"shade\"\n",
+            "shadow-shade",
+        );
+        assert_eq!(
+            b[(5, 2)].bg,
+            Color::Rgb(50, 50, 50),
+            "halfway to the shadow"
+        );
+        assert_eq!(b[(5, 2)].symbol(), "x", "the text stays");
+        assert_eq!(
+            b[(0, 2)].bg,
+            Color::Rgb(100, 100, 100),
+            "only under the shadow"
+        );
+        // Off by default.
+        let b = draw("", "shadow-off");
+        assert_eq!(rows(&b)[2], "xxxxxxxx");
     }
 
     #[test]

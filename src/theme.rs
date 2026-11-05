@@ -210,6 +210,10 @@ pub struct Colors {
     pub title_fg_inactive: Option<Color>,
     #[serde(default)]
     pub title_fg_floating: Option<Color>,
+    /// A float's shadow's colour (`floating.shadow`); unset, cells are made
+    /// faint (`shade`) or drawn in `bar_dim` (`char`).
+    #[serde(default)]
+    pub shadow: Option<Color>,
     // A pane's state (DESIGN.md, "Title bars a theme can build", F2, F3):
     // the colour of its edges' lines and of a filled title row's ground,
     // and that row's text on it. Each optional; unset, the plain state's
@@ -885,6 +889,9 @@ pub struct Theme {
     /// A group's tabs: what each says and how they sit on their row.
     #[serde(default)]
     pub tabs: Tabs,
+    /// Floats' own looks beyond their border: a shadow.
+    #[serde(default)]
+    pub floating: Floating,
     /// `[icons]`: a program's name (or a glob, `"*"` the fallback) to a
     /// glyph, for `{icon}` and the `icon` title piece (card c438).
     #[serde(default)]
@@ -905,6 +912,26 @@ impl Panes {
         ]
         .map(|p| p.unwrap_or(self.padding))
     }
+}
+
+/// `[floating]` (card c440).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Floating {
+    pub shadow: Shadow,
+}
+
+/// A float's shadow: one cell on its right and one row below it, offset by
+/// one, as a desktop window's. Static, drawn with the float.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Shadow {
+    #[default]
+    Off,
+    /// The cells under it darkened toward `colors.shadow`, or faint.
+    Shade,
+    /// `░` in `colors.shadow` (else `bar_dim`) over them.
+    Char,
 }
 
 /// `[tabs]`: a group's tabs, in its tab row or its title row (card c436),
