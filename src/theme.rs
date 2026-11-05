@@ -873,6 +873,18 @@ pub enum BarPosition {
     Hidden,
 }
 
+/// Whether `key` is one of a theme's `[bar]` keys: asked of `Bar` itself,
+/// whose strict parse reports an unknown field only for a name it lacks,
+/// so this never drifts from the theme. For `ranma.bar` to say where a
+/// look it was given belongs.
+pub fn is_bar_key(key: &str) -> bool {
+    let src = format!("{} = 0", toml::Value::String(key.to_string()));
+    match toml::from_str::<Bar>(&src) {
+        Ok(_) => true,
+        Err(e) => !e.to_string().contains("unknown field"),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Bar {

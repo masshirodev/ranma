@@ -988,6 +988,24 @@ impl<'de> Deserialize<'de> for TitleEntry {
     }
 }
 
+/// `ranma.bar`'s error, saying where a theme's key given to it belongs:
+/// `join`, `separator` and the rest are how the bar looks, the theme's
+/// `[bar]`, while `ranma.bar` says what it holds.
+fn bar_error(who: &str, e: &str) -> String {
+    let theirs = e
+        .split_once("unknown field `")
+        .and_then(|(_, rest)| rest.split_once('`'))
+        .map(|(k, _)| k)
+        .filter(|k| crate::theme::is_bar_key(k));
+    match theirs {
+        Some(k) => format!(
+            "{who}: `{k}` is the theme's, not ranma.bar's: `{k} = ...` under [bar] in the theme \
+             (or a profile's theme = {{ bar = {{ {k} = ... }} }}); ranma.bar takes left, center, right, size, center_min"
+        ),
+        None => format!("{who}: {e}"),
+    }
+}
+
 /// A titlebar's groups, rewritten so serde can read them: Lua's `{ "a",
 /// "b", style = "x" }` is a list with a key on the side, which reaches
 /// serde as the list alone. Checked here, strictly, as it is rewritten.
@@ -2975,7 +2993,7 @@ fn install_api(
             normalize_bar(lua, "ranma.bar", &value)?;
             let patch: BarPatch = lua
                 .from_value(value)
-                .map_err(|e| rt_err(format!("ranma.bar: {e}")))?;
+                .map_err(|e| rt_err(bar_error("ranma.bar", &e.to_string())))?;
             let mut b = lua.app_data_mut::<Builder>().ok_or_else(loading_only)?;
             apply_bar(&mut b.bar, patch);
             Ok(())
@@ -3094,6 +3112,11 @@ fn install_api(
                 .unwrap_or(serde_json::Value::Null);
             let source = profile_source(lua);
             let mut def: Profile = lua.from_value(value).map_err(|e| {
+                let e = e.to_string();
+                // Its `bar` refused a key: the theme's, perhaps.
+                if e.contains("`center_min`") {
+                    return rt_err(bar_error(&format!("{who} bar"), &e));
+                }
                 rt_err(format!(
                     "{who}: {e} (a profile takes set, bar, titlebar, toolbars, theme and setup)"
                 ))
@@ -6601,6 +6624,24 @@ mod tests {
 
     /// The configurations in doc/examples are copied whole by readers, so one
     /// the strict parser rejects would fail on the first thing they try.
+    #[test]
+    fn a_theme_key_given_to_ranma_bar_says_where_it_belongs() {
+        let err = |src: &str| format!("{:#}", with_user(src).unwrap_err());
+        for src in [
+            r#"ranma.bar { left = { "mode" }, join = "arrows" }"#,
+            r#"ranma.profile("p", { bar = { join = "arrows" } })"#,
+        ] {
+            let e = err(src);
+            assert!(e.contains("`join` is the theme's"), "{src}: {e}");
+            assert!(e.contains("under [bar] in the theme"), "{e}");
+        }
+        // A name that is nobody's keeps the plain message.
+        let e = err(r#"ranma.bar { joni = "arrows" }"#);
+        assert!(e.contains("unknown field `joni`"), "{e}");
+        assert!(crate::theme::is_bar_key("separator") && crate::theme::is_bar_key("join"));
+        assert!(!crate::theme::is_bar_key("joni") && !crate::theme::is_bar_key("center_min"));
+    }
+
     #[test]
     fn a_module_takes_a_priority_and_widths_and_a_bar_group_a_priority() {
         let cfg = with_user(

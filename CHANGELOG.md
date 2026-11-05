@@ -201,6 +201,11 @@ commit log has the detail.
 
 ### Fixed
 
+- A theme key given to `ranma.bar` (or a profile's `bar`), such as `join =
+  "arrows"`, now says it is the theme's and where it goes (`[bar]` in the
+  theme, or a profile's `theme = { bar = { ... } }`) instead of only listing
+  what `ranma.bar` takes.
+
 - With an inner ranma's workspaces expanded in the bar (over ssh), modules
   now drop by `priority` as elsewhere, before the workspaces' names give
   way, and `join = "arrows"` draws one run across the whole side, the
