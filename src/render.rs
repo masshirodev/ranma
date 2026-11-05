@@ -1861,6 +1861,7 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
                 | bar::Style::TabPeek
                 | bar::Style::Cap
                 | bar::Style::RoleCap(_)
+                | bar::Style::Arrow(..)
         );
         let mut style = piece_style(c, st, piece.style);
         // These carry their own background, and so does a role with a
@@ -2436,6 +2437,9 @@ fn piece_style(c: &Colors, st: &Styles, s: bar::Style) -> Style {
             own.or(c.separator).unwrap_or(c.bar_dim),
             st.separator.unwrap_or(st.dim),
         ),
+        bar::Style::Arrow(from, to) => Style::default()
+            .fg(color(from.unwrap_or(c.bar_bg)))
+            .bg(color(to.unwrap_or(c.bar_bg))),
         bar::Style::RoleCap(r) => Style::default()
             .fg(color(r.bg.unwrap_or(c.bar_bg)))
             .bg(color(c.bar_bg)),

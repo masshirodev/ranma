@@ -383,7 +383,7 @@ not listed here.
 - [x] Scrollbar looks (c442)
 - [x] Splash art from a file (c443)
 - [x] Caps per role, for modules and title pieces (c444)
-- [ ] Powerline bars: grounds, `style` on built-ins, groups, arrows, sides,
+- [x] Powerline bars: grounds, `style` on built-ins, groups, arrows, sides,
   cuts that keep caps, `center_min` (c445)
 - [ ] Workspaces in any form, hover colours, `show = N`, `message` placed by the
   config (c446)

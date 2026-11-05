@@ -49,6 +49,9 @@ pub enum Style {
     /// A group's separator, on its ground: the role's colour, else
     /// `colors.separator`, else dim.
     GroupSep(Option<crate::theme::Color>),
+    /// `join = "arrows"`: the arrow from one pill's ground (its ink) into
+    /// the next's (its ground); `None` is the bar's own ground.
+    Arrow(Option<crate::theme::Color>, Option<crate::theme::Color>),
     /// `bar.chip_left` or `chip_right`: the edge of a filled chip, in that
     /// chip's ground on whatever it sits on.
     ChipCap(Chip),

@@ -15,6 +15,11 @@ commit log has the detail.
 
 ### Added
 
+- A powerline bar: `bar.join = "arrows"` makes a side's pills abut, with an
+  arrow between two in their grounds; `[bar.left]`, `[bar.center]` and
+  `[bar.right]` give a side its own caps, paddings, chip caps, join and
+  arrow.
+
 - Bar groups: a table in a `ranma.bar` side is one pill, its modules joined
   by `bar.group_separator` on the ground of the role it names. Any module,
   built-in ones too, takes a `style`: a role it stands on as a pill.

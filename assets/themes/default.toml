@@ -160,6 +160,12 @@ gradient_angle = 0
 # "cargo*" = "\ue7a8"
 # "*" = "\uf120"
 
+# How the bar's pills meet: "pills" (each between its caps) or "arrows" (they
+# abut, the side's arrow between two in their grounds). A side may take its
+# own shape over the bar's: [bar.left], [bar.center], [bar.right] with join,
+# module_left, module_right, module_padding_left, module_padding_right,
+# chip_left, chip_right and arrow. These go at the end of [bar], as tables.
+
 # A group's tabs, in its tab row and in the `tabs` title piece. Unset here on
 # purpose; these are what an unset key means.
 # [tabs]

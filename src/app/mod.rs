@@ -5166,17 +5166,19 @@ impl App {
         let theme_bar = &self.config.theme.bar;
         // The large bar pads its chips itself (`bar::enlarge`), full height.
         let roles = &self.config.theme.roles;
-        let chips = |s: Segment| {
+        use crate::theme::{Join, Side, SideShape};
+        let chips = |s: Segment, shape: &SideShape| {
             if large {
                 s
             } else {
-                bar::rounded(s, &theme_bar.chip_left, &theme_bar.chip_right)
+                bar::rounded(s, &shape.chip_left, &shape.chip_right)
             }
         };
         // Between the caps: on `role`'s ground when it has one (a module's
         // `style`, else the role its text is in), a pill of that colour
-        // between the role's caps, else the bar's (cards c444, c445).
-        let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>| {
+        // between the role's caps, else the side's (cards c444, c445). With
+        // arrows the pills abut, so there are no caps.
+        let wrap_in = |s: Segment, role: Option<crate::theme::RoleDef>, shape: &SideShape| {
             let role = role.filter(|r| r.bg.is_some()).or_else(|| {
                 s.iter()
                     .find(|p| !p.text.is_empty())
@@ -5185,27 +5187,24 @@ impl App {
                         _ => None,
                     })
             });
+            let arrows = shape.join == Join::Arrows;
             match role {
                 Some(r) => {
                     let own = r.left.is_some() || r.right.is_some();
-                    let (l, rt) = if own {
+                    let (l, rt) = if arrows {
+                        (String::new(), String::new())
+                    } else if own {
                         (
                             r.left.map(String::from).unwrap_or_default(),
                             r.right.map(String::from).unwrap_or_default(),
                         )
                     } else {
-                        (
-                            theme_bar.module_left.clone(),
-                            theme_bar.module_right.clone(),
-                        )
+                        (shape.module_left.clone(), shape.module_right.clone())
                     };
                     let pads = if own {
                         (r.padding_left, r.padding_right)
                     } else {
-                        (
-                            theme_bar.module_padding_left,
-                            theme_bar.module_padding_right,
-                        )
+                        (shape.module_padding_left, shape.module_padding_right)
                     };
                     let mut out =
                         bar::boxed_in(s, (&l, &rt), pads, Style::RoleCap(r), Style::Role(r));
@@ -5214,16 +5213,24 @@ impl App {
                     }
                     out
                 }
+                None if arrows => bar::boxed(
+                    s,
+                    "",
+                    "",
+                    shape.module_padding_left.max(1),
+                    shape.module_padding_right.max(1),
+                ),
                 None => bar::boxed(
                     s,
-                    &theme_bar.module_left,
-                    &theme_bar.module_right,
-                    theme_bar.module_padding_left,
-                    theme_bar.module_padding_right,
+                    &shape.module_left,
+                    &shape.module_right,
+                    shape.module_padding_left,
+                    shape.module_padding_right,
                 ),
             }
         };
-        let wrap = |s: Segment| wrap_in(chips(s), None);
+        let center_shape = theme_bar.shape(Side::Center);
+        let wrap = |s: Segment| wrap_in(chips(s, &center_shape), None, &center_shape);
         let role_of = |n: &str| match self
             .config
             .module_styles
@@ -5241,13 +5248,14 @@ impl App {
                 s
             }
         };
-        let seg = |n: &String| wrap_in(chips(raw(n)), role_of(n));
+        let seg_in =
+            |n: &String, shape: &SideShape| wrap_in(chips(raw(n), shape), role_of(n), shape);
         // A group: its modules in one pill, `bar.group_separator` between
         // them on its ground. The large bar keeps each module's own square
         // chip, and so the order without the grouping (B8).
-        let group = |names: &[String], style: &Option<String>| -> Vec<Segment> {
+        let group = |names: &[String], style: &Option<String>, shape: &SideShape| -> Vec<Segment> {
             if large {
-                return names.iter().map(seg).collect();
+                return names.iter().map(|n| seg_in(n, shape)).collect();
             }
             let role = match style.as_deref().and_then(|st| Style::from_name(st, roles)) {
                 Some(Style::Role(r)) => Some(r),
@@ -5256,7 +5264,7 @@ impl App {
             let sep = role.and_then(|r| r.separator);
             let mut inner: Segment = Vec::new();
             for n in names {
-                let s = chips(self.segment(n));
+                let s = chips(self.segment(n), shape);
                 if bar::width(&s) == 0 {
                     continue;
                 }
@@ -5268,17 +5276,65 @@ impl App {
                 }
                 inner.extend(s);
             }
-            vec![wrap_in(inner, role)]
+            vec![wrap_in(inner, role, shape)]
         };
-        let side = |entries: &[config::TitleEntry]| -> Vec<Segment> {
-            entries
+        let colors = self.colors();
+        // A pill's ground, for the arrows on either side of it: a module that
+        // is one filled chip (the mode's ` WM `) is that chip's (B2).
+        let ground_of = |s: &Segment| -> Option<crate::theme::Color> {
+            let shown: Vec<&Piece> = s.iter().filter(|p| !p.text.trim().is_empty()).collect();
+            if let [p] = shown.as_slice() {
+                let chip = match p.style {
+                    Style::Mode => Some(colors.mode_bg),
+                    Style::WsActive => Some(colors.ws_active_bg),
+                    Style::TabActive => Some(colors.tab_active_bg),
+                    Style::TabInactive => Some(colors.tab_inactive_bg),
+                    _ => None,
+                };
+                if chip.is_some() {
+                    return chip;
+                }
+            }
+            s.iter().find_map(|p| p.ground).or(colors.module_bg)
+        };
+        // With arrows, a side is one run of abutting pills: the arrow
+        // between two in their grounds, and one at the side's inner end.
+        let arrows = |segs: Vec<Segment>, side: Side, glyph: &str| -> Vec<Segment> {
+            let segs: Vec<Segment> = segs.into_iter().filter(|s| bar::width(s) > 0).collect();
+            if segs.is_empty() {
+                return segs;
+            }
+            let grounds: Vec<_> = segs.iter().map(&ground_of).collect();
+            let mut out: Segment = Vec::new();
+            for (i, s) in segs.into_iter().enumerate() {
+                if side == Side::Right {
+                    let to = if i == 0 { None } else { grounds[i - 1] };
+                    out.push(Piece::new(glyph, Style::Arrow(grounds[i], to)));
+                }
+                out.extend(s);
+                if side != Side::Right {
+                    let to = grounds.get(i + 1).copied().flatten();
+                    out.push(Piece::new(glyph, Style::Arrow(grounds[i], to)));
+                }
+            }
+            vec![out]
+        };
+        let side_in = |entries: &[config::TitleEntry], which: Side| -> Vec<Segment> {
+            let shape = theme_bar.shape(which);
+            let segs: Vec<Segment> = entries
                 .iter()
                 .flat_map(|e| match e {
-                    config::TitleEntry::Piece(n) => vec![seg(n)],
-                    config::TitleEntry::Group { pieces, style } => group(pieces, style),
+                    config::TitleEntry::Piece(n) => vec![seg_in(n, &shape)],
+                    config::TitleEntry::Group { pieces, style } => group(pieces, style, &shape),
                 })
-                .collect()
+                .collect();
+            if shape.join == Join::Arrows && !large {
+                arrows(segs, which, &shape.arrow)
+            } else {
+                segs
+            }
         };
+        let side = |entries: &[config::TitleEntry]| side_in(entries, Side::Left);
         let bar = &self.config.bar;
         let cols = cols.min(chrome.bar_room);
         // A message of this ranma's, else one from a nested ranma that draws
@@ -5291,9 +5347,9 @@ impl App {
         });
         let center = match &status {
             Some(msg) => vec![wrap(vec![Piece::new(msg.clone(), Style::Accent)])],
-            None => side(&bar.center),
+            None => side_in(&bar.center, Side::Center),
         };
-        let right = side(&bar.right);
+        let right = side_in(&bar.right, Side::Right);
         // Chips a column apart, whatever the theme's separator: the large
         // bar's spacing is the design's (the handoff's section 06).
         let sep = if large {
@@ -6707,6 +6763,68 @@ mod tests {
             assert!(err.contains("`nope`"), "{err}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn arrows_join_a_sides_pills_in_their_grounds() {
+        let mut a = themed(
+            "arrows",
+            r##"
+            [colors]
+            mode_bg = "#ff0000"
+            [bar]
+            join = "arrows"
+            [bar.left]
+            arrow = ">"
+            [bar.right]
+            arrow = "<"
+            [roles.one]
+            fg = "#eeeeee"
+            bg = "#111111"
+            [roles.two]
+            fg = "#eeeeee"
+            bg = "#222222"
+            "##,
+            r#"
+            ranma.module("a", { render = function() return "A" end, style = "one" })
+            ranma.module("b", { render = function() return "B" end, style = "two" })
+            ranma.bar { left = { "mode", "a", "b" }, center = {}, right = { "a", "b" } }
+            "#,
+        );
+        use crate::theme::Color as C;
+        let (one, two) = (
+            Some(C::Rgb(0x11, 0x11, 0x11)),
+            Some(C::Rgb(0x22, 0x22, 0x22)),
+        );
+        a.mode = Mode::Wm;
+        a.render_state_modules();
+        let pieces = a.bar_pieces(60);
+        let arrows: Vec<(&str, Style)> = pieces
+            .iter()
+            .filter(|(_, p)| matches!(p.style, Style::Arrow(..)))
+            .map(|(_, p)| (p.text.as_str(), p.style))
+            .collect();
+        let red = Some(C::Rgb(0xff, 0, 0));
+        assert_eq!(
+            arrows,
+            vec![
+                // Left: out of the mode chip's ground (B2), into one, into
+                // two, and onto the bar.
+                (">", Style::Arrow(red, one)),
+                (">", Style::Arrow(one, two)),
+                (">", Style::Arrow(two, None)),
+                // Right: pointing back, each in its pill's ground over the
+                // one before (the bar's, first).
+                ("<", Style::Arrow(one, None)),
+                ("<", Style::Arrow(two, one)),
+            ]
+        );
+        // No caps where pills abut.
+        assert!(
+            !pieces
+                .iter()
+                .any(|(_, p)| matches!(p.style, Style::Cap | Style::RoleCap(_)))
+        );
     }
 
     #[test]

@@ -3392,6 +3392,12 @@ text drawn between two modules on the same side
 \fBbar.workspace_format\fR, \fBworkspace_current_format\fR
 a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's, \fB{icon}\fR that program's glyph from \fB[icons]\fR. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.
 .TP
+\fBbar.join\fR
+\fBpills\fR (the default: each module between its caps, the bar showing between them) or \fBarrows\fR: a side's pills abut, with the side's arrow between two drawn in their grounds (the left one's as ink, the right one's as ground) and one at the side's inner end onto the bar. A module that is one filled chip (the mode's \fBWM\fR) counts as that chip's ground. No caps are drawn where pills abut.
+.TP
+\fBbar.left\fR, \fBbar.center\fR, \fBbar.right\fR
+a side's own shape over the bar's, as tables (\fB[bar.left]\fR): \fBjoin\fR, \fBmodule_left\fR, \fBmodule_right\fR, \fBmodule_padding_left\fR, \fBmodule_padding_right\fR, \fBchip_left\fR, \fBchip_right\fR, and \fBarrow\fR, the glyph between pills with \fBarrows\fR (by default \fB"\eue0b0"\fR on the left and \fB"\eue0b2"\fR on the right, pointing away from the bar's edge). The centre takes \fBpills\fR unless its own \fBjoin\fR says otherwise. So a current workspace can be a square chip inside arrows on the left while the right stays round.
+.TP
 \fBbar.group_separator\fR
 drawn between the modules of a group, on its ground, in its role's \fBseparator\fR colour (else \fBcolors.separator\fR, else \fBbar_dim\fR). Empty by default.
 .TP

@@ -889,6 +889,107 @@ pub struct Bar {
     /// Between the modules of a group (card c445), on its ground.
     #[serde(default)]
     pub group_separator: String,
+    /// `pills` (the default) or `arrows`: whether neighbouring pills abut,
+    /// an arrow drawn between them in their two grounds.
+    #[serde(default)]
+    pub join: Join,
+    /// A side's own shape over the bar's (`[bar.left]`, B6, B7).
+    #[serde(default)]
+    pub left: Option<BarSide>,
+    #[serde(default)]
+    pub center: Option<BarSide>,
+    #[serde(default)]
+    pub right: Option<BarSide>,
+}
+
+/// How a side's pills meet (card c445).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Join {
+    /// Each between its caps, the bar showing between them.
+    #[default]
+    Pills,
+    /// Abutting, the side's arrow between two in their grounds.
+    Arrows,
+}
+
+/// `[bar.left]`, `[bar.center]`, `[bar.right]`: a side's shape over the
+/// bar's own keys of the same names.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BarSide {
+    pub join: Option<Join>,
+    pub module_left: Option<String>,
+    pub module_right: Option<String>,
+    pub module_padding_left: Option<u8>,
+    pub module_padding_right: Option<u8>,
+    pub chip_left: Option<String>,
+    pub chip_right: Option<String>,
+    /// With `join = "arrows"`: the glyph between two pills; by default it
+    /// points away from the bar's edge (right on the left side).
+    pub arrow: Option<String>,
+}
+
+/// A side's shape, every key settled: its own over the bar's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SideShape {
+    pub join: Join,
+    pub module_left: String,
+    pub module_right: String,
+    pub module_padding_left: u8,
+    pub module_padding_right: u8,
+    pub chip_left: String,
+    pub chip_right: String,
+    pub arrow: String,
+}
+
+/// Which side of the bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Center,
+    Right,
+}
+
+impl Bar {
+    /// A side's shape. The centre takes pills unless it says otherwise: it
+    /// has no direction of its own to point in.
+    pub fn shape(&self, side: Side) -> SideShape {
+        let own = match side {
+            Side::Left => self.left.as_ref(),
+            Side::Center => self.center.as_ref(),
+            Side::Right => self.right.as_ref(),
+        };
+        let o = |f: fn(&BarSide) -> Option<String>, base: &String| {
+            own.and_then(f).unwrap_or_else(|| base.clone())
+        };
+        let join = match (own.and_then(|s| s.join), side) {
+            (Some(j), _) => j,
+            (None, Side::Center) => Join::Pills,
+            (None, _) => self.join,
+        };
+        let arrow = own.and_then(|s| s.arrow.clone()).unwrap_or_else(|| {
+            match side {
+                Side::Right => "\u{e0b2}",
+                _ => "\u{e0b0}",
+            }
+            .to_string()
+        });
+        SideShape {
+            join,
+            module_left: o(|s| s.module_left.clone(), &self.module_left),
+            module_right: o(|s| s.module_right.clone(), &self.module_right),
+            module_padding_left: own
+                .and_then(|s| s.module_padding_left)
+                .unwrap_or(self.module_padding_left),
+            module_padding_right: own
+                .and_then(|s| s.module_padding_right)
+                .unwrap_or(self.module_padding_right),
+            chip_left: o(|s| s.chip_left.clone(), &self.chip_left),
+            chip_right: o(|s| s.chip_right.clone(), &self.chip_right),
+            arrow,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -1915,6 +2016,32 @@ fn check(t: &Theme) -> Result<(), String> {
                         "border.chars must be six one-cell characters (top-left, top-right, bottom-left, bottom-right, horizontal, vertical), not `{c}`"
                     ));
                 }
+            }
+        }
+    }
+    for (name, side) in [
+        ("left", &t.bar.left),
+        ("center", &t.bar.center),
+        ("right", &t.bar.right),
+    ] {
+        let Some(s) = side else { continue };
+        for (k, n) in [
+            ("module_padding_left", s.module_padding_left),
+            ("module_padding_right", s.module_padding_right),
+        ] {
+            if n.is_some_and(|n| n > 4) {
+                return Err(format!("bar.{name}.{k} must be 0 to 4"));
+            }
+        }
+        for (k, v) in [
+            ("module_left", &s.module_left),
+            ("module_right", &s.module_right),
+            ("chip_left", &s.chip_left),
+            ("chip_right", &s.chip_right),
+            ("arrow", &s.arrow),
+        ] {
+            if v.as_ref().is_some_and(|v| v.chars().any(char::is_control)) {
+                return Err(format!("bar.{name}.{k}: no control characters"));
             }
         }
     }
