@@ -2300,39 +2300,36 @@ Decided:
 - Under `theme_colors = "outer"`, a pane's own colours still win over the
   outer's: they were asked for about that pane.
 
-### Title bars a theme can build (2026-11-04, proposed)
+### Title bars a theme can build (2026-11-04)
 
 The question was whether a theme could make a pane's top edge look like a
 GUI window's title bar: a filled row, an icon and the title on the left, a
 few buttons on the right, thin side edges or none. ranma should not ship
-such a look; a theme and an `init.lua` should be able to build one. Today
-they cannot, for reasons that are each small:
+such a look; a theme and an `init.lua` should be able to build one. They
+could not, for reasons that were each small: the border was all four edges
+or none; one set of six characters served every edge; the title sat in the
+border line with no ground of its own; there was one title at one
+alignment, with no caps; a click anywhere on the top edge was the move
+drag; and nothing let Lua write into the border the way `ranma.module`
+writes into the bar.
 
-- the border is all four edges or none (`border.style = "none"` takes the
-  title away too);
-- one set of six characters serves every edge, so the top cannot differ
-  from the bottom;
-- the title sits in the border line, in the border's colour; the row has no
-  ground of its own;
-- there is one title at one alignment, with no caps, where the bar has three
-  sides, module caps and chip caps;
-- a click anywhere on the top edge is the move drag, so nothing on it can be
-  a button;
-- a format has placeholders and nothing else (on purpose, "Looks: what tmux
-  lets you style"), and there is no Lua hook for the border the way
-  `ranma.module` is one for the bar.
+Proposed the same day, then tested before any code by a design handoff
+(`doc/briefs/TITLE_BARS.md`, answered in `doc/handoffs/TITLE_BARS_MOCK.txt`).
+The designer built three looks (Window, Pills, Quiet) with only the
+proposed keys and listed what they could not express: twelve findings
+(F1-F12), four renames (R1-R4) and four drops (D1-D4). The handoff's
+"this handoff's ladder" grids are the reference for narrow panes. What
+follows is the decision with the handoff folded in; each finding is cited
+where it changed something.
 
-Proposed. The key names may still change after the design handoff
-(`doc/briefs/TITLE_BARS.md`). That brief has looks drawn using only the
-keys below, so that what they cannot express shows up before any code
-exists.
+**The row**
 
 - **The title bar is the top edge, one row.** It is not a row taken from
   the pane on top of the border. "The mouse: top border moves, the rest
-  resize" already calls the top edge the title bar; a filled title row is
-  that edge drawn differently. So a pane's inner area is the same with or
-  without one, and nothing about the layout changes. Two rows (a title
-  over a toolbar) are not planned, for the same reason the bar is one row.
+  resize" already calls the top edge the title bar, and a filled title row
+  is that edge drawn differently. So a pane's inner area is the same with
+  or without one. Two rows (a title over a toolbar) are not planned, for
+  the same reason the bar is one row.
 - **Which edges are drawn: `border.edges`** (a list of `top`, `bottom`,
   `left`, `right`; all four by default), with `border.floating_edges` for
   floats (unset, `edges`). It belongs to the theme and is never per pane,
@@ -2341,80 +2338,170 @@ exists.
   only for each edge drawn (`Rect::inset_sides`; today `App::border` takes
   one cell off all four sides or none). Strict, as everything is:
   `border.title = "top"` without a top edge is a load error, and so is the
-  bottom. An edge not drawn has no scrollbar and no indicator arrow, and is
-  no handle. Resizing from it goes to the gap beside it when `gaps.inner`
-  leaves one, and to the keys when it does not. With no top edge there is
-  no move handle, which is a choice the theme made.
-- **The top and bottom rows have characters of their own**:
-  `border.top_chars` and `border.bottom_chars`, three one-cell characters
-  each (left corner, fill, right corner), over the style's own. The fill
-  may be a space. `custom` and its six `border.chars` stay as they are.
+  bottom. `edges = []` is refused too, naming `style = "none"`, which is
+  the one way to say it (D2). An edge not drawn has no indicator arrow and
+  is no handle. Resizing from it goes to the gap beside it when
+  `gaps.inner` leaves one, and to the keys when it does not. With no top
+  edge there is no move handle, which is a choice the theme made.
+- **Each edge has its own characters** (F4, R2): `[border.chars]` with
+  `top = "╭─╮"` (left corner, fill, right corner), `bottom = "╰─╯"`,
+  `left = "▏"` and `right = "▕"`, each optional over the style's own.
+  Setting any of them is what `custom` means; the old six-character string
+  stays as the shorthand for all four, read as before. A fill may be a
+  space. There are no separate `top_chars` / `bottom_chars` (D1).
 - **The title row can have a ground**: `colors.title_bg_active`,
   `title_bg_inactive` and `title_bg_floating`, with `title_fg_*` for the
-  text and the fill. When set, the whole top row is filled, corners
-  included. Unset, the row is today's border line. In WM mode (or with a
-  latched modifier) the focused pane's row takes `mode_bg` / `mode_fg`, as
-  its border does, because that colour is how you know where the next
-  action goes. States beyond these three (urgent, zoomed, synced, scrolled
-  back) are card c437's, with one precedence for the edges and the title
-  row. A gradient (`border_*_gradient`) runs over the edge characters, not
+  text and the fill. When set, the whole top row is filled. A filled row
+  takes no corner characters from `[border.chars]`, since the fill covers
+  them (D4). Unset, the row is today's border line.
+- **Corners round the row**: `border.title_corner_left` and
+  `title_corner_right` (R1; proposed as `title_cap_*`, which reads as caps
+  round the title, the reading the designer took first). They take the
+  corner cells, drawn in the row's ground over whatever lies behind the
+  pane (a gap, the background, another pane's edge), so powerline glyphs
+  round the row. They take the corners rather than adding cells, because
+  there are no cells outside a pane to add.
+- **Or pills on the row**, not a filled row (F6):
+  `border.title_ground = "row"` (the default, the whole row) or
+  `"pieces"`, where only the pieces have a ground and the edge line shows
+  between them. A piece's ground and caps come from its role, as a bar
+  module's do (c444's caps per role, which apply to title pieces too), and
+  a list inside a `ranma.titlebar` side is one pill, as a group is in the
+  bar. So a pill round the title, one round each badge and one round the
+  three buttons together need only `title_ground` and the grouping; the
+  rest is roles.
+
+**Colours and states**
+
+- **One precedence for edges and title rows** (F3): WM mode (and a latched
+  modifier), urgent, synced, zoomed, scrolled back, then focused,
+  floating, inactive. The first that applies wins. In WM mode the focused
+  pane's edge and row take `mode_bg` / `mode_fg`, because that colour is how
+  you know where the next action goes.
+- **A state is a ground and its text** (F2, R3), since without side edges
+  the row's ground is the only place a state can show:
+  `colors.state_urgent` with `state_urgent_fg`, and the same for `synced`,
+  `zoomed` and `scrolled`. They colour the edges' lines and the title row's
+  ground; `_fg` is the row's text on it. On a state's ground, badges take
+  the row's text colour, because an urgent badge in `bar_urgent` on an
+  urgent ground vanishes. This is card c437, renamed from its
+  `border_urgent`.
+- **`state_urgent` never defaults to `mode_bg`** (F3). In the built-in
+  theme `mode_bg` and `bar_urgent` are the same colour (`#f38ba8`), so an
+  urgent pane would look like the pane in WM mode. Its default is the
+  palette's peach (`#fab387`).
+- **WM mode on a row with no line** (F10): a focused row whose line is
+  blanks and which has no ground is filled with `mode_bg` / `mode_fg`.
+  Otherwise the mode colour lands on the title's letters only. This is a
+  rule, not a key.
+- **A float has its own ground**: `panes.floating_bg` (F5), between
+  `active_bg` and `inactive_bg`. A float with no edges on the same ground
+  as the tiles under it runs into them on its left, where no shadow falls.
+- **A colour may name another colour role** (F9):
+  `title_bg_active = "active_bg"`, resolved after the theme's merge, so a
+  theme rendered by matugen fills in the old roles and the new keys follow
+  them. This holds for every key in `[colors]`. An unknown name or a cycle
+  is a load error naming the chain. `theme_colors = "outer"` carries the
+  resolved colours, not the names.
+- A gradient (`border_*_gradient`) runs over the edge characters, not
   under the title row: a ground changing cell by cell behind text is noise.
-- **Caps round the row**: `border.title_cap_left` and `title_cap_right`
-  take the corner cells, drawn in the title row's ground over whatever lies
-  behind the pane (a gap, the background, another pane's edge). Powerline
-  glyphs then round the bar, as `bar.module_left` / `module_right` round a
-  module. They take the corners rather than adding cells, because there are
-  no cells outside a pane to add.
+
+**What the row shows**
+
 - **What the row shows is `init.lua`'s, and how it looks is the theme's**,
   the bar's split ("The bar: waybar's shape"). `ranma.titlebar { left = {...},
   center = {...}, right = {...} }` lists pieces by name. Without it, the row
   is exactly today's: `title_format` at `title_align`, the sync mark and the
-  badges. The built-in pieces are `title` (which draws the theme's
-  `border.title_format`, so the theme keeps its say over the text), `sync`
-  (the `⇉` of synchronized input), `badges`, and `icon` (card c438).
-  A config adds its own with
+  badges. With it, the slots decide where things go and `title_align` is
+  not read. That is not an error (D3 asked for one): the same theme serves
+  configs with and without a titlebar, and switching themes must not make
+  a config invalid. `ranma health` says when it is set and unused.
+- **Built-in pieces**: `title` (draws the theme's `border.title_format`, so
+  the theme keeps its say over the text), `sync` (the `⇉`), `badges`,
+  `icon` (c438), `index` (the pane's place in its workspace), and `tabs`.
+- **A group's tabs can be its title row** (F1). With a filled row, a group
+  drew its tab row over its title row: two rows, against the first rule.
+  The `tabs` piece draws, in a grouped pane, the group's tabs where it is
+  listed, hides `title` there, and gives the tab row's cell back to the
+  pane. In a pane that is not grouped it draws nothing. A config that does
+  not list `tabs` keeps today's tab row. Which of the two is used is
+  layout, so it is the config's, like the rest of the row.
+- **A config adds its own pieces** with
   `ranma.title_piece(name, { render, text, style, hover_style, action,
-  on_click, interval })`. `render(pane)` returns a string,
+  on_click, interval, priority })`. `render(pane)` returns a string,
   `{ text, style }` or `nil` (hidden for that pane), and `style` is a role,
   as a module's is.
+- **Pane handles grow what pieces need** (F8): `pane:index()`,
+  `pane:zoomed()`, `pane:synced()` and `pane:urgent()`. Without them a zoom
+  button cannot say "restore" while zoomed, and a title cannot follow the
+  bell.
 - **Pieces run as state-driven modules do, never in a frame.** A piece is
   run for each pane on screen when that pane's title, program, directory,
-  focus or vars change, when the mode changes, and on a resize, and its
-  result is cached per pane. A pane brought on screen runs its pieces once.
-  `interval` ticks only while a pane showing the piece is on screen (the
-  bar's rule for timed modules). Idle stays at zero wakeups, and the smoke
-  test measures that with a `ranma.titlebar` loaded. The time budget and the
-  error display are a module's: a failing piece shows its error in the
-  `urgent` role where its text would be.
+  focus, vars, index or state change, when the mode changes, and on a
+  resize, and its result is cached per pane. A pane brought on screen runs
+  its pieces once. `interval` ticks only while a pane showing the piece is
+  on screen (the bar's rule for timed modules). Idle stays at zero wakeups,
+  and the smoke test measures that with a `ranma.titlebar` loaded. The time
+  budget and the error display are a module's: a failing piece shows its
+  error in the `urgent` role where its text would be.
 - **The marks a config did not list still show.** If `badges` is not
   listed, the badges come after `title`. If `sync` is not listed, the mark
   goes before it. A plugin's badge, or a warning that you are typing into
   several panes, must not vanish because a config left a name out.
+- **A look is a theme plus `init.lua` lines, and a profile can carry
+  both** (F11). The theme never names pieces, for the reason a theme
+  cannot regroup the bar's modules. So `choose_theme` from a look with
+  buttons to one meant to have none keeps the buttons. A profile
+  (`ranma.profile`) already carries theme keys and bar sides, and now
+  carries `titlebar` as well. A look that needs both halves is shipped as
+  a profile, and switching profiles switches the whole look.
+
+**The mouse**
+
 - **A button is a piece with an `action` or an `on_click`.** A plain left
   press on its cells runs it and takes the press. Every other cell of the
   row is still the move drag, so the one rule for the mouse holds, with
   holes where a config put buttons. The pane under the pointer is focused
   first, as for a mouse bind, so `close_pane` closes the pane clicked.
-  `hover_style` is the role while the pointer is over the piece (motion is
-  already reported for `hover`). There is no pressed look: a press runs
+  `hover_style` is the role while the pointer is over the piece (R4: the
+  same word as the bar modules'). There is no pressed look: a press runs
   the action at once and there is nothing to show between the two.
 - **A `title` mouse target**: `ranma.mouse("double@title", "toggle_floating")`
   hears the row's cells that are not buttons. It is matched before `border`
   and falls back to it, so a `double@border` bind written before this keeps
   working on the top edge. A plain `left@title` is refused, as
   `left@border` is.
-- **Narrow panes are budgeted as the bar is**: the right side first, then
-  the left, with the centre taking what is left. A piece is cut with `…`. A
-  button is never cut, because half a glyph is not a button; it is dropped
-  whole. Badges keep their own ladder inside their piece, with urgent ones
-  going last.
-- **Per pane**: a rule's `style` and `pane:style` may set the `title_bg_*`
-  and `title_fg_*` colours and the caps, which are pane-shaped looks
-  ("Looks a single pane may override"). They may not set `edges`, which
-  belong to the layout, nor the pieces, which are the config's.
-- **Groups keep their tab bar.** A group's tabs already are its title row,
-  and card c436 gives the tab bar the same vocabulary (formats, caps).
-  A grouped pane's own top edge is drawn like any other pane's.
+
+**Narrow panes** (F7)
+
+Budgeting as the bar does (right side first) was what was proposed, and
+the mocks showed it break: at 18 columns a pane showed three buttons and
+no title, with the `⇉` gone. The marks must stay. So the row gives way by
+**priority, across sides**. Each piece has a `priority`, and the built-ins'
+defaults make the handoff's ladder. Things go in this order:
+
+1. the badges' words;
+2. the title is cut to four letters;
+3. calm badges (dim, normal, accent);
+4. buttons other than close (float, then zoom with the defaults);
+5. the title's name, though `⇉` and the icon stay;
+6. urgent badges;
+7. close and the index, last.
+
+A config's own pieces fit in by their `priority`. A piece is cut with `…`
+only at step 2, which is the title's. A button is never cut, because half
+a glyph is not a button: it is dropped whole.
+
+**Also decided**
+
+- **Per pane**: a rule's `style` and `pane:style` may set the `title_bg_*`,
+  `title_fg_*` and `state_*` colours and the corners, which are pane-shaped
+  looks ("Looks a single pane may override"). They may not set `edges` or
+  `title_ground`, which shape the row for every pane, nor the pieces, which
+  are the config's.
+- **The scrollbar in the padding** (F12): with no right edge and
+  `panes.padding_right` of at least 1 (c439), the thumb sits in the padding
+  column. With neither there is no scrollbar, as before.
 - **Unchanged**: a nested pane drawn without a border has no title row
   either; the built-in theme draws exactly what it draws today; pickers,
   sheets and toasts keep their frames (card c441's question).
@@ -2423,93 +2510,106 @@ Left out: images or pixel icons (a cell is a cell), animation (hover is a
 redraw on a pointer event, not a transition), a selector language over
 panes, and a GUI look shipped as a default.
 
-### Powerline bars: grounds, groups and arrows (2026-11-04, proposed)
+### Powerline bars: grounds, groups and arrows (2026-11-04)
 
-The bar can make pills: each module between `bar.module_left` and
-`module_right` on `colors.module_bg`, with chips rounded inside. It cannot
-make a powerline bar, for four reasons found in the code (`bar::boxed`,
-`bar::join`, `render::piece_style`):
-
-- **Every module stands on the one `module_bg`.** A role's `bg` colours only
-  that module's text cells, and its caps are still drawn in `module_bg`. A
-  blue clock pill beside a green git pill is impossible.
-- **A pill is one module.** Three modules cannot share a pill, and neither
-  can a whole side.
-- **A cap always stands on `bar_bg`**, never on its neighbour's ground, so
-  segments cannot abut with an arrow between them (the transition glyph
-  needs one ground as its colour and the next as its background).
-- **The caps are the same on both sides of the bar**, and the separator is
-  plain text in the `dim` style.
-
-Proposed, with the key names to be settled by the design addendum
-(`doc/briefs/TITLE_BARS_ADDENDUM.md`):
+The bar could make pills (each module between `bar.module_left` and
+`module_right` on `colors.module_bg`, chips rounded inside) but not a
+powerline bar. The code showed four reasons (`bar::boxed`, `bar::join`,
+`render::piece_style`): every module stood on the one `module_bg`, and a
+role's `bg` coloured only its text cells; a pill held one module; a cap
+always stood on `bar_bg`, never on its neighbour's ground; and both sides
+had the same caps, with the separator plain `dim` text. The design
+addendum (`doc/briefs/TITLE_BARS_ADDENDUM.md`, answered in the same
+handoff) drew four bars (grouped pills, classic powerline, one pill per
+side, dots) and found ten more things (B1-B10).
 
 - **A module's ground is its role's `bg`** when the role has one, and
-  `module_bg` otherwise. Its caps follow its ground, so a role is enough
-  to give a module a pill of its own colour (card c444, which also lets a
-  role carry its own caps).
+  `module_bg` otherwise. Its caps follow its ground, and a role may carry
+  caps of its own (c444). That alone gives each module a pill of its own
+  colour.
+- **Every built-in takes a `style`** (B1):
+  `ranma.module("cpu", { style = "cpu" })`. Without it, the classic bar had
+  to make each built-in a group of one only to give it a ground.
+- **A module that is one chip takes the chip's ground** (B2). The mode
+  module is the ` WM ` chip, so the arrow after it is drawn in `mode_bg`.
 - **Groups are `init.lua`'s, because which modules go together is
   layout.** A table inside a side is one pill:
   `right = { "load", { "cpu", "mem", "clock", style = "sys" } }`.
   `style` names the role whose ground the group stands on; unset, it is
   `module_bg`. A whole side in one pill is a side holding one group.
   Inside a group, modules keep their own text styles and their own clicks.
-  The group has caps only at its two ends, and between its modules goes
-  `bar.group_separator` (a thin `` or a space), drawn on the group's
-  ground. Groups do not nest. Today a table in a side is an error, so no
-  config written before this changes meaning.
-- **`bar.join = "pills"` (the default) or `"arrows"`.** With `arrows`,
-  neighbouring pills on the same side abut. Between them ranma draws the
-  side's arrow in the left pill's ground on the right pill's ground (on the
-  right side, the mirror). At the outer end of a side the arrow stands on
-  `bar_bg`. Where pills are separated by bar showing through, `pills` keeps
-  today's caps. The centre always uses pills, since it has no direction to
-  point in.
-- **Caps per side**: `[bar.left]`, `[bar.center]` and `[bar.right]` may
-  each set `module_left`, `module_right` and the `arrow`, over the bar's
-  own. Arrows point right on the left side and left on the right side by
-  default.
-- **The separator gets a role**: `colors.separator` with
-  `styles.separator`. Unset, it is `bar_dim` and the `dim` styles, as now.
-- **Budgeting is unchanged**: right first, then left, then the centre. A
-  group is cut with `…` inside its caps, so a cut pill is still a pill.
-- **Unchanged**: the large bar keeps square chips with no caps (its chips
-  are three rows tall); a nested ranma's modules still follow by name, and
-  in a group too; a theme and a config that set none of this look as
-  today.
+  The group has caps only at its two ends, and `bar.group_separator`
+  goes between its modules, on the group's ground. Groups do not nest.
+  Today a table in a side is an error, so no config written before this
+  changes meaning.
+- **Separators take the colour of where they stand** (B5).
+  `colors.separator` with `styles.separator` colours `bar.separator` on
+  the bar's ground. Inside a group the separator takes its role's
+  `separator` colour (`[roles.sys] separator = ...`), falling back to
+  `colors.separator`, because one colour cannot read on every ground.
+  Unset, `bar_dim` and the `dim` styles, as now.
+- **`join = "pills"` (the default) or `"arrows"`.** With `arrows`,
+  neighbouring pills on a side abut. Between them ranma draws the side's
+  arrow in the left pill's ground on the right pill's ground (on the right
+  side, the mirror). At the outer end of a side the arrow stands on
+  `bar_bg`.
+- **Each side has its own shape** (B6, B7): `[bar.left]`, `[bar.center]`
+  and `[bar.right]` may each set `join`, `module_left`, `module_right`,
+  `module_padding_left`, `module_padding_right`, `chip_left`, `chip_right`
+  and `arrow`, over the bar's own keys of the same names. So a current
+  workspace can be a square chip inside an arrow segment on the left while
+  the right side stays round. Arrows point right on the left side and left
+  on the right side by default. The centre takes `pills` unless it says
+  otherwise, having no direction of its own to point in.
+- **A cut keeps its caps** (B3). Today's `truncate` cuts the flat list of
+  pieces, so a closing cap or arrow goes with the text. A group or a pill
+  is cut with `…` inside its caps, and in `arrows` the cut segment keeps
+  its arrow.
+- **The centre can keep a floor**: `ranma.bar { center_min = 12 }` (B3).
+  The centre gets only what the sides leave, so workspaces moved there were
+  the first thing cut; at 80 columns the dots bar kept only the current
+  dot. This is the floor `bar::fit_floor` already takes for the nested bar,
+  given a setting.
+- **Budgeting is otherwise unchanged**: right first, then left, then the
+  centre.
+- **The large bar ignores groups** (B8). Each module keeps its own square,
+  thumb-sized chip; a shared ground under three-row chips buys nothing. A
+  group is layout, so the large bar keeps the order and drops the grouping.
+- **Unchanged**: a nested ranma's modules still follow by name, and in a
+  group too; a theme and a config that set none of this look as today.
 
-**Workspaces drawn as anything** (2026-11-04, proposed). A row of dots,
-always shown, with the current one bigger, is nearly possible:
-`workspace_format = " ○ "`, `workspace_current_format = " ● "` and
-`show = "all"` load today. The rest of it is not:
+**Workspaces drawn as anything.** A row of dots, always shown, with the
+current one bigger, was nearly possible: `workspace_format = " ○ "`,
+`workspace_current_format = " ● "` and `show = "all"` load today.
 
-- **A format per state.** Only `workspace_format` and
-  `workspace_current_format` exist, so an empty workspace and an occupied
-  one differ only in colour. Add `workspace_empty_format`,
+- **A format per state**: `workspace_empty_format`,
   `workspace_urgent_format` and `workspace_activity_format`. Each is unset
-  by default and falls back to `workspace_format`, so the precedence is
+  by default and falls back to `workspace_format`; the precedence is
   current, then urgent, then activity, then empty or occupied.
-- **Hover.** The bar has no hover state anywhere. Add
-  `workspace_hover_format` with `colors.ws_hover_fg` / `ws_hover_bg`, drawn
-  while the pointer is over a workspace. Modules get the same thing as a
-  `hover_style` role, as title pieces do. Pointer motion is already
-  reported (pickers select rows by hover); a hover redraws only the bar,
-  and only when the piece under the pointer changes.
-- **How many show.** `show` also takes a number (`show = 5`: 1 to 5
+- **Hover is colour, over the state's own format** (B4):
+  `colors.ws_hover_fg` / `ws_hover_bg`. The proposed
+  `workspace_hover_format` is dropped, because it replaced the dot under
+  the pointer and so the dot stopped saying what it was. Modules get the
+  same thing as a `hover_style` role, as title pieces do. Pointer motion is
+  already reported (pickers select rows by hover); a hover redraws only the
+  bar, and only when the piece under the pointer changes.
+- **How many show**: `show` also takes a number (`show = 5`: 1 to 5
   always, plus any higher one that is occupied), next to `"occupied"` and
   `"all"`.
+- **Formats for different states should be the same width** (B9), and
+  CONFIG.md says so. A cell cannot grow, so "bigger" is another glyph, and
+  `⬤` is drawn wider than a cell by several fonts. The handoff's dots are
+  three cells each, the current one `●` on a chip, so the row does not
+  shift as focus moves.
 
-**Messages go where the config puts them** (2026-11-04, proposed). Any
-module can sit on any side already, but a message (from ranma or
-`ranma.notify`) always takes the centre. With the workspaces moved to the
-centre, every message hides them. So `message` becomes a module name: a
+**Messages go where the config puts them.** Any module could already sit
+on any side, but a message (from ranma or `ranma.notify`) always took the
+centre, so it hid workspaces moved there. `message` is now a module name: a
 side that lists it shows messages there, in its place, and a config that
-lists it nowhere gets the centre, as today. Listed once at most, which is
-strict as names always are.
-
-A different glyph is how a dot gets bigger, since a cell cannot grow:
-`·` `•` `●` `⬤`. The nested bar's compact workspaces keep their own form,
-as they already do with the other formats.
+lists it nowhere gets the centre, as before. It may be listed once at most.
+Listed on a side, a message takes no room while there is none, and when
+one arrives it pushes into the centre, since the centre gets what the
+sides leave (B10).
 
 ### Mouse binds (2026-10-13)
 

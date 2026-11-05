@@ -1,0 +1,2597 @@
+# ranma: title bars a theme can build (c435-c440) and powerline bars (c444-c446).
+# Text mockups, cell for cell. Every colour is a theme role; '(NEW)' marks a role this
+# handoff had to invent. Powerline glyphs are the real Nerd Font code points (U+E0B0-E0B6);
+# pane icons are stand-ins ($ ✎ ◆ ≡) for what [icons] maps each program to.
+# Findings (F, R, D, B) are on the design's first artboard and at the end of this file.
+
+
+################ Window ################
+
+## Window · focused, unfocused, float, urgent, synced, badges  (120x32)
+# left: the focused zsh, two badges · top right: nvim rang the bell (urgent) · bottom right: a group of two tabs, synced input (⇉) · the float over them
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕   ✎ nvim src/render.rs                            ⊡  ▢  ✕ 
+ ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,              
+ running 412 tests                                            794     let own = app.pane_theme(view.id);                
+ ............................. ✎ notes.md                               ⊡  ▢  ✕ own.as_ref()                          
+ test result: ok. 412 passed;  # c435 title bars                                  or(&app.config.theme);                
+ ❯ git status -sb                                                                 me.border;                            
+ ## main...origin/main         - edges belong to the theme                        if view.floating {                    
+  M src/render.rs              - drag the row, click buttons                      ng()                                  
+  M doc/DESIGN.md              - ⇉ must stay loud                                 tyle };                               
+ ❯ █                           - a button drops whole                                                                   
+                                                                                  e the focused border                  
+                               TODO: tabs in the title row?                        mode colour, so it is                
+                                                                                  hich pane the next                    
+                                                                                  plies to.                             
+                                                                                                                        
+                                                                                                                        
+                                                              ⇉  ◆ cargo watch   ≡ logs                       ⊡  ▢  ✕ 
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                  Finished `dev` profile in 2.41s                       
+                                                              [Finished running. Exit status: 0]                        
+                                                                                                                        
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ main   1:zsh  2:nvim  3                            ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeeeeeeeeafghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhg
+i...............iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj............................................jjjjjjjjjjjjjj
+i.................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..........................................jjjjjjjjjjjjjjjj
+i.............................kllllllllllllllllllllllllllllllllllllllllllllllllllk............jjjjjjjjjjjjjjjjjjjjjjjjjj
+i.............................m.................nnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.....................jjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.........jjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i.....................iiiiiiiin...........................nnnnooooqqqqqqqqqqqqqqqqp.................jjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin.............................nnoooommmmmmmmmmmmmmmmp...jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin..................nnnnnnnnnnnnnooooqqqqqqqqqqqqqqqqp......jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i...iiiiiiiiiiiiiiiiiiiiiiiiiin......................nnnnnnnnnoooonnnnnnnnnnnnnnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop...................jjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiin............................nnnoooooooooooooooooooop.....................jjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop.................jjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop........jjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiippppppppppppppppppppppppppppppppppppppppppppppppppppjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifrssstttttttttttttttsssssssssssssssssssssssssssssssssssssssr
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj...................................jjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..................................jjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+uuuuuuvwwwwwwwxxxxxxxxyyyvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg default (the terminal's ground)
+   g  fg border_urgent · bg default (the terminal's ground)
+   h  fg title_fg_urgent (NEW) · bg border_urgent
+   i  fg default · bg active_bg
+   j  fg default · bg inactive_bg
+   k  fg title_bg_floating · bg default (the terminal's ground)
+   l  fg title_fg_floating · bg title_bg_floating
+   m  fg foreground · bg floating_bg (NEW)
+   n  fg default · bg floating_bg (NEW)
+   o  fg color8 · bg floating_bg (NEW)
+   p  fg the cell's own, mixed toward shadow · bg shadow
+   q  fg color5 · bg floating_bg (NEW)
+   r  fg border_synced · bg default (the terminal's ground)
+   s  fg title_fg_synced (NEW) · bg border_synced
+   t  fg tab_active_fg · bg tab_active_bg · bold
+   u  fg bar_dim · bg bar_bg
+   v  fg bar_fg · bg bar_bg
+   w  fg ws_active_fg · bg ws_active_bg · bold
+   x  fg ws_occupied · bg bar_bg
+   y  fg ws_empty · bg bar_bg
+
+## Window · WM mode  (120x32)
+# the focused pane's row takes mode_bg; nothing else on screen uses it
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕   ✎ nvim src/render.rs                            ⊡  ▢  ✕ 
+ ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,              
+ running 412 tests                                            794     let own = app.pane_theme(view.id);                
+ ............................. ✎ notes.md                               ⊡  ▢  ✕ own.as_ref()                          
+ test result: ok. 412 passed;  # c435 title bars                                  or(&app.config.theme);                
+ ❯ git status -sb                                                                 me.border;                            
+ ## main...origin/main         - edges belong to the theme                        if view.floating {                    
+  M src/render.rs              - drag the row, click buttons                      ng()                                  
+  M doc/DESIGN.md              - ⇉ must stay loud                                 tyle };                               
+ ❯ █                           - a button drops whole                                                                   
+                                                                                  e the focused border                  
+                               TODO: tabs in the title row?                        mode colour, so it is                
+                                                                                  hich pane the next                    
+                                                                                  plies to.                             
+                                                                                                                        
+                                                                                                                        
+                                                              ⇉  ◆ cargo watch   ≡ logs                       ⊡  ▢  ✕ 
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                  Finished `dev` profile in 2.41s                       
+                                                              [Finished running. Exit status: 0]                        
+                                                                                                                        
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ WM    main   1:zsh  2:nvim  3                      ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccccccccccccccccccccccccccccccccadefffffffffffffffffffffffffffffffffffffffffffffffffffffffffe
+g...............ggggggggggggggggggggggggggggggggggggggggggggdh............................................hhhhhhhhhhhhhh
+g.................ggggggggggggggggggggggggggggggggggggggggggdh..........................................hhhhhhhhhhhhhhhh
+g.............................ijjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjji............hhhhhhhhhhhhhhhhhhhhhhhhhh
+g.............................k.................llllllllllllllmmmmkkkkkkkkkkkkkkkkn.....................hhhhhhhhhhhhhhhh
+g................gggggggggggggllllllllllllllllllllllllllllllllmmmmkkkkkkkkkkkkkkkkn.........hhhhhhhhhhhhhhhhhhhhhhhhhhhh
+g.....................ggggggggl...........................llllmmmmoooooooooooooooon.................hhhhhhhhhhhhhhhhhhhh
+g................gggggggggggggl.............................llmmmmkkkkkkkkkkkkkkkkn...hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+g................gggggggggggggl..................lllllllllllllmmmmoooooooooooooooon......hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+g...ggggggggggggggggggggggggggl......................lllllllllmmmmllllllllllllllllnhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggllllllllllllllllllllllllllllllllmmmmmmmmmmmmmmmmmmmmn...................hhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggl............................lllmmmmmmmmmmmmmmmmmmmmn.....................hhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggllllllllllllllllllllllllllllllllmmmmmmmmmmmmmmmmmmmmn.................hhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggllllllllllllllllllllllllllllllllmmmmmmmmmmmmmmmmmmmmn........hhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+gggggggggggggggggggggggggggggggnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdpqqqrrrrrrrrrrrrrrrqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh.......................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh.........................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh...................................hhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh..................................hhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh.......................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdh.........................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+bbbbssttttttsuuuuuuuvvvvvvvvwwwsssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
+   a  fg mode_bg · bg default (the terminal's ground)
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_fg · bg mode_bg
+   d  fg default · bg default (the terminal's ground)
+   e  fg border_urgent · bg default (the terminal's ground)
+   f  fg title_fg_urgent (NEW) · bg border_urgent
+   g  fg default · bg active_bg
+   h  fg default · bg inactive_bg
+   i  fg title_bg_floating · bg default (the terminal's ground)
+   j  fg title_fg_floating · bg title_bg_floating
+   k  fg foreground · bg floating_bg (NEW)
+   l  fg default · bg floating_bg (NEW)
+   m  fg color8 · bg floating_bg (NEW)
+   n  fg the cell's own, mixed toward shadow · bg shadow
+   o  fg color5 · bg floating_bg (NEW)
+   p  fg border_synced · bg default (the terminal's ground)
+   q  fg title_fg_synced (NEW) · bg border_synced
+   r  fg tab_active_fg · bg tab_active_bg · bold
+   s  fg bar_fg · bg bar_bg
+   t  fg bar_dim · bg bar_bg
+   u  fg ws_active_fg · bg ws_active_bg · bold
+   v  fg ws_occupied · bg bar_bg
+   w  fg ws_empty · bg bar_bg
+
+## Window · pointer on close  (60x2)
+# hover_style on close; every other cell of the row is still the move drag
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕ 
+ ❯ cargo test -q                                            
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeeeeefffa
+g...............gggggggggggggggggggggggggggggggggggggggggggg
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg roles.close_hover.fg · bg roles.close_hover.bg
+   g  fg default · bg active_bg
+
+## Window · pointer on zoom  (60x2)
+# hover_style on zoom; every other cell of the row is still the move drag
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕ 
+ ❯ cargo test -q                                            
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeefffeeea
+g...............gggggggggggggggggggggggggggggggggggggggggggg
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg roles.btn_hover.fg · bg roles.btn_hover.bg
+   g  fg default · bg active_bg
+
+## Window · two plugin badges, 60 wide  (60x4)
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕ 
+ ❯ cargo test -q                                            
+ running 412 tests                                          
+ ....................................................       
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeeeeeeeea
+f...............ffffffffffffffffffffffffffffffffffffffffffff
+f.................ffffffffffffffffffffffffffffffffffffffffff
+f....................................................fffffff
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg active_bg
+
+## Window · the same pane at 40  (40x4)
+# the badges' words go first
+ $ ~/projects/ranma  ±  ●     ⊡  ▢  ✕ 
+ ❯ cargo test -q                        
+ running 412 tests                      
+ ...................................... 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbcccdddeeeeeeeeeeeea
+f...............ffffffffffffffffffffffff
+f.................ffffffffffffffffffffff
+f......................................f
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg active_bg
+
+## Window · a 24-column pane, as proposed  (24x7)
+# right side first: the buttons keep their room, the left is cut at its end
+ $ ~/proje…   ⊡  ▢  ✕ 
+ ❯ cargo test -q        
+ running 412 tests      
+ ...................... 
+ test result: ok. 412 p 
+ ❯ git status -sb       
+ ## main...origin/main  
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbcccccccccca
+d...............dddddddd
+d.................dddddd
+d......................d
+d......................d
+d................ddddddd
+d.....................dd
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg title_fg_active · bg title_bg_active
+   d  fg default · bg active_bg
+
+## Window · 40 columns, as proposed (right side first)  (40x1)
+# synced, three badges: dim, accent, urgent
+ ⇉ $ ~/projects/ranma  ●  !   ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbbbcccbbbcccccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 32 columns, as proposed (right side first)  (32x1)
+ ⇉ $ ~/projects/ra…   ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbcccccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 24 columns, as proposed (right side first)  (24x1)
+ ⇉ $ ~/pro…   ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbcccccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 18 columns, as proposed (right side first)  (18x1)
+        ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbba
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 40 columns, this handoff's ladder (F7)  (40x1)
+# synced, three badges: dim, accent, urgent
+ ⇉ $ ~/projects/r…  ±  ●  !   ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbccccccbbbcccccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 32 columns, this handoff's ladder (F7)  (32x1)
+ ⇉ $ ~/pr…  ±  ●  !   ⊡  ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbccccccbbbcccccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 24 columns, this handoff's ladder (F7)  (24x1)
+ ⇉ $ ~/pr…  !    ▢  ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbcccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · 18 columns, this handoff's ladder (F7)  (18x1)
+ ⇉ $  !       ✕ 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbcccccccca
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg title_fg_synced (NEW) · bg border_synced
+
+## Window · the group as proposed: a tab row, then the pane's own title row  (59x5)
+# DESIGN.md: "Groups keep their tab bar" (F1)
+ cargo watch                  logs                         
+ ⇉ ◆ cargo watch                                 ⊡  ▢  ✕ 
+ [Running 'cargo check']                                   
+     Checking ranma v0.4.0                                 
+     Finished `dev` profile in 2.41s                       
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaabbbbbbbbbbbbbbbbcccccccccccccccccccccccccccccc
+deeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed
+f.......................fffffffffffffffffffffffffffffffffff
+f.........................fffffffffffffffffffffffffffffffff
+f...................................fffffffffffffffffffffff
+   a  fg tab_active_fg · bg tab_active_bg · bold
+   b  fg tab_active_fg · bg tab_active_bg
+   c  fg tab_inactive_fg · bg tab_inactive_bg
+   d  fg border_synced · bg default (the terminal's ground)
+   e  fg title_fg_synced (NEW) · bg border_synced
+   f  fg default · bg inactive_bg
+
+
+################ Pills ################
+
+## Pills · focused, unfocused, float, urgent, synced, badges  (120x32)
+# left: the focused zsh, two badges · top right: nvim rang the bell (urgent) · bottom right: a group of two tabs, synced input (⇉) · the float over them
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮ ╭─ ✎ nvim src/render.rs ──────────────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │ │ 793 fn draw_border(f: &mut Frame, app: &App,            │
+│ running 412 tests                                        │ │ 794     let own = app.pane_theme(view.id);              │
+│ ............................╭─ ✎ notes.md ─────────────────────── ⊡  ▢  ✕ ─╮ own.as_ref()                        │
+│ test result: ok. 412 passed;│ # c435 title bars                                │_or(&app.config.theme);              │
+│ ❯ git status -sb            │                                                  │eme.border;                          │
+│ ## main...origin/main       │ - edges belong to the theme                      │ if view.floating {                  │
+│  M src/render.rs            │ - drag the row, click buttons                    │ing()                                │
+│  M doc/DESIGN.md            │ - ⇉ must stay loud                               │style };                             │
+│ ❯ █                         │ - a button drops whole                           │                                     │
+│                             │                                                  │de the focused border                │
+│                             │ TODO: tabs in the title row?                     │e mode colour, so it is              │
+│                             │                                                  │which pane the next                  │
+│                             ╰──────────────────────────────────────────────────╯pplies to.                           │
+│                                                          │ ╰─────────────────────────────────────────────────────────╯
+│                                                          │                                                            
+│                                                          │ ╭─ ⇉ ◆ cargo watch ─ ≡ logs ────────────── ⊡  ▢  ✕ ─╮
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │     Finished `dev` profile in 2.41s                     │
+│                                                          │ │ [Finished running. Exit status: 0]                      │
+│                                                          │ │                                                         │
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+╰──────────────────────────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────╯
+ main   1:zsh  2:nvim  3                            ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbadeeedadfffdaaaaaaaaaaadgggggggggdaahiiijjjjjjjjjjjjjjjjjjjjjjiiiiiiiiiiiiiiiiiiiiidgggggggggdii
+ak...............kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahil............................................lllllllllllli
+ak.................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahil..........................................lllllllllllllli
+ak............................mmnoooooooooooonmmmmmmmmmmmmmmmmmmmmmmmdgggggggggdmm.............lllllllllllllllllllllllli
+ak............................mp.................qqqqqqqqqqrqsqttttppppppppppppppmu......................lllllllllllllli
+ak................kkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttppppppppppppppmu..........lllllllllllllllllllllllllli
+ak.....................kkkkkkkmq...........................rqsqttttvvvvvvvvvvvvvvmu..................lllllllllllllllllli
+ak................kkkkkkkkkkkkmq.............................sqttttppppppppppppppmu....lllllllllllllllllllllllllllllllli
+ak................kkkkkkkkkkkkmq..................qqqqqqqqqrqsqttttvvvvvvvvvvvvvvmu.......llllllllllllllllllllllllllllli
+ak...kkkkkkkkkkkkkkkkkkkkkkkkkmq......................qqqqqrqsqttttqqqqqqqqqqqqqqmulllllllllllllllllllllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttttttttttttttttmu....................lllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmq............................qsqttttttttttttttttttmu......................lllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttttttttttttttttmu..................lllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmu.........llllllllllllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwwwxxxxxxxxxxxxxxxxxwwyzzzzzzzzywwwwwwwwwwwwwwdgggggggggdww
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.......................lllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.........................lllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl...................................lllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl..................................llllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.......................lllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.........................lllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+AAAAAABCCCCCCCDDDDDDDDEEEBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg bar_dim · bg piece_bg (NEW)
+   f  fg bar_accent · bg piece_bg (NEW)
+   g  fg piece_fg (NEW) · bg piece_bg (NEW)
+   h  fg default · bg default (the terminal's ground)
+   i  fg border_urgent · bg default (the terminal's ground)
+   j  fg title_fg_urgent (NEW) · bg border_urgent
+   k  fg default · bg active_bg
+   l  fg default · bg inactive_bg
+   m  fg border_floating · bg default (the terminal's ground)
+   n  fg title_bg_floating · bg default (the terminal's ground)
+   o  fg title_fg_floating · bg title_bg_floating
+   p  fg foreground · bg floating_bg (NEW)
+   q  fg default · bg floating_bg (NEW)
+   r  fg border_active · bg floating_bg (NEW)
+   s  fg border_urgent · bg floating_bg (NEW)
+   t  fg color8 · bg floating_bg (NEW)
+   u  fg the cell's own, mixed toward shadow · bg shadow
+   v  fg color5 · bg floating_bg (NEW)
+   w  fg border_synced · bg default (the terminal's ground)
+   x  fg title_fg_synced (NEW) · bg border_synced · bold
+   y  fg tab_inactive_bg · bg default (the terminal's ground)
+   z  fg tab_inactive_fg · bg tab_inactive_bg
+   A  fg bar_dim · bg bar_bg
+   B  fg bar_fg · bg bar_bg
+   C  fg ws_active_fg · bg ws_active_bg · bold
+   D  fg ws_occupied · bg bar_bg
+   E  fg ws_empty · bg bar_bg
+
+## Pills · WM mode  (120x32)
+# the focused pane's row takes mode_bg; nothing else on screen uses it
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮ ╭─ ✎ nvim src/render.rs ──────────────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │ │ 793 fn draw_border(f: &mut Frame, app: &App,            │
+│ running 412 tests                                        │ │ 794     let own = app.pane_theme(view.id);              │
+│ ............................╭─ ✎ notes.md ─────────────────────── ⊡  ▢  ✕ ─╮ own.as_ref()                        │
+│ test result: ok. 412 passed;│ # c435 title bars                                │_or(&app.config.theme);              │
+│ ❯ git status -sb            │                                                  │eme.border;                          │
+│ ## main...origin/main       │ - edges belong to the theme                      │ if view.floating {                  │
+│  M src/render.rs            │ - drag the row, click buttons                    │ing()                                │
+│  M doc/DESIGN.md            │ - ⇉ must stay loud                               │style };                             │
+│ ❯ █                         │ - a button drops whole                           │                                     │
+│                             │                                                  │de the focused border                │
+│                             │ TODO: tabs in the title row?                     │e mode colour, so it is              │
+│                             │                                                  │which pane the next                  │
+│                             ╰──────────────────────────────────────────────────╯pplies to.                           │
+│                                                          │ ╰─────────────────────────────────────────────────────────╯
+│                                                          │                                                            
+│                                                          │ ╭─ ⇉ ◆ cargo watch ─ ≡ logs ────────────── ⊡  ▢  ✕ ─╮
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │     Finished `dev` profile in 2.41s                     │
+│                                                          │ │ [Finished running. Exit status: 0]                      │
+│                                                          │ │                                                         │
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+╰──────────────────────────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────╯
+ WM    main   1:zsh  2:nvim  3                      ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbbbbbbbbbbbbbbbbaacdddcaceeecaaaaaaaaaaacfffffffffcaaghhhiiiiiiiiiiiiiiiiiiiiiihhhhhhhhhhhhhhhhhhhhhcfffffffffchh
+aj...............jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaghk............................................kkkkkkkkkkkkh
+aj.................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaghk..........................................kkkkkkkkkkkkkkh
+aj............................llmnnnnnnnnnnnnmlllllllllllllllllllllllcfffffffffcll.............kkkkkkkkkkkkkkkkkkkkkkkkh
+aj............................lo.................ppppppppppqprpssssoooooooooooooolt......................kkkkkkkkkkkkkkh
+aj................jjjjjjjjjjjjlppppppppppppppppppppppppppppqprpssssoooooooooooooolt..........kkkkkkkkkkkkkkkkkkkkkkkkkkh
+aj.....................jjjjjjjlp...........................qprpssssuuuuuuuuuuuuuult..................kkkkkkkkkkkkkkkkkkh
+aj................jjjjjjjjjjjjlp.............................rpssssoooooooooooooolt....kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh
+aj................jjjjjjjjjjjjlp..................pppppppppqprpssssuuuuuuuuuuuuuult.......kkkkkkkkkkkkkkkkkkkkkkkkkkkkkh
+aj...jjjjjjjjjjjjjjjjjjjjjjjjjlp......................pppppqprpssssppppppppppppppltkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjlppppppppppppppppppppppppppppqprpsssssssssssssssssslt....................kkkkkkkkkkkkkkkkh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjlp............................prpsssssssssssssssssslt......................kkkkkkkkkkkkkkh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjlppppppppppppppppppppppppppppqprpsssssssssssssssssslt..................kkkkkkkkkkkkkkkkkkh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjllllllllllllllllllllllllllllllllllllllllllllllllllllt.........kkkkkkkkkkkkkkkkkkkkkkkkkkkh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjtttttttttttttttttttttttttttttttttttttttttttttttttttthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvvvwwwwwwwwwwwwwwwwwvvxyyyyyyyyxvvvvvvvvvvvvvvcfffffffffcvv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk.......................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk.........................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk...................................kkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk..................................kkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk.......................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvk.........................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+ajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjagvkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkv
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaagvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+bbbbzzAAAAAAzBBBBBBBCCCCCCCCDDDzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+   a  fg mode_bg · bg default (the terminal's ground)
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg bar_dim · bg piece_bg (NEW)
+   e  fg bar_accent · bg piece_bg (NEW)
+   f  fg piece_fg (NEW) · bg piece_bg (NEW)
+   g  fg default · bg default (the terminal's ground)
+   h  fg border_urgent · bg default (the terminal's ground)
+   i  fg title_fg_urgent (NEW) · bg border_urgent
+   j  fg default · bg active_bg
+   k  fg default · bg inactive_bg
+   l  fg border_floating · bg default (the terminal's ground)
+   m  fg title_bg_floating · bg default (the terminal's ground)
+   n  fg title_fg_floating · bg title_bg_floating
+   o  fg foreground · bg floating_bg (NEW)
+   p  fg default · bg floating_bg (NEW)
+   q  fg mode_bg · bg floating_bg (NEW)
+   r  fg border_urgent · bg floating_bg (NEW)
+   s  fg color8 · bg floating_bg (NEW)
+   t  fg the cell's own, mixed toward shadow · bg shadow
+   u  fg color5 · bg floating_bg (NEW)
+   v  fg border_synced · bg default (the terminal's ground)
+   w  fg title_fg_synced (NEW) · bg border_synced · bold
+   x  fg tab_inactive_bg · bg default (the terminal's ground)
+   y  fg tab_inactive_fg · bg tab_inactive_bg
+   z  fg bar_fg · bg bar_bg
+   A  fg bar_dim · bg bar_bg
+   B  fg ws_active_fg · bg ws_active_bg · bold
+   C  fg ws_occupied · bg bar_bg
+   D  fg ws_empty · bg bar_bg
+
+## Pills · pointer on close  (60x2)
+# hover_style on close; every other cell of the row is still the move drag
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbadeeedadfffdaaaaaaaaaaadgggggghhhdaa
+ai...............iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiia
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg bar_dim · bg piece_bg (NEW)
+   f  fg bar_accent · bg piece_bg (NEW)
+   g  fg piece_fg (NEW) · bg piece_bg (NEW)
+   h  fg roles.close_hover.fg · bg roles.close_hover.bg
+   i  fg default · bg active_bg
+
+## Pills · pointer on zoom  (60x2)
+# hover_style on zoom; every other cell of the row is still the move drag
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbadeeedadfffdaaaaaaaaaaadggghhhgggdaa
+ai...............iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiia
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg bar_dim · bg piece_bg (NEW)
+   f  fg bar_accent · bg piece_bg (NEW)
+   g  fg piece_fg (NEW) · bg piece_bg (NEW)
+   h  fg roles.btn_hover.fg · bg roles.btn_hover.bg
+   i  fg default · bg active_bg
+
+## Pills · two plugin badges, 60 wide  (60x4)
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │
+│ running 412 tests                                        │
+╰──────────────────────────────────────────────────────────╯
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbadeeedadfffdaaaaaaaaaaadgggggggggdaa
+ah...............hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhha
+ah.................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhha
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg bar_dim · bg piece_bg (NEW)
+   f  fg bar_accent · bg piece_bg (NEW)
+   g  fg piece_fg (NEW) · bg piece_bg (NEW)
+   h  fg default · bg active_bg
+
+## Pills · the same pane at 40  (40x4)
+# the badges' words go first
+╭─ $ ~/projects/ranma ─── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                      │
+│ running 412 tests                    │
+╰──────────────────────────────────────╯
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbaaadeeeeeeeeedaa
+af...............ffffffffffffffffffffffa
+af.................ffffffffffffffffffffa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg piece_fg (NEW) · bg piece_bg (NEW)
+   f  fg default · bg active_bg
+
+## Pills · a 24-column pane, as proposed  (24x7)
+# right side first: the buttons keep their room, the left is cut at its end
+╭─ $ ~… ─ ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q      │
+│ running 412 tests    │
+│ .....................│
+│ test result: ok. 412 │
+│ ❯ git status -sb     │
+╰──────────────────────╯
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccbadeeeeeeeeedaa
+af...............ffffffa
+af.................ffffa
+af.....................a
+af.....................a
+af................fffffa
+aaaaaaaaaaaaaaaaaaaaaaaa
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg piece_fg (NEW) · bg piece_bg (NEW)
+   f  fg default · bg active_bg
+
+## Pills · 40 columns, as proposed (right side first)  (40x1)
+# synced, three badges: dim, accent, urgent
+╭─ ⇉ $ ~/projects/ranma ─ ⊡  ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbbbbbbbbbbbbbbbbbbaacdddddddddcaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 32 columns, as proposed (right side first)  (32x1)
+╭─ ⇉ $ ~/proje… ─ ⊡  ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbbbbbbbbbbaacdddddddddcaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 24 columns, as proposed (right side first)  (24x1)
+╭────────── ⊡  ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaabcccccccccbaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg piece_bg (NEW) · bg default (the terminal's ground)
+   c  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 18 columns, as proposed (right side first)  (18x1)
+╭──── ⊡  ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaabcccccccccbaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg piece_bg (NEW) · bg default (the terminal's ground)
+   c  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 40 columns, this handoff's ladder (F7)  (40x1)
+# synced, three badges: dim, accent, urgent
+╭─ ⇉ $ ~/pr… ─ ! ────── ⊡  ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbbbbbbbaacdddcaaaaaaceeeeeeeeecaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg bar_urgent · bg piece_bg (NEW) · bold
+   e  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 32 columns, this handoff's ladder (F7)  (32x1)
+╭─ ⇉ $ ~/pr… ─ ! ─ ▢  ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbbbbbbbaacdddcaceeeeeecaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg bar_urgent · bg piece_bg (NEW) · bold
+   e  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 24 columns, this handoff's ladder (F7)  (24x1)
+╭─ ⇉ $ ─ ! ── ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbaacdddcaaceeecaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg bar_urgent · bg piece_bg (NEW) · bold
+   e  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+## Pills · 18 columns, this handoff's ladder (F7)  (18x1)
+╭─ ⇉ $ ── ✕ ─╮
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaabbbbbaaacdddcaa
+   a  fg border_synced · bg default (the terminal's ground)
+   b  fg title_fg_synced (NEW) · bg border_synced · bold
+   c  fg piece_bg (NEW) · bg default (the terminal's ground)
+   d  fg piece_fg (NEW) · bg piece_bg (NEW)
+
+
+################ Quiet ################
+
+## Quiet · focused, unfocused, float, urgent, synced, badges  (120x32)
+# left: the focused zsh, two badges · top right: nvim rang the bell (urgent) · bottom right: a group of two tabs, synced input (⇉) · the float over them
+  ~/projects/ranma                   ± main  ● 2 running  1    nvim src/render.rs                                     2 
+  ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,             
+  running 412 tests                                            794     let own = app.pane_theme(view.id);               
+  ............................  notes.md                                        4  own.as_ref()                         
+  test result: ok. 412 passed;  # c435 title bars                                 ░or(&app.config.theme);               
+  ❯ git status -sb                                                                ░me.border;                           
+  ## main...origin/main         - edges belong to the theme                       ░if view.floating {                   
+   M src/render.rs              - drag the row, click buttons                     ░ng()                                 
+   M doc/DESIGN.md              - ⇉ must stay loud                                ░tyle };                              
+  ❯ █                           - a button drops whole                            ░                                     
+                                                                                  ░e the focused border                 
+                                TODO: tabs in the title row?                      ░ mode colour, so it is               
+                                                                                  ░hich pane the next                   
+                                                                                  ░plies to.                            
+                               ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                     
+                                                                                                                        
+                                                               ⇉ cargo watch · logs                                   3 
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                   Finished `dev` profile in 2.41s                      
+                                                               [Finished running. Exit status: 0]                       
+                                                                                                                        
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ main   1:zsh  2:nvim  3                            ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbccccccccdddddddddddddbbefffffffffffffffffffffffffffffffffffffffffffffffffffffffffgg
+hh...............hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii............................................iiiiiiiiiiiii
+hh.................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii..........................................iiiiiiiiiiiiiii
+hh............................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjkk.............iiiiiiiiiiiiiiiiiiiiiiiii
+hh............................ll.................mmmmmmmmmmmmmmnnnnooooooooooooooop......................iiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnooooooooooooooop..........iiiiiiiiiiiiiiiiiiiiiiiiiii
+hh.....................hhhhhhhmm...........................mmmmnnnnqqqqqqqqqqqqqqqp..................iiiiiiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmm.............................mmnnnnooooooooooooooop....iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmm..................mmmmmmmmmmmmmnnnnqqqqqqqqqqqqqqqp.......iiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hh...hhhhhhhhhhhhhhhhhhhhhhhhhmm......................mmmmmmmmmnnnnmmmmmmmmmmmmmmmpiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp....................iiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmm............................mmmnnnnnnnnnnnnnnnnnnnp......................iiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp..................iiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp.........iiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhrrrrrrrrrrrrrrrrrrrrrrrrrrrrrsppppppppppppppppppppppiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhettttuuuuuuuuuuugggggggtttttttttttttttttttttttttttttttttttgg
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.......................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.........................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii...................................iiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii..................................iiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.......................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.........................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+vvvvvvwxxxxxxxyyyyyyyyzzzwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+   a  fg title_fg_active · bg active_bg · bold
+   b  fg title_fg_active · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg default · bg default (the terminal's ground)
+   f  fg border_urgent · bg inactive_bg
+   g  fg title_fg_inactive · bg inactive_bg
+   h  fg default · bg active_bg
+   i  fg default · bg inactive_bg
+   j  fg title_fg_floating · bg floating_bg (NEW)
+   k  fg title_fg_inactive · bg floating_bg (NEW)
+   l  fg foreground · bg floating_bg (NEW)
+   m  fg default · bg floating_bg (NEW)
+   n  fg color8, faded (dim_unfocused) · bg floating_bg (NEW)
+   o  fg foreground, faded (dim_unfocused) · bg floating_bg (NEW)
+   p  fg shadow · bg inactive_bg
+   q  fg color5, faded (dim_unfocused) · bg floating_bg (NEW)
+   r  fg shadow · bg active_bg
+   s  fg shadow · bg default (the terminal's ground)
+   t  fg border_synced · bg inactive_bg
+   u  fg border_synced · bg inactive_bg · bold underline
+   v  fg bar_dim · bg bar_bg
+   w  fg bar_fg · bg bar_bg
+   x  fg ws_active_fg · bg ws_active_bg · bold
+   y  fg ws_occupied · bg bar_bg
+   z  fg ws_empty · bg bar_bg
+
+## Quiet · WM mode  (120x32)
+# the focused pane's row takes mode_bg; nothing else on screen uses it
+  ~/projects/ranma                   ± main  ● 2 running  1    nvim src/render.rs                                     2 
+  ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,             
+  running 412 tests                                            794     let own = app.pane_theme(view.id);               
+  ............................  notes.md                                        4  own.as_ref()                         
+  test result: ok. 412 passed;  # c435 title bars                                 ░or(&app.config.theme);               
+  ❯ git status -sb                                                                ░me.border;                           
+  ## main...origin/main         - edges belong to the theme                       ░if view.floating {                   
+   M src/render.rs              - drag the row, click buttons                     ░ng()                                 
+   M doc/DESIGN.md              - ⇉ must stay loud                                ░tyle };                              
+  ❯ █                           - a button drops whole                            ░                                     
+                                                                                  ░e the focused border                 
+                                TODO: tabs in the title row?                      ░ mode colour, so it is               
+                                                                                  ░hich pane the next                   
+                                                                                  ░plies to.                            
+                               ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                     
+                                                                                                                        
+                                                               ⇉ cargo watch · logs                                   3 
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                   Finished `dev` profile in 2.41s                      
+                                                               [Finished running. Exit status: 0]                       
+                                                                                                                        
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ WM    main   1:zsh  2:nvim  3                      ~/projects/ranma                                   Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcdddddddddddddddddddddddddddddddddddddddddddddddddddddddddee
+ff...............fffffffffffffffffffffffffffffffffffffffffffcgg............................................ggggggggggggg
+ff.................fffffffffffffffffffffffffffffffffffffffffcgg..........................................ggggggggggggggg
+ff............................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhii.............ggggggggggggggggggggggggg
+ff............................jj.................kkkkkkkkkkkkkkllllmmmmmmmmmmmmmmmn......................ggggggggggggggg
+ff................ffffffffffffkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkllllmmmmmmmmmmmmmmmn..........ggggggggggggggggggggggggggg
+ff.....................fffffffkk...........................kkkkllllooooooooooooooon..................ggggggggggggggggggg
+ff................ffffffffffffkk.............................kkllllmmmmmmmmmmmmmmmn....ggggggggggggggggggggggggggggggggg
+ff................ffffffffffffkk..................kkkkkkkkkkkkkllllooooooooooooooon.......gggggggggggggggggggggggggggggg
+ff...fffffffffffffffffffffffffkk......................kkkkkkkkkllllkkkkkkkkkkkkkkknggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkllllllllllllllllllln....................ggggggggggggggggg
+ffffffffffffffffffffffffffffffkk............................kkkllllllllllllllllllln......................ggggggggggggggg
+ffffffffffffffffffffffffffffffkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkllllllllllllllllllln..................ggggggggggggggggggg
+ffffffffffffffffffffffffffffffkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkllllllllllllllllllln.........gggggggggggggggggggggggggggg
+fffffffffffffffffffffffffffffffpppppppppppppppppppppppppppppqnnnnnnnnnnnnnnnnnnnnnnggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcrrrrssssssssssseeeeeeerrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrree
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg.......................gggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg.........................gggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg...................................gggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg..................................ggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg.......................gggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcgg.........................gggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+aaaattuuuuuutvvvvvvvwwwwwwwwxxxttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
+   a  fg mode_fg · bg mode_bg · bold
+   b  fg mode_fg · bg mode_bg
+   c  fg default · bg default (the terminal's ground)
+   d  fg border_urgent · bg inactive_bg
+   e  fg title_fg_inactive · bg inactive_bg
+   f  fg default · bg active_bg
+   g  fg default · bg inactive_bg
+   h  fg title_fg_floating · bg floating_bg (NEW)
+   i  fg title_fg_inactive · bg floating_bg (NEW)
+   j  fg foreground · bg floating_bg (NEW)
+   k  fg default · bg floating_bg (NEW)
+   l  fg color8, faded (dim_unfocused) · bg floating_bg (NEW)
+   m  fg foreground, faded (dim_unfocused) · bg floating_bg (NEW)
+   n  fg shadow · bg inactive_bg
+   o  fg color5, faded (dim_unfocused) · bg floating_bg (NEW)
+   p  fg shadow · bg active_bg
+   q  fg shadow · bg default (the terminal's ground)
+   r  fg border_synced · bg inactive_bg
+   s  fg border_synced · bg inactive_bg · bold underline
+   t  fg bar_fg · bg bar_bg
+   u  fg bar_dim · bg bar_bg
+   v  fg ws_active_fg · bg ws_active_bg · bold
+   w  fg ws_occupied · bg bar_bg
+   x  fg ws_empty · bg bar_bg
+
+## Quiet · two plugin badges, 60 wide  (60x4)
+  ~/projects/ranma                   ± main  ● 2 running  1 
+  ❯ cargo test -q                                           
+  running 412 tests                                         
+  ....................................................      
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbccccccccdddddddddddddbb
+ee...............eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+ee.................eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+ee....................................................eeeeee
+   a  fg title_fg_active · bg active_bg · bold
+   b  fg title_fg_active · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg default · bg active_bg
+
+## Quiet · the same pane at 40  (40x4)
+# the badges' words go first
+  ~/projects/ra… ± main  ● 2 running  1 
+  ❯ cargo test -q                       
+  running 412 tests                     
+  ..................................... 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaabccccccccdddddddddddddbb
+ee...............eeeeeeeeeeeeeeeeeeeeeee
+ee.................eeeeeeeeeeeeeeeeeeeee
+ee.....................................e
+   a  fg title_fg_active · bg active_bg · bold
+   b  fg title_fg_active · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg default · bg active_bg
+
+## Quiet · a 24-column pane, as proposed  (24x7)
+# right side first: the buttons keep their room, the left is cut at its end
+ ± main  ● 2 running  1 
+  ❯ cargo test -q       
+  running 412 tests     
+  ..................... 
+  test result: ok. 412  
+  ❯ git status -sb      
+  ## main...origin/main 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbcccccccccccccaa
+dd...............ddddddd
+dd.................ddddd
+dd.....................d
+dd.....................d
+dd................dddddd
+dd.....................d
+   a  fg title_fg_active · bg active_bg
+   b  fg bar_dim · bg active_bg
+   c  fg bar_accent · bg active_bg
+   d  fg default · bg active_bg
+
+## Quiet · 40 columns, as proposed (right side first)  (40x1)
+# synced, three badges: dim, accent, urgent
+  ⇉ ~/p… ± main  ● 2 running  ! prod  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaabccccccccdddddddddddddeeeeeeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 32 columns, as proposed (right side first)  (32x1)
+ ± main  ● 2 running  ! prod  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbcccccccccccccddddddddaa
+   a  fg border_synced · bg active_bg
+   b  fg bar_dim · bg active_bg
+   c  fg bar_accent · bg active_bg
+   d  fg bar_urgent · bg active_bg
+
+## Quiet · 24 columns, as proposed (right side first)  (24x1)
+  ⇉ ~/proje… ±  ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaabcccdddeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 18 columns, as proposed (right side first)  (18x1)
+  ⇉ ~… ±  ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccdddeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 40 columns, this handoff's ladder (F7)  (40x1)
+# synced, three badges: dim, accent, urgent
+  ⇉ ~/projects/ranma         ±  ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaaaabbbbbbbbbcccdddeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 32 columns, this handoff's ladder (F7)  (32x1)
+  ⇉ ~/projects/ranma ±  ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaaaabcccdddeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 24 columns, this handoff's ladder (F7)  (24x1)
+  ⇉ ~/proje… ±  ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaabcccdddeeebb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg bar_urgent · bg active_bg
+
+## Quiet · 18 columns, this handoff's ladder (F7)  (18x1)
+  ⇉ ~/pr… ●  !  1 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaabcccdddbb
+   a  fg border_synced · bg active_bg · bold
+   b  fg border_synced · bg active_bg
+   c  fg bar_accent · bg active_bg
+   d  fg bar_urgent · bg active_bg
+
+## Quiet with title_bg_* unset · WM mode  (60x4)
+# the row is a border line of blanks, so the mode colour lands on the title's letters only (F10)
+  ~/projects/ranma                   ± main  ● 2 running  1 
+  ❯ cargo test -q                                           
+  running 412 tests                                         
+  ............................  notes.md                    
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+cc...............ccccccccccccccccccccccccccccccccccccccccccc
+cc.................ccccccccccccccccccccccccccccccccccccccccc
+cc............................dddddddddddddddddddddddddddddd
+   a  fg mode_bg · bg active_bg · bold
+   b  fg mode_bg · bg active_bg
+   c  fg default · bg active_bg
+   d  fg title_fg_floating · bg floating_bg (NEW)
+
+
+################ Window at 80x24 ################
+
+## Window at 80x24  (80x24)
+ $ ~/projects/ranma  ±  ●     ⊡  ▢  ✕   ✎ nvim src/render.rs        ⊡  ▢  ✕ 
+ ❯ cargo test -q                          793 fn draw_border(f: &mut Frame, app 
+ running 412 test ✎ notes.md                 ⊡  ▢  ✕ wn = app.pane_theme(view 
+ ................ # c435 title bars                    heme = own.as_ref()      
+ test result: ok.                                      unwrap_or(&app.config.th 
+ ❯ git status -sb - edges belong to the theme           = &theme.border;        
+ ## main...origin - drag the row, click buttons        tyle = if view.floating  
+  M src/render.rs - ⇉ must stay loud                   .floating()              
+  M doc/DESIGN.md - a button drops whole               e { b.style };           
+ ❯ █                                                                            
+                                          802     // In WM mode the focused bor 
+                                                                                
+                                          ⇉  ◆ cargo watch   ≡ logs   ⊡  ▢  ✕ 
+                                          [Running 'cargo check']               
+                                              Checking ranma v0.4.0             
+                                              Finished `dev` profile in 2.41s   
+                                          [Finished running. Exit status: 0]    
+                                                                                
+                                          [Running 'cargo check']               
+                                              Checking ranma v0.4.0             
+                                                                                
+                                                                                
+                                                                                
+ main   1:zsh  2:nvim  3        ~/projects/ranma               Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbcccdddeeeeeeeeeeeeafghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhg
+i...............iiiiiiiiiiiiiiiiiiiiiiiifj.....................................j
+i................kllllllllllllllllllllllllllllllllllllk........................j
+i................m.................mmmmnnnoooopppppppppq..................jjjjjj
+i................pppppppppppppppppppppnnnnoooopppppppppq.......................j
+i................n...........................opppppppppq................jjjjjjjj
+i................m.............................rrrrrrrrq.......................j
+i................n..................nnnnnnoooopppppppppq..........jjjjjjjjjjjjjj
+i................n......................nnoooorrrrrrrrrq.............jjjjjjjjjjj
+i...iiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnoooonnnnnnnnnqjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq.......................j
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffffffffffffffffffffffffffffffffffff
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifstttuuuuuuuuuuuuuuuttttttttttttttttttts
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj...................................jjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..................................jjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+vvvvvvwxxxxxxxyyyyyyyyzzzwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg default (the terminal's ground)
+   g  fg border_urgent · bg default (the terminal's ground)
+   h  fg title_fg_urgent (NEW) · bg border_urgent
+   i  fg default · bg active_bg
+   j  fg default · bg inactive_bg
+   k  fg title_bg_floating · bg default (the terminal's ground)
+   l  fg title_fg_floating · bg title_bg_floating
+   m  fg color2 · bg floating_bg (NEW)
+   n  fg default · bg floating_bg (NEW)
+   o  fg color8 · bg floating_bg (NEW)
+   p  fg foreground · bg floating_bg (NEW)
+   q  fg the cell's own, mixed toward shadow · bg shadow
+   r  fg color5 · bg floating_bg (NEW)
+   s  fg border_synced · bg default (the terminal's ground)
+   t  fg title_fg_synced (NEW) · bg border_synced
+   u  fg tab_active_fg · bg tab_active_bg · bold
+   v  fg bar_dim · bg bar_bg
+   w  fg bar_fg · bg bar_bg
+   x  fg ws_active_fg · bg ws_active_bg · bold
+   y  fg ws_occupied · bg bar_bg
+   z  fg ws_empty · bg bar_bg
+
+## Window at 80x24 · WM mode  (80x24)
+ $ ~/projects/ranma  ±  ●     ⊡  ▢  ✕   ✎ nvim src/render.rs        ⊡  ▢  ✕ 
+ ❯ cargo test -q                          793 fn draw_border(f: &mut Frame, app 
+ running 412 test ✎ notes.md                 ⊡  ▢  ✕ wn = app.pane_theme(view 
+ ................ # c435 title bars                    heme = own.as_ref()      
+ test result: ok.                                      unwrap_or(&app.config.th 
+ ❯ git status -sb - edges belong to the theme           = &theme.border;        
+ ## main...origin - drag the row, click buttons        tyle = if view.floating  
+  M src/render.rs - ⇉ must stay loud                   .floating()              
+  M doc/DESIGN.md - a button drops whole               e { b.style };           
+ ❯ █                                                                            
+                                          802     // In WM mode the focused bor 
+                                                                                
+                                          ⇉  ◆ cargo watch   ≡ logs   ⊡  ▢  ✕ 
+                                          [Running 'cargo check']               
+                                              Checking ranma v0.4.0             
+                                              Finished `dev` profile in 2.41s   
+                                          [Finished running. Exit status: 0]    
+                                                                                
+                                          [Running 'cargo check']               
+                                              Checking ranma v0.4.0             
+                                                                                
+                                                                                
+                                                                                
+ WM    main   1:zsh  2:nvim  3  ~/projects/ranma               Wed 4 Nov  20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccccccccccccadefffffffffffffffffffffffffffffffffffffe
+g...............ggggggggggggggggggggggggdh.....................................h
+g................ijjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjji........................h
+g................k.................kkkklllmmmmnnnnnnnnno..................hhhhhh
+g................nnnnnnnnnnnnnnnnnnnnnllllmmmmnnnnnnnnno.......................h
+g................l...........................mnnnnnnnnno................hhhhhhhh
+g................k.............................ppppppppo.......................h
+g................l..................llllllmmmmnnnnnnnnno..........hhhhhhhhhhhhhh
+g................l......................llmmmmpppppppppo.............hhhhhhhhhhh
+g...ggggggggggggglllllllllllllllllllllllllmmmmlllllllllohhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggoooooooooooooooooooooooooooooooooooooo.......................h
+ggggggggggggggggggggggggggggggggggggggggdddddddddddddddddddddddddddddddddddddddd
+ggggggggggggggggggggggggggggggggggggggggdqrrrsssssssssssssssrrrrrrrrrrrrrrrrrrrq
+ggggggggggggggggggggggggggggggggggggggggdh.......................hhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdh.........................hhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdh...................................hhh
+ggggggggggggggggggggggggggggggggggggggggdh..................................hhhh
+ggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdh.......................hhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdh.........................hhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+ggggggggggggggggggggggggggggggggggggggggdhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+bbbbttuuuuuutvvvvvvvwwwwwwwwxxxttttttttttttttttttttttttttttttttttttttttttttttttt
+   a  fg mode_bg · bg default (the terminal's ground)
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_fg · bg mode_bg
+   d  fg default · bg default (the terminal's ground)
+   e  fg border_urgent · bg default (the terminal's ground)
+   f  fg title_fg_urgent (NEW) · bg border_urgent
+   g  fg default · bg active_bg
+   h  fg default · bg inactive_bg
+   i  fg title_bg_floating · bg default (the terminal's ground)
+   j  fg title_fg_floating · bg title_bg_floating
+   k  fg color2 · bg floating_bg (NEW)
+   l  fg default · bg floating_bg (NEW)
+   m  fg color8 · bg floating_bg (NEW)
+   n  fg foreground · bg floating_bg (NEW)
+   o  fg the cell's own, mixed toward shadow · bg shadow
+   p  fg color5 · bg floating_bg (NEW)
+   q  fg border_synced · bg default (the terminal's ground)
+   r  fg title_fg_synced (NEW) · bg border_synced
+   s  fg tab_active_fg · bg tab_active_bg · bold
+   t  fg bar_fg · bg bar_bg
+   u  fg bar_dim · bg bar_bg
+   v  fg ws_active_fg · bg ws_active_bg · bold
+   w  fg ws_occupied · bg bar_bg
+   x  fg ws_empty · bg bar_bg
+
+
+################ Bars ################
+
+## Grouped pills · the bar under the Pills title bars  (120x32)
+# mode and workspaces in one pill, the title in the centre, cpu · mem · clock in one pill of the sys role
+╭─ $ ~/projects/ranma ─ ± ─ ● ─────────── ⊡  ▢  ✕ ─╮ ╭─ ✎ nvim src/render.rs ──────────────────── ⊡  ▢  ✕ ─╮
+│ ❯ cargo test -q                                          │ │ 793 fn draw_border(f: &mut Frame, app: &App,            │
+│ running 412 tests                                        │ │ 794     let own = app.pane_theme(view.id);              │
+│ ............................╭─ ✎ notes.md ─────────────────────── ⊡  ▢  ✕ ─╮ own.as_ref()                        │
+│ test result: ok. 412 passed;│ # c435 title bars                                │_or(&app.config.theme);              │
+│ ❯ git status -sb            │                                                  │eme.border;                          │
+│ ## main...origin/main       │ - edges belong to the theme                      │ if view.floating {                  │
+│  M src/render.rs            │ - drag the row, click buttons                    │ing()                                │
+│  M doc/DESIGN.md            │ - ⇉ must stay loud                               │style };                             │
+│ ❯ █                         │ - a button drops whole                           │                                     │
+│                             │                                                  │de the focused border                │
+│                             │ TODO: tabs in the title row?                     │e mode colour, so it is              │
+│                             │                                                  │which pane the next                  │
+│                             ╰──────────────────────────────────────────────────╯pplies to.                           │
+│                                                          │ ╰─────────────────────────────────────────────────────────╯
+│                                                          │                                                            
+│                                                          │ ╭─ ⇉ ◆ cargo watch ─ ≡ logs ────────────── ⊡  ▢  ✕ ─╮
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │     Finished `dev` profile in 2.41s                     │
+│                                                          │ │ [Finished running. Exit status: 0]                      │
+│                                                          │ │                                                         │
+│                                                          │ │ [Running 'cargo check']                                 │
+│                                                          │ │     Checking ranma v0.4.0                               │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+╰──────────────────────────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────╯
+1:zsh 2:nvim  3  5:btop                         ~/projects/ranma        cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aabccccccccccccccccccccbadeeedadfffdaaaaaaaaaaadgggggggggdaahiiijjjjjjjjjjjjjjjjjjjjjjiiiiiiiiiiiiiiiiiiiiidgggggggggdii
+ak...............kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahil............................................lllllllllllli
+ak.................kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahil..........................................lllllllllllllli
+ak............................mmnoooooooooooonmmmmmmmmmmmmmmmmmmmmmmmdgggggggggdmm.............lllllllllllllllllllllllli
+ak............................mp.................qqqqqqqqqqrqsqttttppppppppppppppmu......................lllllllllllllli
+ak................kkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttppppppppppppppmu..........lllllllllllllllllllllllllli
+ak.....................kkkkkkkmq...........................rqsqttttvvvvvvvvvvvvvvmu..................lllllllllllllllllli
+ak................kkkkkkkkkkkkmq.............................sqttttppppppppppppppmu....lllllllllllllllllllllllllllllllli
+ak................kkkkkkkkkkkkmq..................qqqqqqqqqrqsqttttvvvvvvvvvvvvvvmu.......llllllllllllllllllllllllllllli
+ak...kkkkkkkkkkkkkkkkkkkkkkkkkmq......................qqqqqrqsqttttqqqqqqqqqqqqqqmulllllllllllllllllllllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttttttttttttttttmu....................lllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmq............................qsqttttttttttttttttttmu......................lllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmqqqqqqqqqqqqqqqqqqqqqqqqqqqqrqsqttttttttttttttttttmu..................lllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmu.........llllllllllllllllllllllllllli
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwwwxxxxxxxxxxxxxxxxxwwyzzzzzzzzywwwwwwwwwwwwwwdgggggggggdww
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.......................lllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.........................lllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl...................................lllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl..................................llllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.......................lllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwl.........................lllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+akkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkahwlllllllllllllllllllllllllllllllllllllllllllllllllllllllllw
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+ABBBBBCDDDDDDDDEEEDDDDDDDDFGGGGGGGGGGGGGGGGGGGGGGGFHHHHHHHHHHHHHHHHHHFGGGGGGIJJJJJJJJJKKKJJJJJJJJJJKKKJJJJJJJJJJJJJJJJJI
+   a  fg border_active · bg default (the terminal's ground)
+   b  fg title_bg_active · bg default (the terminal's ground)
+   c  fg title_fg_active · bg title_bg_active · bold
+   d  fg piece_bg (NEW) · bg default (the terminal's ground)
+   e  fg bar_dim · bg piece_bg (NEW)
+   f  fg bar_accent · bg piece_bg (NEW)
+   g  fg piece_fg (NEW) · bg piece_bg (NEW)
+   h  fg default · bg default (the terminal's ground)
+   i  fg border_urgent · bg default (the terminal's ground)
+   j  fg title_fg_urgent (NEW) · bg border_urgent
+   k  fg default · bg active_bg
+   l  fg default · bg inactive_bg
+   m  fg border_floating · bg default (the terminal's ground)
+   n  fg title_bg_floating · bg default (the terminal's ground)
+   o  fg title_fg_floating · bg title_bg_floating
+   p  fg foreground · bg floating_bg (NEW)
+   q  fg default · bg floating_bg (NEW)
+   r  fg border_active · bg floating_bg (NEW)
+   s  fg border_urgent · bg floating_bg (NEW)
+   t  fg color8 · bg floating_bg (NEW)
+   u  fg the cell's own, mixed toward shadow · bg shadow
+   v  fg color5 · bg floating_bg (NEW)
+   w  fg border_synced · bg default (the terminal's ground)
+   x  fg title_fg_synced (NEW) · bg border_synced · bold
+   y  fg tab_inactive_bg · bg default (the terminal's ground)
+   z  fg tab_inactive_fg · bg tab_inactive_bg
+   A  fg ws_active_bg · bg bar_bg
+   B  fg ws_active_fg · bg ws_active_bg · bold
+   C  fg ws_active_bg · bg module_bg
+   D  fg ws_occupied · bg module_bg
+   E  fg ws_urgent · bg module_bg · bold
+   F  fg module_bg · bg bar_bg
+   G  fg bar_fg · bg bar_bg
+   H  fg module_fg · bg module_bg
+   I  fg roles.sys.bg · bg bar_bg
+   J  fg roles.sys.fg · bg roles.sys.bg
+   K  fg separator · bg roles.sys.bg
+
+## Grouped pills · normal mode  (120x1)
+1:zsh 2:nvim  3  5:btop                         ~/projects/ranma        cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbcddddddddeeeddddddddfgggggggggggggggggggggggfhhhhhhhhhhhhhhhhhhfggggggijjjjjjjjjkkkjjjjjjjjjjkkkjjjjjjjjjjjjjjjjji
+   a  fg ws_active_bg · bg bar_bg
+   b  fg ws_active_fg · bg ws_active_bg · bold
+   c  fg ws_active_bg · bg module_bg
+   d  fg ws_occupied · bg module_bg
+   e  fg ws_urgent · bg module_bg · bold
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.sys.bg · bg bar_bg
+   j  fg roles.sys.fg · bg roles.sys.bg
+   k  fg separator · bg roles.sys.bg
+
+## Grouped pills · WM mode  (120x1)
+WM · 1:zsh 2:nvim  3  5:btop                  ~/projects/ranma        cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddefffffegggggggghhhggggggggijjjjjjjjjjjjjjjjikkkkkkkkkkkkkkkkkkijjjjjjlmmmmmmmmmnnnmmmmmmmmmmnnnmmmmmmmmmmmmmmmmml
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg ws_active_bg · bg module_bg
+   f  fg ws_active_fg · bg ws_active_bg · bold
+   g  fg ws_occupied · bg module_bg
+   h  fg ws_urgent · bg module_bg · bold
+   i  fg module_bg · bg bar_bg
+   j  fg bar_fg · bg bar_bg
+   k  fg module_fg · bg module_bg
+   l  fg roles.sys.bg · bg bar_bg
+   m  fg roles.sys.fg · bg roles.sys.bg
+   n  fg separator · bg roles.sys.bg
+
+## Grouped pills · ranma.notify("build finished in 2m14s")  (120x1)
+# no side lists `message`: it takes the centre, as today
+1:zsh 2:nvim  3  5:btop                     build finished in 2m14s     cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbcddddddddeeeddddddddfgggggggggggggggggggfhhhhhhhhhhhhhhhhhhhhhhhhhfgggijjjjjjjjjkkkjjjjjjjjjjkkkjjjjjjjjjjjjjjjjji
+   a  fg ws_active_bg · bg bar_bg
+   b  fg ws_active_fg · bg ws_active_bg · bold
+   c  fg ws_active_bg · bg module_bg
+   d  fg ws_occupied · bg module_bg
+   e  fg ws_urgent · bg module_bg · bold
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg bar_accent · bg module_bg
+   i  fg roles.sys.bg · bg bar_bg
+   j  fg roles.sys.fg · bg roles.sys.bg
+   k  fg separator · bg roles.sys.bg
+
+## Grouped pills · 80 columns  (80x1)
+# c445: a group is cut with … inside its caps
+1:zsh 2:nvim  3  5:btop   ~/p…  cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbcddddddddeeeddddddddfgfhhhhhfgijjjjjjjjjkkkjjjjjjjjjjkkkjjjjjjjjjjjjjjjjji
+   a  fg ws_active_bg · bg bar_bg
+   b  fg ws_active_fg · bg ws_active_bg · bold
+   c  fg ws_active_bg · bg module_bg
+   d  fg ws_occupied · bg module_bg
+   e  fg ws_urgent · bg module_bg · bold
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.sys.bg · bg bar_bg
+   j  fg roles.sys.fg · bg roles.sys.bg
+   k  fg separator · bg roles.sys.bg
+
+## Grouped pills · 80 columns, WM mode  (80x1)
+WM · 1:zsh 2:nvim  3  5:btop    cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddefffffegggggggghhhggggggggijjklllllllllmmmllllllllllmmmlllllllllllllllllk
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg ws_active_bg · bg module_bg
+   f  fg ws_active_fg · bg ws_active_bg · bold
+   g  fg ws_occupied · bg module_bg
+   h  fg ws_urgent · bg module_bg · bold
+   i  fg module_bg · bg bar_bg
+   j  fg bar_fg · bg bar_bg
+   k  fg roles.sys.bg · bg bar_bg
+   l  fg roles.sys.fg · bg roles.sys.bg
+   m  fg separator · bg roles.sys.bg
+
+## Grouped pills · 80 columns, cut as bar.rs cuts today  (80x1)
+# truncate() cuts the flat list of pieces: the closing cap or arrow goes (B3)
+1:zsh 2:nvim  3  5:btop   ~/pr…  cpu 12%  ·  mem 4.1G  ·  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbcddddddddeeeddddddddfgfhhhhhhgijjjjjjjjjkkkjjjjjjjjjjkkkjjjjjjjjjjjjjjjjji
+   a  fg ws_active_bg · bg bar_bg
+   b  fg ws_active_fg · bg ws_active_bg · bold
+   c  fg ws_active_bg · bg module_bg
+   d  fg ws_occupied · bg module_bg
+   e  fg ws_urgent · bg module_bg · bold
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.sys.bg · bg bar_bg
+   j  fg roles.sys.fg · bg roles.sys.bg
+   k  fg separator · bg roles.sys.bg
+
+## Classic powerline · the bar under the Window title bars  (120x32)
+# every module on its own role's ground, abutting, arrows pointing in on both sides
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕   ✎ nvim src/render.rs                            ⊡  ▢  ✕ 
+ ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,              
+ running 412 tests                                            794     let own = app.pane_theme(view.id);                
+ ............................. ✎ notes.md                               ⊡  ▢  ✕ own.as_ref()                          
+ test result: ok. 412 passed;  # c435 title bars                                  or(&app.config.theme);                
+ ❯ git status -sb                                                                 me.border;                            
+ ## main...origin/main         - edges belong to the theme                        if view.floating {                    
+  M src/render.rs              - drag the row, click buttons                      ng()                                  
+  M doc/DESIGN.md              - ⇉ must stay loud                                 tyle };                               
+ ❯ █                           - a button drops whole                                                                   
+                                                                                  e the focused border                  
+                               TODO: tabs in the title row?                        mode colour, so it is                
+                                                                                  hich pane the next                    
+                                                                                  plies to.                             
+                                                                                                                        
+                                                                                                                        
+                                                              ⇉  ◆ cargo watch   ≡ logs                       ⊡  ▢  ✕ 
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                  Finished `dev` profile in 2.41s                       
+                                                              [Finished running. Exit status: 0]                        
+                                                                                                                        
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ main  1:zsh  2:nvim  3  5:btop                   ~/projects/ranma              cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeeeeeeeeafghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhg
+i...............iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj............................................jjjjjjjjjjjjjj
+i.................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..........................................jjjjjjjjjjjjjjjj
+i.............................kllllllllllllllllllllllllllllllllllllllllllllllllllk............jjjjjjjjjjjjjjjjjjjjjjjjjj
+i.............................m.................nnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.....................jjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.........jjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i.....................iiiiiiiin...........................nnnnooooqqqqqqqqqqqqqqqqp.................jjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin.............................nnoooommmmmmmmmmmmmmmmp...jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin..................nnnnnnnnnnnnnooooqqqqqqqqqqqqqqqqp......jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i...iiiiiiiiiiiiiiiiiiiiiiiiiin......................nnnnnnnnnoooonnnnnnnnnnnnnnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop...................jjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiin............................nnnoooooooooooooooooooop.....................jjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop.................jjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop........jjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiippppppppppppppppppppppppppppppppppppppppppppppppppppjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifrssstttttttttttttttsssssssssssssssssssssssssssssssssssssssr
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj...................................jjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..................................jjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+uuuuuuvwwwwwwwxxxxxxxxyyyxxxxxxxxzAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBAAAAAAAAAAAACDDDDDDDDDEFFFFFFFFFFGHHHHHHHHHHHHHHHHH
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg default (the terminal's ground)
+   g  fg border_urgent · bg default (the terminal's ground)
+   h  fg title_fg_urgent (NEW) · bg border_urgent
+   i  fg default · bg active_bg
+   j  fg default · bg inactive_bg
+   k  fg title_bg_floating · bg default (the terminal's ground)
+   l  fg title_fg_floating · bg title_bg_floating
+   m  fg foreground · bg floating_bg (NEW)
+   n  fg default · bg floating_bg (NEW)
+   o  fg color8 · bg floating_bg (NEW)
+   p  fg the cell's own, mixed toward shadow · bg shadow
+   q  fg color5 · bg floating_bg (NEW)
+   r  fg border_synced · bg default (the terminal's ground)
+   s  fg title_fg_synced (NEW) · bg border_synced
+   t  fg tab_active_fg · bg tab_active_bg · bold
+   u  fg roles.sess.fg · bg roles.sess.bg
+   v  fg roles.sess.bg · bg roles.wsg.bg
+   w  fg ws_active_fg · bg ws_active_bg · bold
+   x  fg ws_occupied · bg roles.wsg.bg
+   y  fg ws_urgent · bg roles.wsg.bg · bold
+   z  fg roles.wsg.bg · bg bar_bg
+   A  fg bar_fg · bg bar_bg
+   B  fg module_fg · bg module_bg
+   C  fg roles.cpu.bg · bg bar_bg
+   D  fg roles.cpu.fg · bg roles.cpu.bg
+   E  fg roles.mem.bg · bg roles.cpu.bg
+   F  fg roles.mem.fg · bg roles.mem.bg
+   G  fg roles.clock.bg · bg roles.mem.bg
+   H  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · normal mode  (120x1)
+ main  1:zsh  2:nvim  3  5:btop                   ~/projects/ranma              cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccccccddddddddeeeddddddddfggggggggggggggggghhhhhhhhhhhhhhhhhhggggggggggggijjjjjjjjjkllllllllllmnnnnnnnnnnnnnnnnn
+   a  fg roles.sess.fg · bg roles.sess.bg
+   b  fg roles.sess.bg · bg roles.wsg.bg
+   c  fg ws_active_fg · bg ws_active_bg · bold
+   d  fg ws_occupied · bg roles.wsg.bg
+   e  fg ws_urgent · bg roles.wsg.bg · bold
+   f  fg roles.wsg.bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.cpu.bg · bg bar_bg
+   j  fg roles.cpu.fg · bg roles.cpu.bg
+   k  fg roles.mem.bg · bg roles.cpu.bg
+   l  fg roles.mem.fg · bg roles.mem.bg
+   m  fg roles.clock.bg · bg roles.mem.bg
+   n  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · WM mode  (120x1)
+ WM  main  1:zsh  2:nvim  3  5:btop              ~/projects/ranma              cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaabccccccdeeeeeeeffffffffgggffffffffhiiiiiiiiiiiijjjjjjjjjjjjjjjjjjiiiiiiiiiiiiklllllllllmnnnnnnnnnnoppppppppppppppppp
+   a  fg mode_fg · bg mode_bg · bold
+   b  fg mode_bg · bg roles.sess.bg
+   c  fg roles.sess.fg · bg roles.sess.bg
+   d  fg roles.sess.bg · bg roles.wsg.bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_occupied · bg roles.wsg.bg
+   g  fg ws_urgent · bg roles.wsg.bg · bold
+   h  fg roles.wsg.bg · bg bar_bg
+   i  fg bar_fg · bg bar_bg
+   j  fg module_fg · bg module_bg
+   k  fg roles.cpu.bg · bg bar_bg
+   l  fg roles.cpu.fg · bg roles.cpu.bg
+   m  fg roles.mem.bg · bg roles.cpu.bg
+   n  fg roles.mem.fg · bg roles.mem.bg
+   o  fg roles.clock.bg · bg roles.mem.bg
+   p  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · ranma.notify("build finished in 2m14s")  (120x1)
+# no side lists `message`: it takes the centre, as today
+ main  1:zsh  2:nvim  3  5:btop               build finished in 2m14s           cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccccccddddddddeeeddddddddfggggggggggggghhhhhhhhhhhhhhhhhhhhhhhhhgggggggggijjjjjjjjjkllllllllllmnnnnnnnnnnnnnnnnn
+   a  fg roles.sess.fg · bg roles.sess.bg
+   b  fg roles.sess.bg · bg roles.wsg.bg
+   c  fg ws_active_fg · bg ws_active_bg · bold
+   d  fg ws_occupied · bg roles.wsg.bg
+   e  fg ws_urgent · bg roles.wsg.bg · bold
+   f  fg roles.wsg.bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg bar_accent · bg bar_bg
+   i  fg roles.cpu.bg · bg bar_bg
+   j  fg roles.cpu.fg · bg roles.cpu.bg
+   k  fg roles.mem.bg · bg roles.cpu.bg
+   l  fg roles.mem.fg · bg roles.mem.bg
+   m  fg roles.clock.bg · bg roles.mem.bg
+   n  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · 80 columns  (80x1)
+# c445: a group is cut with … inside its caps
+ main  1:zsh  2:nvim  3  5:btop   ~/p…  cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccccccddddddddeeeddddddddfghhhhhgijjjjjjjjjkllllllllllmnnnnnnnnnnnnnnnnn
+   a  fg roles.sess.fg · bg roles.sess.bg
+   b  fg roles.sess.bg · bg roles.wsg.bg
+   c  fg ws_active_fg · bg ws_active_bg · bold
+   d  fg ws_occupied · bg roles.wsg.bg
+   e  fg ws_urgent · bg roles.wsg.bg · bold
+   f  fg roles.wsg.bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.cpu.bg · bg bar_bg
+   j  fg roles.cpu.fg · bg roles.cpu.bg
+   k  fg roles.mem.bg · bg roles.cpu.bg
+   l  fg roles.mem.fg · bg roles.mem.bg
+   m  fg roles.clock.bg · bg roles.mem.bg
+   n  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · 80 columns, WM mode  (80x1)
+ WM  main  1:zsh  2:nvim  3  5:btop    cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaabccccccdeeeeeeeffffffffgggffffffffhiijkkkkkkkkklmmmmmmmmmmnooooooooooooooooo
+   a  fg mode_fg · bg mode_bg · bold
+   b  fg mode_bg · bg roles.sess.bg
+   c  fg roles.sess.fg · bg roles.sess.bg
+   d  fg roles.sess.bg · bg roles.wsg.bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_occupied · bg roles.wsg.bg
+   g  fg ws_urgent · bg roles.wsg.bg · bold
+   h  fg roles.wsg.bg · bg bar_bg
+   i  fg bar_fg · bg bar_bg
+   j  fg roles.cpu.bg · bg bar_bg
+   k  fg roles.cpu.fg · bg roles.cpu.bg
+   l  fg roles.mem.bg · bg roles.cpu.bg
+   m  fg roles.mem.fg · bg roles.mem.bg
+   n  fg roles.clock.bg · bg roles.mem.bg
+   o  fg roles.clock.fg · bg roles.clock.bg
+
+## Classic powerline · 80 columns, cut as bar.rs cuts today  (80x1)
+# truncate() cuts the flat list of pieces: the closing cap or arrow goes (B3)
+ main  1:zsh  2:nvim  3  5:btop   ~/p…  cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccccccddddddddeeeddddddddfghhhhhgijjjjjjjjjkllllllllllmnnnnnnnnnnnnnnnnn
+   a  fg roles.sess.fg · bg roles.sess.bg
+   b  fg roles.sess.bg · bg roles.wsg.bg
+   c  fg ws_active_fg · bg ws_active_bg · bold
+   d  fg ws_occupied · bg roles.wsg.bg
+   e  fg ws_urgent · bg roles.wsg.bg · bold
+   f  fg roles.wsg.bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.cpu.bg · bg bar_bg
+   j  fg roles.cpu.fg · bg roles.cpu.bg
+   k  fg roles.mem.bg · bg roles.cpu.bg
+   l  fg roles.mem.fg · bg roles.mem.bg
+   m  fg roles.clock.bg · bg roles.mem.bg
+   n  fg roles.clock.fg · bg roles.clock.bg
+
+## One pill per side · the bar under the Quiet title bars  (120x32)
+# a whole side in one group, soft │ inside; workspaces 1-6 always (show = 6)
+  ~/projects/ranma                   ± main  ● 2 running  1    nvim src/render.rs                                     2 
+  ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,             
+  running 412 tests                                            794     let own = app.pane_theme(view.id);               
+  ............................  notes.md                                        4  own.as_ref()                         
+  test result: ok. 412 passed;  # c435 title bars                                 ░or(&app.config.theme);               
+  ❯ git status -sb                                                                ░me.border;                           
+  ## main...origin/main         - edges belong to the theme                       ░if view.floating {                   
+   M src/render.rs              - drag the row, click buttons                     ░ng()                                 
+   M doc/DESIGN.md              - ⇉ must stay loud                                ░tyle };                              
+  ❯ █                           - a button drops whole                            ░                                     
+                                                                                  ░e the focused border                 
+                                TODO: tabs in the title row?                      ░ mode colour, so it is               
+                                                                                  ░hich pane the next                   
+                                                                                  ░plies to.                            
+                               ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                     
+                                                                                                                        
+                                                               ⇉ cargo watch · logs                                   3 
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                   Finished `dev` profile in 2.41s                      
+                                                               [Finished running. Exit status: 0]                       
+                                                                                                                        
+                                                               [Running 'cargo check']                                  
+                                                                   Checking ranma v0.4.0                                
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ main  │ 1:zsh 2:nvim  3  4  5:btop  6         ~/projects/ranma        cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbccccccccdddddddddddddbbefffffffffffffffffffffffffffffffffffffffffffffffffffffffffgg
+hh...............hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii............................................iiiiiiiiiiiii
+hh.................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii..........................................iiiiiiiiiiiiiii
+hh............................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjkk.............iiiiiiiiiiiiiiiiiiiiiiiii
+hh............................ll.................mmmmmmmmmmmmmmnnnnooooooooooooooop......................iiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnooooooooooooooop..........iiiiiiiiiiiiiiiiiiiiiiiiiii
+hh.....................hhhhhhhmm...........................mmmmnnnnqqqqqqqqqqqqqqqp..................iiiiiiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmm.............................mmnnnnooooooooooooooop....iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hh................hhhhhhhhhhhhmm..................mmmmmmmmmmmmmnnnnqqqqqqqqqqqqqqqp.......iiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hh...hhhhhhhhhhhhhhhhhhhhhhhhhmm......................mmmmmmmmmnnnnmmmmmmmmmmmmmmmpiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp....................iiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmm............................mmmnnnnnnnnnnnnnnnnnnnp......................iiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp..................iiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnp.........iiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhrrrrrrrrrrrrrrrrrrrrrrrrrrrrrsppppppppppppppppppppppiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhettttuuuuuuuuuuugggggggtttttttttttttttttttttttttttttttttttgg
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.......................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.........................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii...................................iiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii..................................iiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.......................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheii.........................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+vwwwwwwxxxyzzzzzyAAAAAAAABBBCCCAAAAAAAACCCvDDDDDDDvwwwwwwwwwwwwwwwwwwvDDDDDDvwwwwwwwwwxxxwwwwwwwwwwxxxwwwwwwwwwwwwwwwwwv
+   a  fg title_fg_active · bg active_bg · bold
+   b  fg title_fg_active · bg active_bg
+   c  fg bar_dim · bg active_bg
+   d  fg bar_accent · bg active_bg
+   e  fg default · bg default (the terminal's ground)
+   f  fg border_urgent · bg inactive_bg
+   g  fg title_fg_inactive · bg inactive_bg
+   h  fg default · bg active_bg
+   i  fg default · bg inactive_bg
+   j  fg title_fg_floating · bg floating_bg (NEW)
+   k  fg title_fg_inactive · bg floating_bg (NEW)
+   l  fg foreground · bg floating_bg (NEW)
+   m  fg default · bg floating_bg (NEW)
+   n  fg color8, faded (dim_unfocused) · bg floating_bg (NEW)
+   o  fg foreground, faded (dim_unfocused) · bg floating_bg (NEW)
+   p  fg shadow · bg inactive_bg
+   q  fg color5, faded (dim_unfocused) · bg floating_bg (NEW)
+   r  fg shadow · bg active_bg
+   s  fg shadow · bg default (the terminal's ground)
+   t  fg border_synced · bg inactive_bg
+   u  fg border_synced · bg inactive_bg · bold underline
+   v  fg module_bg · bg bar_bg
+   w  fg module_fg · bg module_bg
+   x  fg separator · bg module_bg
+   y  fg ws_active_bg · bg module_bg
+   z  fg ws_active_fg · bg ws_active_bg · bold
+   A  fg ws_occupied · bg module_bg
+   B  fg ws_urgent · bg module_bg · bold
+   C  fg ws_empty · bg module_bg
+   D  fg bar_fg · bg bar_bg
+
+## One pill per side · normal mode  (120x1)
+ main  │ 1:zsh 2:nvim  3  4  5:btop  6         ~/projects/ranma        cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbcccdeeeeedffffffffggghhhffffffffhhhaiiiiiiiabbbbbbbbbbbbbbbbbbaiiiiiiabbbbbbbbbcccbbbbbbbbbbcccbbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg separator · bg module_bg
+   d  fg ws_active_bg · bg module_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_occupied · bg module_bg
+   g  fg ws_urgent · bg module_bg · bold
+   h  fg ws_empty · bg module_bg
+   i  fg bar_fg · bg bar_bg
+
+## One pill per side · WM mode  (120x1)
+WM │  main  │ 1:zsh 2:nvim  3  4  5:btop  6   ~/projects/ranma        cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddeeeeeedddfgggggfhhhhhhhhiiijjjhhhhhhhhjjjklkeeeeeeeeeeeeeeeeeekllllllkeeeeeeeeedddeeeeeeeeeedddeeeeeeeeeeeeeeeeek
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg module_fg · bg module_bg
+   f  fg ws_active_bg · bg module_bg
+   g  fg ws_active_fg · bg ws_active_bg · bold
+   h  fg ws_occupied · bg module_bg
+   i  fg ws_urgent · bg module_bg · bold
+   j  fg ws_empty · bg module_bg
+   k  fg module_bg · bg bar_bg
+   l  fg bar_fg · bg bar_bg
+
+## One pill per side · ranma.notify("build finished in 2m14s")  (120x1)
+# no side lists `message`: it takes the centre, as today
+ main  │ 1:zsh 2:nvim  3  4  5:btop  6     build finished in 2m14s     cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbcccdeeeeedffffffffggghhhffffffffhhhaiiiajjjjjjjjjjjjjjjjjjjjjjjjjaiiiabbbbbbbbbcccbbbbbbbbbbcccbbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg separator · bg module_bg
+   d  fg ws_active_bg · bg module_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_occupied · bg module_bg
+   g  fg ws_urgent · bg module_bg · bold
+   h  fg ws_empty · bg module_bg
+   i  fg bar_fg · bg bar_bg
+   j  fg bar_accent · bg module_bg
+
+## One pill per side · 80 columns  (80x1)
+# c445: a group is cut with … inside its caps
+ main  │ 1:zsh 2:nvim  3  4  5…  cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbcccdeeeeedffffffffggghhhfffaiabbbbbbbbbcccbbbbbbbbbbcccbbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg separator · bg module_bg
+   d  fg ws_active_bg · bg module_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_occupied · bg module_bg
+   g  fg ws_urgent · bg module_bg · bold
+   h  fg ws_empty · bg module_bg
+   i  fg bar_fg · bg bar_bg
+
+## One pill per side · 80 columns, WM mode  (80x1)
+WM │  main  │ 1:zsh 2:nvim  3…  cpu 12%  │  mem 4.1G  │  Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddeeeeeedddfgggggfhhhhhhhhiiijkjeeeeeeeeedddeeeeeeeeeedddeeeeeeeeeeeeeeeeej
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg module_fg · bg module_bg
+   f  fg ws_active_bg · bg module_bg
+   g  fg ws_active_fg · bg ws_active_bg · bold
+   h  fg ws_occupied · bg module_bg
+   i  fg ws_urgent · bg module_bg · bold
+   j  fg module_bg · bg bar_bg
+   k  fg bar_fg · bg bar_bg
+
+## Dots · the bar under the Window title bars  (120x32)
+# workspaces 1-6 as dots in the centre; title, cpu and mem in one group; messages land on the left
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕   ✎ nvim src/render.rs                            ⊡  ▢  ✕ 
+ ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,              
+ running 412 tests                                            794     let own = app.pane_theme(view.id);                
+ ............................. ✎ notes.md                               ⊡  ▢  ✕ own.as_ref()                          
+ test result: ok. 412 passed;  # c435 title bars                                  or(&app.config.theme);                
+ ❯ git status -sb                                                                 me.border;                            
+ ## main...origin/main         - edges belong to the theme                        if view.floating {                    
+  M src/render.rs              - drag the row, click buttons                      ng()                                  
+  M doc/DESIGN.md              - ⇉ must stay loud                                 tyle };                               
+ ❯ █                           - a button drops whole                                                                   
+                                                                                  e the focused border                  
+                               TODO: tabs in the title row?                        mode colour, so it is                
+                                                                                  hich pane the next                    
+                                                                                  plies to.                             
+                                                                                                                        
+                                                                                                                        
+                                                              ⇉  ◆ cargo watch   ≡ logs                       ⊡  ▢  ✕ 
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                  Finished `dev` profile in 2.41s                       
+                                                              [Finished running. Exit status: 0]                        
+                                                                                                                        
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ main                            ● •  ◆  ·  •  ·   ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbbbbbbbbbbbbbbbccccccccdddddddddddddeeeeeeeeeeeeeeeeeafghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhg
+i...............iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj............................................jjjjjjjjjjjjjj
+i.................iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..........................................jjjjjjjjjjjjjjjj
+i.............................kllllllllllllllllllllllllllllllllllllllllllllllllllk............jjjjjjjjjjjjjjjjjjjjjjjjjj
+i.............................m.................nnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.....................jjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooommmmmmmmmmmmmmmmp.........jjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i.....................iiiiiiiin...........................nnnnooooqqqqqqqqqqqqqqqqp.................jjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin.............................nnoooommmmmmmmmmmmmmmmp...jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i................iiiiiiiiiiiiin..................nnnnnnnnnnnnnooooqqqqqqqqqqqqqqqqp......jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+i...iiiiiiiiiiiiiiiiiiiiiiiiiin......................nnnnnnnnnoooonnnnnnnnnnnnnnnnpjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop...................jjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiin............................nnnoooooooooooooooooooop.....................jjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop.................jjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiinnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooop........jjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiippppppppppppppppppppppppppppppppppppppppppppppppppppjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifrssstttttttttttttttsssssssssssssssssssssssssssssssssssssssr
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj...................................jjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj..................................jjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.......................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifj.........................jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+uvvvvvvuwwwwwwwwwwwwwwwwwwwwwwwwwwwxyzAAABBBCCCAAACCCuwDEEEEEEEEEEEEEEEEEEFFFEEEEEEEEEFFFEEEEEEEEEEDGuvvvvvvvvvvvvvvvvvu
+   a  fg title_bg_active · bg default (the terminal's ground)
+   b  fg title_fg_active · bg title_bg_active · bold
+   c  fg bar_dim · bg title_bg_active
+   d  fg bar_accent · bg title_bg_active
+   e  fg title_fg_active · bg title_bg_active
+   f  fg default · bg default (the terminal's ground)
+   g  fg border_urgent · bg default (the terminal's ground)
+   h  fg title_fg_urgent (NEW) · bg border_urgent
+   i  fg default · bg active_bg
+   j  fg default · bg inactive_bg
+   k  fg title_bg_floating · bg default (the terminal's ground)
+   l  fg title_fg_floating · bg title_bg_floating
+   m  fg foreground · bg floating_bg (NEW)
+   n  fg default · bg floating_bg (NEW)
+   o  fg color8 · bg floating_bg (NEW)
+   p  fg the cell's own, mixed toward shadow · bg shadow
+   q  fg color5 · bg floating_bg (NEW)
+   r  fg border_synced · bg default (the terminal's ground)
+   s  fg title_fg_synced (NEW) · bg border_synced
+   t  fg tab_active_fg · bg tab_active_bg · bold
+   u  fg module_bg · bg bar_bg
+   v  fg module_fg · bg module_bg
+   w  fg bar_fg · bg bar_bg
+   x  fg ws_active_bg · bg bar_bg
+   y  fg ws_active_fg · bg ws_active_bg · bold
+   z  fg ws_active_bg · bg module_bg
+   A  fg ws_occupied · bg module_bg
+   B  fg ws_urgent · bg module_bg · bold
+   C  fg ws_empty · bg module_bg
+   D  fg roles.sys.bg · bg bar_bg
+   E  fg roles.sys.fg · bg roles.sys.bg
+   F  fg separator · bg roles.sys.bg
+   G  fg separator · bg bar_bg
+
+## Dots · normal mode  (120x1)
+ main                            ● •  ◆  ·  •  ·   ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbacccccccccccccccccccccccccccdefggghhhiiigggiiiacjkkkkkkkkkkkkkkkkkklllkkkkkkkkklllkkkkkkkkkkjmabbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg bar_fg · bg bar_bg
+   d  fg ws_active_bg · bg bar_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_active_bg · bg module_bg
+   g  fg ws_occupied · bg module_bg
+   h  fg ws_urgent · bg module_bg · bold
+   i  fg ws_empty · bg module_bg
+   j  fg roles.sys.bg · bg bar_bg
+   k  fg roles.sys.fg · bg roles.sys.bg
+   l  fg separator · bg roles.sys.bg
+   m  fg separator · bg bar_bg
+
+## Dots · WM mode  (120x1)
+WM ·  main                      ● •  ◆  ·  •  ·   ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddeeeeeefggggggggggggggggggggghijkkklllmmmkkkmmmfgnoooooooooooooooooopppooooooooopppoooooooooonqfeeeeeeeeeeeeeeeeef
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg module_fg · bg module_bg
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg ws_active_bg · bg bar_bg
+   i  fg ws_active_fg · bg ws_active_bg · bold
+   j  fg ws_active_bg · bg module_bg
+   k  fg ws_occupied · bg module_bg
+   l  fg ws_urgent · bg module_bg · bold
+   m  fg ws_empty · bg module_bg
+   n  fg roles.sys.bg · bg bar_bg
+   o  fg roles.sys.fg · bg roles.sys.bg
+   p  fg separator · bg roles.sys.bg
+   q  fg separator · bg bar_bg
+
+## Dots · ranma.notify("build finished in 2m14s")  (120x1)
+# messages go where a side lists `message`
+ main   build finished in 2m14s  ● •  ◆  ·  • …  ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbacadddddddddddddddddddddddddaefghiiijjjkkkiiikaelmmmmmmmmmmmmmmmmmmnnnmmmmmmmmmnnnmmmmmmmmmmlcabbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg separator · bg bar_bg
+   d  fg bar_accent · bg module_bg
+   e  fg bar_fg · bg bar_bg
+   f  fg ws_active_bg · bg bar_bg
+   g  fg ws_active_fg · bg ws_active_bg · bold
+   h  fg ws_active_bg · bg module_bg
+   i  fg ws_occupied · bg module_bg
+   j  fg ws_urgent · bg module_bg · bold
+   k  fg ws_empty · bg module_bg
+   l  fg roles.sys.bg · bg bar_bg
+   m  fg roles.sys.fg · bg roles.sys.bg
+   n  fg separator · bg roles.sys.bg
+
+## Dots · pointer on workspace 4 (empty)  (120x1)
+# · empty  • occupied  ◆ urgent  ● current; hover is a ground, so the dot still says what it is (B4)
+ main                            ● •  ◆  ·  •  ·   ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbacccccccccccccccccccccccccccdefggghhhiiigggjjjackllllllllllllllllllmmmlllllllllmmmllllllllllknabbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg bar_fg · bg bar_bg
+   d  fg ws_active_bg · bg bar_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_active_bg · bg module_bg
+   g  fg ws_occupied · bg module_bg
+   h  fg ws_urgent · bg module_bg · bold
+   i  fg ws_hover_fg · bg ws_hover_bg
+   j  fg ws_empty · bg module_bg
+   k  fg roles.sys.bg · bg bar_bg
+   l  fg roles.sys.fg · bg roles.sys.bg
+   m  fg separator · bg roles.sys.bg
+   n  fg separator · bg bar_bg
+
+## Dots · 80 columns  (80x1)
+# c445: a group is cut with … inside its caps
+ main  ●…  ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbbbbbacdefgachiiiiiiiiiiiiiiiiiijjjiiiiiiiiijjjiiiiiiiiiihkabbbbbbbbbbbbbbbbba
+   a  fg module_bg · bg bar_bg
+   b  fg module_fg · bg module_bg
+   c  fg bar_fg · bg bar_bg
+   d  fg ws_active_bg · bg bar_bg
+   e  fg ws_active_fg · bg ws_active_bg · bold
+   f  fg ws_active_bg · bg module_bg
+   g  fg ws_occupied · bg module_bg
+   h  fg roles.sys.bg · bg bar_bg
+   i  fg roles.sys.fg · bg roles.sys.bg
+   j  fg separator · bg roles.sys.bg
+   k  fg separator · bg bar_bg
+
+## Dots · 80 columns, WM mode  (80x1)
+WM ·  main   ~/projects/ranma  ·  cpu 12%  ·  mem 4.1G   Wed 4 Nov 20:21 
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+abbcdddeeeeeefghiiiiiiiiiiiiiiiiiijjjiiiiiiiiijjjiiiiiiiiiihkfeeeeeeeeeeeeeeeeef
+   a  fg mode_bg · bg bar_bg
+   b  fg mode_fg · bg mode_bg · bold
+   c  fg mode_bg · bg module_bg
+   d  fg separator · bg module_bg
+   e  fg module_fg · bg module_bg
+   f  fg module_bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg roles.sys.bg · bg bar_bg
+   i  fg roles.sys.fg · bg roles.sys.bg
+   j  fg separator · bg roles.sys.bg
+   k  fg separator · bg bar_bg
+
+## Classic powerline · bar.position = "top", WM mode off  (120x32)
+ main  1:zsh  2:nvim  3  5:btop                   ~/projects/ranma              cpu 12%  mem 4.1G  Wed 4 Nov 20:21 
+ $ ~/projects/ranma  ± main  ● 2 running          ⊡  ▢  ✕   ✎ nvim src/render.rs                            ⊡  ▢  ✕ 
+ ❯ cargo test -q                                              793 fn draw_border(f: &mut Frame, app: &App,              
+ running 412 tests                                            794     let own = app.pane_theme(view.id);                
+ ............................. ✎ notes.md                               ⊡  ▢  ✕ own.as_ref()                          
+ test result: ok. 412 passed;  # c435 title bars                                  or(&app.config.theme);                
+ ❯ git status -sb                                                                 me.border;                            
+ ## main...origin/main         - edges belong to the theme                        if view.floating {                    
+  M src/render.rs              - drag the row, click buttons                      ng()                                  
+  M doc/DESIGN.md              - ⇉ must stay loud                                 tyle };                               
+ ❯ █                           - a button drops whole                                                                   
+                                                                                  e the focused border                  
+                               TODO: tabs in the title row?                        mode colour, so it is                
+                                                                                  hich pane the next                    
+                                                                                  plies to.                             
+                                                                                                                        
+                                                                                                                        
+                                                              ⇉  ◆ cargo watch   ≡ logs                       ⊡  ▢  ✕ 
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                  Finished `dev` profile in 2.41s                       
+                                                              [Finished running. Exit status: 0]                        
+                                                                                                                        
+                                                              [Running 'cargo check']                                   
+                                                                  Checking ranma v0.4.0                                 
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+-- roles, a letter per cell ('.' is program text, drawn with [palette] on the pane's ground)
+aaaaaabcccccccddddddddeeeddddddddfggggggggggggggggghhhhhhhhhhhhhhhhhhggggggggggggijjjjjjjjjkllllllllllmnnnnnnnnnnnnnnnnn
+oppppppppppppppppppppqqqqqqqqrrrrrrrrrrrrrsssssssssssssssssotuvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvu
+w...............wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx............................................xxxxxxxxxxxxxx
+w.................wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx..........................................xxxxxxxxxxxxxxxx
+w.............................yzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzy............xxxxxxxxxxxxxxxxxxxxxxxxxx
+w.............................A.................BBBBBBBBBBBBBBCCCCAAAAAAAAAAAAAAAAD.....................xxxxxxxxxxxxxxxx
+w................wwwwwwwwwwwwwBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCAAAAAAAAAAAAAAAAD.........xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+w.....................wwwwwwwwB...........................BBBBCCCCEEEEEEEEEEEEEEEED.................xxxxxxxxxxxxxxxxxxxx
+w................wwwwwwwwwwwwwB.............................BBCCCCAAAAAAAAAAAAAAAAD...xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+w................wwwwwwwwwwwwwB..................BBBBBBBBBBBBBCCCCEEEEEEEEEEEEEEEED......xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+w...wwwwwwwwwwwwwwwwwwwwwwwwwwB......................BBBBBBBBBCCCCBBBBBBBBBBBBBBBBDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCD...................xxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwB............................BBBCCCCCCCCCCCCCCCCCCCCD.....................xxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCD.................xxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCD........xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtFGGGHHHHHHHHHHHHHHHGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGF
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx.......................xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx.........................xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx...................................xxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx..................................xxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx.......................xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtx.........................xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwtxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   a  fg roles.sess.fg · bg roles.sess.bg
+   b  fg roles.sess.bg · bg roles.wsg.bg
+   c  fg ws_active_fg · bg ws_active_bg · bold
+   d  fg ws_occupied · bg roles.wsg.bg
+   e  fg ws_urgent · bg roles.wsg.bg · bold
+   f  fg roles.wsg.bg · bg bar_bg
+   g  fg bar_fg · bg bar_bg
+   h  fg module_fg · bg module_bg
+   i  fg roles.cpu.bg · bg bar_bg
+   j  fg roles.cpu.fg · bg roles.cpu.bg
+   k  fg roles.mem.bg · bg roles.cpu.bg
+   l  fg roles.mem.fg · bg roles.mem.bg
+   m  fg roles.clock.bg · bg roles.mem.bg
+   n  fg roles.clock.fg · bg roles.clock.bg
+   o  fg title_bg_active · bg default (the terminal's ground)
+   p  fg title_fg_active · bg title_bg_active · bold
+   q  fg bar_dim · bg title_bg_active
+   r  fg bar_accent · bg title_bg_active
+   s  fg title_fg_active · bg title_bg_active
+   t  fg default · bg default (the terminal's ground)
+   u  fg border_urgent · bg default (the terminal's ground)
+   v  fg title_fg_urgent (NEW) · bg border_urgent
+   w  fg default · bg active_bg
+   x  fg default · bg inactive_bg
+   y  fg title_bg_floating · bg default (the terminal's ground)
+   z  fg title_fg_floating · bg title_bg_floating
+   A  fg foreground · bg floating_bg (NEW)
+   B  fg default · bg floating_bg (NEW)
+   C  fg color8 · bg floating_bg (NEW)
+   D  fg the cell's own, mixed toward shadow · bg shadow
+   E  fg color5 · bg floating_bg (NEW)
+   F  fg border_synced · bg default (the terminal's ground)
+   G  fg title_fg_synced (NEW) · bg border_synced
+   H  fg tab_active_fg · bg tab_active_bg · bold
+
+
+################ Themes and init.lua ################
+
+## window.toml
+# ~/.config/ranma/themes/window.toml
+# A GUI window: a filled title row, icon and title on the left, float /
+# fullscreen / close on the right, no side or bottom edges. Floats cast a shade.
+inherits = "default"
+
+[colors]
+title_bg_active   = "#45475a"   # c435: the focused pane's row
+title_fg_active   = "#cdd6f4"
+title_bg_inactive = "#262637"
+title_fg_inactive = "#7f849c"
+title_bg_floating = "#585b70"
+title_fg_floating = "#cdd6f4"
+border_urgent = "#fab387"       # c437; with no side edges it can only be the row's ground
+border_synced = "#94e2d5"       # c437
+title_fg_urgent = "#1e1e2e"     # NEW (F2): the text on the urgent ground
+title_fg_synced = "#1e1e2e"     # NEW (F2): the text on the synced ground
+shadow = "#0b0b12"              # c440
+
+[border]
+edges = ["top"]                 # the title row and nothing else
+top_chars = "   "               # corners and fill blank (the ground fills them anyway)
+title_format = " {icon} {title} "
+title_cap_left  = "\ue0b6"      # the row's corners, rounded: a window's top
+title_cap_right = "\ue0b4"
+
+[gaps]
+inner = 1                       # with no side edges the gap keeps two panes apart
+
+[panes]
+active_bg = "#1e1e2e"
+inactive_bg = "#181825"
+floating_bg = "#24273a"         # NEW (F5): a float with no edges needs its own ground
+padding_left = 1                # c439
+padding_right = 1
+
+[floating]
+shadow = "shade"                # c440
+
+[tabs]                          # c436
+position = "title"              # NEW (F1): the group's tabs in its title row
+current_format = " {icon} {title} "
+format = " {icon} {title} "
+separator = " "
+
+[icons]                         # c438; the mock draws stand-ins ($ ✎ ◆ ≡)
+zsh = ""
+nvim = ""
+cargo = ""
+tail = ""
+"*" = ""
+
+[roles.btn_hover]               # what hover_style names
+fg = "#cdd6f4"
+bg = "#6c7086"
+
+[roles.close_hover]
+fg = "#1e1e2e"
+bg = "#f38ba8"
+
+## window: init.lua
+-- init.lua: the pieces of a pane's title row, and what they do.
+ranma.title_piece("float", { text = " ⊡ ", on_click = "toggle_floating", hover_style = "btn_hover" })
+ranma.title_piece("zoom",  { text = " ▢ ", on_click = "fullscreen",      hover_style = "btn_hover" })
+ranma.title_piece("close", { text = " ✕ ", on_click = "close_pane",      hover_style = "close_hover",
+                             keep = true })                     -- NEW (F7): dropped last, not first
+ranma.titlebar {
+  left  = { "title", "badges" },       -- built-ins: title (border.title_format), badges
+  right = { "float", "zoom", "close" },
+}
+ranma.mouse("double@title", "fullscreen")
+
+## pills.toml
+# ~/.config/ranma/themes/pills.toml
+# Powerline: a thin rounded frame, the title a pill on the top edge, badges
+# and the buttons pills of their own, the group's tabs as chips.
+inherits = "default"
+
+[colors]
+title_bg_active   = "#89b4fa"
+title_fg_active   = "#1e1e2e"
+title_bg_inactive = "#313244"
+title_fg_inactive = "#cdd6f4"
+title_bg_floating = "#f5c2e7"
+title_fg_floating = "#1e1e2e"
+border_urgent = "#fab387"       # c437: the frame and the title pill
+border_synced = "#94e2d5"
+title_fg_urgent = "#1e1e2e"     # NEW (F2)
+title_fg_synced = "#1e1e2e"     # NEW (F2)
+piece_bg = "#313244"            # NEW (F6): the ground of badge and button pills
+piece_fg = "#cdd6f4"            # NEW (F6)
+shadow = "#0b0b12"
+
+[border]
+style = "rounded"               # the frame (top_chars / bottom_chars would only repeat it, R2)
+title_format = " {icon} {title} "
+title_ground = "title"          # NEW (F6): title_bg_* paints the title piece, not the row
+title_cap_left  = "\ue0b6"      # with title_ground = "title" these round the title
+title_cap_right = "\ue0b4"
+piece_cap_left  = "\ue0b6"      # NEW (F6): caps round every other piece
+piece_cap_right = "\ue0b4"
+
+[gaps]
+inner = 1
+
+[panes]
+active_bg = "#1e1e2e"
+inactive_bg = "#181825"
+floating_bg = "#24273a"         # NEW (F5)
+padding_left = 1                # c439
+
+[floating]
+shadow = "shade"                # c440
+
+[tabs]                          # c436
+position = "title"              # NEW (F1)
+format = " {icon} {title} "
+current_format = " {icon} {title} "
+chip_left = "\ue0b6"
+chip_right = "\ue0b4"
+separator = "─"
+
+[icons]
+zsh = ""
+nvim = ""
+cargo = ""
+"*" = ""
+
+[roles.btn_hover]
+fg = "#cdd6f4"
+bg = "#585b70"
+
+[roles.close_hover]
+fg = "#1e1e2e"
+bg = "#f38ba8"
+
+## pills: init.lua
+-- init.lua
+ranma.title_piece("float", { text = " ⊡ ", on_click = "toggle_floating", hover_style = "btn_hover" })
+ranma.title_piece("zoom",  { text = " ▢ ", on_click = "fullscreen",      hover_style = "btn_hover" })
+ranma.title_piece("close", { text = " ✕ ", on_click = "close_pane",      hover_style = "close_hover",
+                             keep = true })                     -- NEW (F7)
+ranma.titlebar {
+  left  = { "title", "badges" },
+  right = { { "float", "zoom", "close" } },  -- NEW (F6): a list inside the list is one pill
+}
+
+## quiet.toml
+# ~/.config/ranma/themes/quiet.toml
+# Minimal: no edges but a one-row title in a dim colour, on the pane's own
+# ground; padding gives the text room. No buttons: keys and the menu do it.
+inherits = "default"
+
+[colors]
+title_bg_active   = "#1e1e2e"   # = panes.active_bg: a colour cannot name a role (F9)
+title_fg_active   = "#89b4fa"
+title_bg_inactive = "#181825"   # = panes.inactive_bg (F9)
+title_fg_inactive = "#6c7086"
+title_bg_floating = "#24273a"   # = panes.floating_bg (F9)
+title_fg_floating = "#f5c2e7"
+border_urgent = "#fab387"       # c437: here only the title's text can carry it
+border_synced = "#94e2d5"
+shadow = "#313244"              # c440: the ░ glyph's colour
+
+[border]
+edges = ["top"]
+top_chars = "   "
+title_format = "  {title}"
+# WM mode: title_bg_* is set, so the focused row fills with mode_bg / mode_fg,
+# as proposed. Leave title_bg_* unset and it does not (F10).
+
+[gaps]
+inner = 1
+
+[panes]
+active_bg = "#1e1e2e"
+inactive_bg = "#181825"
+floating_bg = "#24273a"         # NEW (F5)
+padding_left = 2                # c439
+padding_right = 1
+dim_unfocused = 0.35
+
+[floating]
+shadow = "char"                 # c440: ░ in colors.shadow
+
+[tabs]                          # c436
+position = "title"              # NEW (F1)
+format = "{title}"
+current_format = "{title}"
+separator = " · "
+
+[styles]
+title_active = ["bold"]
+tab_active = ["bold", "underline"]
+
+## quiet: init.lua
+-- init.lua
+ranma.title_piece("index", {           -- the pane's place in its workspace
+  render = function(p) return tostring(p.index) end,   -- NEW (F8): a handle has no index
+})
+ranma.titlebar {
+  left  = { "title" },
+  right = { "badges", "index" },
+}
+ranma.mouse("double@title", "fullscreen")
+
+## grouped.toml
+# themes/grouped.toml: under the Pills title bars
+inherits = "pills"
+
+[colors]
+module_bg = "#313244"
+module_fg = "#cdd6f4"
+separator = "#6c7086"           # c445: the separators, on the bar and inside groups (B5)
+
+[bar]
+separator = " "
+group_separator = " · "         # c445: between the modules of one group
+workspace_format = " {n}[:{name}] "
+workspace_current_format = "{n}[:{name}]"
+module_left = ""
+module_right = ""
+chip_left = ""
+chip_right = ""
+
+[roles.sys]                     # c444: a role's bg is the group's ground; its caps follow
+fg = "#cdd6f4"
+bg = "#45475a"
+
+## grouped: init.lua
+ranma.bar {
+  left   = { { "mode", "workspaces" } },                  -- c445: a table is one pill
+  center = { "title" },
+  right  = { { "cpu", "mem", "clock", style = "sys" } },
+}
+
+## classic.toml
+# themes/classic.toml: under the Window title bars
+inherits = "window"
+
+[colors]
+separator = "#6c7086"
+
+[bar]
+separator = ""
+join = "arrows"                 # c445: pills on a side abut, the side's arrow between
+workspace_format = " {n}[:{name}] "
+workspace_current_format = " {n}[:{name}] "   # a square chip: round caps inside an arrow read wrong (B6)
+
+[bar.left]                      # c445; the key names inside are this handoff's guess (B7)
+arrow = ""
+[bar.right]
+arrow = ""
+[bar.center]                    # the centre always uses pills: blank caps make it flat
+module_left = ""
+module_right = ""
+
+[roles.sess]
+fg = "#cdd6f4"
+bg = "#45475a"
+[roles.wsg]
+fg = "#cdd6f4"
+bg = "#313244"
+[roles.cpu]
+fg = "#1e1e2e"
+bg = "#a6e3a1"
+[roles.mem]
+fg = "#1e1e2e"
+bg = "#f9e2af"
+[roles.clock]
+fg = "#1e1e2e"
+bg = "#89b4fa"
+
+## classic: init.lua
+-- Built-in modules take no role (B1), so each is a group of one to get a ground.
+ranma.bar {
+  left   = { "mode", { "session", style = "sess" }, { "workspaces", style = "wsg" } },
+  center = { "title" },
+  right  = { { "cpu", style = "cpu" }, { "mem", style = "mem" }, "clock" },
+}
+ranma.module("clock", {
+  interval = 60,
+  render = function() return { text = os.date(" %a %-d %b %H:%M "), style = "clock" } end,
+})
+-- The mode needs no role: its one chip is its ground (B2, a rule this handoff asks for).
+
+## sides.toml
+# themes/sides.toml: under the Quiet title bars
+inherits = "quiet"
+
+[colors]
+module_bg = "#313244"
+module_fg = "#cdd6f4"
+separator = "#585b70"
+
+[bar]
+separator = " "
+group_separator = " │ "
+workspace_format = " {n}[:{name}] "
+workspace_current_format = "{n}[:{name}]"
+module_left = ""
+module_right = ""
+chip_left = ""
+chip_right = ""
+
+## sides: init.lua
+ranma.module("workspaces", { show = 6 })                      -- c446: 1-6 always
+ranma.bar {
+  left   = { { "mode", "session", "workspaces" } },          -- the whole side is one group
+  center = { "title" },
+  right  = { { "cpu", "mem", "clock" } },
+}
+
+## dots.toml
+# themes/dots.toml: under the Window title bars; the workspaces are dots
+inherits = "window"
+
+[colors]
+module_bg = "#313244"
+module_fg = "#cdd6f4"
+separator = "#6c7086"
+ws_hover_fg = "#1e1e2e"         # c446
+ws_hover_bg = "#f5c2e7"
+
+[bar]
+group_separator = " · "
+workspace_format = " • "        # occupied
+workspace_empty_format = " · "  # c446
+workspace_urgent_format = " ◆ " # c446: a shape, not only a colour
+workspace_current_format = "●"  # in its chip caps: three cells, as every other dot
+# workspace_hover_format: left out on purpose (B4)
+module_left = ""
+module_right = ""
+chip_left = ""
+chip_right = ""
+
+[roles.sys]
+fg = "#cdd6f4"
+bg = "#45475a"
+
+## dots: init.lua
+ranma.module("workspaces", { show = 6 })                      -- c446
+ranma.bar {
+  left   = { { "mode", "session" }, "message" },             -- c446: messages land here
+  center = { "workspaces" },
+  right  = { { "title", "cpu", "mem", style = "sys" }, "clock" },
+}
+
+
+################ Findings ################
+
+## Title bars: what the proposal cannot express
+F1  Groups draw two rows
+    DESIGN.md decides "Groups keep their tab bar", and a grouped pane's top edge is drawn like any other. With a filled title row every group then shows its tab row over its title row (Window, "as proposed"), and the brief's rule is one row.
+    Ask: tabs.position = "title" (NEW): the tabs drawn in the active pane's title row, where `title` would be, and the tab row's cell given back to the pane. Or a built-in `tabs` piece: a theme without it keeps today's tab row.
+F2  No text colour on a state's ground
+    c437 gives each state one colour. Without side edges the row's ground is the only place a state can show, and then its text has no role. An urgent badge in bar_urgent on an urgent ground disappears.
+    Ask: title_fg_urgent and title_fg_synced (NEW, used in Window and Pills), or state pairs (R3). On a state ground, badges take the row's text colour.
+F3  One precedence, and a colour clash
+    Edges and title rows need one order: WM mode, urgent, synced, zoomed, scrolled, then focused / floating / inactive. In the built-in theme mode_bg and bar_urgent are the same colour, so an urgent pane that fell back to bar_urgent would look like the WM-mode pane.
+    Ask: Record the order, and give border_urgent a default that is never mode_bg (the mocks use a peach).
+F4  Thin side edges
+    ▏ on the left and ▕ on the right are two characters. border.chars has one vertical, and top_chars / bottom_chars only cover the top and bottom.
+    Ask: Left and right characters of their own (R2).
+F5  A float with no edges blends in
+    An unfocused float takes inactive_bg, the same ground as the tiles under it, and with no edge its left side runs into them. The shadow only covers the right and bottom.
+    Ask: panes.floating_bg (NEW).
+F6  A pill round one piece
+    title_cap_* take the row's corners, which rounds the whole row (Window). A pill round the title alone, round each badge, or round the buttons together (Pills) cannot be made, because setting title_bg_* fills the whole row.
+    Ask: border.title_ground = "row" | "title" (NEW). Then piece caps with their own ground (border.piece_cap_*, colors.piece_bg / piece_fg, NEW), and a list inside a ranma.titlebar side drawn as one pill, as c445 does for the bar. Better still: apply c444's caps per role to title pieces too, so a piece with style = "x" takes [roles.x]'s ground and caps. Then only title_ground and the grouping are new.
+F7  Right side first starves the title
+    Budgeting as the bar does keeps every button and cuts the left side at its end. Badges, urgent ones included, go before the title is cut, and at 18 columns the pane shows three buttons with no title and no ⇉ (the ladders). That breaks the proposal's own "the marks a config did not list still show".
+    Ask: keep / a priority on a piece (NEW), and a ladder that mixes sides: badge words, the title cut to four letters, calm badges, float, zoom, the title's name (⇉ and the icon stay), urgent badges, with close and the index last. Drawn as "this handoff's ladder".
+F8  A handle lacks what pieces need
+    render(pane) gets a pane handle, which has no index, zoomed, synced or urgent. So Quiet's index, a zoom button that reads "restore" while zoomed, and a title that follows the bell cannot be written.
+    Ask: Those four fields on handles.
+F9  A colour cannot name a role
+    Quiet's title_bg_* repeat the pane grounds, and every hover role repeats a button colour, all as hex. A matugen template then has to learn every new key.
+    Ask: Let a colour be another role's name (title_bg_active = "active_bg", NEW), resolved after the merge.
+F10  WM mode on a row of blanks
+    With top_chars blank and title_bg_* unset, the row is a border line of spaces, so mode_bg lands on the title's letters only (Quiet, "as proposed").
+    Ask: A rule, not a key: a focused row with no line to colour is filled with mode_bg / mode_fg.
+F11  Switching themes keeps init.lua's layout
+    choose_theme from Window to Quiet keeps three buttons on a theme meant to have none, and from Classic to Grouped it keeps the groups of one.
+    Ask: Let a theme name its pieces ([titlebar] right = [...], with ranma.title_piece still defining them), or have the docs say that a look is a theme plus init.lua lines.
+F12  No scrollbar without a right edge
+    Decided in the proposal, and it holds.
+    Ask: With panes.padding_right of 1 or more, the thumb could sit in the padding column.
+
+## Title bars: what to rename
+R1  title_cap_left / right → title_corner_left / right
+    They take the corners and round the row, not the title. I read them as caps round the title on the first pass, which is the reading the name invites.
+R2  top_chars, bottom_chars, chars → one table
+    [border.chars] top = "╭─╮", bottom = "╰─╯", left = "│", right = "│". This fixes F4, and custom becomes "any side set".
+R3  c437's border_urgent… → state_urgent + state_urgent_fg …
+    In an edgeless theme they colour a row's ground and its text, not a border. This fixes F2.
+R4  hover_style: keep
+    It is the same word for title pieces and bar modules (c446), and reads well in both.
+
+## Title bars: what to drop
+D1  bottom_chars
+    No look here needed it. It folds into R2.
+D2  border.edges = []
+    It is the same as style = "none". Refuse it, or make it the only spelling.
+D3  title_align with ranma.titlebar
+    The slots decide where things go, so setting both should be an error.
+D4  top_chars' corners on a filled row
+    The fill covers them, and title_cap_* take them anyway. Document them as "corners only on an unfilled row", or drop them.
+
+## Bars: what c444-c446 cannot express
+B1  Built-in modules take no role
+    style comes from a Lua module's return value. cpu, mem, session and workspaces have none, so the classic bar makes each one a group of one just to give it a ground.
+    Ask: style on every built-in: ranma.module("cpu", { style = "cpu" }).
+B2  The mode's ground
+    In arrows mode the mode module is one chip. The arrow after it must be drawn in mode_bg, but a module's ground comes from its role.
+    Ask: A rule: a module whose text is a single chip takes the chip's ground (as drawn).
+B3  Cuts must keep caps, and the centre goes first
+    c445's "cut with … inside its caps" is right and needed: today's truncate cuts the flat piece list, so the closing cap or arrow goes (the "today" rows). In arrows mode the cut segment should keep its arrow. Because the centre gets only what the sides leave, workspaces moved there are cut first: Dots at 80 columns keeps only the current dot.
+    Ask: A floor for the centre of its own (fit_floor already exists for one case), or keep on a module.
+B4  A hover format loses the state
+    A single workspace_hover_format replaces the empty / occupied / urgent glyph, so the dot under the pointer stops saying what it is.
+    Ask: Drop it. Hover becomes ws_hover_fg / ws_hover_bg over the state's own format (as drawn).
+B5  One separator colour, two grounds
+    colors.separator colours bar.separator on bar_bg and group_separator on a pill's ground, and a pill on a role's ground (sys) makes a third. One colour cannot read on all of them.
+    Ask: colors.group_separator (NEW), or a separator in the group's role, [roles.x] separator (NEW).
+B6  Chip caps per side
+    A current workspace inside an arrow segment wants square chips or arrows, while the right side stays round. chip_left / chip_right are global.
+    Ask: chip_left / chip_right inside [bar.left], [bar.center] and [bar.right] (NEW).
+B7  Name the keys inside [bar.left] / [bar.center] / [bar.right]
+    The mocks use module_left, module_right and arrow, plus the paddings. join belongs there too: "the centre always uses pills" already makes join a per-side setting.
+B8  Groups and the large bar: no change
+    Each module keeps its own square, thumb-sized chip. A group could at most share one ground under its chips, which buys nothing at three rows. A group is layout, so the large bar can keep its order and ignore the grouping.
+B9  A bigger dot is a different glyph
+    ⬤ is drawn wider than a cell by several fonts and terminals. The mocks use ● in a chip, which reads as bigger because of its ground and stays three cells like every other dot, so the row does not shift as focus moves.
+    Ask: One line in CONFIG.md: formats for different states should have the same width.
+B10  message on a side works
+    Listed after the session, a message takes no room while there is none. When one arrives it pushes into the centre, since the centre gets what the sides leave. That is consistent with the rest, so it is only noted here.
+
+Status: finished

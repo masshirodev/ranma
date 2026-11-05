@@ -357,26 +357,32 @@ macOS, not native Windows" records what differs.
 
 The 2026-11-04 survey: a theme should be able to build a look (a GUI title
 bar, say), not only recolour ranma's. DESIGN.md, "Title bars a theme can
-build" (proposed). Cards c435 to c446 on the board; c426 to c434 are the
-behaviour half of the same survey and are not listed here.
+build" and "Powerline bars: grounds, groups and arrows", settled from the
+design handoff (`doc/handoffs/TITLE_BARS_MOCK.txt`). Cards c435 to c446 on
+the board; c426 to c434 are the behaviour half of the same survey and are
+not listed here.
 
-- [ ] Design: `doc/briefs/TITLE_BARS.md`, handoff in `doc/handoffs/`; the
-  proposal settled from it
-- [ ] `border.edges`, `floating_edges`, `top_chars`, `bottom_chars`
-- [ ] A filled title row: `title_bg_*`, `title_fg_*`, `title_cap_left` / `right`
-- [ ] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`
+- [x] Design: `doc/briefs/TITLE_BARS.md` and its addendum, one handoff;
+  the proposal settled from it (F1-F12, R1-R4, D1-D4, B1-B10)
+- [ ] A colour may name another colour role (F9); `state_urgent` off `mode_bg`
+- [ ] `border.edges`, `floating_edges`, `[border.chars]` per edge
+- [ ] A filled title row: `title_bg_*`, `title_fg_*`, `title_corner_left` / `right`,
+  `panes.floating_bg`
+- [ ] `ranma.titlebar` and `ranma.title_piece`: pieces, buttons, `hover_style`,
+  priorities and the handoff's ladder; `tabs`, `index` built in; profiles carry it
+- [ ] Pane handles: `index`, `zoomed`, `synced`, `urgent`
+- [ ] `title_ground = "pieces"`: pills on the row, from roles
 - [ ] The `title` mouse target
+- [ ] State colours: `state_*` and `state_*_fg`, one precedence (c437)
 - [ ] Group tab bars: formats, separators, caps (c436)
-- [ ] Border and title colours for states (c437)
 - [ ] `[icons]` and `{icon}` (c438)
-- [ ] Pane padding (c439)
+- [ ] Pane padding, the scrollbar in it (c439)
 - [ ] Shadows under floats (c440)
 - [ ] Pickers and toasts follow `border.style` (c441)
 - [ ] Scrollbar looks (c442)
 - [ ] Splash art from a file (c443)
-- [ ] Caps per role (c444)
-- [ ] Design addendum: `doc/briefs/TITLE_BARS_ADDENDUM.md` (the bar), in the same
-  handoff
-- [ ] Powerline bars: a ground per module, groups, arrows (c445)
-- [ ] Workspaces in any form, hover, `show = N`, and `message` placed by the
+- [ ] Caps per role, for modules and title pieces (c444)
+- [ ] Powerline bars: grounds, `style` on built-ins, groups, arrows, sides,
+  cuts that keep caps, `center_min` (c445)
+- [ ] Workspaces in any form, hover colours, `show = N`, `message` placed by the
   config (c446)
