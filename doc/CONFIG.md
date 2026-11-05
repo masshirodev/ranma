@@ -2348,6 +2348,16 @@ A theme can build on another of yours with `inherits = "other-name"`.
 Colours are `"#rrggbb"`, an ANSI name (`"blue"`, `"bright-black"`), an index
 `0`-`255`, or `"default"` for the host terminal's own colour.
 
+A colour may also be **the name of another key in `[colors]`**, which it then
+takes the value of: `border_floating = "bar_accent"`. Names are followed
+after the theme is merged with everything it inherits (and the settings
+panel's `[theme]`), so they follow what that key ends up being: a theme
+rendered from the wallpaper that sets only `bar_accent` colours every key
+that names it. Gradients may hold names too. A name of no key the theme sets,
+and names that go round in a circle, are errors at load. ANSI names stay
+colours: no key is called `red` or `default`. The settings panel takes
+colours only; a key set to a name shows the name there.
+
 | Key | Values |
 | --- | --- |
 | `colors.border_active`, `border_inactive`, `border_floating` | colour |

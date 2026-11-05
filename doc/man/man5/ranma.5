@@ -3088,6 +3088,16 @@ A theme can build on another of yours with \fBinherits = "other\-name"\fR.
 .PP
 Colours are \fB"#rrggbb"\fR, an ANSI name (\fB"blue"\fR, \fB"bright\-black"\fR), an index
 \fB0\fR\-\fB255\fR, or \fB"default"\fR for the host terminal's own colour.
+.PP
+A colour may also be \fBthe name of another key in \fB[colors]\fB\fR, which it then
+takes the value of: \fBborder_floating = "bar_accent"\fR. Names are followed
+after the theme is merged with everything it inherits (and the settings
+panel's \fB[theme]\fR), so they follow what that key ends up being: a theme
+rendered from the wallpaper that sets only \fBbar_accent\fR colours every key
+that names it. Gradients may hold names too. A name of no key the theme sets,
+and names that go round in a circle, are errors at load. ANSI names stay
+colours: no key is called \fBred\fR or \fBdefault\fR. The settings panel takes
+colours only; a key set to a name shows the name there.
 .TP
 \fBcolors.border_active\fR, \fBborder_inactive\fR, \fBborder_floating\fR
 colour

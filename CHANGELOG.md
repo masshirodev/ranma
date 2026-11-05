@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- A theme colour can name another key in `[colors]`
+  (`border_floating = "bar_accent"`) and takes its value, followed after
+  inheritance, so a matugen template sets the base roles and the rest follow.
+
 - Text in the settings panel and in plugin screens (a Kumiko card, the
   agents list) is selected with the mouse, as in a pane: drag, double click
   for a word, triple click for a line, copied on release. A click still picks

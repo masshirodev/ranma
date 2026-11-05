@@ -1176,6 +1176,9 @@ pub fn load_over_unset(
     } else {
         format!("theme `{name}`")
     };
+    if let Some(toml::Value::Table(colors)) = table.get_mut("colors") {
+        resolve_color_names(colors).map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
+    }
     let mut theme: Theme = toml::Value::Table(table)
         .try_into()
         .with_context(|| what.clone())?;
@@ -1195,6 +1198,70 @@ pub fn load_over_unset(
         theme.art = Some(std::sync::Arc::new(art));
     }
     Ok((theme, resolved))
+}
+
+/// A colour that names another colour role (`title_bg_active = "active_bg"`)
+/// takes that role's value, followed through as many names as it takes
+/// (DESIGN.md, "Title bars a theme can build", F9). Run on the merged table,
+/// after every layer of inheritance and the settings panel's, so a name
+/// follows whatever the role ends up being: a matugen theme that sets only
+/// the old roles colours the new keys that name them. Gradients may hold
+/// names too. A name that is no role this theme sets, and a cycle, are
+/// errors naming the chain. ANSI names (`red`, `bright-blue`, `default`)
+/// are colours, not roles, and no role is called that.
+fn resolve_color_names(colors: &mut toml::Table) -> Result<(), String> {
+    fn is_role(s: &str) -> bool {
+        s.parse::<Color>().is_err()
+    }
+    fn follow(colors: &toml::Table, key: &str, start: &str) -> Result<toml::Value, String> {
+        let mut chain = vec![key.to_string()];
+        let mut name = start.to_string();
+        loop {
+            if chain.contains(&name) {
+                chain.push(name);
+                return Err(format!(
+                    "colors: {} names itself in the end",
+                    chain.join(" → ")
+                ));
+            }
+            chain.push(name.clone());
+            match colors.get(&name) {
+                Some(toml::Value::String(s)) if is_role(s) => name = s.clone(),
+                Some(v @ (toml::Value::String(_) | toml::Value::Integer(_))) => {
+                    return Ok(v.clone());
+                }
+                Some(_) => {
+                    return Err(format!(
+                        "colors.{key}: `{}` is a list of colours, not one",
+                        chain[1]
+                    ));
+                }
+                None => {
+                    let shown = chain.join(" → ");
+                    return Err(format!(
+                        "colors: {shown}, which is not a colour (#rrggbb, 0-255, an ANSI name, default) or a colour this theme sets"
+                    ));
+                }
+            }
+        }
+    }
+    let snapshot = colors.clone();
+    for (key, value) in colors.iter_mut() {
+        match value {
+            toml::Value::String(s) if is_role(s) => *value = follow(&snapshot, key, &s.clone())?,
+            toml::Value::Array(items) => {
+                for item in items.iter_mut() {
+                    if let toml::Value::String(s) = item
+                        && is_role(s)
+                    {
+                        *item = follow(&snapshot, key, &s.clone())?;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// What serde cannot see: placeholders by key, and `chars` where `custom`
@@ -1515,6 +1582,46 @@ mod tests {
         assert!(err.contains("border_actve"), "{err}");
         let err = format!("{:#}", load("colour", &[dir]).unwrap_err());
         assert!(err.contains("#12345"), "{err}");
+    }
+
+    #[test]
+    fn a_colour_may_name_another_colour_role() {
+        let dir = tmp_dir("role-names");
+        let write = |name: &str, body: &str| std::fs::write(dir.join(name), body).unwrap();
+        // Through two names, into a gradient, and over what it inherits:
+        // the child changes bar_dim, and every name that leads to it follows.
+        write(
+            "base.toml",
+            "[colors]\nbar_dim = \"#101010\"\nborder_inactive = \"bar_dim\"\nborder_floating = \"border_inactive\"\nborder_active_gradient = [\"bar_dim\", \"#ffffff\"]\n",
+        );
+        write(
+            "child.toml",
+            "inherits = \"base\"\n[colors]\nbar_dim = \"#202020\"\n",
+        );
+        write(
+            "loop.toml",
+            "[colors]\nbar_fg = \"bar_dim\"\nbar_dim = \"bar_fg\"\n",
+        );
+        write("nowhere.toml", "[colors]\nbar_fg = \"active_bg\"\n");
+        write("ansi.toml", "[colors]\nbar_fg = \"bright-blue\"\n");
+        let dirs = std::slice::from_ref(&dir);
+        let c = load("child", dirs).unwrap().colors;
+        let dim = Color::Rgb(0x20, 0x20, 0x20);
+        assert_eq!((c.border_inactive, c.border_floating), (dim, dim));
+        assert_eq!(
+            c.border_active_gradient,
+            Some(vec![dim, Color::Rgb(0xff, 0xff, 0xff)])
+        );
+        let err = format!("{:#}", load("loop", dirs).unwrap_err());
+        assert!(err.contains("names itself"), "{err}");
+        // A pane's ground is not a colour role: [panes] is another table.
+        let err = format!("{:#}", load("nowhere", dirs).unwrap_err());
+        assert!(err.contains("bar_fg → active_bg"), "{err}");
+        assert_eq!(
+            load("ansi", dirs).unwrap().colors.bar_fg,
+            Color::Indexed(12)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

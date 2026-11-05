@@ -364,7 +364,7 @@ not listed here.
 
 - [x] Design: `doc/briefs/TITLE_BARS.md` and its addendum, one handoff;
   the proposal settled from it (F1-F12, R1-R4, D1-D4, B1-B10)
-- [ ] A colour may name another colour role (F9); `state_urgent` off `mode_bg`
+- [x] A colour may name another colour role (F9)
 - [ ] `border.edges`, `floating_edges`, `[border.chars]` per edge
 - [ ] A filled title row: `title_bg_*`, `title_fg_*`, `title_corner_left` / `right`,
   `panes.floating_bg`
@@ -373,7 +373,8 @@ not listed here.
 - [ ] Pane handles: `index`, `zoomed`, `synced`, `urgent`
 - [ ] `title_ground = "pieces"`: pills on the row, from roles
 - [ ] The `title` mouse target
-- [ ] State colours: `state_*` and `state_*_fg`, one precedence (c437)
+- [ ] State colours: `state_*` and `state_*_fg`, one precedence, `state_urgent`
+  never `mode_bg` (c437)
 - [ ] Group tab bars: formats, separators, caps (c436)
 - [ ] `[icons]` and `{icon}` (c438)
 - [ ] Pane padding, the scrollbar in it (c439)
