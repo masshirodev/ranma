@@ -258,6 +258,11 @@ Default: \fB10000\fR
 .br
 Scrollback per pane.
 .TP
+\fBbuffers_kept\fR
+Default: \fB50\fR
+.br
+Copies kept to paste again (\fBchoose_buffer\fR, \fBpaste_buffer\fR), 1\-1000, in memory only; fewer at a reload drops the oldest.
+.TP
 \fBmouse_wheel_lines\fR
 Default: \fB3\fR
 .br
@@ -668,7 +673,7 @@ Number the panes on screen, large (tmux's \fBdisplay\-panes\fR): type a number t
 Copy what the focused pane's program writes, as it wrote it (escape sequences and all), somewhere (tmux's \fBpipe\-pane\fR). Bare, it toggles a log at \fB~/.local/state/ranma/logs/pane<ID>\-<YYYYMMDD\-HHMMSS>.log\fR (UTC); with a command line, the output goes into that command's stdin (\fBpipe_pane cat >> ~/build.log\fR, \fBpipe_pane grep \-\-line\-buffered error > ~/errors\fR), run by \fBsh \-c\fR in the pane's directory; \fBoff\fR stops. The bar says where it goes. Output a sink cannot keep up with is dropped rather than slowing the pane. A respawned pane keeps piping; an upgrade stops it. Bare, it is \fBleader x l\fR.
 .TP
 \fBchoose_buffer\fR
-The copies kept lately, newest first, one line each (\fB↵\fR for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's \fBchoose\-buffer\fR). Every copy is kept: copy mode's, a link copied from \fBhints\fR, \fBranma.copy\fR, and what a program copies itself with OSC 52. The last 50, the same text once, in memory only: never written to disk, and gone when the server ends or upgrades (\fBleader V\fR, beside \fBv\fR; not tmux's \fB#\fR, which is Shift+3 and so moves with the keyboard layout).
+The copies kept lately, newest first, one line each (\fB↵\fR for a line break) with their size; Enter pastes the selected one into the focused pane (tmux's \fBchoose\-buffer\fR). Every copy is kept: copy mode's, a link copied from \fBhints\fR, \fBranma.copy\fR, and what a program copies itself with OSC 52. The last 50 (\fBbuffers_kept\fR), the same text once, in memory only: never written to disk, and gone when the server ends or upgrades (\fBleader V\fR, beside \fBv\fR; not tmux's \fB#\fR, which is Shift+3 and so moves with the keyboard layout).
 .TP
 \fBpaste_buffer [n]\fR
 Paste the last copy into the focused pane, or the \fBn\fRth newest (tmux's \fBpaste\-buffer\fR), as a paste: bracketed when the program asked for that (\fBleader ]\fR, tmux's key).

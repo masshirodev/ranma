@@ -117,6 +117,9 @@ ranma.set {
   -- Lines one notch of the wheel scrolls: through scrollback, in copy mode, and
   -- as arrow keys in a full-screen program that takes no mouse (less, man).
   mouse_wheel_lines = 3,
+  -- Copies kept to paste again (choose_buffer, leader V; paste_buffer, leader
+  -- ]), newest first, in memory only: a clipboard holds passwords.
+  buffers_kept = 50,
 
   -- When ranma's source (its own clone, ~/.local/share/ranma/repo) has new commits:
   --   "remind": a toast and a marker in the bar; leader U installs.

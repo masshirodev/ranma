@@ -58,7 +58,12 @@ mod watch;
 pub use touch::{ButtonState, SheetLayout};
 pub(crate) mod upgrade;
 
-pub use buffers::KEPT as BUFFERS_KEPT;
+pub use buffers::MAX_KEPT as BUFFERS_MAX;
+
+/// Paste buffers kept unless `buffers_kept` says.
+pub const fn buffers_kept_default() -> usize {
+    buffers::KEPT
+}
 pub use copy::CopyState;
 pub use display::PaneNumbers;
 pub use drag::drop_half;
@@ -3743,7 +3748,8 @@ impl App {
                 self.module_values.clear();
                 self.piece_values.clear();
                 // A changed scrollback or word_separators reaches the
-                // panes already open.
+                // panes already open; fewer buffers kept drops the oldest.
+                self.buffers.truncate(self.config.settings.buffers_kept);
                 let s = &self.config.settings;
                 for p in self.panes.values() {
                     p.set_options(s.scrollback_lines, &s.word_separators);

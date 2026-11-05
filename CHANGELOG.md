@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `buffers_kept`: how many copies are kept to paste again (50 as before, up
+  to 1000); `paste_buffer N` takes any N up to it.
+
 - `toasts.position` (any corner, or the top or bottom middle) and
   `toasts.timeout` (the default seconds a toast stays).
 

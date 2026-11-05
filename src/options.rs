@@ -370,6 +370,14 @@ pub fn builtin() -> Vec<Opt> {
             "Lines of scrollback kept per pane.",
         ),
         opt(
+            "buffers_kept",
+            "general",
+            "Buffers kept",
+            int(1, 1000, 10, false),
+            Init,
+            "Copies kept to paste again (choose_buffer, paste_buffer), in memory only.",
+        ),
+        opt(
             "mouse_wheel_lines",
             "general",
             "Wheel lines",

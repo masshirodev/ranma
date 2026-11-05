@@ -8,18 +8,20 @@ use super::App;
 use crate::input;
 use crate::picker::{Item, Kind, Picker, Target};
 
-/// How many copies are kept.
+/// How many copies are kept unless `buffers_kept` says (card c431).
 pub const KEPT: usize = 50;
+/// The most `buffers_kept` may keep.
+pub const MAX_KEPT: usize = 1000;
 
 /// `text` as the newest of `list`: an earlier copy of the same text moves
-/// up instead of being kept twice, and the oldest go past `KEPT`.
-pub fn remember(list: &mut Vec<String>, text: &str) {
+/// up instead of being kept twice, and the oldest go past `kept`.
+pub fn remember(list: &mut Vec<String>, text: &str, kept: usize) {
     if text.is_empty() {
         return;
     }
     list.retain(|t| t != text);
     list.insert(0, text.to_string());
-    list.truncate(KEPT);
+    list.truncate(kept);
 }
 
 /// One line for the picker: the text with its line breaks as `↵` and other
@@ -46,7 +48,7 @@ pub fn preview(text: &str, width: usize) -> String {
 impl App {
     /// A copy went to the clipboard: keep it as the newest buffer.
     pub(super) fn remember_copy(&mut self, text: &str) {
-        remember(&mut self.buffers, text);
+        remember(&mut self.buffers, text, self.config.settings.buffers_kept);
     }
 
     /// `choose_buffer`: the buffers, newest first; Enter pastes one.
@@ -100,14 +102,16 @@ mod tests {
     fn copies_are_kept_newest_first_once_each() {
         let mut l = Vec::new();
         for t in ["a", "b", "", "a"] {
-            remember(&mut l, t);
+            remember(&mut l, t, KEPT);
         }
         assert_eq!(l, vec!["a", "b"]);
         for i in 0..80 {
-            remember(&mut l, &i.to_string());
+            remember(&mut l, &i.to_string(), KEPT);
         }
         assert_eq!(l.len(), KEPT);
         assert_eq!(l[0], "79");
+        remember(&mut l, "x", 3);
+        assert_eq!(l, vec!["x", "79", "78"], "fewer kept: the oldest go");
     }
 
     #[test]

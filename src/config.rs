@@ -265,6 +265,8 @@ pub struct Settings {
     /// What ends a word for copy mode's word motions and a double click
     /// (alacritty's semantic escape characters; card c427).
     pub word_separators: String,
+    /// Copies kept as paste buffers (card c431).
+    pub buffers_kept: usize,
     /// Lines one notch of the wheel scrolls (card c429).
     pub mouse_wheel_lines: u8,
     /// Where toasts stack, and how long one lasts unless it says (c430).
@@ -328,6 +330,7 @@ impl Default for Settings {
             word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             hint_alphabet: "asdfghjklqwertyuiopzxcvbnm".to_string(),
             mouse_wheel_lines: 3,
+            buffers_kept: crate::app::buffers_kept_default(),
             toast_position: crate::toast::Corner::TopRight,
             toast_timeout: crate::toast::DEFAULT_TIMEOUT,
             hint_urls: true,
@@ -374,6 +377,7 @@ struct SettingsPatch {
     word_separators: Option<String>,
     hint_alphabet: Option<String>,
     mouse_wheel_lines: Option<u8>,
+    buffers_kept: Option<usize>,
     hint_urls: Option<bool>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
@@ -2209,6 +2213,15 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(u) = patch.hint_urls {
         s.hint_urls = u;
+    }
+    if let Some(n) = patch.buffers_kept {
+        if !(1..=crate::app::BUFFERS_MAX).contains(&n) {
+            return Err(format!(
+                "{who}: buffers_kept must be 1 to {}, not {n}",
+                crate::app::BUFFERS_MAX
+            ));
+        }
+        s.buffers_kept = n;
     }
     if let Some(n) = patch.mouse_wheel_lines {
         if !(1..=50).contains(&n) {
@@ -4656,6 +4669,26 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn buffers_kept_is_a_setting_and_paste_buffer_takes_its_range() {
+        assert_eq!(with_user("").unwrap().settings.buffers_kept, 50);
+        assert_eq!(
+            with_user("ranma.set { buffers_kept = 200 }")
+                .unwrap()
+                .settings
+                .buffers_kept,
+            200
+        );
+        assert!(with_user("ranma.set { buffers_kept = 0 }").is_err());
+        assert!(with_user("ranma.set { buffers_kept = 1001 }").is_err());
+        // Past the 50 it once stopped at; the run says when there are fewer.
+        assert_eq!(
+            "paste_buffer 120".parse::<Action>().unwrap(),
+            Action::PasteBuffer(120)
+        );
+        assert!("paste_buffer 1001".parse::<Action>().is_err());
     }
 
     #[test]

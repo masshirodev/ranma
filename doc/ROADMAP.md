@@ -398,7 +398,7 @@ fixed in the code and is a setting or a bind now.
 - [x] Hints: an alphabet and patterns of your own (c428)
 - [x] `mouse_wheel_lines` (c429)
 - [x] Toasts: their corner and default timeout (c430)
-- [ ] `buffers_kept` (c431)
+- [x] `buffers_kept` (c431)
 - [ ] One double-click window, and a setting for it (c432)
 - [ ] Picker size from the theme (c433)
 - [ ] An exec module's own timeout (c434)

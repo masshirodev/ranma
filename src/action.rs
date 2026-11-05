@@ -1096,12 +1096,12 @@ impl FromStr for Action {
                 (Some(n), None) => n
                     .parse::<usize>()
                     .ok()
-                    .filter(|n| (1..=crate::app::BUFFERS_KEPT).contains(n))
+                    .filter(|n| (1..=crate::app::BUFFERS_MAX).contains(n))
                     .map(Action::PasteBuffer)
                     .ok_or(ActionError::BadArg {
                         action: name.into(),
                         arg: n.into(),
-                        expected: "which copy, 1 (the last) to 50",
+                        expected: "which copy, 1 (the last) up to buffers_kept (at most 1000)",
                     }),
                 (Some(_), Some(_)) => Err(ActionError::BadArg {
                     action: name.into(),
