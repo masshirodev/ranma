@@ -3400,6 +3400,12 @@ drawn before and after every tab, in the tab's ground on the row's: \fB"\eue0b6"
 \fBpanes.dim_unfocused\fR
 \fB0\fR\-\fB1\fR: how far the text of unfocused panes fades toward its background (\fB0\fR is off, the default; \fB0.3\fR is a hint). It mixes real colours, from what the program set and the host terminal reported; with a host that reports no colours it uses the terminal's faint attribute instead.
 .TP
+\fBpanes.scrollbar_thumb\fR, \fBpanes.scrollbar_track\fR
+one character each: the scrollbar's thumb (unset, the heavy line, \fB#\fR with \fBascii\fR) and its track along the rest of the column (unset, the edge as it is): \fB"█"\fR and \fB"│"\fR.
+.TP
+\fBcolors.scrollbar_thumb\fR, \fBscrollbar_track\fR
+their colours; unset, the border's
+.TP
 \fBfloating.shadow\fR
 \fBoff\fR (the default), \fBshade\fR or \fBchar\fR: a shadow one cell right of a float and one row below it, each offset by one, as a desktop window casts. \fBshade\fR darkens the cells there halfway to \fBcolors.shadow\fR (faint, when that or their colours are unknown); \fBchar\fR draws \fB░\fR over them in \fBcolors.shadow\fR (unset, \fBbar_dim\fR). Floats and popups alike.
 .TP

@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `panes.scrollbar_thumb` and `scrollbar_track` (characters) with
+  `colors.scrollbar_thumb` and `scrollbar_track`: the scrollbar's looks.
+
 - `border.overlay_style`: the frame of pickers, sheets, toasts, the settings
   panel and plugin screens, apart from the panes' `border.style`.
 

@@ -1533,15 +1533,59 @@ fn draw_scrollbar(f: &mut Frame, app: &App, view: &PaneView, pane: &crate::pane:
     } else {
         buf[(x, inner.y)].style()
     };
-    let b = &app.config.theme.border;
-    let style = if view.floating { b.floating() } else { b.style };
-    let glyph = if style == BorderStyle::Ascii {
-        "#"
+    let style = if view.floating {
+        app.config.theme.border.floating()
     } else {
-        "┃"
+        app.config.theme.border.style
     };
-    for y in inner.y + at..inner.y + at + len {
-        buf[(x, y)].set_symbol(glyph).set_style(edge);
+    paint_scrollbar(
+        buf,
+        &app.config.theme,
+        style,
+        edge,
+        (x, inner.y, inner.h),
+        (at, len),
+    );
+}
+
+/// A scrollbar in column `x`, from row `y` for `h` rows: the track (when
+/// the theme draws one), then the thumb over it, `at` rows down, `len` long.
+fn paint_scrollbar(
+    buf: &mut ratatui::buffer::Buffer,
+    theme: &theme::Theme,
+    style: BorderStyle,
+    edge: Style,
+    (x, y0, h): (u16, u16, u16),
+    (at, len): (u16, u16),
+) {
+    let thumb = theme.panes.scrollbar_thumb.map_or_else(
+        || {
+            if style == BorderStyle::Ascii {
+                "#"
+            } else {
+                "┃"
+            }
+            .to_string()
+        },
+        |c| c.to_string(),
+    );
+    let ink = |c: Option<theme::Color>| match c {
+        Some(c) => edge.fg(color(c)),
+        None => edge,
+    };
+    // The track first, along the whole column, then the thumb over it.
+    if let Some(track) = theme.panes.scrollbar_track {
+        let track = track.to_string();
+        for y in y0..y0 + h {
+            buf[(x, y)]
+                .set_symbol(&track)
+                .set_style(ink(theme.colors.scrollbar_track));
+        }
+    }
+    for y in y0 + at..y0 + at + len {
+        buf[(x, y)]
+            .set_symbol(&thumb)
+            .set_style(ink(theme.colors.scrollbar_thumb));
     }
 }
 
@@ -2886,6 +2930,47 @@ mod tests {
         // Unset: the panes' style, rounded when that is none.
         let (app, dir) = themed_app("overlay-unset", "[border]\nstyle = \"none\"\n");
         assert_eq!(frame_set(&app.config.theme.border).top_left, "╭");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_scrollbar_takes_the_themes_thumb_and_track() {
+        let (app, dir) = themed_app(
+            "scrollbar",
+            "[colors]\nscrollbar_thumb = \"#ff0000\"\n[panes]\nscrollbar_thumb = \"█\"\nscrollbar_track = \"│\"\n",
+        );
+        let mut buf = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 1, 6));
+        let edge = Style::default().fg(Color::Rgb(1, 1, 1));
+        paint_scrollbar(
+            &mut buf,
+            &app.config.theme,
+            BorderStyle::Rounded,
+            edge,
+            (0, 0, 6),
+            (2, 2),
+        );
+        let col: String = (0..6).map(|y| buf[(0, y)].symbol().to_string()).collect();
+        assert_eq!(col, "││██││");
+        assert_eq!(buf[(0, 2)].fg, Color::Rgb(255, 0, 0));
+        assert_eq!(
+            buf[(0, 0)].fg,
+            Color::Rgb(1, 1, 1),
+            "the track in the edge's colour"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        // Unset: the heavy line, and no track.
+        let (app, dir) = themed_app("scrollbar-unset", "");
+        let mut buf = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 1, 4));
+        paint_scrollbar(
+            &mut buf,
+            &app.config.theme,
+            BorderStyle::Rounded,
+            edge,
+            (0, 0, 4),
+            (1, 1),
+        );
+        let col: String = (0..4).map(|y| buf[(0, y)].symbol().to_string()).collect();
+        assert_eq!(col, " ┃  ");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

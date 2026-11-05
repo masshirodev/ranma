@@ -217,6 +217,10 @@ dim_unfocused = 0.0
 # (tmux's pane-scrollbars): "scrolled" only while you are scrolled back, "on"
 # whenever there is history, "off" never. Drawn in the border's colour.
 scrollbar = "scrolled"
+# The thumb's character and the track's along the rest of the column (unset:
+# the heavy line, and the edge as it is); colours in [colors].
+# scrollbar_thumb = "█"
+# scrollbar_track = "│"
 
 [background]
 # Text art drawn behind the panes, where none covers the workspace: the gaps,

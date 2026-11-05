@@ -210,6 +210,12 @@ pub struct Colors {
     pub title_fg_inactive: Option<Color>,
     #[serde(default)]
     pub title_fg_floating: Option<Color>,
+    /// The scrollbar's thumb and track (`panes.scrollbar`); unset, the
+    /// border's colour.
+    #[serde(default)]
+    pub scrollbar_thumb: Option<Color>,
+    #[serde(default)]
+    pub scrollbar_track: Option<Color>,
     /// A float's shadow's colour (`floating.shadow`); unset, cells are made
     /// faint (`shade`) or drawn in `bar_dim` (`char`).
     #[serde(default)]
@@ -1363,6 +1369,12 @@ pub struct Panes {
     /// A thumb on the right border for where the view is in the history.
     #[serde(default)]
     pub scrollbar: Scrollbar,
+    /// The thumb's character; unset, the heavy line (`#` with `ascii`).
+    #[serde(default)]
+    pub scrollbar_thumb: Option<char>,
+    /// The track's, where the thumb is not; unset, the edge as it is.
+    #[serde(default)]
+    pub scrollbar_track: Option<char>,
 }
 
 /// Where the thumb goes on a track of `track` cells, for a view `offset`
@@ -1820,6 +1832,17 @@ fn check(t: &Theme) -> Result<(), String> {
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
     check_edges(&t.border)?;
+    for (k, c) in [
+        ("panes.scrollbar_thumb", t.panes.scrollbar_thumb),
+        ("panes.scrollbar_track", t.panes.scrollbar_track),
+    ] {
+        use unicode_width::UnicodeWidthChar;
+        if let Some(c) = c
+            && (c.is_control() || c.width() != Some(1))
+        {
+            return Err(format!("{k} must be one one-cell character, not `{c}`"));
+        }
+    }
     let pad = t.panes.pad();
     if pad.iter().any(|p| *p > 8) {
         return Err(format!(
