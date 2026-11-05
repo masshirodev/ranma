@@ -216,6 +216,12 @@ pub struct Colors {
     pub scrollbar_thumb: Option<Color>,
     #[serde(default)]
     pub scrollbar_track: Option<Color>,
+    /// A workspace under the pointer, over its state's own format and
+    /// colours; unset, as it is (card c446).
+    #[serde(default)]
+    pub ws_hover_fg: Option<Color>,
+    #[serde(default)]
+    pub ws_hover_bg: Option<Color>,
     /// `bar.separator`'s colour, and a group's separator's where its role
     /// gives none; unset, `bar_dim`.
     #[serde(default)]
@@ -889,6 +895,14 @@ pub struct Bar {
     /// Between the modules of a group (card c445), on its ground.
     #[serde(default)]
     pub group_separator: String,
+    /// A workspace with nothing in it, one that is urgent, one that printed
+    /// while not shown: each unset, `workspace_format` (card c446).
+    #[serde(default)]
+    pub workspace_empty_format: Option<Format>,
+    #[serde(default)]
+    pub workspace_urgent_format: Option<Format>,
+    #[serde(default)]
+    pub workspace_activity_format: Option<Format>,
     /// `pills` (the default) or `arrows`: whether neighbouring pills abut,
     /// an arrow drawn between them in their two grounds.
     #[serde(default)]
@@ -1977,6 +1991,21 @@ fn check(t: &Theme) -> Result<(), String> {
     t.bar
         .workspace_current_format
         .check("bar.workspace_current_format", &WORKSPACE_VARS)?;
+    for (k, f) in [
+        ("bar.workspace_empty_format", &t.bar.workspace_empty_format),
+        (
+            "bar.workspace_urgent_format",
+            &t.bar.workspace_urgent_format,
+        ),
+        (
+            "bar.workspace_activity_format",
+            &t.bar.workspace_activity_format,
+        ),
+    ] {
+        if let Some(f) = f {
+            f.check(k, &WORKSPACE_VARS)?;
+        }
+    }
     check_edges(&t.border)?;
     for (k, c) in [
         ("panes.scrollbar_thumb", t.panes.scrollbar_thumb),

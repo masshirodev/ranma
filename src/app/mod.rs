@@ -114,6 +114,13 @@ pub struct PaneView {
     pub pad: [u16; 4],
 }
 
+/// What on the bar the pointer is over (card c446).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BarHover {
+    Workspace(u8),
+    Module(String),
+}
+
 /// The title row draws the groups' tabs: each group's tab row goes back to
 /// its panes, the one shown and the hidden ones alike, so they keep one size.
 /// A row that is not a group's (monocle's strip of panes, in a row of the
@@ -303,6 +310,8 @@ pub struct App {
     /// The panes' states the pieces were last run on (urgent, synced,
     /// zoomed): a change runs them again.
     piece_states: u64,
+    /// What on the bar is under the pointer, when it looks different there.
+    bar_hover: Option<BarHover>,
     /// What to call back when the picker or prompt a plugin opened closes.
     lua_ui: Option<crate::luaui::Hooks>,
     /// Panes that printed since they were last idle: when the burst began and
@@ -584,6 +593,7 @@ impl App {
             piece_due: HashMap::new(),
             piece_hover: None,
             piece_states: 0,
+            bar_hover: None,
             lua_ui: None,
             activity: HashMap::new(),
             idle_due: None,
@@ -870,8 +880,8 @@ impl App {
             .filter(|(n, ws)| **n == self.current || !ws.is_empty() || ws.name.is_some())
             .map(|(n, _)| *n)
             .collect();
-        if self.config.workspaces_show_all {
-            nums.extend(1..=10);
+        if self.config.workspaces_shown > 0 {
+            nums.extend(1..=self.config.workspaces_shown);
             nums.sort_unstable();
             nums.dedup();
         }
@@ -2466,6 +2476,7 @@ impl App {
             self.leave_tooltip(m.column, m.row);
             self.track_hover(m.column, m.row);
             self.track_piece_hover(m.column, m.row);
+            self.track_bar_hover(m.column, m.row);
         }
         // A click on a toast dismisses it, in any mode; it never reaches a pane.
         if let MouseEventKind::Down(_) = m.kind
@@ -4991,6 +5002,19 @@ impl App {
                 ]
             }
             "session" => Vec::new(),
+            // Where the config put messages (card c446); with `message` in
+            // no side, they take the centre.
+            "message" => self
+                .status
+                .clone()
+                .or_else(|| {
+                    self.nested_path()
+                        .iter()
+                        .rev()
+                        .find_map(|r| r.status.clone())
+                })
+                .map(|m| vec![Piece::new(m, Style::Accent)])
+                .unwrap_or_default(),
             "workspaces" => {
                 let compact = self.chrome().compact_workspaces;
                 let mut seg: Segment = self
@@ -5012,11 +5036,20 @@ impl App {
                         // A short screen keeps only the current one's name.
                         let name = name.filter(|_| current || !compact);
                         let theme_bar = &self.config.theme.bar;
+                        // By state: current, urgent, activity, then empty
+                        // or occupied, each falling back to the plain one.
                         let fmt = if current {
                             &theme_bar.workspace_current_format
+                        } else if urgent && let Some(f) = &theme_bar.workspace_urgent_format {
+                            f
+                        } else if activity && let Some(f) = &theme_bar.workspace_activity_format {
+                            f
+                        } else if !occupied && let Some(f) = &theme_bar.workspace_empty_format {
+                            f
                         } else {
                             &theme_bar.workspace_format
                         };
+                        let hovered = self.bar_hover == Some(BarHover::Workspace(n));
                         let label = fmt.render(|v| match v {
                             "n" => Some(n.to_string()),
                             "name" => name.clone(),
@@ -5043,7 +5076,10 @@ impl App {
                                 Piece::new(format!("[{k}] "), Style::Dim)
                                     .on_click(Click::Workspace(n)),
                             ],
-                            None => vec![Piece::new(label, style).on_click(Click::Workspace(n))],
+                            None => vec![Piece {
+                                hover: hovered,
+                                ..Piece::new(label, style).on_click(Click::Workspace(n))
+                            }],
                         }
                     })
                     .collect();
@@ -5140,6 +5176,36 @@ impl App {
                     None => seg,
                 }
             }
+        }
+    }
+
+    /// The pointer moved: a workspace (with `ws_hover_*` set) or a module
+    /// (with a `hover_style`) under it looks so. Only a change costs a frame.
+    fn track_bar_hover(&mut self, x: u16, y: u16) {
+        let c = &self.config.theme.colors;
+        let ws_hover = c.ws_hover_fg.is_some() || c.ws_hover_bg.is_some();
+        if !ws_hover && self.config.module_hover_styles.is_empty() {
+            return;
+        }
+        let at = self.bar_rect().filter(|b| b.contains(x, y)).and_then(|b| {
+            let x = x - b.x;
+            self.bar_pieces(b.w).into_iter().find_map(|(px, p)| {
+                let w = unicode_width::UnicodeWidthStr::width(p.text.as_str()) as u16;
+                if x < px || x >= px + w {
+                    return None;
+                }
+                match (p.click, &p.module) {
+                    (Some(Click::Workspace(n)), _) if ws_hover => Some(BarHover::Workspace(n)),
+                    (_, Some(m)) if self.config.module_hover_styles.contains_key(m) => {
+                        Some(BarHover::Module(m.clone()))
+                    }
+                    _ => None,
+                }
+            })
+        });
+        if at != self.bar_hover {
+            self.bar_hover = at;
+            self.dirty = true;
         }
     }
 
@@ -5248,8 +5314,31 @@ impl App {
                 s
             }
         };
-        let seg_in =
-            |n: &String, shape: &SideShape| wrap_in(chips(raw(n), shape), role_of(n), shape);
+        // Its module's name on every piece, for hover; under the pointer, a
+        // module with a `hover_style` takes that role.
+        let hover_role = |n: &str| {
+            (self.bar_hover.as_ref() == Some(&BarHover::Module(n.to_string())))
+                .then(|| self.config.module_hover_styles.get(n))
+                .flatten()
+                .and_then(|st| Style::from_name(st, roles))
+        };
+        let named = |n: &String, s: Segment| -> Segment {
+            let hover = hover_role(n);
+            s.into_iter()
+                .map(|mut p| {
+                    p.module = Some(n.clone());
+                    if let Some(h) = hover
+                        && !p.text.trim().is_empty()
+                    {
+                        p.style = h;
+                    }
+                    p
+                })
+                .collect()
+        };
+        let seg_in = |n: &String, shape: &SideShape| {
+            wrap_in(chips(named(n, raw(n)), shape), role_of(n), shape)
+        };
         // A group: its modules in one pill, `bar.group_separator` between
         // them on its ground. The large bar keeps each module's own square
         // chip, and so the order without the grouping (B8).
@@ -5264,7 +5353,7 @@ impl App {
             let sep = role.and_then(|r| r.separator);
             let mut inner: Segment = Vec::new();
             for n in names {
-                let s = chips(self.segment(n), shape);
+                let s = chips(named(n, self.segment(n)), shape);
                 if bar::width(&s) == 0 {
                     continue;
                 }
@@ -5345,9 +5434,12 @@ impl App {
                 .rev()
                 .find_map(|r| r.status.clone())
         });
+        // A message takes the centre, unless the config put `message`
+        // somewhere: then it shows there and the centre stays.
+        let placed = bar.all().any(|n| n == "message");
         let center = match &status {
-            Some(msg) => vec![wrap(vec![Piece::new(msg.clone(), Style::Accent)])],
-            None => side_in(&bar.center, Side::Center),
+            Some(msg) if !placed => vec![wrap(vec![Piece::new(msg.clone(), Style::Accent)])],
+            _ => side_in(&bar.center, Side::Center),
         };
         let right = side_in(&bar.right, Side::Right);
         // Chips a column apart, whatever the theme's separator: the large
@@ -6825,6 +6917,90 @@ mod tests {
                 .iter()
                 .any(|(_, p)| matches!(p.style, Style::Cap | Style::RoleCap(_)))
         );
+    }
+
+    #[test]
+    fn workspaces_take_a_format_per_state_and_show_n() {
+        let mut a = themed(
+            "ws-states",
+            r##"
+            [colors]
+            ws_hover_bg = "#123456"
+            [bar]
+            workspace_format = " o "
+            workspace_current_format = " @ "
+            workspace_empty_format = " . "
+            workspace_urgent_format = " ! "
+            "##,
+            r#"
+            ranma.module("workspaces", { show = 4 })
+            ranma.bar { left = { "workspaces" }, center = {}, right = { "message" } }
+            "#,
+        );
+        with_pane_in(&mut a, 1, 1);
+        with_pane_in(&mut a, 2, 2);
+        a.ws_mut(2).urgent = true;
+        a.current = 1;
+        let row: String = a
+            .segment("workspaces")
+            .iter()
+            .map(|p| p.text.clone())
+            .collect();
+        // 1 current, 2 urgent, 3 and 4 empty but shown: show = 4.
+        assert_eq!(row, " @  !  .  . ");
+        // The pointer on workspace 3: hovered, its format kept.
+        let bar = a.bar_rect().unwrap();
+        let x = a
+            .bar_pieces(bar.w)
+            .iter()
+            .find(|(_, p)| p.click == Some(Click::Workspace(3)))
+            .map(|(x, _)| bar.x + x)
+            .unwrap();
+        a.track_bar_hover(x, bar.y);
+        assert_eq!(a.bar_hover, Some(BarHover::Workspace(3)));
+        let ws = a.segment("workspaces");
+        assert!(ws.iter().any(|p| p.hover && p.text == " . "));
+        // A message goes where `message` is, and the centre stays.
+        a.status = Some("hello".into());
+        let pieces = a.bar_pieces(bar.w);
+        let hello = pieces.iter().find(|(_, p)| p.text == "hello").unwrap();
+        assert!(hello.0 > bar.w / 2, "on the right");
+        // show takes all, occupied, or a number; nothing else.
+        let err = |src: &str| {
+            format!(
+                "{:#}",
+                crate::config::load_from(None, None, Some(src)).unwrap_err()
+            )
+        };
+        assert!(err(r#"ranma.module("workspaces", { show = 0 })"#).contains("1-99"));
+        assert!(err(r#"ranma.module("workspaces", { show = "some" })"#).contains("1-99"));
+    }
+
+    #[test]
+    fn a_module_takes_its_hover_style_under_the_pointer() {
+        let mut a = app(Some(
+            r#"
+            ranma.module("clock", { render = function() return "12:00" end, hover_style = "urgent" })
+            ranma.bar { left = {}, center = {}, right = { "clock" } }
+            "#,
+        ));
+        a.render_state_modules();
+        let bar = a.bar_rect().unwrap();
+        let (x, p) = a
+            .bar_pieces(bar.w)
+            .into_iter()
+            .find(|(_, p)| p.text == "12:00")
+            .unwrap();
+        assert_eq!(p.style, Style::Normal);
+        a.track_bar_hover(bar.x + x, bar.y);
+        assert_eq!(a.bar_hover, Some(BarHover::Module("clock".into())));
+        let p = a
+            .bar_pieces(bar.w)
+            .into_iter()
+            .find(|(_, p)| p.text == "12:00")
+            .unwrap()
+            .1;
+        assert_eq!(p.style, Style::Urgent);
     }
 
     #[test]

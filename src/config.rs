@@ -637,7 +637,8 @@ impl FromStr for Event {
 
 /// Modules ranma draws itself. Anything else in a bar list must be defined with
 /// `ranma.module`.
-pub const BUILTIN_MODULES: [&str; 7] = [
+pub const BUILTIN_MODULES: [&str; 8] = [
+    "message",
     "mode",
     "session",
     "workspaces",
@@ -1466,7 +1467,8 @@ struct Builder {
     title_pieces: HashMap<String, TitlePieceDef>,
     modules: HashMap<String, ModuleDef>,
     module_styles: HashMap<String, String>,
-    workspaces_show_all: bool,
+    module_hover_styles: HashMap<String, String>,
+    workspaces_shown: u8,
     workspaces_numbers_only: bool,
     workspaces_nested: NestedWorkspaces,
     title_nested: bool,
@@ -1523,8 +1525,11 @@ pub struct Config {
     pub modules: HashMap<String, ModuleDef>,
     /// A module's `style`: the role it stands on, a pill of its ground.
     pub module_styles: HashMap<String, String>,
-    /// The workspaces module shows 1-10 even when empty.
-    pub workspaces_show_all: bool,
+    /// A module's `hover_style`: the role of its text under the pointer.
+    pub module_hover_styles: HashMap<String, String>,
+    /// The workspaces module shows 1 to this many even when empty (`show`:
+    /// "occupied" 0, "all" 10, or a number).
+    pub workspaces_shown: u8,
     /// The workspaces module shows ` 3 ` for an unnamed workspace, not
     /// ` 3:nvim ` (the program in its focused pane).
     pub workspaces_numbers_only: bool,
@@ -2669,13 +2674,21 @@ fn install_api(
                 keys.push(pair?.0);
             }
             // Any module's ground: the role it stands on, as a pill of its
-            // own (card c445). Checked against the theme once it is read.
+            // own (card c445), and the role it takes under the pointer
+            // (c446). Checked against the theme once it is read.
             if let Some(style) = opts.get::<Option<String>>("style")? {
                 lua.app_data_mut::<Builder>()
                     .ok_or_else(loading_only)?
                     .module_styles
                     .insert(name.clone(), style);
             }
+            if let Some(style) = opts.get::<Option<String>>("hover_style")? {
+                lua.app_data_mut::<Builder>()
+                    .ok_or_else(loading_only)?
+                    .module_hover_styles
+                    .insert(name.clone(), style);
+            }
+            keys.retain(|k| k != "hover_style");
             if BUILTIN_MODULES.contains(&name.as_str()) {
                 // Built-ins are configured, not replaced: their only knobs are listed
                 // here, so a typo is an error instead of a silently ignored option.
@@ -2691,20 +2704,27 @@ fn install_api(
                     )));
                 }
                 if name == "workspaces"
-                    && let Some(show) = opts.get::<Option<String>>("show")?
+                    && let Some(show) = opts.get::<Option<Value>>("show")?
                 {
-                    let all = match show.as_str() {
-                        "all" => true,
-                        "occupied" => false,
+                    // How many always show: "occupied" none, "all" 1-10, or a
+                    // number of them (card c446).
+                    let shown = match &show {
+                        Value::String(s) if s.to_str()? == "all" => 10,
+                        Value::String(s) if s.to_str()? == "occupied" => 0,
+                        Value::Integer(n) if (1..=99).contains(n) => *n as u8,
                         other => {
                             return Err(rt_err(format!(
-                                "ranma.module(\"workspaces\"): show = \"{other}\" (expected \"all\" or \"occupied\")"
+                                "ranma.module(\"workspaces\"): show = {} (expected \"all\", \"occupied\" or a number 1-99)",
+                                match other {
+                                    Value::String(s) => format!("\"{}\"", s.to_string_lossy()),
+                                    v => format!("{v:?}"),
+                                }
                             )));
                         }
                     };
                     lua.app_data_mut::<Builder>()
                         .ok_or_else(loading_only)?
-                        .workspaces_show_all = all;
+                        .workspaces_shown = shown;
                 }
                 if name == "workspaces"
                     && let Some(label) = opts.get::<Option<String>>("label")?
@@ -3670,7 +3690,11 @@ pub fn load_full(
     // A module's style, and a group's, name roles: the theme must have them.
     {
         let known = |st: &str| crate::bar::Style::from_name(st, &theme.roles).is_some();
-        for (m, st) in &builder.module_styles {
+        for (m, st) in builder
+            .module_styles
+            .iter()
+            .chain(&builder.module_hover_styles)
+        {
             if !known(st) {
                 anyhow::bail!(
                     "ranma.module(\"{m}\"): style `{st}` is not a role of theme `{}` (normal, dim, accent, urgent, or its [roles])",
@@ -3798,7 +3822,8 @@ pub fn load_full(
         bar: builder.bar,
         modules: builder.modules,
         module_styles: builder.module_styles,
-        workspaces_show_all: builder.workspaces_show_all,
+        module_hover_styles: builder.module_hover_styles,
+        workspaces_shown: builder.workspaces_shown,
         workspaces_numbers_only: builder.workspaces_numbers_only,
         workspaces_nested: builder.workspaces_nested,
         title_nested: builder.title_nested,
@@ -5049,7 +5074,7 @@ mod tests {
         assert_eq!(names(&cfg.bar.right), vec!["load", "clock"]);
         // Only the side given changes.
         assert_eq!(names(&cfg.bar.left), vec!["mode", "session", "workspaces"]);
-        assert!(cfg.workspaces_show_all);
+        assert_eq!(cfg.workspaces_shown, 10);
         assert!(
             !cfg.workspaces_numbers_only,
             "program names are the default"

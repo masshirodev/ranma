@@ -158,6 +158,10 @@ pub struct Piece {
     pub boxed: bool,
     /// A ground of its own inside the caps: its role's (card c445).
     pub ground: Option<crate::theme::Color>,
+    /// The module it comes from, for hover (card c446).
+    pub module: Option<String>,
+    /// The pointer is over it: a workspace takes `ws_hover_fg` / `_bg`.
+    pub hover: bool,
 }
 
 impl Piece {
@@ -168,6 +172,8 @@ impl Piece {
             click: None,
             boxed: false,
             ground: None,
+            module: None,
+            hover: false,
         }
     }
     pub fn on_click(mut self, click: Click) -> Piece {

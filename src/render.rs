@@ -1881,6 +1881,15 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
                 _ => style = style.bg(color(c.bar_bg)),
             }
         }
+        // A workspace under the pointer, over its state's own colours.
+        if piece.hover {
+            if let Some(fg) = c.ws_hover_fg {
+                style = style.fg(color(fg));
+            }
+            if let Some(bg) = c.ws_hover_bg {
+                style = style.bg(color(bg));
+            }
+        }
         let room = area.w.saturating_sub(x);
         if filled && area.h > 1 {
             let w = (piece.text.width() as u16).min(room);
