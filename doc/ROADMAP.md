@@ -376,7 +376,7 @@ not listed here.
 - [x] State colours: `state_*` and `state_*_fg`, one precedence, `state_urgent`
   never `mode_bg` (c437)
 - [x] Group tab bars: formats, separators, caps (c436)
-- [ ] `[icons]` and `{icon}` (c438)
+- [x] `[icons]` and `{icon}` (c438)
 - [ ] Pane padding, the scrollbar in it (c439)
 - [ ] Shadows under floats (c440)
 - [ ] Pickers and toasts follow `border.style` (c441)

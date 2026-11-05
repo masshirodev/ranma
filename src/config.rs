@@ -753,7 +753,7 @@ impl ModuleNested {
 
 /// What a pane's title row may show without a `ranma.title_piece`
 /// (DESIGN.md, "Title bars a theme can build").
-pub const BUILTIN_PIECES: [&str; 5] = ["title", "sync", "badges", "index", "tabs"];
+pub const BUILTIN_PIECES: [&str; 6] = ["title", "sync", "badges", "index", "tabs", "icon"];
 
 /// `ranma.titlebar`: the pieces a pane's title row shows, in order, on each
 /// side. Unset, the row is the theme's `title_format` at `title_align`.

@@ -885,6 +885,10 @@ pub struct Theme {
     /// A group's tabs: what each says and how they sit on their row.
     #[serde(default)]
     pub tabs: Tabs,
+    /// `[icons]`: a program's name (or a glob, `"*"` the fallback) to a
+    /// glyph, for `{icon}` and the `icon` title piece (card c438).
+    #[serde(default)]
+    pub icons: std::collections::BTreeMap<String, String>,
     /// `background.art`, read and parsed as the theme loads.
     #[serde(skip)]
     pub art: Option<std::sync::Arc<crate::art::Art>>,
@@ -1320,9 +1324,30 @@ pub fn thumb(track: u16, rows: usize, history: usize, offset: usize) -> (u16, u1
 }
 
 /// What a border title's format can name.
-pub const TITLE_VARS: [&str; 4] = ["title", "index", "program", "cwd"];
+pub const TITLE_VARS: [&str; 5] = ["title", "index", "program", "cwd", "icon"];
 /// What a workspace's format can name.
-pub const WORKSPACE_VARS: [&str; 2] = ["n", "name"];
+pub const WORKSPACE_VARS: [&str; 3] = ["n", "name", "icon"];
+
+impl Theme {
+    /// The glyph `[icons]` gives a program: its own name first, then the
+    /// first glob that matches (in the table's order), then `"*"`.
+    pub fn icon(&self, program: Option<&str>) -> Option<&str> {
+        let globby = |k: &str| k.contains(['*', '?', '[']);
+        if let Some(p) = program {
+            if let Some(g) = self.icons.get(p).filter(|_| !globby(p)) {
+                return Some(g);
+            }
+            if let Some((_, g)) = self
+                .icons
+                .iter()
+                .find(|(k, _)| k.as_str() != "*" && globby(k) && crate::config::glob(k, p))
+            {
+                return Some(g);
+            }
+        }
+        self.icons.get("*").map(String::as_str)
+    }
+}
 
 /// Where themes are looked up, in order, before falling back to the built-ins.
 pub fn theme_dirs(config_dir: Option<&Path>) -> Vec<PathBuf> {
@@ -1709,6 +1734,15 @@ fn check(t: &Theme) -> Result<(), String> {
         .workspace_format
         .check("bar.workspace_format", &WORKSPACE_VARS)?;
     t.tabs.format.check("tabs.format", &TITLE_VARS)?;
+    for (k, glyph) in &t.icons {
+        use unicode_width::UnicodeWidthStr;
+        let w = glyph.width();
+        if !(1..=2).contains(&w) || glyph.chars().any(char::is_control) {
+            return Err(format!(
+                "icons.{k}: an icon is one or two cells, not `{glyph}`"
+            ));
+        }
+    }
     if let Some(f) = &t.tabs.current_format {
         f.check("tabs.current_format", &TITLE_VARS)?;
     }
@@ -2112,6 +2146,27 @@ mod tests {
         assert_eq!(over.panes.floating_bg, Some(Color::Rgb(32, 32, 32)));
         let bad: toml::Table = toml::from_str("title_corner_left = \"ab\"\n").unwrap();
         assert!(PaneLooks::from_table(&bad).is_err());
+    }
+
+    #[test]
+    fn an_icon_is_the_programs_then_a_globs_then_the_fallback() {
+        let dir = tmp_dir("icons");
+        std::fs::write(
+            dir.join("i.toml"),
+            "[icons]\nnvim = \"N\"\n\"cargo*\" = \"C\"\n\"*\" = \"$\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("bad.toml"), "[icons]\nzsh = \"wide-word\"\n").unwrap();
+        let dirs = std::slice::from_ref(&dir);
+        let t = load("i", dirs).unwrap();
+        assert_eq!(t.icon(Some("nvim")), Some("N"));
+        assert_eq!(t.icon(Some("cargo-watch")), Some("C"));
+        assert_eq!(t.icon(Some("htop")), Some("$"));
+        assert_eq!(t.icon(None), Some("$"));
+        assert_eq!(load("default", &[]).unwrap().icon(Some("nvim")), None);
+        let err = format!("{:#}", load("bad", dirs).unwrap_err());
+        assert!(err.contains("icons.zsh"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

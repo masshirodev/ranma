@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- `[icons]` in a theme: a glyph per program (by name, glob, or `"*"`), shown
+  by `{icon}` in title, tab and workspace formats and by the `icon` title
+  piece.
+
 - `[tabs]` in a theme: a group's tabs by `format` and `current_format`
   (`{index}`, `{title}`, `{program}`, `{cwd}`), with a `separator`, caps
   (`chip_left`, `chip_right`) and `align` (`fill`, as before, or `left`,

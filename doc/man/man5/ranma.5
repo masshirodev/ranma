@@ -1460,6 +1460,9 @@ the plugins' badges (\fBpane:badge\fR), each glyph and word in its role
 \fBindex\fR
 the pane's place in its workspace, from 1
 .TP
+\fBicon\fR
+its program's glyph from the theme's \fB[icons]\fR; it stays with \fB⇉\fR as a narrow pane gives way
+.TP
 \fBtabs\fR
 in a group, its tabs by the theme's \fB[tabs]\fR formats, caps and separator, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and \fBtitle\fR is not drawn in a grouped pane (its tabs name it). Outside a group, nothing.
 .PP
@@ -1511,7 +1514,7 @@ them.
 first: the badges' words (10), the title cut to four letters (20), calm
 badges (30, dim before normal before accent), your pieces at their
 priority (40 unless given: a tie goes leftmost first), the title's name (50),
-urgent badges (60), the index (70), and \fB⇉\fR last (90). Give the button you
+urgent badges (60), the index (70), the icon (85), and \fB⇉\fR last (90). Give the button you
 never want to lose a high priority, as \fBclose\fR has above. A piece is cut with
 \fB…\fR only where it is the title; anything else, a button above all, goes
 whole.
@@ -3347,7 +3350,7 @@ where a pane's title goes: \fBtop\fR, \fBbottom\fR, \fBoff\fR
 \fBleft\fR, \fBcenter\fR, \fBright\fR
 .TP
 \fBborder.title_format\fR
-the title's text (see Formats\fR): \fB{title}\fR (its name, else what its program set), \fB{index}\fR (its place in the workspace, from 1), \fB{program}\fR (the program in its foreground), \fB{cwd}\fR (its directory, \fB~\fR for home). \fB" {title} "\fR by default.
+the title's text (see Formats\fR): \fB{title}\fR (its name, else what its program set), \fB{index}\fR (its place in the workspace, from 1), \fB{program}\fR (the program in its foreground), \fB{cwd}\fR (its directory, \fB~\fR for home), \fB{icon}\fR (its program's glyph from \fB[icons]\fR). \fB" {title} "\fR by default.
 .TP
 \fBborder.indicator\fR
 \fBnone\fR, or \fBarrows\fR: arrows on the focused pane's edges, pointing in (not on the edge its title is on)
@@ -3365,7 +3368,7 @@ cells, one side's outer gap over its axis's (\fBouter_top = 2\fR with \fBouter_v
 text drawn between two modules on the same side
 .TP
 \fBbar.workspace_format\fR, \fBworkspace_current_format\fR
-a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.
+a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's, \fB{icon}\fR that program's glyph from \fB[icons]\fR. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.
 .TP
 \fBbar.module_left\fR, \fBmodule_right\fR
 drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerline glyphs (\fB"\eue0b6"\fR, \fB"\eue0b4"\fR) make each module a pill. Empty by default.
@@ -3376,8 +3379,11 @@ drawn before and after every module, in \fBmodule_bg\fR on \fBbar_bg\fR: powerli
 \fBbar.chip_left\fR, \fBchip_right\fR
 drawn before and after every filled chip (the current workspace, a \fBpane_strip\fR tab, \fBWM\fR), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a \fBworkspace_current_format\fR without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default.
 .TP
+\fBicons.<program>\fR
+\fB[icons]\fR: a glyph (one or two cells) for a program, by its name or a glob (\fB"cargo*"\fR), \fB"*"\fR for any other: \fBnvim = "\eue62b"\fR. Shown by \fB{icon}\fR in \fBborder.title_format\fR, the \fB[tabs]\fR formats and the workspace formats (the program a workspace is named after), and by the \fBicon\fR title piece. A name wins over a glob, a glob over \fB"*"\fR. None by default.
+.TP
 \fBtabs.format\fR, \fBtabs.current_format\fR
-a group's tab (see Formats\fR): \fB{index}\fR its place in the group from 1, \fB{title}\fR its pane's title (or \fBshell\fR), \fB{program}\fR, \fB{cwd}\fR; the active tab's, unset, \fBformat\fR. \fB" {title} "\fR by default. In the tab row and in the \fBtabs\fR title piece alike.
+a group's tab (see Formats\fR): \fB{index}\fR its place in the group from 1, \fB{title}\fR its pane's title (or \fBshell\fR), \fB{program}\fR, \fB{cwd}\fR, \fB{icon}\fR; the active tab's, unset, \fBformat\fR. \fB" {title} "\fR by default. In the tab row and in the \fBtabs\fR title piece alike.
 .TP
 \fBtabs.separator\fR
 drawn between two tabs, in the \fBdim\fR style. Empty by default.

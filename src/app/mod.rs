@@ -4627,8 +4627,17 @@ impl App {
         let fmt = &self.config.theme.border.title_format;
         let own = |v: &str| self.pane_looks.values().any(|(_, l)| l.uses(v));
         let tabs = &self.config.theme.tabs;
+        // An icon is the program's: naming one reads the program.
+        let piece = self
+            .config
+            .titlebar
+            .as_ref()
+            .is_some_and(|t| t.all().any(|n| n == "icon"));
         let (program, cwd) = (
-            fmt.uses("program") || own("program") || tabs.uses("program"),
+            ["program", "icon"]
+                .iter()
+                .any(|v| fmt.uses(v) || own(v) || tabs.uses(v))
+                || piece,
             fmt.uses("cwd") || own("cwd") || tabs.uses("cwd"),
         );
         let facts: HashMap<PaneId, (Option<String>, Option<String>)> = if program || cwd {
@@ -4682,6 +4691,11 @@ impl App {
             }
             "program" => facts.and_then(|f| f.0.clone()),
             "cwd" => facts.and_then(|f| f.1.clone()),
+            "icon" => self
+                .config
+                .theme
+                .icon(facts.and_then(|f| f.0.as_deref()))
+                .map(str::to_string),
             _ => None,
         })
     }
@@ -4978,6 +4992,18 @@ impl App {
                         let label = fmt.render(|v| match v {
                             "n" => Some(n.to_string()),
                             "name" => name.clone(),
+                            // The program its focused pane is named after.
+                            "icon" => {
+                                let program = self
+                                    .workspaces
+                                    .get(&n)
+                                    .and_then(|w| w.focused)
+                                    .and_then(|id| self.programs.get(&id));
+                                self.config
+                                    .theme
+                                    .icon(program.map(String::as_str))
+                                    .map(str::to_string)
+                            }
                             _ => None,
                         });
                         // A holder drawn here is collapsed (nestbar draws the

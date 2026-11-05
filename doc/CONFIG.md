@@ -1033,6 +1033,7 @@ top = "   "
 | `sync` | `⇉` while the pane takes synchronized input |
 | `badges` | the plugins' badges (`pane:badge`), each glyph and word in its role |
 | `index` | the pane's place in its workspace, from 1 |
+| `icon` | its program's glyph from the theme's `[icons]`; it stays with `⇉` as a narrow pane gives way |
 | `tabs` | in a group, its tabs by the theme's `[tabs]` formats, caps and separator, the active one in the tab colours; a click on one shows its pane. Listed, a group has no tab row of its own: the row goes back to its panes, and `title` is not drawn in a grouped pane (its tabs name it). Outside a group, nothing. |
 
 `sync` and `badges` show even when a config does not list them: the mark
@@ -1070,7 +1071,7 @@ them.
 first: the badges' words (10), the title cut to four letters (20), calm
 badges (30, dim before normal before accent), your pieces at their
 priority (40 unless given: a tie goes leftmost first), the title's name (50),
-urgent badges (60), the index (70), and `⇉` last (90). Give the button you
+urgent badges (60), the index (70), the icon (85), and `⇉` last (90). Give the button you
 never want to lose a high priority, as `close` has above. A piece is cut with
 `…` only where it is the title; anything else, a button above all, goes
 whole.
@@ -2498,17 +2499,18 @@ colours only; a key set to a name shows the name there.
 | `border.floating_style` | floats and popups (`ranma popup`); unset, `style` |
 | `border.title` | where a pane's title goes: `top`, `bottom`, `off` |
 | `border.title_align` | `left`, `center`, `right` |
-| `border.title_format` | the title's text (see [Formats](#formats)): `{title}` (its name, else what its program set), `{index}` (its place in the workspace, from 1), `{program}` (the program in its foreground), `{cwd}` (its directory, `~` for home). `" {title} "` by default. |
+| `border.title_format` | the title's text (see [Formats](#formats)): `{title}` (its name, else what its program set), `{index}` (its place in the workspace, from 1), `{program}` (the program in its foreground), `{cwd}` (its directory, `~` for home), `{icon}` (its program's glyph from `[icons]`). `" {title} "` by default. |
 | `border.indicator` | `none`, or `arrows`: arrows on the focused pane's edges, pointing in (not on the edge its title is on) |
 | `gaps.inner`, `outer_horizontal`, `outer_vertical` | cells |
 | `gaps.outer_top`, `outer_bottom`, `outer_left`, `outer_right` | cells, one side's outer gap over its axis's (`outer_top = 2` with `outer_vertical = 1`: two above, one below); unset, the side follows `outer_vertical` or `outer_horizontal` |
 | `bar.position` | `top`, `bottom`, `hidden` |
 | `bar.separator` | text drawn between two modules on the same side |
-| `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |
+| `bar.workspace_format`, `workspace_current_format` | a workspace in the workspaces module, and the current one (see [Formats](#formats)): `{n}` its number, `{name}` its name or its program's, `{icon}` that program's glyph from `[icons]`. `" {n}[:{name}] "` by default. The workspaces of a ranma inside one keep their compact form. |
 | `bar.module_left`, `module_right` | drawn before and after every module, in `module_bg` on `bar_bg`: powerline glyphs (`"\ue0b6"`, `"\ue0b4"`) make each module a pill. Empty by default. |
 | `bar.module_padding_left`, `module_padding_right` | `0`-`4`: blank cells inside the left cap and the right one, on the module's ground. `0` by default. On a side with none, a filled chip that ends the module (the current workspace first in the list, with `chip_left`/`chip_right` set) has its own cap as the module's end, on the bar's ground, rather than the module's cap drawing a ring around it; a workspace there that is not current gives the blank its format starts or ends with to the module's cap, so the workspace hugs the edge either way and the module keeps its width. |
 | `bar.chip_left`, `chip_right` | drawn before and after every filled chip (the current workspace, a `pane_strip` tab, ` WM `), in the chip's own ground on the module's: the same glyphs as the module caps round the current workspace inside its pill. The caps take room, so a `workspace_current_format` without its outer spaces keeps the width. Not on the large bar, whose chips are full height. Empty by default. |
-| `tabs.format`, `tabs.current_format` | a group's tab (see [Formats](#formats)): `{index}` its place in the group from 1, `{title}` its pane's title (or `shell`), `{program}`, `{cwd}`; the active tab's, unset, `format`. `" {title} "` by default. In the tab row and in the `tabs` title piece alike. |
+| `icons.<program>` | `[icons]`: a glyph (one or two cells) for a program, by its name or a glob (`"cargo*"`), `"*"` for any other: `nvim = "\ue62b"`. Shown by `{icon}` in `border.title_format`, the `[tabs]` formats and the workspace formats (the program a workspace is named after), and by the `icon` title piece. A name wins over a glob, a glob over `"*"`. None by default. |
+| `tabs.format`, `tabs.current_format` | a group's tab (see [Formats](#formats)): `{index}` its place in the group from 1, `{title}` its pane's title (or `shell`), `{program}`, `{cwd}`, `{icon}`; the active tab's, unset, `format`. `" {title} "` by default. In the tab row and in the `tabs` title piece alike. |
 | `tabs.separator` | drawn between two tabs, in the `dim` style. Empty by default. |
 | `tabs.chip_left`, `tabs.chip_right` | drawn before and after every tab, in the tab's ground on the row's: `"\ue0b6"` and `"\ue0b4"` round each. Empty by default. |
 | `tabs.align` | `fill` (the default: the tabs share the row, each its label cut or padded to its share, as they always did), `left`, `center`, `right` (at their own widths, shared again when they do not fit). A touch-sized tab row keeps its own faces. |

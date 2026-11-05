@@ -208,7 +208,7 @@ function ranma.bar(bar) end
 function ranma.module(name, def) end
 
 ---@class ranma.Titlebar
----@field left? (string|table)[] Piece names: built-ins (title, sync, badges, index, tabs) or ranma.title_piece's; a table of names (with style = "role") is one pill.
+---@field left? (string|table)[] Piece names: built-ins (title, sync, badges, index, tabs, icon) or ranma.title_piece's; a table of names (with style = "role") is one pill.
 ---@field center? (string|table)[]
 ---@field right? (string|table)[]
 

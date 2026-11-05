@@ -15,6 +15,7 @@ pub const PIECE: u8 = 40;
 pub const TITLE_GONE: u8 = 50;
 pub const URGENT_BADGES: u8 = 60;
 pub const INDEX: u8 = 70;
+pub const ICON: u8 = 85;
 pub const SYNC: u8 = 90;
 
 /// One tab of a tab row, laid out: its columns `[x0, x1)` (caps included),
@@ -350,6 +351,15 @@ impl App {
                 None => Item::default(),
             },
             "badges" => self.badge_item(id, n),
+            // The program's glyph, from [icons]; it stays with ⇉ as the
+            // title gives way.
+            "icon" => {
+                let program = self.pane_facts.get(&id).and_then(|f| f.0.as_deref());
+                match self.config.theme.icon(program) {
+                    Some(g) => one(format!(" {g}"), Ink::Title, ICON),
+                    None => Item::default(),
+                }
+            }
             // The group's tabs: drawn by `tabs_item` once the tab row moves
             // into the title row.
             "tabs" => self.tabs_item(id, n),
@@ -480,6 +490,11 @@ impl App {
             "title" => Some(self.chip_label(id)),
             "program" => facts.and_then(|f| f.0.clone()),
             "cwd" => facts.and_then(|f| f.1.clone()),
+            "icon" => self
+                .config
+                .theme
+                .icon(facts.and_then(|f| f.0.as_deref()))
+                .map(str::to_string),
             _ => None,
         })
     }
@@ -1031,6 +1046,23 @@ mod tests {
         let frame = a.frame();
         assert!(a.click_chrome(&frame, x, y, false));
         assert_eq!(a.focused(), Some(1));
+    }
+
+    #[test]
+    fn an_icon_shows_in_the_row_and_the_workspaces() {
+        let (mut a, dir) = app_themed(
+            "icon",
+            "[icons]\nnvim = \"N\"\n[bar]\nworkspace_format = \" {n}{icon} \"\nworkspace_current_format = \" {n}{icon} \"\n",
+            r#"ranma.titlebar { left = { "icon" } }"#,
+        );
+        with_pane(&mut a, 1);
+        // What read_programs would have found in the pane.
+        a.pane_facts.insert(1, (Some("nvim".into()), None));
+        a.programs.insert(1, "nvim".into());
+        assert_eq!(row_text(&a, 1, 10), " N");
+        let ws = a.segment("workspaces");
+        assert!(ws.iter().any(|p| p.text == " 1N "), "{ws:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
