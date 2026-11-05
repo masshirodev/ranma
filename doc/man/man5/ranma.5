@@ -258,6 +258,9 @@ Default: \fB10000\fR
 .br
 Scrollback per pane.
 .TP
+\fBword_separators\fR
+\fB",│`|:\e"' ()[]{}<>\et"\fR | What ends a word for copy mode's word motions (\fBw\fR, \fBb\fR, \fBe\fR) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload.
+.TP
 \fBwm_mode.sticky\fR
 Default: \fBtrue\fR
 .br

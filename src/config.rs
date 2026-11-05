@@ -262,6 +262,9 @@ pub struct Settings {
     pub preserve_split: bool,
     pub shell: Option<String>,
     pub scrollback_lines: usize,
+    /// What ends a word for copy mode's word motions and a double click
+    /// (alacritty's semantic escape characters; card c427).
+    pub word_separators: String,
     pub wm_mode_sticky: bool,
     /// How long WM mode waits before showing the which-key hint; `None` is off.
     pub wm_mode_hint: Option<std::time::Duration>,
@@ -313,6 +316,7 @@ impl Default for Settings {
             preserve_split: true,
             shell: None,
             scrollback_lines: 10_000,
+            word_separators: alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS.to_string(),
             wm_mode_sticky: true,
             wm_mode_hint: Some(std::time::Duration::from_millis(500)),
             wm_mode_hint_at: HintAt::Bar,
@@ -353,6 +357,7 @@ struct SettingsPatch {
     preserve_split: Option<bool>,
     shell: Option<String>,
     scrollback_lines: Option<usize>,
+    word_separators: Option<String>,
     wm_mode: Option<WmModePatch>,
     mouse: Option<MouseMode>,
     updates: Option<UpdateMode>,
@@ -2133,6 +2138,14 @@ fn apply_settings(s: &mut Settings, patch: SettingsPatch, who: &str) -> Result<(
     }
     if let Some(n) = patch.scrollback_lines {
         s.scrollback_lines = n;
+    }
+    if let Some(w) = patch.word_separators {
+        if w.chars().any(|c| c.is_control() && c != '\t') {
+            return Err(format!(
+                "{who}: word_separators: no control characters but the tab"
+            ));
+        }
+        s.word_separators = w;
     }
     if let Some(w) = patch.wm_mode {
         if let Some(sticky) = w.sticky {
@@ -4519,6 +4532,38 @@ mod tests {
 
     fn with_user(src: &str) -> Result<Config> {
         load_from(None, None, Some(src))
+    }
+
+    #[test]
+    fn word_separators_are_a_setting_and_change_what_a_word_is() {
+        use alacritty_terminal::index::{Column, Line, Point};
+        use alacritty_terminal::vi_mode::ViMotion;
+        let def = with_user("").unwrap().settings.word_separators;
+        assert_eq!(def, alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS);
+        let cfg = with_user(r#"ranma.set { word_separators = " =" }"#).unwrap();
+        assert_eq!(cfg.settings.word_separators, " =");
+        assert!(with_user("ranma.set { word_separators = \"\\x01\" }").is_err());
+        // What `w` does with each: by default the next word after `a` is
+        // the `:`; with " =" `a:b` is one word and the next is the `=`.
+        let word_end = |seps: &str| {
+            let config = alacritty_terminal::term::Config {
+                semantic_escape_chars: seps.to_string(),
+                ..Default::default()
+            };
+            let mut term = alacritty_terminal::Term::new(
+                config,
+                &crate::pane::Size { cols: 20, rows: 2 },
+                alacritty_terminal::event::VoidListener,
+            );
+            let mut parser: alacritty_terminal::vte::ansi::Processor = Default::default();
+            parser.advance(&mut term, b"a:b=c d");
+            term.toggle_vi_mode();
+            term.vi_goto_point(Point::new(Line(0), Column(0)));
+            term.vi_motion(ViMotion::SemanticRight);
+            term.vi_mode_cursor.point.column.0
+        };
+        assert_eq!(word_end(&def), 1, "the `:` ends `a`");
+        assert_eq!(word_end(" ="), 3, "`a:b` is a word, then `=`");
     }
 
     #[test]

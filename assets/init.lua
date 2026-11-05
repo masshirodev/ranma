@@ -80,6 +80,10 @@ ranma.set {
   -- nil means $SHELL, then /bin/sh.
   shell = nil,
   scrollback_lines = 10000,
+  -- What ends a word for copy mode's w, b and e and for a double click: a path
+  -- or a URL with : or = in it is cut there. Take a character out to keep it
+  -- in words. alacritty's own set.
+  word_separators = ",│`|:\"' ()[]{}<>\t",
 
   wm_mode = {
     -- true: WM mode stays on until Esc or Enter (or an action that ends it, like

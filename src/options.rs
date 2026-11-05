@@ -370,6 +370,14 @@ pub fn builtin() -> Vec<Opt> {
             "Lines of scrollback kept per pane.",
         ),
         opt(
+            "word_separators",
+            "general",
+            "Word separators",
+            Kind::Text,
+            Init,
+            "What ends a word for copy mode's w, b, e and a double click.",
+        ),
+        opt(
             "mouse",
             "general",
             "Mouse",

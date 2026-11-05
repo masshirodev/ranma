@@ -15,6 +15,9 @@ commit log has the detail.
 
 ### Added
 
+- `word_separators`: what ends a word for copy mode's word motions and a
+  double click, alacritty's set by default.
+
 - Copy mode's keys are binds: `ranma.bind(key, action, { mode = "copy" })` to
   the new `copy_*` actions (`copy_move`, `copy_page`, `copy_select`,
   `copy_yank`, `copy_search`, `copy_next`, `copy_prev`, `copy_exit`), the old

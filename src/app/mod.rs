@@ -1368,6 +1368,8 @@ impl App {
         };
         match Pane::spawn(id, size, &opts, self.tx.clone()) {
             Ok(pane) => {
+                let s = &self.config.settings;
+                pane.set_options(s.scrollback_lines, &s.word_separators);
                 self.panes.insert(id, pane);
                 self.focus(id);
                 self.relayout();
@@ -3733,6 +3735,12 @@ impl App {
                 self.module_generation += 1;
                 self.module_values.clear();
                 self.piece_values.clear();
+                // A changed scrollback or word_separators reaches the
+                // panes already open.
+                let s = &self.config.settings;
+                for p in self.panes.values() {
+                    p.set_options(s.scrollback_lines, &s.word_separators);
+                }
                 self.piece_hover = None;
                 self.module_running.clear();
                 self.schedule_modules(Instant::now());

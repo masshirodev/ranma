@@ -189,6 +189,7 @@ impl App {
                 Pane::adopt(p.id, size, p.fd, p.pid, &p.snapshot, scrollback, tx.clone())
             } {
                 Ok(mut pane) => {
+                    pane.set_options(scrollback, &app.config.settings.word_separators);
                     pane.title = p.title.clone();
                     pane.name = p.name.clone();
                     pane.command = p.command.clone();

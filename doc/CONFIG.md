@@ -183,6 +183,7 @@ Each call changes only the fields it names; call it as often as you like.
 | `splash` | `true` | An empty workspace shows the ranma logo, with the keys to start below it: Enter opens a shell, and the key bound to `help` lists every bind. It is drawn in `bar_accent` (the logo), `bar_fg` (the keys) and `bar_dim`; a screen too small for the logo gets the name in plain letters, and one too small for that, nothing. `false` leaves an empty workspace blank. |
 | `shell` | `nil` | Program for new panes; `nil` means `$SHELL`, then `/bin/sh`. |
 | `scrollback_lines` | `10000` | Scrollback per pane. |
+| `word_separators` | ``",│`|:\"' ()[]{}<>\t"`` | What ends a word for copy mode's word motions (`w`, `b`, `e`) and a double click: a path or a URL holding one of these is cut there. Take a character out to keep it inside words; a separator is a word of its own. Applied to the panes already open on a reload. |
 | `wm_mode.sticky` | `true` | Stay in WM mode until `Esc` or `Enter` (`false`: every bind is one-shot, except one bound with `{ exit = false }`). |
 | `wm_mode.hint` | `0.5` | Seconds of pause in WM mode before the which-key hint shows (below), or `false` for never. |
 | `wm_mode.hint_at` | `"bar"` | Where the which-key hint stands: `"bar"` (on the bar from its left end, by the mode), or `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`, `"center"` of the space the panes use, clear of the bar. A user mode may set its own. |

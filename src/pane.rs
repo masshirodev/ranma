@@ -588,6 +588,18 @@ impl Pane {
         Ok(pane)
     }
 
+    /// The terminal's options from the settings: its scrollback and what
+    /// ends a word (copy mode's `w`, a double click). A reload calls it on
+    /// every pane, so a changed setting reaches the ones already open.
+    pub fn set_options(&self, scrollback_lines: usize, word_separators: &str) {
+        self.term.lock().set_options(term::Config {
+            scrolling_history: scrollback_lines,
+            kitty_keyboard: true,
+            semantic_escape_chars: word_separators.to_string(),
+            ..Default::default()
+        });
+    }
+
     /// A pane around a child that is already running, after a server took a
     /// new build (DESIGN.md, "Upgrading a server in place"): `fd` is the PTY
     /// master kept across the exec, `snapshot` what the pane showed.
