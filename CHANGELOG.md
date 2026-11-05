@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- Workspaces drawn as anything: `bar.workspace_empty_format`,
+  `workspace_urgent_format` and `workspace_activity_format`, hover colours
+  (`colors.ws_hover_fg` / `_bg`), and `show = N`. Any module takes a
+  `hover_style`. `message` is a module: listed on a side, messages show
+  there instead of taking the centre.
+
 - A powerline bar: `bar.join = "arrows"` makes a side's pills abut, with an
   arrow between two in their grounds; `[bar.left]`, `[bar.center]` and
   `[bar.right]` give a side its own caps, paddings, chip caps, join and

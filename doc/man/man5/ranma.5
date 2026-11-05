@@ -1345,10 +1345,15 @@ Shows: The shown session's name, once there is more than one. Click for the sess
 .br
 —
 .TP
+\fBmessage\fR
+Shows: A message from ranma or \fBranma.notify\fR, while it is up, and nothing otherwise. Listed on a side, messages show there and the centre keeps what it holds; listed nowhere, they take the centre.
+.br
+—
+.TP
 \fBworkspaces\fR
 Shows: The workspaces as \fB3:name\fR, the current one highlighted, urgent ones marked; \fBS\fR when the scratchpad has panes. Clickable. The name is the one given with \fBrename_workspace\fR, else the program in the workspace's focused pane (\fB3:nvim\fR, \fB1:zsh\fR at a prompt), read from \fB/proc\fR at most twice a second and only when something happened. A connection is named for where it goes: \fB2:vps\fR for \fBssh vps\fR (the destination as typed); with no plain \fBssh\fR to read, such as under mosh, the host a ranma on the far side reports.
 .br
-\fBshow = "occupied"\fR (default) or \fB"all"\fR (1\-10); \fBlabel = "program"\fR (default) or \fB"number"\fR (only \fB3\fR unless named); \fBnested = "focused"\fR (default), \fB"all"\fR or \fB"off"\fR: which workspaces show the workspaces of a ranma inside them (see ranma inside ranma\fR)
+\fBshow = "occupied"\fR (default), \fB"all"\fR (1\-10), or a number (\fBshow = 5\fR: 1\-5 always, any higher one that is occupied); \fBlabel = "program"\fR (default) or \fB"number"\fR (only \fB3\fR unless named); \fBnested = "focused"\fR (default), \fB"all"\fR or \fB"off"\fR: which workspaces show the workspaces of a ranma inside them (see ranma inside ranma\fR)
 .TP
 \fBtitle\fR
 Shows: The focused pane's title; nothing while that pane runs a ranma reporting to this one, which shows its title on its own pane's border (the same words twice otherwise)
@@ -1418,6 +1423,9 @@ Seconds between runs; required for \fBexec\fR. Aligned to the wall clock: \fB60\
 .TP
 \fBstyle\fR
 A role the module stands on: its ground and caps (see The bar\fR). Every module takes it, built\-in ones too.
+.TP
+\fBhover_style\fR
+The role its text takes while the pointer is over it. Every module takes it.
 .TP
 \fBon_click\fR
 A function a click on the module calls (a plugin's module opening its screen). A module without one is not clickable.
@@ -3388,6 +3396,12 @@ cells, one side's outer gap over its axis's (\fBouter_top = 2\fR with \fBouter_v
 .TP
 \fBbar.separator\fR
 text drawn between two modules on the same side
+.TP
+\fBbar.workspace_empty_format\fR, \fBworkspace_urgent_format\fR, \fBworkspace_activity_format\fR
+a workspace with nothing in it, one that is urgent, one that printed while not shown; each unset, \fBworkspace_format\fR. The current one's is \fBworkspace_current_format\fR; then urgent, then activity, then empty. Formats for different states should be the same width, or the row shifts as states change: a cell cannot grow, so "a bigger dot" is another glyph of one cell (\fB·\fR \fB•\fR \fB●\fR; \fB⬤\fR is drawn wider than a cell by several fonts).
+.TP
+\fBcolors.ws_hover_fg\fR, \fBws_hover_bg\fR
+a workspace under the pointer, over its state's own format and colours; unset, as it is
 .TP
 \fBbar.workspace_format\fR, \fBworkspace_current_format\fR
 a workspace in the workspaces module, and the current one (see Formats\fR): \fB{n}\fR its number, \fB{name}\fR its name or its program's, \fB{icon}\fR that program's glyph from \fB[icons]\fR. \fB" {n}[:{name}] "\fR by default. The workspaces of a ranma inside one keep their compact form.

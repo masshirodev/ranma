@@ -456,7 +456,8 @@ ranma.bar {
   size = "normal",
 }
 
--- "occupied" shows only workspaces with panes (and the current one); "all" shows 1-10.
+-- "occupied" shows only workspaces with panes (and the current one); "all" shows
+-- 1-10; a number, that many always (show = 5), and any higher one in use.
 -- label = "program" names an unnamed workspace after the program in its focused
 -- pane (" 3:nvim ", the shell at its prompt); "number" shows only " 3 ". A name
 -- given with rename_workspace (leader .) always wins.
