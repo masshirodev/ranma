@@ -160,6 +160,16 @@ pub struct Colors {
     pub module_bg: Option<Color>,
     #[serde(default)]
     pub module_fg: Option<Color>,
+    /// A module's `dim`, `accent` and `urgent` text on its ground, as
+    /// `module_fg` is its plain text there: a plugin's accent on a pill,
+    /// where the bar's own `bar_accent` may not read (card c467). Unset,
+    /// the bar's.
+    #[serde(default)]
+    pub module_dim: Option<Color>,
+    #[serde(default)]
+    pub module_accent: Option<Color>,
+    #[serde(default)]
+    pub module_urgent: Option<Color>,
     // Background art's own colour where the art sets none; unset, `bar_dim`
     // on the terminal's ground.
     #[serde(default)]

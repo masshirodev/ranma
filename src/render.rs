@@ -1872,9 +1872,16 @@ fn draw_bar(f: &mut Frame, app: &App, area: Rect) {
             match (piece.boxed, piece.ground.or(c.module_bg)) {
                 (true, Some(ground)) => {
                     style = style.bg(color(ground));
-                    if piece.style == bar::Style::Normal
-                        && let Some(fg) = c.module_fg
-                    {
+                    // Its text in the pill's own colours for each style,
+                    // where the theme gives them.
+                    let on_pill = match piece.style {
+                        bar::Style::Normal => c.module_fg,
+                        bar::Style::Dim => c.module_dim,
+                        bar::Style::Accent => c.module_accent,
+                        bar::Style::Urgent => c.module_urgent,
+                        _ => None,
+                    };
+                    if let Some(fg) = on_pill {
                         style = style.fg(color(fg));
                     }
                 }
@@ -2804,6 +2811,55 @@ mod tests {
         );
         let filled = caps("module_bg = \"#222222\"");
         assert!(filled.contains("(") && filled.contains(")"), "{filled:?}");
+    }
+
+    /// A module's styled text on its pill takes the pill's colour for that
+    /// style (`module_accent`), as plain text takes `module_fg`; off a pill,
+    /// the bar's own (`bar_accent`) (card c467).
+    #[test]
+    fn a_modules_accent_on_a_pill_takes_module_accent() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let draw = |colors: &str, caps: bool| {
+            let bar = if caps {
+                "[bar]\nmodule_left = \"(\"\nmodule_right = \")\"\n"
+            } else {
+                ""
+            };
+            let (mut app, dir) = themed_app_with(
+                "accentpill",
+                &format!("[colors]\nbar_accent = \"#ffffff\"\n{colors}\n{bar}"),
+                r#"ranma.module("a", { render = function() return { text = "ACC", style = "accent" } end })
+                   ranma.bar { left = { "a" }, center = {}, right = {} }"#,
+            );
+            app.render_state_modules();
+            let mut t = Terminal::new(TestBackend::new(40, 10)).unwrap();
+            t.draw(|f| {
+                let area = f.area();
+                draw_bar(f, &app, Rect::new(0, area.height - 1, area.width, 1));
+            })
+            .unwrap();
+            let _ = std::fs::remove_dir_all(dir);
+            let buf = t.backend().buffer().clone();
+            let row = rows(&buf).last().unwrap().clone();
+            let x = row[..row.find("ACC").unwrap()].chars().count() as u16;
+            buf[(x, 9)].fg
+        };
+        let pill = "module_bg = \"#224466\"\nmodule_accent = \"#111111\"";
+        assert_eq!(
+            draw(pill, true),
+            Color::Rgb(0x11, 0x11, 0x11),
+            "on its pill"
+        );
+        assert_eq!(
+            draw(pill, false),
+            Color::Rgb(0xff, 0xff, 0xff),
+            "no pill: the bar's"
+        );
+        assert_eq!(
+            draw("module_bg = \"#224466\"", true),
+            Color::Rgb(0xff, 0xff, 0xff),
+            "unset: the bar's, as before"
+        );
     }
 
     /// With arrows the pills abut and have no caps: a module still stands

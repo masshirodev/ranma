@@ -15,6 +15,10 @@ commit log has the detail.
 
 ### Added
 
+- `colors.module_dim`, `module_accent`, `module_urgent`: a module's styled
+  text on its pill, as `module_fg` is its plain text, so a plugin's accent
+  reads on a pill without changing `bar_accent` everywhere.
+
 - `ranma.module("workspaces", { nested_format = "theme" })`: the workspaces
   of a ranma inside (` 1 [1:nvim 2:logs] `) in the theme's workspace formats
   instead, every level, dots and all, drawn as

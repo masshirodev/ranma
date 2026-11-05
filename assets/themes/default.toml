@@ -101,6 +101,9 @@ state_urgent = "#fab387"
 # purpose: the selection is drawn reversed, and modules sit on bar_bg.
 # selection_fg = ...    selection_bg = ...
 # module_fg = ...       module_bg = ...
+# A module's dim, accent and urgent text on its ground (module_fg is its plain
+# text there). Unset here on purpose: bar_dim, bar_accent, bar_urgent.
+# module_dim = ...  module_accent = ...  module_urgent = ...
 
 [border]
 # rounded | plain | thick | double | ascii | custom | none

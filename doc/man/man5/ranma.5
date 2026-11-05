@@ -3576,6 +3576,9 @@ toasts (their border is \fBbar_accent\fR, or \fBbar_urgent\fR when urgent)
 \fBcolors.module_bg\fR, \fBmodule_fg\fR
 a bar module's ground, between \fBbar.module_left\fR and \fBmodule_right\fR, and its \fBnormal\fR text there; unset, modules sit on \fBbar_bg\fR
 .TP
+\fBcolors.module_dim\fR, \fBmodule_accent\fR, \fBmodule_urgent\fR
+a module's text in the \fBdim\fR, \fBaccent\fR and \fBurgent\fR styles on its ground, as \fBmodule_fg\fR is its plain text there: a plugin's accent (a count of agents, open ports) readable on a pill when \fBbar_accent\fR is chosen for the bar's own ground. Unset, \fBbar_dim\fR, \fBbar_accent\fR, \fBbar_urgent\fR.
+.TP
 \fBcolors.border_active_gradient\fR, \fBborder_inactive_gradient\fR, \fBborder_floating_gradient\fR
 two colours or more: the border runs through them along \fBborder.gradient_angle\fR instead of being one colour, spread over each pane's own border, one colour per cell (a terminal cannot shade inside a cell, so a short border shows the steps). Not while the focused border is in the WM\-mode colour. A colour the host terminal did not report (an index or \fBdefault\fR with no answer) leaves that border one colour. Unset, the one colour.
 .TP
