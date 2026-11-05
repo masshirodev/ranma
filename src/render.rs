@@ -1000,16 +1000,11 @@ fn draw_border(f: &mut Frame, app: &App, view: &PaneView, title: &str) {
         } else {
             theme.styles.title
         };
-        paint_pieces(
-            f,
-            c,
-            &theme.styles,
-            edge,
-            attrs,
-            row.as_ref(),
-            (x0, y),
-            &placed,
-        );
+        let grounds = Grounds {
+            row: row.as_ref().map(|r| (r.ground, r.ink)),
+            title: title_pill_colours(view, c, border, mode_edge),
+        };
+        paint_pieces(f, c, &theme.styles, edge, attrs, &grounds, (x0, y), &placed);
     }
     if b.indicator == theme::Indicator::Arrows && view.focused && r.w >= 3 && r.h >= 3 {
         let buf = f.buffer_mut();
@@ -1054,22 +1049,17 @@ fn title_row(
     border: theme::Color,
     mode_edge: bool,
 ) -> Option<TitleRow> {
+    // With pieces as the ground, the row itself is the line.
+    if b.title_ground == theme::TitleGround::Pieces {
+        return None;
+    }
     let drawn = view.drawn();
     let (y, fill) = match b.title {
         TitlePosition::Top if drawn.top => (view.outer.y, set.horizontal_top),
         TitlePosition::Bottom if drawn.bottom => (view.outer.bottom() - 1, set.horizontal_bottom),
         _ => return None,
     };
-    let (bg, fg) = if view.focused {
-        (c.title_bg_active, c.title_fg_active)
-    } else if view.floating {
-        (
-            c.title_bg_floating.or(c.title_bg_inactive),
-            c.title_fg_floating.or(c.title_fg_inactive),
-        )
-    } else {
-        (c.title_bg_inactive, c.title_fg_inactive)
-    };
+    let (bg, fg) = title_state_colours(view, c);
     let (bg, fg) = match (mode_edge, bg) {
         (true, Some(_)) => (c.mode_bg, c.mode_fg),
         (true, None) if fill.trim().is_empty() => (c.mode_bg, c.mode_fg),
@@ -1080,6 +1070,41 @@ fn title_row(
         y,
         ground: color(bg),
         ink: color(fg),
+    })
+}
+
+/// The title's ground and ink for the pane's state, as the theme sets them.
+fn title_state_colours(
+    view: &PaneView,
+    c: &Colors,
+) -> (Option<theme::Color>, Option<theme::Color>) {
+    if view.focused {
+        (c.title_bg_active, c.title_fg_active)
+    } else if view.floating {
+        (
+            c.title_bg_floating.or(c.title_bg_inactive),
+            c.title_fg_floating.or(c.title_fg_inactive),
+        )
+    } else {
+        (c.title_bg_inactive, c.title_fg_inactive)
+    }
+}
+
+/// The title pill's ground and ink (`title_ground = "pieces"`): the state's
+/// `title_bg_*`, or the mode's colours on the focused pane in WM mode; none
+/// when the state has no ground, and the title stands on the line.
+fn title_pill_colours(
+    view: &PaneView,
+    c: &Colors,
+    border: theme::Color,
+    mode_edge: bool,
+) -> Option<(Color, Color)> {
+    let (bg, fg) = title_state_colours(view, c);
+    let bg = bg?;
+    Some(if mode_edge {
+        (color(c.mode_bg), color(c.mode_fg))
+    } else {
+        (color(bg), color(fg.unwrap_or(border)))
     })
 }
 
@@ -1144,9 +1169,18 @@ fn badge_style(c: &Colors, role: crate::screen::Role) -> Style {
     }
 }
 
-/// `ranma.titlebar`'s pieces, placed, over the row: the title and the line
-/// in the border's colour (a filled row's ink), roles and badges in theirs,
-/// all on the row's ground when it has one.
+/// The grounds a title row's spans may stand on: the filled row's (ground,
+/// ink), and the title pill's.
+struct Grounds {
+    row: Option<(Color, Color)>,
+    title: Option<(Color, Color)>,
+}
+
+/// `ranma.titlebar`'s pieces, placed, over the row. A span on the line takes
+/// the row's ground (and, for the title and the line, its ink) when the row
+/// is filled; on the title's ground, the title pill's; on a role's, the
+/// role's, with the role's ink. A cap is its ground's colour on whatever
+/// lies under the pill.
 #[allow(clippy::too_many_arguments)]
 fn paint_pieces(
     f: &mut Frame,
@@ -1154,28 +1188,54 @@ fn paint_pieces(
     styles: &theme::Styles,
     edge: Style,
     attrs: theme::Attrs,
-    row: Option<&TitleRow>,
+    grounds: &Grounds,
     (x0, y): (u16, u16),
     placed: &[crate::titlebar::Placed],
 ) {
-    use crate::titlebar::Ink;
+    use crate::titlebar::{Ground, Ink};
     let buf = f.buffer_mut();
     if y >= buf.area.bottom() {
         return;
     }
+    // The ground under a span, and the ink the title and the line take there.
+    let under = |g: Ground| -> (Option<Color>, Option<Color>) {
+        match g {
+            Ground::Line => (grounds.row.map(|r| r.0), grounds.row.map(|r| r.1)),
+            Ground::Title => match grounds.title {
+                Some((bg, fg)) => (Some(bg), Some(fg)),
+                None => (grounds.row.map(|r| r.0), grounds.row.map(|r| r.1)),
+            },
+            Ground::Role(s) => {
+                let st = piece_style(c, styles, s);
+                (st.bg, st.fg)
+            }
+        }
+    };
     for p in placed {
+        let (ground, ink) = under(p.span.ground);
         let mut st = match p.span.ink {
             Ink::Title => edge.add_modifier(modifier(attrs)),
             Ink::Line => edge,
             Ink::Role(s) => piece_style(c, styles, s),
             Ink::Badge(role) => badge_style(c, role),
+            Ink::Cap => Style::default(),
         };
-        if let Some(r) = row {
-            if matches!(p.span.ink, Ink::Title | Ink::Line) {
-                st = st.fg(r.ink);
+        if p.span.ink == Ink::Cap {
+            // Its ground as ink, on the line's (or the row's) ground.
+            if let Some(g) = ground {
+                st = st.fg(g);
             }
-            if st.bg.is_none() {
-                st = st.bg(r.ground);
+            if let Some(r) = grounds.row {
+                st = st.bg(r.0);
+            }
+        } else {
+            if matches!(p.span.ink, Ink::Title | Ink::Line)
+                && let Some(i) = ink
+            {
+                st = st.fg(i);
+            }
+            if let Some(g) = ground {
+                st = st.bg(g);
             }
         }
         let x = x0 + p.x;
@@ -2565,6 +2625,50 @@ mod tests {
         );
         assert_eq!(b[(10, 0)].fg, Color::Rgb(0xff, 0, 0));
         assert_eq!(b[(10, 0)].bg, Color::Rgb(0x11, 0x11, 0x11));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pill_is_drawn_in_its_roles_ground() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let (app, dir) = themed_app_with(
+            "pill",
+            r##"
+            [colors]
+            border_inactive = "#000011"
+            [border]
+            title_ground = "pieces"
+            [roles.btn]
+            fg = "#eeeeee"
+            bg = "#222222"
+            left = "<"
+            right = ">"
+            "##,
+            r#"
+            ranma.title_piece("x", { text = "X" })
+            ranma.titlebar { right = { { "x", style = "btn" } } }
+            "#,
+        );
+        let outer = crate::layout::Rect::new(0, 0, 12, 3);
+        let view = PaneView {
+            id: 1,
+            outer,
+            inner: outer.inset_sides(app.insets(false)),
+            focused: false,
+            floating: false,
+        };
+        let mut t = Terminal::new(TestBackend::new(12, 3)).unwrap();
+        t.draw(|f| draw_border(f, &app, &view, "")).unwrap();
+        let b = t.backend().buffer();
+        assert_eq!(rows(b)[0], "╭───────<X>╮");
+        // The caps in the role's ground, on the line; the piece on it, in
+        // its own style (normal: bar_fg), as a module in a group keeps its.
+        assert_eq!(b[(8, 0)].fg, Color::Rgb(0x22, 0x22, 0x22));
+        assert_eq!(b[(8, 0)].bg, Color::Reset);
+        assert_eq!(b[(9, 0)].fg, Color::Rgb(0xcd, 0xd6, 0xf4));
+        assert_eq!(b[(9, 0)].bg, Color::Rgb(0x22, 0x22, 0x22));
+        // The row is not filled: the line keeps the border's colour.
+        assert_eq!(b[(3, 0)].fg, Color::Rgb(0, 0, 0x11));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

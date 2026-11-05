@@ -759,23 +759,136 @@ pub const BUILTIN_PIECES: [&str; 5] = ["title", "sync", "badges", "index", "tabs
 /// side. Unset, the row is the theme's `title_format` at `title_align`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TitleLayout {
-    pub left: Vec<String>,
-    pub center: Vec<String>,
-    pub right: Vec<String>,
+    pub left: Vec<TitleEntry>,
+    pub center: Vec<TitleEntry>,
+    pub right: Vec<TitleEntry>,
 }
 
 impl TitleLayout {
+    /// Every piece named, groups' members in place.
     pub fn all(&self) -> impl Iterator<Item = &String> {
-        self.left.iter().chain(&self.center).chain(&self.right)
+        self.left
+            .iter()
+            .chain(&self.center)
+            .chain(&self.right)
+            .flat_map(TitleEntry::names)
     }
+}
+
+/// One entry of a titlebar side: a piece, or a group of pieces that stand
+/// in one pill (`{ "float", "zoom", "close", style = "buttons" }`), on the
+/// ground and between the caps of the role it names (DESIGN.md, F6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TitleEntry {
+    Piece(String),
+    Group {
+        pieces: Vec<String>,
+        style: Option<String>,
+    },
+}
+
+impl TitleEntry {
+    pub fn names(&self) -> std::slice::Iter<'_, String> {
+        match self {
+            TitleEntry::Piece(n) => std::slice::from_ref(n).iter(),
+            TitleEntry::Group { pieces, .. } => pieces.iter(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TitleEntry {
+    /// A name, a list of names, or a group as `normalize_titlebar` leaves
+    /// it (`{ pieces = {...}, style = "..." }`).
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Group {
+            pieces: Vec<String>,
+            style: Option<String>,
+        }
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Name(String),
+            List(Vec<String>),
+            Group(Group),
+        }
+        let shape = "a piece's name, or a group { \"a\", \"b\", style = \"role\" } of names";
+        Ok(
+            match Raw::deserialize(d).map_err(|_| D::Error::custom(shape))? {
+                Raw::Name(n) => TitleEntry::Piece(n),
+                Raw::List(pieces) => TitleEntry::Group {
+                    pieces,
+                    style: None,
+                },
+                Raw::Group(g) => TitleEntry::Group {
+                    pieces: g.pieces,
+                    style: g.style,
+                },
+            },
+        )
+    }
+}
+
+/// A titlebar's groups, rewritten so serde can read them: Lua's `{ "a",
+/// "b", style = "x" }` is a list with a key on the side, which reaches
+/// serde as the list alone. Checked here, strictly, as it is rewritten.
+fn normalize_titlebar(lua: &Lua, who: &str, value: &Value) -> mlua::Result<()> {
+    let Value::Table(t) = value else {
+        return Ok(());
+    };
+    for side in ["left", "center", "right"] {
+        let Ok(Value::Table(entries)) = t.get::<Value>(side) else {
+            continue;
+        };
+        for pair in entries.clone().pairs::<Value, Value>() {
+            let (k, v) = pair?;
+            let Value::Table(e) = v else { continue };
+            let mut pieces = Vec::new();
+            let mut style = None;
+            for item in e.pairs::<Value, Value>() {
+                match item? {
+                    (Value::Integer(_), Value::String(n)) => pieces.push(n.to_str()?.to_string()),
+                    (Value::String(s), Value::String(v)) if s.to_str()? == "style" => {
+                        style = Some(v.to_str()?.to_string());
+                    }
+                    (Value::String(s), _) => {
+                        return Err(rt_err(format!(
+                            "{who}: {side}: a group takes names and `style`, not `{}`",
+                            s.to_str()?
+                        )));
+                    }
+                    (_, other) => {
+                        return Err(rt_err(format!(
+                            "{who}: {side}: a group holds piece names, not a {}",
+                            other.type_name()
+                        )));
+                    }
+                }
+            }
+            if pieces.is_empty() {
+                return Err(rt_err(format!(
+                    "{who}: {side}: a group needs a piece at least"
+                )));
+            }
+            let g = lua.create_table()?;
+            g.set("pieces", lua.create_sequence_from(pieces)?)?;
+            if let Some(st) = style {
+                g.set("style", st)?;
+            }
+            entries.set(k, g)?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TitlebarPatch {
-    left: Option<Vec<String>>,
-    center: Option<Vec<String>>,
-    right: Option<Vec<String>>,
+    left: Option<Vec<TitleEntry>>,
+    center: Option<Vec<TitleEntry>>,
+    right: Option<Vec<TitleEntry>>,
 }
 
 fn apply_titlebar(t: &mut Option<TitleLayout>, patch: TitlebarPatch) {
@@ -852,6 +965,7 @@ impl Profile {
             .flat_map(|t| [&t.left, &t.center, &t.right])
             .flatten()
             .flatten()
+            .flat_map(TitleEntry::names)
     }
 
     fn modules(&self) -> impl Iterator<Item = &String> {
@@ -2433,6 +2547,7 @@ fn install_api(
     ranma.set(
         "titlebar",
         lua.create_function(|lua, value: Value| {
+            normalize_titlebar(lua, "ranma.titlebar", &value)?;
             let patch: TitlebarPatch = lua
                 .from_value(value)
                 .map_err(|e| rt_err(format!("ranma.titlebar: {e}")))?;
@@ -2456,6 +2571,13 @@ fn install_api(
         "profile",
         lua.create_function(|lua, (name, value): (String, Value)| {
             let who = format!("ranma.profile(\"{name}\")");
+            if let Value::Table(t) = &value {
+                normalize_titlebar(
+                    lua,
+                    &format!("{who} titlebar"),
+                    &t.get::<Value>("titlebar")?,
+                )?;
+            }
             let def: Profile = lua.from_value(value).map_err(|e| {
                 rt_err(format!(
                     "{who}: {e} (a profile takes set, bar, titlebar, toolbars and theme)"
@@ -4232,8 +4354,11 @@ mod tests {
             "#,
         )
         .unwrap();
+        let names = |v: &[TitleEntry]| -> Vec<String> {
+            v.iter().flat_map(TitleEntry::names).cloned().collect()
+        };
         let t = ok.titlebar.clone().unwrap();
-        assert_eq!(t.right, vec!["close"]);
+        assert_eq!(names(&t.right), vec!["close"]);
         assert_eq!(ok.title_pieces["close"].priority, Some(70));
         assert!(matches!(
             ok.title_pieces["close"].click,
@@ -4242,10 +4367,53 @@ mod tests {
         // A profile carries its own row, over the base, and back.
         let mut ok = ok;
         ok.use_profile(Some("plain")).unwrap();
-        assert_eq!(ok.titlebar.as_ref().unwrap().right, Vec::<String>::new());
-        assert_eq!(ok.titlebar.as_ref().unwrap().left, vec!["title", "cwd"]);
+        assert_eq!(
+            names(&ok.titlebar.as_ref().unwrap().right),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            names(&ok.titlebar.as_ref().unwrap().left),
+            vec!["title", "cwd"]
+        );
         ok.use_profile(None).unwrap();
-        assert_eq!(ok.titlebar.as_ref().unwrap().right, vec!["close"]);
+        assert_eq!(names(&ok.titlebar.as_ref().unwrap().right), vec!["close"]);
+        // A group: names and a style, in order, read as one pill.
+        let g = with_user(
+            r#"
+            ranma.title_piece("a", { text = "a" })
+            ranma.title_piece("b", { text = "b" })
+            ranma.titlebar { right = { { "a", "b", style = "accent" } }, left = { { "title" } } }
+            "#,
+        )
+        .unwrap()
+        .titlebar
+        .unwrap();
+        assert_eq!(
+            g.right,
+            vec![TitleEntry::Group {
+                pieces: vec!["a".into(), "b".into()],
+                style: Some("accent".into())
+            }]
+        );
+        assert_eq!(
+            g.left,
+            vec![TitleEntry::Group {
+                pieces: vec!["title".into()],
+                style: None
+            }]
+        );
+        assert!(
+            err(r#"ranma.titlebar { right = { { "title", colour = "x" } } }"#)
+                .contains("not `colour`")
+        );
+        assert!(
+            err(r#"ranma.titlebar { right = { { style = "x" } } }"#).contains("a piece at least")
+        );
+        assert!(
+            err(r#"ranma.profile("p", { titlebar = { left = { { "title", x = "y" } } } })"#)
+                .contains("not `x`")
+        );
+        assert!(err(r#"ranma.titlebar { right = { { "title" }, "title" } }"#).contains("twice"));
 
         assert!(
             err(r#"ranma.title_piece("x", { text = "a", colour = "red" })"#)

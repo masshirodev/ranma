@@ -1650,6 +1650,10 @@ mod tests {
             fg: Color::Rgb(255, 136, 0),
             bg: None,
             styles: Attrs::bold(),
+            left: None,
+            right: None,
+            padding_left: 0,
+            padding_right: 0,
         };
         let roles = BTreeMap::from([("git".to_string(), git)]);
         let seg = vec![

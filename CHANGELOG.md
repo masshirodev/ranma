@@ -15,6 +15,12 @@ commit log has the detail.
 
 ### Added
 
+- Pills on the title row: a table in a `ranma.titlebar` side is a group drawn
+  as one pill on its role's ground, between the role's own caps (`[roles.x]`
+  now takes `left`, `right`, `padding_left`, `padding_right`). With
+  `border.title_ground = "pieces"` the row stays a line and the title is a
+  pill on `title_bg_*` between the corners.
+
 - A pane handle's `index`, `zoomed`, `synced` and `urgent`; a pane is urgent
   when it rings the bell or goes quiet while you are in another one, until
   you focus it. `ranma.has("pane.state")`.

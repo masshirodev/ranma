@@ -487,6 +487,21 @@ pub struct Border {
     pub title_corner_left: String,
     #[serde(default)]
     pub title_corner_right: String,
+    /// What the title row's ground is: `row` (the default), the whole row
+    /// filled with `title_bg_*`; or `pieces`, where only pieces have a
+    /// ground (the title on `title_bg_*` between the corners, others on
+    /// their role's) and the line shows between them.
+    #[serde(default)]
+    pub title_ground: TitleGround,
+}
+
+/// `border.title_ground`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TitleGround {
+    #[default]
+    Row,
+    Pieces,
 }
 
 impl Border {
@@ -1021,6 +1036,17 @@ pub struct RoleDef {
     pub bg: Option<Color>,
     #[serde(default)]
     pub styles: Attrs,
+    /// Caps of its own, drawn in its ground (DESIGN.md, c444): a module or a
+    /// title piece in this role is a pill of its colour. One character each.
+    #[serde(default)]
+    pub left: Option<char>,
+    #[serde(default)]
+    pub right: Option<char>,
+    /// Blank cells inside its caps, 0-4.
+    #[serde(default)]
+    pub padding_left: u8,
+    #[serde(default)]
+    pub padding_right: u8,
 }
 
 /// The styles every theme has, which `[roles]` may not name.
@@ -1567,6 +1593,25 @@ fn check(t: &Theme) -> Result<(), String> {
                 "roles.{name}: a role's name is letters, digits, _ and -"
             ));
         }
+        let r = &t.roles[name];
+        for (k, n) in [
+            ("padding_left", r.padding_left),
+            ("padding_right", r.padding_right),
+        ] {
+            if n > 4 {
+                return Err(format!("roles.{name}.{k} must be 0 to 4, not {n}"));
+            }
+        }
+        for (k, cap) in [("left", r.left), ("right", r.right)] {
+            use unicode_width::UnicodeWidthChar;
+            if let Some(c) = cap
+                && (c.is_control() || c.width() != Some(1))
+            {
+                return Err(format!(
+                    "roles.{name}.{k} must be one one-cell character, not `{c}`"
+                ));
+            }
+        }
     }
     t.border
         .title_format
@@ -1719,7 +1764,11 @@ mod tests {
             RoleDef {
                 fg: Color::Rgb(255, 136, 0),
                 bg: None,
-                styles: Attrs::bold()
+                styles: Attrs::bold(),
+                left: None,
+                right: None,
+                padding_left: 0,
+                padding_right: 0,
             },
             "inherited"
         );

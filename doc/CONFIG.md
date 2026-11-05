@@ -1051,6 +1051,18 @@ panes, or a plugin's mark, never vanishes because a name was left out.
 | `interval` | seconds between runs of `render`, while a pane showing it is on screen |
 | `priority` | `0`-`100`, how long it stays as the pane narrows; `40` unless given |
 
+**Pills.** A table inside a side is a group, drawn as one pill:
+`right = { { "float", "zoom", "close", style = "buttons" } }`. It stands on
+the ground of the role `style` names (`[roles.buttons]` with a `bg`),
+between that role's caps (`left`, `right`) and blanks (`padding_left`,
+`padding_right`); its pieces keep their own styles and clicks. A pill
+narrows piece by piece as the pane does and keeps its caps; once every piece
+in it is gone, so is the pill. With the theme's `border.title_ground =
+"pieces"`, the row is no longer filled: the title stands on `title_bg_*`
+between `title_corner_left` and `title_corner_right`, a piece whose `style`
+is a role with a ground is a pill of that role, and the line shows between
+them.
+
 **A narrow pane** gives way by priority, across all three sides, lowest
 first: the badges' words (10), the title cut to four letters (20), calm
 badges (30, dim before normal before accent), your pieces at their
@@ -2476,6 +2488,7 @@ colours only; a key set to a name shows the name there.
 | `border.floating_edges` | the same, for floats and popups; unset, `edges` |
 | `colors.title_bg_active`, `title_bg_inactive`, `title_bg_floating` | a ground for the row the title is on (the focused pane's, the others', an unfocused float's), filling the whole row, corners included: a title bar rather than a line with words in it. Each is its own; unset, that row is the border line as before. An unfocused float's falls back to `title_bg_inactive`. In WM mode the focused pane's filled row takes `mode_bg` and `mode_fg`; so does a row with no ground whose line is blanks (`[border.chars]` `top = "   "`), or the mode would show on the title's letters only. |
 | `colors.title_fg_active`, `title_fg_inactive`, `title_fg_floating` | a filled row's text and fill; unset, the border's colour. Badges keep their own colours on the row's ground. |
+| `border.title_ground` | `row` (the default): `title_bg_*` fills the whole title row. `pieces`: the row stays a line, the title stands on `title_bg_*` between the corners as a pill of its own, and `ranma.titlebar`'s groups and pieces in a role with a ground are pills of theirs. |
 | `border.title_corner_left`, `title_corner_right` | one character each (empty by default), drawn in the corner cells of a filled title row, in the row's ground over whatever lies behind the pane (`colors.background_bg`, else the terminal's): `"\ue0b6"` and `"\ue0b4"` round it like a window's top. On a side with no edge the corner takes the row's end cell and the title starts after it. Not drawn on a row that is not filled. |
 | `border.floating_style` | floats and popups (`ranma popup`); unset, `style` |
 | `border.title` | where a pane's title goes: `top`, `bottom`, `off` |
@@ -2498,7 +2511,7 @@ colours only; a key set to a name shows the name there.
 | `colors.background_fg`, `background_bg` | the art's colours where it sets none: its text (unset, `bar_dim`) and the ground under the whole area (unset, the terminal's own) |
 | `panes.scrollbar` | `off`, `scrolled` (the default), `on`: a thumb on a pane's right border, over the rows it stands for, showing where the view is in its history (tmux's `pane-scrollbars`). `scrolled` only while the view is scrolled back (the wheel, copy mode); `on` whenever the pane has history. Drawn as the heavy line in the border's colour (`#` with `ascii`); a pane with no border has none. |
 | `palette.color0` - `color15`, `palette.foreground`, `palette.background` | `#rrggbb`: the colours programs in panes draw with (the sixteen ANSI colours, the default text and the default ground), under what a program sets itself (OSC 4, 10, 11) and over the host terminal's. One theme then colours nvim, btop and `ls` alike in kitty, Windows Terminal or Termux. Each is optional; unset, the host's colour shows. The 256-colour cube (16-255) and truecolor text are left as the program sent them. `background` is the pane's ground where the program leaves the default, and `panes.active_bg` / `inactive_bg` win over it. Needs a truecolor host terminal. |
-| `roles.<name>` | a style of the theme's own a module can ask for by name (`style = "git"`): `fg` (a colour), `bg` (optional; unset, the module's own ground), `styles` (attributes, as `[styles]`). Not one of `normal`, `dim`, `accent`, `urgent`, which are `[colors]`'; a name is letters, digits, `_` and `-`. A theme that inherits has its parent's roles. |
+| `roles.<name>` | a style of the theme's own a module can ask for by name (`style = "git"`): `fg` (a colour), `bg` (optional; unset, the module's own ground), `styles` (attributes, as `[styles]`), and for a title piece or group in the role, `left` and `right` (one character each, its caps, drawn in `bg`) and `padding_left` / `padding_right` (`0`-`4` blanks inside them). Not one of `normal`, `dim`, `accent`, `urgent`, which are `[colors]`'; a name is letters, digits, `_` and `-`. A theme that inherits has its parent's roles. |
 | `styles.<role>` | text attributes, a list of `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`. Roles: `bar`, `dim`, `accent`, `urgent` (the module styles), `mode`, `ws_active`, `ws_occupied`, `ws_empty`, `ws_urgent`, `ws_activity`, `tab_active`, `tab_inactive`, `title`, `title_active` (a pane's border title, and the focused one's), `picker_selected` (a picker's selected label; bold by default), `picker_title`, `picker_query`, `picker_current`, `picker_error` (a picker's title, typed query, mark of where you are, and the palette's error row; all but `picker_current` bold by default), `toast`. A list replaces the inherited one: `mode = []` takes the default bold away. |
 
 The toolbar and picker keys are optional: each follows the role it names when

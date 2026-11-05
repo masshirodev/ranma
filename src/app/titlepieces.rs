@@ -4,7 +4,7 @@
 //! out by `titlebar::lay_out`, the same way for drawing and for clicks.
 
 use super::*;
-use crate::titlebar::{Form, Ink, Item, Placed, Row, Span};
+use crate::titlebar::{Form, Ground, Ink, Item, Placed, Row, Span};
 
 /// The built-ins' steps on the handoff's ladder: the lower gives way first.
 /// A config's own pieces fit in by their `priority` (default `PIECE`).
@@ -16,6 +16,19 @@ pub const TITLE_GONE: u8 = 50;
 pub const URGENT_BADGES: u8 = 60;
 pub const INDEX: u8 = 70;
 pub const SYNC: u8 = 90;
+
+/// A role's pill: its caps, the blanks inside them, and its ground; a role
+/// with no ground of its own (or none at all) leaves a piece on the line.
+fn role_shape(st: Option<Style>) -> (crate::titlebar::Caps, (u8, u8), Ground) {
+    match st {
+        Some(Style::Role(r)) if r.bg.is_some() => (
+            (r.left, r.right),
+            (r.padding_left, r.padding_right),
+            Ground::Role(Style::Role(r)),
+        ),
+        _ => ((None, None), (0, 0), Ground::Line),
+    }
+}
 
 impl App {
     /// Run the state-driven pieces (those with `render` and no `interval`),
@@ -135,17 +148,46 @@ impl App {
     }
 
     /// The row's pieces for a pane, in the forms they can take; `None`
-    /// without a `ranma.titlebar`.
+    /// without a `ranma.titlebar`. A group is one pill on its role's ground
+    /// and caps; with `title_ground = "pieces"`, the title is a pill on
+    /// `title_bg_*` between the corners, and a piece whose role has a ground
+    /// one of its own.
     pub fn title_row_items(&self, id: PaneId) -> Option<Row> {
+        use crate::config::TitleEntry;
         let layout = self.config.titlebar.as_ref()?;
+        let pieces = self.config.theme.border.title_ground == crate::theme::TitleGround::Pieces;
         let mut n = 0usize;
-        let mut side = |names: &[String]| -> Vec<Item> {
-            names
+        let mut side = |entries: &[TitleEntry]| -> Vec<Item> {
+            entries
                 .iter()
-                .map(|name| {
-                    let item = self.piece_item(id, name, n);
-                    n += 1;
-                    item
+                .map(|e| match e {
+                    TitleEntry::Piece(name) => {
+                        let item = self.piece_item(id, name, n);
+                        n += 1;
+                        if pieces {
+                            self.own_pill(name, item)
+                        } else {
+                            item
+                        }
+                    }
+                    TitleEntry::Group {
+                        pieces: names,
+                        style,
+                    } => {
+                        let members: Vec<Item> = names
+                            .iter()
+                            .map(|name| {
+                                let item = self.piece_item(id, name, n);
+                                n += 1;
+                                item
+                            })
+                            .collect();
+                        let st = style
+                            .as_deref()
+                            .and_then(|s| Style::from_name(s, &self.config.theme.roles));
+                        let (caps, pad, ground) = role_shape(st);
+                        crate::titlebar::pill(members, caps, pad, ground)
+                    }
                 })
                 .collect()
         };
@@ -161,7 +203,14 @@ impl App {
         let (s, k) = [&layout.left, &layout.center, &layout.right]
             .iter()
             .enumerate()
-            .find_map(|(s, names)| Some((s, names.iter().position(|n| n == "title")?)))
+            .find_map(|(s, entries)| {
+                Some((
+                    s,
+                    entries
+                        .iter()
+                        .position(|e| e.names().any(|n| n == "title"))?,
+                ))
+            })
             .unwrap_or((0, layout.left.len()));
         fn side_of(row: &mut Row, s: usize) -> &mut Vec<Item> {
             match s {
@@ -181,6 +230,30 @@ impl App {
             side.insert(k.min(side.len()), item);
         }
         Some(row)
+    }
+
+    /// With `title_ground = "pieces"`: the title on its own ground between
+    /// the corners; a piece of the config's whose role has a ground, a pill
+    /// of that role. Anything else stands on the line.
+    fn own_pill(&self, name: &str, item: Item) -> Item {
+        let b = &self.config.theme.border;
+        if name == "title" {
+            let caps = (
+                b.title_corner_left.chars().next(),
+                b.title_corner_right.chars().next(),
+            );
+            return crate::titlebar::pill(vec![item], caps, (0, 0), Ground::Title);
+        }
+        let st = self
+            .config
+            .title_pieces
+            .get(name)
+            .and_then(|d| d.style.as_deref())
+            .and_then(|s| Style::from_name(s, &self.config.theme.roles));
+        match role_shape(st) {
+            (_, _, Ground::Line) => item,
+            (caps, pad, ground) => crate::titlebar::pill(vec![item], caps, pad, ground),
+        }
     }
 
     /// The name of the piece a span's `piece` index stands for.
@@ -204,6 +277,7 @@ impl App {
             ink,
             piece: n,
             tab: None,
+            ground: Ground::Line,
         };
         let one = |text: String, ink: Ink, until: u8| Item {
             forms: vec![Form {
@@ -315,6 +389,7 @@ impl App {
                     ink: Ink::Badge(b.role),
                     piece: n,
                     tab: None,
+                    ground: Ground::Line,
                 });
             }
             out.push(Span {
@@ -322,6 +397,7 @@ impl App {
                 ink: Ink::Line,
                 piece: n,
                 tab: None,
+                ground: Ground::Line,
             });
             out
         };
@@ -401,6 +477,7 @@ impl App {
                         ink: Ink::Role(style),
                         piece: n,
                         tab: Some(*t),
+                        ground: Ground::Line,
                     }
                 })
                 .collect()
@@ -641,6 +718,74 @@ mod tests {
         assert_eq!(a.piece_values.get(&("who".into(), 1)), Some(&Vec::new()));
         assert_eq!(a.piece_values.get(&("who".into(), 2)), Some(&Vec::new()));
         assert_eq!(row_text(&a, 1, 20), "");
+    }
+
+    fn app_themed(tag: &str, theme: &str, src: &str) -> (App, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("ranma-pieces-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("themes")).unwrap();
+        std::fs::write(dir.join("themes").join("t.toml"), theme).unwrap();
+        let src = format!("ranma.set {{ theme = \"t\" }}\n{src}");
+        let config = crate::config::load_from(Some(&dir), None, Some(&src)).unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        (App::new(config, tx, 60, 12), dir)
+    }
+
+    #[test]
+    fn pieces_as_the_ground_make_pills() {
+        let (mut a, dir) = app_themed(
+            "pills",
+            r##"
+            [colors]
+            title_bg_inactive = "#111111"
+            [border]
+            title_ground = "pieces"
+            title_corner_left = "("
+            title_corner_right = ")"
+            [roles.btn]
+            fg = "#eeeeee"
+            bg = "#222222"
+            left = "<"
+            right = ">"
+            padding_left = 1
+            "##,
+            r#"
+            ranma.title_piece("f", { text = "F" })
+            ranma.title_piece("x", { text = "X" })
+            ranma.title_piece("solo", { text = "S", style = "btn" })
+            ranma.titlebar { left = { "index" }, right = { "solo", { "f", "x", style = "btn" } } }
+            "#,
+        );
+        with_pane(&mut a, 1);
+        // The index on the line; its own role's pill for solo; one pill
+        // round the group; a piece, its caps and its blanks on the ground.
+        assert_eq!(row_text(&a, 1, 20), " 1         < S>< FX>");
+        let row = a.title_row_items(1).unwrap();
+        let placed = crate::titlebar::lay_out(&row, 20);
+        let at = |t: &str| {
+            placed
+                .iter()
+                .filter(|p| p.span.text == t)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(at(" 1 ")[0].span.ground, Ground::Line);
+        assert!(matches!(
+            at("F")[0].span.ground,
+            Ground::Role(Style::Role(_))
+        ));
+        assert_eq!(at("<")[1].span.ink, Ink::Cap);
+        let _ = std::fs::remove_dir_all(&dir);
+        // The title is a pill of its own on the title's ground.
+        let (mut b, dir) = app_themed(
+            "title-pill",
+            "[border]\ntitle_ground = \"pieces\"\ntitle_corner_left = \"(\"\ntitle_corner_right = \")\"\n",
+            r#"ranma.titlebar { left = { "title" } }"#,
+        );
+        with_pane(&mut b, 1);
+        let row = b.title_row_items(1).unwrap();
+        // No real pane: no title, so no pill at all, not an empty one.
+        assert!(crate::titlebar::lay_out(&row, 20).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

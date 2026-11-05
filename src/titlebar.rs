@@ -22,6 +22,18 @@ pub enum Ink {
     Role(crate::bar::Style),
     /// A plugin's badge, in its role.
     Badge(crate::screen::Role),
+    /// A pill's cap: its ground as ink, on whatever lies under the pill.
+    Cap,
+}
+
+/// What a span stands on: the line (nothing of its own), the title's
+/// ground (`title_bg_*`, the title's pill), or a role's ground.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Ground {
+    #[default]
+    Line,
+    Title,
+    Role(crate::bar::Style),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +45,79 @@ pub struct Span {
     pub piece: usize,
     /// A group's tab: the pane a click on it shows.
     pub tab: Option<crate::layout::PaneId>,
+    /// What it stands on.
+    pub ground: Ground,
+}
+
+/// A pill's caps, left and right: one character each, or none.
+pub type Caps = (Option<char>, Option<char>);
+
+/// A pill: `members` on one ground, between `caps` (DESIGN.md, F6). One item
+/// whose forms are the members' ladders merged: each step is one member's,
+/// taken in the members' order of priority, so a pill narrows member by
+/// member and keeps its caps; once every member is gone, so is the pill.
+pub fn pill(members: Vec<Item>, caps: Caps, pad: (u8, u8), ground: Ground) -> Item {
+    let piece = members
+        .iter()
+        .flat_map(|m| m.forms.iter().flat_map(|f| f.spans.first()))
+        .map(|s| s.piece)
+        .next()
+        .unwrap_or(0);
+    let edge = |text: String, ink: Ink| Span {
+        text,
+        ink,
+        piece,
+        tab: None,
+        ground,
+    };
+    let mut at = vec![0usize; members.len()];
+    let mut forms = Vec::new();
+    loop {
+        let mut inner: Vec<Span> = members
+            .iter()
+            .zip(&at)
+            .flat_map(|(m, i)| {
+                m.forms
+                    .get(*i)
+                    .map_or(&[][..], |f| &f.spans)
+                    .iter()
+                    .cloned()
+            })
+            .map(|mut s| {
+                if s.ground == Ground::Line {
+                    s.ground = ground;
+                }
+                s
+            })
+            .collect();
+        // The next step: the member whose current form gives way first.
+        let next = members
+            .iter()
+            .zip(&at)
+            .enumerate()
+            .filter_map(|(k, (m, i))| m.forms.get(*i).map(|f| (f.until, k)))
+            .min_by_key(|(p, k)| (*p, *k));
+        let Some((until, k)) = next else { break };
+        if !inner.is_empty() {
+            let mut spans = Vec::new();
+            if let Some(c) = caps.0 {
+                spans.push(edge(c.to_string(), Ink::Cap));
+            }
+            if pad.0 > 0 {
+                spans.push(edge(" ".repeat(pad.0 as usize), Ink::Line));
+            }
+            spans.append(&mut inner);
+            if pad.1 > 0 {
+                spans.push(edge(" ".repeat(pad.1 as usize), Ink::Line));
+            }
+            if let Some(c) = caps.1 {
+                spans.push(edge(c.to_string(), Ink::Cap));
+            }
+            forms.push(Form { spans, until });
+        }
+        at[k] += 1;
+    }
+    Item { forms }
 }
 
 /// One width a piece can take, and the priority at which it gives way to
@@ -155,6 +240,7 @@ mod tests {
             ink: Ink::Role(Style::Normal),
             piece,
             tab: None,
+            ground: Ground::Line,
         }
     }
 
@@ -224,6 +310,33 @@ mod tests {
         assert_eq!(at(8), "       X");
         assert_eq!(at(3), "  X");
         assert_eq!(at(0), "");
+    }
+
+    #[test]
+    fn a_pill_narrows_member_by_member_and_keeps_its_caps() {
+        let row = Row {
+            left: vec![],
+            center: vec![],
+            right: vec![pill(
+                vec![one("F", 40, 0), one("Z", 45, 1), one("X", 70, 2)],
+                (Some('('), Some(')')),
+                (1, 0),
+                Ground::Role(Style::Accent),
+            )],
+        };
+        let at = |room| text(&lay_out(&row, room), room as usize);
+        assert_eq!(at(6), "( FZX)");
+        assert_eq!(at(5), "( ZX)");
+        assert_eq!(at(4), "( X)");
+        assert_eq!(at(3), "   ", "nothing left fits: the pill goes whole");
+        // Every span stands on the pill's ground, caps included.
+        let placed = lay_out(&row, 6);
+        assert!(
+            placed
+                .iter()
+                .all(|p| p.span.ground == Ground::Role(Style::Accent))
+        );
+        assert_eq!(placed[0].span.ink, Ink::Cap);
     }
 
     #[test]

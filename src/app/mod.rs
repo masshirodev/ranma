@@ -7202,6 +7202,10 @@ mod tests {
             fg: crate::theme::Color::Rgb(1, 2, 3),
             bg: None,
             styles: crate::theme::Attrs::bold(),
+            left: None,
+            right: None,
+            padding_left: 0,
+            padding_right: 0,
         };
         roles.insert("git".to_string(), git);
         let seg = |code: &str| {
