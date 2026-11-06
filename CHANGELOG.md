@@ -239,6 +239,11 @@ commit log has the detail.
 
 ### Fixed
 
+- A toast's ground (`toast_bg`) was under its border cells too, so it showed
+  as a band around the box: half a row above the top line, half a column
+  beside the right one. It fills inside the border only now, and the border
+  stands on what is behind it, as a pane's does.
+
 - Plain `kitten icat` drew nothing in a pane, for two reasons. Panes
   reported a size of zero pixels, and a program that places images asks for
   it first: they report the driving terminal's cell size now, as kitty does,

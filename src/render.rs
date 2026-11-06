@@ -2241,11 +2241,24 @@ fn draw_toasts(f: &mut Frame, app: &App) {
             crate::toast::Level::Urgent => c.bar_urgent,
         };
         f.render_widget(Clear, rrect(r));
+        // The ground inside the border only: a box-drawing line runs through
+        // the middle of its cell, so a ground under the border cells shows as
+        // half a row above the line and half a column beside it, a band of
+        // toast_bg around the box. The border keeps what is behind it, as a
+        // pane's does.
+        f.render_widget(
+            Block::default().style(body),
+            rrect(crate::layout::Rect::new(
+                r.x + 1,
+                r.y + 1,
+                r.w.saturating_sub(2),
+                r.h.saturating_sub(2),
+            )),
+        );
         let block = Block::default()
             .borders(Borders::ALL)
             .border_set(frame_set(&theme.border))
-            .border_style(body.fg(color(edge)))
-            .style(body);
+            .border_style(Style::default().fg(color(edge)));
         f.render_widget(block, rrect(r));
         let buf = f.buffer_mut();
         let cols = r.w.saturating_sub(4) as usize;
@@ -2853,6 +2866,16 @@ mod tests {
         let detail = at(r.x + 2, r.y + 2);
         assert_eq!(detail.symbol(), "w");
         assert_eq!(detail.fg, Color::Rgb(119, 119, 119));
+        // The ground is inside the border only; the border cells keep what
+        // is behind them, or the ground shows as a band around the line.
+        assert_eq!(at(r.x + 1, r.y + 1).bg, Color::Rgb(16, 16, 16));
+        assert_eq!(at(r.x, r.y).bg, Color::Reset, "a corner");
+        assert_eq!(at(r.x + 3, r.y).bg, Color::Reset, "the top line");
+        assert_eq!(
+            at(r.right() - 1, r.y + 1).bg,
+            Color::Reset,
+            "the right line"
+        );
     }
 
     /// A cap with no ground to draw (no `module_bg`, the bar on the
