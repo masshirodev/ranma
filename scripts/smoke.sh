@@ -32,7 +32,11 @@ wait_count() { # pattern, count
 CFG=$(mktemp -d)
 # Private runtime and cache dirs: the servers started here have their own
 # sockets and logs, and can never be found by (or attach to) the user's.
-RT=$(mktemp -d)
+# Under /tmp, not $TMPDIR: macOS's is a /var/folders path too long for
+# ranma/<name>.sock to fit in a socket address, so ranma would put its socket
+# in /tmp/ranma-UID instead, and the steps that ask $RT/ranma/1.sock would
+# miss it (the upgrade step did, on macOS CI, from 2026-11-05).
+RT=$(mktemp -d /tmp/ranma-smoke.XXXXXX)
 CACHE=$(mktemp -d)
 # Saved layouts are state: the test's go here, never into the user's.
 STATE=$(mktemp -d)
