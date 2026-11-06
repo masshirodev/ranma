@@ -194,7 +194,8 @@ inner = 0
 outer_horizontal = 0
 outer_vertical = 0
 # One side on its own, over the two above: outer_top, outer_bottom,
-# outer_left, outer_right. Unset, a side follows its axis.
+# outer_left, outer_right. Unset, a side follows its axis. A theme that sets
+# an axis drops the sides the theme it inherits set for that axis.
 # outer_top = 1
 
 [bar]

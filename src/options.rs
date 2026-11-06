@@ -655,7 +655,7 @@ pub fn builtin() -> Vec<Opt> {
             "Outer gap, sides",
             int(0, 16, 1, true),
             Theme,
-            "Cells between the panes and the left and right edges. A cell is about twice as tall as wide.",
+            "Cells between the panes and the left and right edges. Sets both sides, over a side the theme set alone. A cell is about twice as tall as wide.",
         ),
         opt(
             "gaps.outer_vertical",
@@ -663,7 +663,7 @@ pub fn builtin() -> Vec<Opt> {
             "Outer gap, ends",
             int(0, 8, 1, true),
             Theme,
-            "Cells between the panes and the top and bottom edges.",
+            "Cells between the panes and the top and bottom edges. Sets both, over a side the theme set alone.",
         ),
         opt(
             "panes.dim_unfocused",

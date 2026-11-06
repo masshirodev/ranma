@@ -2321,7 +2321,7 @@ mod tests {
             i(0),
             None,
             None,
-            "Cells between the panes and the left and right edges. A cell is about twice as tall as wide.",
+            "Cells between the panes and the left and right edges. Sets both sides, over a side the theme set alone. A cell is about twice as tall as wide.",
         );
         add(
             "gaps.outer_vertical",
@@ -2333,7 +2333,7 @@ mod tests {
             i(0),
             None,
             None,
-            "Cells between the panes and the top and bottom edges.",
+            "Cells between the panes and the top and bottom edges. Sets both, over a side the theme set alone.",
         );
         add(
             "panes.dim_unfocused",

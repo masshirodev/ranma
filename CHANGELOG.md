@@ -13,6 +13,15 @@ commit log has the detail.
 
 ## [Unreleased]
 
+### Fixed
+
+- A theme that sets `outer_vertical` or `outer_horizontal` now means it on
+  both sides of that axis, over an `outer_top`, `outer_bottom`, `outer_left`
+  or `outer_right` the theme it inherits set. The same goes for a profile's
+  theme and the settings panel's "Outer gap, ends" and "Outer gap, sides",
+  which could show 0 while a side from the theme kept its gap (kanna over an
+  older sumi kept a blank row above the bar).
+
 ## [0.5.0] - 2026-11-05
 
 ### Added

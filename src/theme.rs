@@ -1721,10 +1721,38 @@ pub fn merge_into(base: &mut toml::Table, over: toml::Table) {
     merge(base, over)
 }
 
+/// The outer gap keys of one axis, and the sides that follow it while unset.
+const GAP_AXES: [(&str, [&str; 2]); 2] = [
+    ("outer_vertical", ["outer_top", "outer_bottom"]),
+    ("outer_horizontal", ["outer_left", "outer_right"]),
+];
+
 fn merge(base: &mut toml::Table, over: toml::Table) {
+    // A layer that sets an axis's outer gap means that gap on both its sides:
+    // the sides a layer under it set stop overriding it, unless this layer
+    // sets them too. Otherwise a theme over one with `outer_bottom = 1`, or the
+    // settings panel's "Outer gap, ends", sets `outer_vertical = 0` and the
+    // bottom keeps its row.
+    if let (Some(toml::Value::Table(b)), Some(toml::Value::Table(o))) =
+        (base.get_mut("gaps"), over.get("gaps"))
+    {
+        for (axis, sides) in GAP_AXES {
+            if o.contains_key(axis) {
+                for side in sides {
+                    if !o.contains_key(side) {
+                        b.remove(side);
+                    }
+                }
+            }
+        }
+    }
+    merge_tables(base, over);
+}
+
+fn merge_tables(base: &mut toml::Table, over: toml::Table) {
     for (k, v) in over {
         match (base.get_mut(&k), v) {
-            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge(b, o),
+            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge_tables(b, o),
             (_, v) => {
                 base.insert(k, v);
             }
@@ -2291,6 +2319,39 @@ mod tests {
         assert_eq!(t.gaps.outer(), [3, 2, 1, 0]);
         let d = load("default", &[]).unwrap();
         assert_eq!(d.gaps.outer(), [0, 0, 0, 0]);
+    }
+
+    /// kanna over sumi: sumi's `outer_bottom = 1` kept a blank row under the
+    /// panes of a theme that said `outer_vertical = 0`, and the settings
+    /// panel's "Outer gap, ends" could not take it away.
+    #[test]
+    fn an_axis_set_over_a_theme_takes_back_the_sides_it_set() {
+        let dir = tmp_dir("gap-axes");
+        std::fs::write(
+            dir.join("parent.toml"),
+            "[gaps]\nouter_horizontal = 2\nouter_vertical = 1\nouter_top = 0\nouter_bottom = 1\nouter_left = 4\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("child.toml"),
+            "inherits = \"parent\"\n[gaps]\nouter_vertical = 0\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("both.toml"),
+            "inherits = \"parent\"\n[gaps]\nouter_vertical = 0\nouter_top = 2\n",
+        )
+        .unwrap();
+        let dirs = [dir];
+        // The vertical sides follow the child's axis; the horizontal ones,
+        // which it left alone, keep the parent's.
+        assert_eq!(load("child", &dirs).unwrap().gaps.outer(), [0, 2, 0, 4]);
+        // A side the same layer sets still wins over its axis.
+        assert_eq!(load("both", &dirs).unwrap().gaps.outer(), [2, 2, 0, 4]);
+        // The settings panel's layer works the same way.
+        let panel: toml::Table = toml::from_str("[gaps]\nouter_horizontal = 0\n").unwrap();
+        let (t, _) = load_over("parent", &dirs, Some(&panel)).unwrap();
+        assert_eq!(t.gaps.outer(), [0, 0, 1, 0]);
     }
 
     #[test]

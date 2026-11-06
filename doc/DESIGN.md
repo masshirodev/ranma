@@ -4210,6 +4210,14 @@ Rust, for predictable latency without a GC, and for the emulator:
   the file does not say. What a fraction was usually wanted for is a side on its
   own: `outer_top` and its three siblings override one side of their axis, and
   unset follow it, so themes with only the two axes look as before.
+- An axis set in a layer takes back the sides set below it (2026-11-06): a
+  theme, a profile's `theme` or settings.toml that sets `outer_vertical` sets
+  the top and bottom both, unless that same layer names a side. Before, kanna
+  (`outer_vertical = 0`) over sumi (`outer_bottom = 1`) kept a blank row under
+  the panes, and "Outer gap, ends" in the settings panel showed 0 and could
+  not remove it: the side was in a file the panel does not write. Read as a
+  sentence, `outer_vertical = 0` says "no gap at the ends", and the layer that
+  says it last is the one meant.
 
 **A followed module's click is the inner's** (2026-10-14). Clicks staying
 local made the followed modules lie on a click: with the VPS's ranma
