@@ -10176,18 +10176,15 @@ mod tests {
         .unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
         let mut a = App::new(config, tx, 80, 24);
-        // Prints each byte it gets, as it gets it.
+        // Prints each byte it gets, as it gets it, after saying it is ready.
+        // It says so itself: waiting for the pane's program to be named
+        // python3 never ended on macOS, where python3 runs as `Python`.
         a.run_action(
-            r#"exec python3 -u -c "import sys,tty;tty.setraw(0);[print(repr(sys.stdin.read(1)),end=' ',flush=True) for _ in iter(int,1)]""#
+            r#"exec python3 -u -c "import sys,tty;tty.setraw(0);print('ready:',end=' ',flush=True);[print(repr(sys.stdin.read(1)),end=' ',flush=True) for _ in iter(int,1)]""#
                 .parse()
                 .unwrap(),
         );
-        pump(&mut a, &rx, |a| {
-            a.focused_pane().is_some_and(|p| {
-                crate::pane::foreground_program(p.pid).as_deref() == Some("python3")
-            })
-        });
-        std::thread::sleep(Duration::from_millis(300));
+        pump(&mut a, &rx, |a| screen(a).join("\n").contains("ready:"));
         a.run_action("mode vi".parse().unwrap());
         let press = |a: &mut App, code, mods| {
             a.handle(AppEvent::Input(Event::Key(KeyEvent::new(code, mods))));
