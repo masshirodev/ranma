@@ -21,6 +21,9 @@ commit log has the detail.
   theme and the settings panel's "Outer gap, ends" and "Outer gap, sides",
   which could show 0 while a side from the theme kept its gap (kanna over an
   older sumi kept a blank row above the bar).
+- An upgrade in place (`ranma upgrade`, `leader U`, `install.sh`) keeps the
+  profile in use, as documented. It went back to no profile, whether the
+  profile came from a switch or from `ranma.set { profile = ... }`.
 
 ## [0.5.0] - 2026-11-05
 

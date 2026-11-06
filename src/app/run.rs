@@ -347,7 +347,7 @@ fn remember_exe() {
 /// taken back. If it cannot be, the old build (kept aside by the old server)
 /// is exec'd with the same handover, so no shell is lost to a bad build.
 pub fn run_server_resume(
-    config: Config,
+    mut config: Config,
     name: &str,
     file: &std::path::Path,
     fallback: Option<&std::path::Path>,
@@ -378,6 +378,11 @@ pub fn run_server_resume(
         Ok(h) => h,
         Err(e) => return Err(fail(e, None)),
     };
+    // The one the old build was using, not the `profile` setting: that names
+    // what a start begins in, and a switch since (to none too) holds.
+    if let Some(p) = &h.state.profile {
+        config = config.in_profile(crate::config::config_dir().as_deref(), p);
+    }
     let (tx, rx) = mpsc::channel();
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let mut term = terminal(Sink::Buffer(buffer.clone()), h.cols, h.rows)?;

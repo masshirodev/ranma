@@ -6292,6 +6292,24 @@ mod tests {
         a
     }
 
+    /// An upgrade keeps the profile in use, and an older build's handover,
+    /// which never said, reads as none.
+    #[test]
+    fn the_handover_carries_the_profile_in_use() {
+        let mut a = app(Some(
+            r#"ranma.profile("p", { set = { layout = "master" } })"#,
+        ));
+        assert_eq!(a.hand_over().profile, None);
+        a.use_profile(Some("p"));
+        let mut json = serde_json::to_value(a.hand_over()).unwrap();
+        assert_eq!(json["profile"], "p");
+        let state: upgrade::State = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(state.profile.as_deref(), Some("p"));
+        json.as_object_mut().unwrap().remove("profile");
+        let older: upgrade::State = serde_json::from_value(json).unwrap();
+        assert_eq!(older.profile, None);
+    }
+
     fn with_pane(app: &mut App, id: PaneId) {
         let ws = app.workspaces.get_mut(&1).unwrap();
         ws.tree

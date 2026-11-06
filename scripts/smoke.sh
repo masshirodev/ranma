@@ -95,7 +95,7 @@ cleanup() {
     proc_env "$p" | grep -qx "XDG_RUNTIME_DIR=$RT" && kill "$p"
   done
   # /tmp is often a tmpfs, so what a run leaves there is memory until reboot.
-  rm -rf "$CFG" "$RT" "$CACHE" "$STATE" "$DATA" "${TCONF:-}" "${MCFG:-}" "${FAKE:-}" "${LAZY:-}"
+  rm -rf "$CFG" "$RT" "$CACHE" "$STATE" "$DATA" "${TCONF:-}" "${MCFG:-}" "${PCFG:-}" "${FAKE:-}" "${LAZY:-}"
   true
 }
 trap cleanup EXIT
@@ -772,6 +772,41 @@ m1 | grep -q '✕' && fail "typing at the desk did not take the touch toolbar aw
 T kill-session -t m1; T kill-session -t m2; sleep 0.8
 $ENV $BIN kill 4; sleep 0.5
 rm -rf "$MCFG"
+
+# A profile holds across an upgrade: a server is upgraded far more often than
+# it is started, so one that went back to none each time made the `profile`
+# setting and every switch last only until the next install (card c477). With a
+# setup, so what the setup made has to be loaded again too, and started by the
+# setting, so the start is driven here as well. A switch to none holds as well:
+# the setting is for a start, and does not come back at an upgrade.
+PCFG=$(mktemp -d)
+cat > "$PCFG/init.lua" <<'LUA'
+ranma.profile("kept", { setup = function()
+  ranma.module("marker", { render = function() return "SETUP-RAN" end })
+  ranma.bar { left = { "marker" } }
+end })
+ranma.set { profile = "kept" }
+LUA
+PENV="${ENV/RANMA_CONFIG_DIR=$CFG/RANMA_CONFIG_DIR=$PCFG}"
+pscreen() { T capture-pane -p -t p; }
+pwait() { for _ in $(seq 1 60); do pscreen | grep -q -- "$1" && return 0; sleep 0.25; done; return 1; }
+pupgrade() {
+  $PENV $BIN upgrade 7 >/dev/null || fail "ranma upgrade with a profile failed"
+  pwait 'ranma upgraded' || fail "no toast after the upgrade with a profile ($(pscreen | tail -3))"
+}
+T new-session -d -s p -x 100 -y 20 "exec $PENV $BIN attach 7"
+pwait 'SETUP-RAN' || fail "a new server did not start in its profile ($(pscreen | tail -2))"
+pupgrade
+pscreen | grep -q 'SETUP-RAN' || fail "an upgrade dropped the profile in use ($(pscreen | tail -2))"
+$PENV RANMA_SOCKET=$RT/ranma/7.sock $BIN action profile none
+for _ in $(seq 1 40); do pscreen | grep -q 'SETUP-RAN' || break; sleep 0.25; done
+pscreen | grep -q 'SETUP-RAN' && fail "profile none kept the profile's bar ($(pscreen | tail -2))"
+sleep 3.5 # the last upgrade's toast, so the next one is not read for it
+pupgrade
+pscreen | grep -q 'SETUP-RAN' && fail "an upgrade put the start profile back over none ($(pscreen | tail -2))"
+T kill-session -t p; sleep 0.5
+$PENV $BIN kill 7; sleep 0.5
+rm -rf "$PCFG"
 
 # A plain ssh in the focused pane (no ranma on the other side) names where it
 # went. A program built here and called ssh, which sleeps: its name is ssh and

@@ -821,7 +821,12 @@ only while in WM mode.
   on the save that fixes it. `--check-config` still fails, which is what
   `install.sh` asks it. And `ranma.set { profile = "..." }` is the profile a
   start begins in (`ranma.use_profile` at load is refused: a load is not a
-  switch); a reload and an upgrade keep the one in use, so a switch holds.
+  switch); a reload and an upgrade keep the one in use, so a switch holds. An
+  upgrade keeps it by carrying it in the handover and loading for it (card c477,
+  2026-11-06): the handover never had it, so for a day this sentence was untrue,
+  and a server, upgraded far more often than started, went back to none at each
+  install. The setting is not consulted there, or a switch to none would not
+  hold.
 - **Lua at run time** (actions, notify, toast, state, client, profiles) exists
   only while ranma is calling into Lua, so a config cannot act on a window
   manager that does not exist yet. Actions a hook runs can fire more hooks; the

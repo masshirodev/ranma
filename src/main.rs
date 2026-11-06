@@ -792,24 +792,15 @@ fn main() -> ExitCode {
         }
     };
     // A new server, or a standalone ranma, starts in the profile `profile`
-    // names; a resumed one (an upgrade) and a reload keep the one in use.
+    // names; a resumed one takes the one its handover says (`run_server_resume`)
+    // and a reload keeps the one in use.
     let starting = matches!(&cli.command, Some(Command::Server { resume: None, .. }))
         || (cli.command.is_none() && cli.standalone);
     if starting
         && cfg.profile.is_none()
         && let Some(p) = cfg.settings.start_profile.clone()
     {
-        // Its setup runs in the load; its set, bar and theme go over it.
-        let loaded = config::load_as(dir.as_deref(), Some(&p)).and_then(|mut c| {
-            c.use_profile(Some(&p)).map_err(anyhow::Error::msg)?;
-            Ok(c)
-        });
-        match loaded {
-            Ok(c) => cfg = c,
-            Err(e) => cfg
-                .warnings
-                .push(format!("profile {p} did not load: {e:#}")),
-        }
+        cfg = cfg.in_profile(dir.as_deref(), &p);
     }
 
     if cli.check_config {

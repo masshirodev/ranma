@@ -67,6 +67,10 @@ pub struct State {
     pub last_focused: Option<PaneId>,
     #[serde(default)]
     pub last_workspace: Option<u8>,
+    /// The profile in use, which an upgrade keeps. Defaulted, so a handover
+    /// from a build that did not carry it still reads, as none.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -156,6 +160,7 @@ impl App {
             reports: self.reports.iter().map(|(a, b)| (*a, b.clone())).collect(),
             last_focused: self.last_focused,
             last_workspace: self.last_workspace,
+            profile: self.config.profile.clone(),
         }
     }
 

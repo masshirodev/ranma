@@ -192,6 +192,8 @@ yours), all removed when it ends. It checks what unit tests cannot see:
 - `ranma upgrade 1` moves the server to its build again in place: a toast, the
   same process, the screen kept, and a shell variable set before it still
   there after
+- a new server starts in the profile `ranma.set { profile }` names, setup and
+  all; an upgrade keeps it, and a switch to none holds across the next upgrade
 - a full-screen program that redraws only when its size changes (as ssh
   passes resizes on) is drawn again after an upgrade, at its own size
 - **idle CPU is zero** over five seconds (at most one 10 ms tick)

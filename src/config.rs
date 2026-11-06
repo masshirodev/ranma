@@ -4119,6 +4119,36 @@ pub fn load_as(config_dir: Option<&Path>, profile: Option<&str>) -> Result<Confi
     load_dir_as(config_dir, crate::hako::dir().as_deref(), profile)
 }
 
+impl Config {
+    /// What a server begins in when it begins in the profile `name`, a start or
+    /// an upgrade: loaded again, so its setup runs in the load, with its set,
+    /// bar and theme over that. A profile that will not load leaves this
+    /// configuration as it is and says why, for a server must still come up.
+    pub fn in_profile(self, config_dir: Option<&Path>, name: &str) -> Config {
+        self.in_profile_from(config_dir, crate::hako::dir().as_deref(), name)
+    }
+
+    fn in_profile_from(
+        mut self,
+        config_dir: Option<&Path>,
+        hako_dir: Option<&Path>,
+        name: &str,
+    ) -> Config {
+        let loaded = load_dir_as(config_dir, hako_dir, Some(name)).and_then(|mut c| {
+            c.use_profile(Some(name)).map_err(anyhow::Error::msg)?;
+            Ok(c)
+        });
+        match loaded {
+            Ok(c) => c,
+            Err(e) => {
+                self.warnings
+                    .push(format!("profile {name} did not load: {e:#}"));
+                self
+            }
+        }
+    }
+}
+
 /// [`load`] with hako's directory given, or left out with `None` (tests, which
 /// must not pick up the machine's own clone).
 pub fn load_dir(config_dir: Option<&Path>, hako_dir: Option<&Path>) -> Result<Config> {
@@ -6736,6 +6766,41 @@ mod tests {
 
     /// The configurations in doc/examples are copied whole by readers, so one
     /// the strict parser rejects would fail on the first thing they try.
+    /// A server begins in a profile with what its setup made; one the
+    /// configuration no longer declares leaves it on the base, saying so.
+    #[test]
+    fn a_server_begins_in_a_profile_or_says_why_not() {
+        let dir = std::env::temp_dir().join(format!("ranma-in-profile-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("init.lua"),
+            r#"ranma.profile("main", { setup = function()
+                 ranma.set { mouse_wheel_lines = 7 }
+               end })"#,
+        )
+        .unwrap();
+        let base = || load_dir(Some(&dir), None).unwrap();
+        let wheel = base().settings.mouse_wheel_lines;
+        assert_ne!(wheel, 7, "the setup runs only in a load made for it");
+
+        let cfg = base().in_profile_from(Some(&dir), None, "main");
+        assert_eq!(cfg.profile.as_deref(), Some("main"));
+        assert_eq!(cfg.settings.mouse_wheel_lines, 7);
+        assert!(cfg.warnings.is_empty(), "{:?}", cfg.warnings);
+
+        let cfg = base().in_profile_from(Some(&dir), None, "gone");
+        assert_eq!(cfg.profile, None);
+        assert_eq!(cfg.settings.mouse_wheel_lines, wheel);
+        assert!(
+            cfg.warnings
+                .iter()
+                .any(|w| w.contains("profile gone did not load")),
+            "{:?}",
+            cfg.warnings
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     /// `ranma.set { profile = ... }` names a declared profile to start in,
     /// checked once every file has declared its own (card c470).
     #[test]
