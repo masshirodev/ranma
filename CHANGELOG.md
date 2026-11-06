@@ -13,6 +13,8 @@ commit log has the detail.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-05
+
 ### Added
 
 - `ranma.toast(text, { icon = "✓", icon_style = "ok", detail = "..." })`: a
@@ -608,6 +610,7 @@ over SSH; copy mode, hints, images, and the tmux shim. README.md is the tour
 and doc/CONFIG.md the reference.
 
 [Unreleased]: https://github.com/masshirodev/ranma/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/masshirodev/ranma/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/masshirodev/ranma/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/masshirodev/ranma/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/masshirodev/ranma/compare/v0.2.3...v0.2.4
